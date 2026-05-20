@@ -96,6 +96,7 @@ const panelHandle = document.getElementById("panelHandle");
 const sidebarEl = document.querySelector(".sidebar");
 const sidebarScrim = document.getElementById("sidebarScrim");
 const brandRefreshBtn = document.getElementById("brandRefresh");
+const appUpdateBtn = document.getElementById("appUpdateBtn");
 const networkBadgeEl = document.getElementById("networkBadge");
 const heroRightEl = document.getElementById("heroRight");
 const loadingOverlayEl = document.getElementById("loadingOverlay");
@@ -192,7 +193,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260508-01";
+const APP_BUILD_VERSION = "20260520-01";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

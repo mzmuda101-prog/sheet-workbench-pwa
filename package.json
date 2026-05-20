@@ -1,0 +1,24 @@
+{
+  "name": "excel-workbench-pwa",
+  "version": "1.0.0",
+  "description": "Local, offline-first workbook workbench for exploring, filtering, restructuring, and lightly editing Excel files in the browser.",
+  "private": true,
+  "scripts": {
+    "test": "node scripts/smoke-playwright.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mzmuda101-prog/excel-workbench-pwa.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mzmuda101-prog/excel-workbench-pwa/issues"
+  },
+  "homepage": "https://github.com/mzmuda101-prog/excel-workbench-pwa#readme",
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  }
+}

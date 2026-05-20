@@ -924,7 +924,7 @@ quickRangeButtons.forEach((btn) => {
 
 selectAllBtn.addEventListener("click", () => {
   columnListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
-    cb.checked = true;
+    cb.checked = activePickerKey === "measures" && cb.value === "count_rows" ? false : true;
   });
 });
 
@@ -935,7 +935,8 @@ clearAllBtn.addEventListener("click", () => {
 });
 
 applyPickBtn.addEventListener("click", (e) => {
-+  e.stopPropagation();  if (!activePickerKey) return;
+  e.stopPropagation();
+  if (!activePickerKey) return;
   const checked = Array.from(columnListEl.querySelectorAll("input[type=checkbox]"))
     .filter((cb) => cb.checked)
     .map((cb) => cb.value);

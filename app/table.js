@@ -47,14 +47,23 @@ function buildLongViewModelFromRows(rows, group = getActiveRepeatingGroup(), opt
   const sourceHeaders = Array.isArray(options.headers) ? options.headers.slice() : currentHeaders.slice();
   const headerRow = Number.isFinite(options.headerRow) ? options.headerRow : currentHeaderRow;
   const prefixHeaders = sourceHeaders.slice(0, prefixCount);
-  const repeatedHeaders = firstBlock.headers.map((header) => parseRepeatedHeader(header)?.base || cleanSectionLabel(header) || header);
+  const repeatedHeaders = Array.isArray(group.longHeaders) && group.longHeaders.length
+    ? group.longHeaders.slice()
+    : firstBlock.headers.map((header) => parseRepeatedHeader(header)?.base || cleanSectionLabel(header) || header);
   const headers = [...prefixHeaders, "Nr bloku", "Blok", ...repeatedHeaders];
   const nextRows = [];
 
   rows.forEach((row) => {
     group.blocks.forEach((block, blockIndex) => {
-      const blockValues = row.values.slice(block.startIndex, block.endIndex + 1);
-      const blockDisplay = blockValues.map((_, idx) => getDisplayValue(row, block.startIndex + idx));
+      const valueIndexes = Array.isArray(block.valueIndexes) && block.valueIndexes.length
+        ? block.valueIndexes
+        : null;
+      const blockValues = valueIndexes
+        ? valueIndexes.map((idx) => idx >= 0 ? row.values[idx] : null)
+        : row.values.slice(block.startIndex, block.endIndex + 1);
+      const blockDisplay = valueIndexes
+        ? valueIndexes.map((idx) => idx >= 0 ? getDisplayValue(row, idx) : "")
+        : blockValues.map((_, idx) => getDisplayValue(row, block.startIndex + idx));
       const hasMeaningfulValue = blockDisplay.some((value) => String(value ?? "").trim() !== "");
       if (!hasMeaningfulValue) return;
 

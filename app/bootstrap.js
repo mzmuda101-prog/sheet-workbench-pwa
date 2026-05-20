@@ -415,22 +415,7 @@ document.addEventListener("keydown", (e) => {
       toast("Wczytaj arkusz, żeby szukać", "info");
     }
   }
-  // Dodatkowo umożliwiam użycie klawisza "Q" zamiast Escape (np. dla klawiatur bez klawisza Escape)
-
-  // Wersja z nowym const (pierwotna)
- /*  const isEscapeOrQ = (key) => key === "Escape" || key.toLowerCase() === "q";
-
-  if (e.shiftKey && isEscapeOrQ(e.key) && selectedCellState) {
-    e.preventDefault();
-    setSelectedCell("", -1);
-    return;
-  }
-  if (!e.shiftKey && isEscapeOrQ(e.key) && focusedCellState) {
-    e.preventDefault();
-    setFocusedCell("", -1);
-    return;
-  }
- */
+  // Escape or Q clears the current table focus/selection.
   if (e.shiftKey && (e.key === "Escape" || e.key.toLowerCase() === "q") && selectedCellState) {
     e.preventDefault();
     setSelectedCell("", -1);
@@ -496,7 +481,51 @@ window.addEventListener("beforeunload", (e) => {
 });
 
 if ("serviceWorker" in navigator) {
+  let waitingServiceWorker = null;
+  let refreshingForUpdate = false;
+
+  const showAppUpdate = (worker) => {
+    waitingServiceWorker = worker;
+    if (!appUpdateBtn) return;
+    appUpdateBtn.classList.remove("hidden");
+    appUpdateBtn.textContent = t("updateNow");
+    appUpdateBtn.setAttribute("title", t("updateReady"));
+    toast(t("updateAvailable"), "info");
+  };
+
+  if (appUpdateBtn) {
+    appUpdateBtn.addEventListener("click", () => {
+      if (!waitingServiceWorker) {
+        hardRefreshApp();
+        return;
+      }
+      appUpdateBtn.disabled = true;
+      appUpdateBtn.textContent = t("refreshingApp");
+      waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
+    });
+  }
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (refreshingForUpdate) return;
+    refreshingForUpdate = true;
+    window.location.reload();
+  });
+
   navigator.serviceWorker.register(`sw.js?v=${APP_BUILD_VERSION}`).then((registration) => {
+    if (registration.waiting && navigator.serviceWorker.controller) {
+      showAppUpdate(registration.waiting);
+    }
+
+    registration.addEventListener("updatefound", () => {
+      const worker = registration.installing;
+      if (!worker) return;
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) {
+          showAppUpdate(worker);
+        }
+      });
+    });
+
     registration.update().catch(() => {});
   }).catch(() => {});
 }

@@ -210,8 +210,12 @@ body.splashing {
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-shrink: 0;
+  flex: 1 1 320px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
   transition: gap var(--t);
+  overflow: visible;
+  min-width: 0;
 }
 
 .lang-switch {
@@ -361,10 +365,19 @@ body.splashing {
   justify-content: center;
   cursor: pointer;
   box-shadow: var(--shadow-xs);
-  transition: all var(--t);
+  transition:
+    transform 180ms cubic-bezier(.2,.8,.2,1),
+    background var(--t),
+    border-color var(--t),
+    box-shadow var(--t);
   overflow: hidden;
   line-height: 0;
   transform-origin: center;
+  position: relative;
+  flex-shrink: 0;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .logo-badge img {
@@ -387,12 +400,13 @@ body.splashing {
   gap: 16px;
 }
 
+
 .logo-badge:hover,
 .logo-badge:focus-visible {
-  transform: scale(2.2);
-  margin: 0 10px;
-  z-index: 2;
+  transform: translateZ(0) scale(2.2);
+  z-index: 20;
 }
+
 .logo-badge:hover {
   background: var(--accent-light);
   border-color: var(--accent-border);
@@ -418,6 +432,28 @@ body.splashing {
   background: var(--accent-light);
   border-color: var(--accent-border);
   color: var(--accent);
+}
+
+.app-update-btn {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent-light) 72%, var(--panel));
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+}
+
+.app-update-btn:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.app-update-btn.hidden {
+  display: none;
 }
 
 /* ===================================================
@@ -720,6 +756,7 @@ details.panel > summary {
   gap: 8px;
   padding: 11px 14px;
   min-height: 46px;
+  -webkit-user-select: none;
   user-select: none;
   transition: background var(--t-fast);
   margin-bottom: 0;
@@ -1339,6 +1376,12 @@ details.panel[open] > summary {
 }
 
 @media (max-width: 768px) {
+  .hero-right {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    width: 100%;
+    gap: 12px;
+  }
   .duration-analysis-controls {
     grid-template-columns: 1fr;
   }
@@ -1985,6 +2028,7 @@ thead tr.header-row th {
   overflow: hidden;
   text-overflow: ellipsis;
   cursor: pointer;
+  -webkit-user-select: none;
   user-select: none;
   color: var(--ink-2);
   transition: background var(--t-fast);
@@ -2173,7 +2217,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 .resizing {
   cursor: col-resize;
-  user-select: none;
+  -webkit-user-select: none;
 }
 
 .table-scrollbar {
@@ -2628,8 +2672,38 @@ kbd {
     height: 96px;
   }
   .sidebar-open .sidebar-handle {
-    /* [EN] Fallback when inline position absent; match ~handle width + margin */
-    left: calc(100vw - 48px);
+    top: auto;
+    bottom: max(14px, env(safe-area-inset-bottom));
+    left: 50% !important;
+    width: min(220px, calc(100vw - 32px));
+    height: 44px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    border-color: color-mix(in srgb, var(--accent) 80%, white);
+    background: color-mix(in srgb, var(--accent) 92%, black);
+    color: white;
+    opacity: 0.96;
+    box-shadow: 0 18px 38px rgba(18, 30, 23, 0.28);
+  }
+  .sidebar-open .sidebar-handle:hover {
+    transform: translateX(-50%) translateY(-1px);
+  }
+  .sidebar-open .sidebar-handle::before {
+    content: "x";
+    top: 50%;
+    left: 18px;
+    transform: translateY(-50%);
+    border-color: rgba(255, 255, 255, 0.32);
+    background: rgba(255, 255, 255, 0.16);
+    color: white;
+  }
+  .sidebar-open .sidebar-handle::after {
+    content: "Schowaj panel";
+    top: 50%;
+    left: 54%;
+    transform: translate(-50%, -50%);
+    letter-spacing: 0.04em;
+    font-size: 11px;
   }
   .quick-search {
     width: 100%;

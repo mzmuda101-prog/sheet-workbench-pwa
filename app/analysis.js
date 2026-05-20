@@ -1000,7 +1000,8 @@ function renderDurationAnalysis() {
 }
 
 function inferAggregationValueKind(header, profile) {
-  const norm = normalizeAnalysisKey(header);
+  const baseHeader = parseRepeatedHeader(header)?.base || cleanSectionLabel(header) || header;
+  const norm = normalizeAnalysisKey(baseHeader);
   if (profile?.measureType === "date_range") return "duration";
   if (profile?.dateCount > 0 || /\b(data|date|created|closed|start|end|od|do|termin|deadline)\b/.test(norm)) return "date";
   if (profile?.durationCount > 0 || norm.includes("dlugosc") || norm.includes("czas")) return "duration";
@@ -1078,7 +1079,8 @@ function collectAggregationProfiles(model) {
 }
 
 function classifyAggregationHeader(header) {
-  const norm = normalizeAnalysisKey(header);
+  const baseHeader = parseRepeatedHeader(header)?.base || cleanSectionLabel(header) || header;
+  const norm = normalizeAnalysisKey(baseHeader);
   if (/\b(id|uuid|guid|nr|lp|numer|number|no|kod|code|pesel|nip|regon|phone|telefon|email|mail)\b/.test(norm)) return "id";
   if (/\b(imie|nazwisko|osoba|pracownik|employee|person|owner|assignee|agent|user|uzytkownik|manager|opiekun)\b/.test(norm)) return "person";
   if (/\b(status|stage|etap|stan|alert|priority|priorytet|type|typ|rodzaj|category|kategoria|segment|tag)\b/.test(norm)) return "category";
@@ -1306,8 +1308,9 @@ function filterCompatibleAggregationMeasures(selectedMeasures, aggregation) {
 
 function getAllowedAggregationsForMeasures(selectedMeasures) {
   if (!selectedMeasures.length) return ["count"];
-  if (selectedMeasures.some((measure) => measure.measureType === "count_rows")) return ["count"];
-  const families = new Set(selectedMeasures.map((measure) => getAggregationKindFamily(measure.kind)));
+  const columnMeasures = selectedMeasures.filter((measure) => measure.measureType !== "count_rows");
+  if (!columnMeasures.length) return ["count"];
+  const families = new Set(columnMeasures.map((measure) => getAggregationKindFamily(measure.kind)));
   const allowed = ["count", "distinct"];
   if (families.has("numeric")) allowed.push("avg", "median", "min", "max", "sum");
   if (families.has("date")) allowed.push("earliest", "latest");
@@ -2177,6 +2180,76 @@ function detectSignatureRepeatingBlocks(headers, tableStartCol, mergedLabels) {
   return [buildGroupFromSignature(headers, best.startIndex, best.span, best.repeatCount, tableStartCol, mergedLabels)];
 }
 
+function detectSuffixedCycleBlocks(headers, tableStartCol, mergedLabels) {
+  if (!Array.isArray(headers) || headers.length < 2) return [];
+
+  const baseOrder = [];
+  const baseSeen = new Set();
+  const byBase = new Map();
+  const byOrder = new Map();
+
+  headers.forEach((header, index) => {
+    const parsed = parseRepeatedHeader(header);
+    if (!parsed || !parsed.base) return;
+    const base = parsed.base;
+    const order = Number(parsed.order) || 1;
+    if (!baseSeen.has(base)) {
+      baseSeen.add(base);
+      baseOrder.push(base);
+    }
+    const baseEntry = byBase.get(base) || [];
+    baseEntry.push({ index, order, header });
+    byBase.set(base, baseEntry);
+
+    const orderEntry = byOrder.get(order) || new Map();
+    if (!orderEntry.has(base)) orderEntry.set(base, { index, header });
+    byOrder.set(order, orderEntry);
+  });
+
+  const repeatedBases = baseOrder.filter((base) => {
+    const orders = new Set((byBase.get(base) || []).map((entry) => entry.order));
+    return orders.size >= 2;
+  });
+  if (!repeatedBases.length) return [];
+
+  const minPresent = repeatedBases.length === 1 ? 1 : Math.max(2, Math.ceil(repeatedBases.length * 0.5));
+  const blocks = Array.from(byOrder.entries())
+    .sort(([a], [b]) => a - b)
+    .map(([order, entries]) => {
+      const valueIndexes = repeatedBases.map((base) => entries.get(base)?.index ?? -1);
+      const presentIndexes = valueIndexes.filter((idx) => idx >= 0);
+      if (presentIndexes.length < minPresent) return null;
+      const startIndex = Math.min(...presentIndexes);
+      const endIndex = Math.max(...presentIndexes);
+      return {
+        label: mergedLabels.get(startIndex) || `Cykl ${order}`,
+        order,
+        span: repeatedBases.length,
+        startIndex,
+        endIndex,
+        startAbs: tableStartCol + startIndex,
+        endAbs: tableStartCol + endIndex,
+        headers: repeatedBases.slice(),
+        valueIndexes,
+      };
+    })
+    .filter(Boolean);
+
+  if (blocks.length < 2) return [];
+
+  const firstStart = Math.min(...blocks.map((block) => block.startIndex));
+  return [{
+    label: `Powtarzalny układ: ${blocks.length} cykli`,
+    kind: "suffixed-cycle",
+    meta: `${blocks.length} cykli • ${repeatedBases.length} pól w schemacie`,
+    prefixCount: firstStart,
+    prefixLabel: firstStart > 0 ? formatColRange(tableStartCol, tableStartCol + firstStart - 1) : "",
+    longHeaders: repeatedBases.slice(),
+    families: repeatedBases.slice(0, 10).map((label) => ({ label, count: blocks.length })),
+    blocks,
+  }];
+}
+
 function detectRepeatingBlocks(sheet, headerRow, data) {
   if (!sheet || !data || !Array.isArray(data.headers) || !data.headers.length) return [];
   const merges = Array.isArray(data.merges) ? data.merges : [];
@@ -2247,38 +2320,7 @@ function detectRepeatingBlocks(sheet, headerRow, data) {
 
   if (groups.length) return groups.slice(0, 4);
 
-  const familyMap = new Map();
-  data.headers.forEach((header, index) => {
-    const parsed = parseRepeatedHeader(header);
-    if (!parsed) return;
-    const entry = familyMap.get(parsed.base) || { label: parsed.base, indexes: [], orders: [] };
-    entry.indexes.push(index);
-    entry.orders.push(parsed.order);
-    familyMap.set(parsed.base, entry);
-  });
-  const families = Array.from(familyMap.values())
-    .filter((entry) => entry.indexes.length >= 3)
-    .sort((a, b) => b.indexes.length - a.indexes.length);
-
-  if (!families.length) return [];
-
-  return [{
-    label: "Powtarzalne rodziny kolumn",
-    kind: "family",
-    meta: `${families.length} rodzin powtarzalnych kolumn`,
-    prefixCount: 0,
-    prefixLabel: "",
-    families: families.slice(0, 10).map((entry) => ({ label: entry.label, count: entry.indexes.length })),
-    blocks: families.slice(0, 10).map((entry) => ({
-      label: entry.label,
-      span: 1,
-      startIndex: entry.indexes[0],
-      endIndex: entry.indexes[entry.indexes.length - 1],
-      startAbs: tableStartCol + entry.indexes[0],
-      endAbs: tableStartCol + entry.indexes[entry.indexes.length - 1],
-      headers: entry.indexes.map((idx) => data.headers[idx]),
-    })),
-  }];
+  return detectSuffixedCycleBlocks(data.headers, tableStartCol, mergedLabels);
 }
 
 function renderRepeatingBlocks() {

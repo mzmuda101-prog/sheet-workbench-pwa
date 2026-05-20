@@ -76,6 +76,9 @@ const I18N = {
     widthsRestored: "Przywrocono automatyczne szerokosci",
     cacheRefresh: "Czyszcze cache i odswiezam aplikacje...",
     refreshingApp: "Odswiezam aplikacje...",
+    updateAvailable: "Jest dostepna nowsza wersja aplikacji.",
+    updateReady: "Nowa wersja gotowa. Kliknij Aktualizuj.",
+    updateNow: "Aktualizuj",
     fileLoadFailed: "Nie udalo sie wczytac pliku",
     noDataForExport: "Brak danych do eksportu",
     csvExported: "Wyeksportowano CSV",
@@ -256,6 +259,9 @@ const I18N = {
     widthsRestored: "Automatic widths restored",
     cacheRefresh: "Clearing cache and refreshing the app...",
     refreshingApp: "Refreshing the app...",
+    updateAvailable: "A newer app version is available.",
+    updateReady: "New version ready. Click Update.",
+    updateNow: "Update",
     fileLoadFailed: "Failed to load the file",
     noDataForExport: "No data to export",
     csvExported: "CSV exported",
@@ -890,6 +896,8 @@ function applyStaticTranslations() {
   setAttr("#link2", "aria-label", copy.link2Title);
   setAttr("#brandRefresh", "title", t("brandRefreshTitle"));
   setAttr("#brandRefresh", "aria-label", t("brandRefreshAria"));
+  setText("#appUpdateBtn", t("updateNow"));
+  setAttr("#appUpdateBtn", "title", t("updateReady"));
   setAttr("#themeToggle", "title", t("themeToggleTitle"));
   setAttr("#themeToggle", "aria-label", t("themeToggleAria"));
 
