@@ -4,7 +4,8 @@
   "description": "Local, offline-first workbook workbench for exploring, filtering, restructuring, and lightly editing Excel files in the browser.",
   "private": true,
   "scripts": {
-    "test": "node scripts/smoke-playwright.js"
+    "test": "node scripts/smoke-playwright.js",
+    "release": "node scripts/bump-version.js"
   },
   "repository": {
     "type": "git",
