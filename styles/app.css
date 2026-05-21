@@ -2679,14 +2679,15 @@ kbd {
     height: 44px;
     transform: translateX(-50%);
     border-radius: 999px;
-    border-color: color-mix(in srgb, var(--accent) 80%, white);
+    border-color: color-mix(in srgb, var(--accent) 10%, white);
     background: color-mix(in srgb, var(--accent) 92%, black);
     color: white;
-    opacity: 0.96;
+    opacity: 0.78;
     box-shadow: 0 18px 38px rgba(18, 30, 23, 0.28);
   }
   .sidebar-open .sidebar-handle:hover {
     transform: translateX(-50%) translateY(-1px);
+    /* opacity: 0.92; */
   }
   .sidebar-open .sidebar-handle::before {
     content: "x";
