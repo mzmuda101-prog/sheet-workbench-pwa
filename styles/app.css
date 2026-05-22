@@ -327,6 +327,14 @@ body.splashing {
   border: 1px solid var(--accent-border);
 }
 
+.hero-badges {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center; /* [EN] Align left in column layout, [PL] Ustaw do lewej w kolumnowym ukladzie (można to zakomentowac i wtedy wszytkie spany w kolumnie maja rowna dlugosc)*/
+  /* flex-wrap: wrap; */
+}
+
 .network-badge {
   display: inline-flex;
   align-items: center;
@@ -353,6 +361,10 @@ body.splashing {
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--warning) 18%, transparent);
 }
 
+.pwa-badge {
+  text-align: center;
+}
+
 .logo-badge {
   width: 36px;
   height: 36px;
@@ -367,6 +379,7 @@ body.splashing {
   box-shadow: var(--shadow-xs);
   transition:
     transform 180ms cubic-bezier(.2,.8,.2,1),
+    margin 180ms cubic-bezier(.2,.8,.2,1),
     background var(--t),
     border-color var(--t),
     box-shadow var(--t);
@@ -404,6 +417,7 @@ body.splashing {
 .logo-badge:hover,
 .logo-badge:focus-visible {
   transform: translateZ(0) scale(2.2);
+  margin: 0 10px;
   z-index: 20;
 }
 
