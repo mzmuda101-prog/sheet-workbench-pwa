@@ -34,6 +34,8 @@
   --glass: blur(16px) saturate(1.4);
   --glass-border: rgba(255, 255, 255, 0.55);
 
+  --field: rgba(255, 255, 255, 0.5);
+
   --shadow-xs: 0 1px 3px rgba(20,30,20,.04), inset 0 1px 0 rgba(255,255,255,0.6);
   --shadow-sm: 0 2px 8px rgba(20,30,20,.06), inset 0 1px 0 rgba(255,255,255,0.5);
   --shadow:    0 4px 20px rgba(20,30,20,.07), inset 0 1px 0 rgba(255,255,255,0.45);
@@ -77,6 +79,8 @@
 
   --glass: blur(20px) saturate(1.6);
   --glass-border: rgba(255, 255, 255, 0.07);
+
+  --field: rgba(255, 255, 255, 0.06);
 
   --shadow-xs: 0 1px 3px rgba(0,0,0,.22);
   --shadow-sm: 0 2px 8px rgba(0,0,0,.28);
@@ -603,8 +607,9 @@ body.splashing {
   inset: 0;
   border: 0;
   padding: 0;
-  background: rgba(20, 26, 22, 0.28);
-  backdrop-filter: blur(4px);
+  background: rgba(20, 26, 22, 0.18);
+  -webkit-backdrop-filter: blur(8px) saturate(1.2);
+  backdrop-filter: blur(8px) saturate(1.2);
   z-index: 25;
   cursor: pointer;
 }
@@ -1647,14 +1652,15 @@ details.panel[open] > summary {
   padding: 8px 11px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
-  background: var(--panel);
+  background: var(--field);
   color: var(--ink);
   transition: border-color var(--t), box-shadow var(--t);
   outline: none;
-  appearance: none;
   -webkit-appearance: none;
+  appearance: none;
   width: 100%;
   min-width: 0;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255,255,255,0.8);
 }
 
 .field select {
@@ -1706,6 +1712,12 @@ details.panel[open] > summary {
 
 .picker-row { display: flex; gap: 6px; }
 .picker-row input { flex: 1; min-width: 0; cursor: default; }
+
+[data-theme="dark"] .field input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="dark"] .field select {
+  background: var(--field);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
+}
 
 /* ===================================================
    BUTTONS
