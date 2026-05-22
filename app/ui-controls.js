@@ -202,7 +202,7 @@ function setSidebarOpen(open) {
     panelToggle.textContent = shouldOpen ? t("panelOpen") : t("panelClosed");
   }
   requestAnimationFrame(() => syncSidebarHandle());
-  window.setTimeout(() => syncSidebarHandle(), 180);
+  window.setTimeout(() => syncSidebarHandle(), 270);
 }
 
 function openColumnPicker(key) {

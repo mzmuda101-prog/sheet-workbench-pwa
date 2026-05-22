@@ -4,9 +4,9 @@
    DESIGN TOKENS
    =================================================== */
 :root {
-  --bg: #f0ede4;
-  --surface: #f6f4ee;
-  --panel: #ffffff;
+  --bg: #edeae0;
+  --surface: #f4f2ec;
+  --panel: rgba(255, 255, 255, 0.62);
   --ink: #1a1d19;
   --ink-2: #3a3f38;
   --muted: #7a8075;
@@ -14,7 +14,7 @@
 
   --accent: #2f6f5c;
   --accent-h: #245849;
-  --accent-light: #ecf5f0;
+  --accent-light: rgba(236, 245, 240, 0.85);
   --accent-2: #a8d9b8;
   --accent-border: #c5e8d5;
 
@@ -27,15 +27,18 @@
   --info: #1a6fa5;
   --info-bg: #e8f3fc;
 
-  --border: #e0ddd3;
-  --border-subtle: #eceae2;
+  --border: rgba(180, 175, 160, 0.45);
+  --border-subtle: rgba(200, 196, 182, 0.35);
   --border-focus: #2f6f5c;
 
-  --shadow-xs: 0 1px 3px rgba(20,30,20,.05);
-  --shadow-sm: 0 2px 8px rgba(20,30,20,.07);
-  --shadow:    0 4px 20px rgba(20,30,20,.08);
-  --shadow-lg: 0 8px 40px rgba(20,30,20,.12);
-  --shadow-xl: 0 20px 60px rgba(20,30,20,.18);
+  --glass: blur(16px) saturate(1.4);
+  --glass-border: rgba(255, 255, 255, 0.55);
+
+  --shadow-xs: 0 1px 3px rgba(20,30,20,.04), inset 0 1px 0 rgba(255,255,255,0.6);
+  --shadow-sm: 0 2px 8px rgba(20,30,20,.06), inset 0 1px 0 rgba(255,255,255,0.5);
+  --shadow:    0 4px 20px rgba(20,30,20,.07), inset 0 1px 0 rgba(255,255,255,0.45);
+  --shadow-lg: 0 8px 40px rgba(20,30,20,.10), inset 0 1px 0 rgba(255,255,255,0.4);
+  --shadow-xl: 0 20px 60px rgba(20,30,20,.16);
 
   --guide-row-height: 32px;
 
@@ -55,9 +58,9 @@
 }
 
 [data-theme="dark"] {
-  --bg: #111814;
-  --surface: #161c18;
-  --panel: #1d2622;
+  --bg: #0e1511;
+  --surface: #141a16;
+  --panel: rgba(26, 35, 29, 0.75);
   --ink: #e5ece3;
   --ink-2: #b8c9b3;
   --muted: #7a9078;
@@ -65,28 +68,21 @@
 
   --accent: #4db88f;
   --accent-h: #5ec89a;
-  --accent-light: #193028;
+  --accent-light: rgba(25, 48, 40, 0.85);
   --accent-2: #2a5a42;
   --accent-border: #2d6048;
 
-  --success: #4db88f;
-  --success-bg: #1a3028;
-  --warning: #e8a020;
-  --warning-bg: #2a2010;
-  --danger: #e05858;
-  --danger-bg: #2d1515;
-  --info: #5babd6;
-  --info-bg: #102030;
+  --border: rgba(60, 80, 65, 0.55);
+  --border-subtle: rgba(45, 62, 50, 0.45);
 
-  --border: #2a3530;
-  --border-subtle: #232e28;
-  --border-focus: #4db88f;
+  --glass: blur(20px) saturate(1.6);
+  --glass-border: rgba(255, 255, 255, 0.07);
 
-  --shadow-xs: 0 1px 3px rgba(0,0,0,.20);
-  --shadow-sm: 0 2px 8px rgba(0,0,0,.25);
-  --shadow:    0 4px 20px rgba(0,0,0,.30);
-  --shadow-lg: 0 8px 40px rgba(0,0,0,.40);
-  --shadow-xl: 0 20px 60px rgba(0,0,0,.50);
+  --shadow-xs: 0 1px 3px rgba(0,0,0,.22);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.28);
+  --shadow:    0 4px 20px rgba(0,0,0,.32);
+  --shadow-lg: 0 8px 40px rgba(0,0,0,.42);
+  --shadow-xl: 0 20px 60px rgba(0,0,0,.52);
 }
 
 /* ===================================================
@@ -110,13 +106,22 @@ html {
 body {
   font-family: var(--font);
   background:
-    radial-gradient(900px 500px at 5% -5%, rgba(47,111,92,.08) 0%, transparent 60%),
-    radial-gradient(700px 500px at 95% 0%, rgba(168,217,184,.25) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 50% at 15% -10%, rgba(47,111,92,.13) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 90% 5%,  rgba(168,217,184,.22) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 60% at 50% 100%, rgba(47,111,92,.06) 0%, transparent 50%),
     var(--bg);
   color: var(--ink);
   min-height: 100vh;
   transition: background var(--t-slow), color var(--t);
 }
+
+/* [data-theme="dark"] body {
+  background:
+    radial-gradient(ellipse 70% 50% at 10% -5%,  rgba(83, 201, 156, 0.1) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 40% at 88% 8%,   rgba(55, 132, 96, 0.18) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 70% at 50% 110%,  rgba(20,50,35,.25) 0%, transparent 55%),
+    var(--bg);
+} */
 
 body.splashing {
   overflow: hidden !important;
@@ -176,9 +181,11 @@ body.splashing {
   justify-content: space-between;
   padding: 14px 20px;
   border-radius: var(--r-xl);
-  background: linear-gradient(135deg, var(--panel) 0%, var(--surface) 100%);
-  border: 1px solid var(--border-subtle);
-  box-shadow: var(--shadow);
+  background: var(--panel);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow) inset 0 1px 0 rgba(255,255,255,0.5);;
   margin-bottom: 16px;
   gap: 12px;
   flex-wrap: wrap;
@@ -299,21 +306,6 @@ body.splashing {
   box-shadow:
     0 10px 22px color-mix(in srgb, var(--accent) 28%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-
-.panel-toggle {
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--ink);
-  padding: 7px 10px;
-  border-radius: var(--r-sm);
-  font-size: 12px;
-  cursor: pointer;
-}
-.panel-toggle:focus-visible {
-  outline: none;
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(47,111,92,.2);
 }
 
 .hero-badge {
@@ -637,11 +629,13 @@ body.splashing {
   color: var(--accent);
   cursor: pointer;
   box-shadow:
-    0 18px 34px rgba(18, 30, 23, 0.10),
-    inset 0 1px 0 rgba(255,255,255,0.32);
+    0 18px 34px rgba(18, 30, 23, 0.12),
+    0 4px 12px rgba(18, 30, 23, 0.08),
+    inset 0 1px 0 rgba(255,255,255,0.55),
+    inset 0 -1px 0 rgba(0,0,0,0.06);
   opacity: 0.76;
-  backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
   z-index: 31;
   overflow: hidden;
   transition:
@@ -658,8 +652,10 @@ body.splashing {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--accent-light) 76%, white) 0%, color-mix(in srgb, var(--panel) 92%, white) 100%);
   box-shadow:
-    0 22px 42px rgba(18, 30, 23, 0.16),
-    inset 0 1px 0 rgba(255,255,255,0.52);
+    0 22px 42px rgba(18, 30, 23, 0.18),
+    0 6px 16px rgba(18, 30, 23, 0.10),
+    inset 0 1px 0 rgba(255,255,255,0.72),
+    inset 0 -1px 0 rgba(0,0,0,0.05);
   opacity: 0.92;
 }
 
@@ -724,7 +720,9 @@ body.splashing {
    =================================================== */
 .panel {
   background: var(--panel);
-  border: 1px solid var(--border);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   padding: 14px;
   box-shadow: var(--shadow-xs);
@@ -759,7 +757,7 @@ body.splashing {
 /* details as accordion panel */
 details.panel {
   padding: 0;
-  overflow: visible;
+  overflow: hidden;
 }
 
 details.panel > summary {
@@ -811,6 +809,21 @@ details.panel[open] > summary {
   color: var(--muted);
   font-size: 11.5px;
   line-height: 1.45;
+}
+
+.panel-toggle {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  padding: 7px 10px;
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  cursor: pointer;
+}
+.panel-toggle:focus-visible {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(47,111,92,.2);
 }
 
 /* ===================================================
@@ -1489,6 +1502,24 @@ details.panel[open] > summary {
   color: var(--warning);
   background: var(--warning-bg);
   border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+}
+
+.insight-item,
+.formula-item,
+.section-nav-item,
+.repeat-block-item,
+.sheet-inspector-chip {
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+[data-theme="dark"] .insight-item,
+[data-theme="dark"] .formula-item,
+[data-theme="dark"] .section-nav-item,
+[data-theme="dark"] .repeat-block-item,
+[data-theme="dark"] .sheet-inspector-chip {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* ===================================================
