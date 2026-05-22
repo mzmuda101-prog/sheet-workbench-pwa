@@ -409,6 +409,7 @@ function initIntroSplash() {
     try {
       vid.currentTime = 0;
       vid.muted = true;
+      vid.playbackRate = 1.5;
       const playPromise = vid.play();
       if (playPromise && typeof playPromise.catch === "function") {
         playPromise.catch(() => hideSplash());
@@ -417,13 +418,13 @@ function initIntroSplash() {
       hideSplash();
     }
 
-    const fallback = setTimeout(hideSplash, 15000);
+    const fallback = setTimeout(hideSplash, 10000);
     vid.addEventListener("ended", () => {
       clearTimeout(fallback);
       hideSplash();
     });
   } else {
-    setTimeout(hideSplash, 8000);
+    setTimeout(hideSplash, 6000);
   }
 }
 
