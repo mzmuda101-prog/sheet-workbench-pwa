@@ -2608,7 +2608,7 @@ kbd {
 }
 .quick-search-popup-hint {
   font-size: 11px;
-  color: var(--placeholder);
+  color: var(--ink);
   margin: 0;
 }
 

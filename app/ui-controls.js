@@ -320,18 +320,8 @@ columnListEl.addEventListener("click", (e) => {
   if (!row) return;
   const cb = row.querySelector("input[type=checkbox]");
   if (!cb) return;
-  if (e.target !== cb) cb.checked = !cb.checked;
-});
-
-columnListEl.addEventListener("mousedown", (e) => {
-  const row = e.target.closest(".field.checkbox");
-  if (!row) return;
-  const cb = row.querySelector("input[type=checkbox]");
-  if (!cb) return;
-  if (e.target !== cb) {
-    e.preventDefault();
-    cb.checked = !cb.checked;
-  }
+  if (e.target === cb || e.target.tagName === "LABEL") return;
+  cb.checked = !cb.checked;
 });
 
 
