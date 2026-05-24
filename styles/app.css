@@ -1403,7 +1403,7 @@ details.panel[open] > summary {
   padding: 11px;
   border-radius: var(--r-sm);
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--info-bg) 60%, white) 0%, var(--surface) 100%);
+    linear-gradient(135deg, color-mix(in srgb, var(--surface) 60%, var(--surface)) 0%, var(--accent-light) 100%);
   border: 1px solid color-mix(in srgb, var(--info) 18%, var(--border));
 }
 
