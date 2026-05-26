@@ -496,7 +496,16 @@ const STATIC_TRANSLATIONS = {
     function: "Funkcja",
     log: "Log",
     logAria: "Log zdarzeń",
-    shortcuts: "Skróty",
+    shortcuts: "Skróty i info",
+    quickSearchActionFilter: "Filtruj",
+    quickSearchActionHighlight: "Zaznacz",
+    quickSearchOperatorsLabel: "&&·||",
+    quickSearchOperatorsTitle: "Pozwól silnikowi odczytywać operatory && i || w zapytaniu",
+    searchOperatorsTitle: "Operatory wyszukiwania",
+    searchOperatorOr: "LUB — wiersz zawiera przynajmniej jeden z wyrazów",
+    searchOperatorOrExample: "np. 'Kowalski || Nowak'",
+    searchOperatorAnd: "I — wiersz zawiera wszystkie wyrazy jednocześnie",
+    searchOperatorAndExample: "np. 'Kowalski && Faktura' · ma pierwszeństwo nad ||",
     statusNoData: "Brak danych",
     quickSearchPlaceholder: "Szybkie szukanie...",
     quickSearchAria: "Tryb szybkiego szukania",
@@ -610,7 +619,16 @@ const STATIC_TRANSLATIONS = {
     function: "Function",
     log: "Log",
     logAria: "Event log",
-    shortcuts: "Shortcuts",
+    shortcuts: "Shortcuts & info",
+    quickSearchActionFilter: "Filter",
+    quickSearchActionHighlight: "Highlight",
+    quickSearchOperatorsLabel: "&&·||",
+    quickSearchOperatorsTitle: "Allow the engine to interpret && and || operators in the query",
+    searchOperatorsTitle: "Search operators",
+    searchOperatorOr: "OR — row contains at least one of the terms",
+    searchOperatorOrExample: "e.g. \'Kowalski || Nowak\'",
+    searchOperatorAnd: "AND — row contains all terms simultaneously",
+    searchOperatorAndExample: "e.g. \'Kowalski && Invoice\' · takes precedence over ||",
     statusNoData: "No data",
     quickSearchPlaceholder: "Quick search...",
     quickSearchAria: "Quick search mode",
@@ -984,6 +1002,9 @@ function applyStaticTranslations() {
   setText("#panel-log .panel-title", copy.log);
   setAttr("#log", "aria-label", copy.logAria);
   setText("#panel-shortcuts .panel-title", copy.shortcuts);
+  setAttr("#quickSearchOperators", "title", copy.quickSearchOperatorsTitle);
+  setAttr("#quickSearchPopupOperators", "title", copy.quickSearchOperatorsTitle);
+
 
   const heroStatus = statusEl
     && !statusEl.classList.contains("unsaved")

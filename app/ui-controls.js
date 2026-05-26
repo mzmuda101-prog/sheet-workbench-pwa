@@ -188,8 +188,11 @@ function resetFilterInputs() {
   columnSelections.date.clear();
   quickSearchHighlightMode = false;
   matchedRowIndexes = new Set();
+  quickSearchOperatorsEnabled = false;
   if (quickSearchActionEl) quickSearchActionEl.value = "filter";
   if (quickSearchPopupActionEl) quickSearchPopupActionEl.value = "filter";
+  if (quickSearchOperatorsEl) quickSearchOperatorsEl.checked = false;
+  if (quickSearchPopupOperatorsEl) quickSearchPopupOperatorsEl.checked = false;
   syncQuickSearchInputs();
   syncQuickSearchModeControls();
   updateColumnSummary();
@@ -763,6 +766,12 @@ function applyQuickSearch() {
   // Odczytaj tryb akcji (filtruj / zaznacz)
   const actionEl = (popupActive && quickSearchPopupActionEl) ? quickSearchPopupActionEl : quickSearchActionEl;
   quickSearchHighlightMode = actionEl ? actionEl.value === "highlight" : false;
+
+  // Odczytaj i synchronizuj checkbox operatorów
+  const operatorsEl = (popupActive && quickSearchPopupOperatorsEl) ? quickSearchPopupOperatorsEl : quickSearchOperatorsEl;
+  quickSearchOperatorsEnabled = operatorsEl ? operatorsEl.checked : false;
+  if (quickSearchOperatorsEl) quickSearchOperatorsEl.checked = quickSearchOperatorsEnabled;
+  if (quickSearchPopupOperatorsEl) quickSearchPopupOperatorsEl.checked = quickSearchOperatorsEnabled;
 
   // Synchronizuj oba selecty akcji
   if (quickSearchActionEl && actionEl) quickSearchActionEl.value = actionEl.value;

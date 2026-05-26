@@ -1915,10 +1915,10 @@ details.panel[open] > summary {
   border-radius: var(--r-full);
   background: var(--surface);
   color: var(--muted);
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
-.quick-search input {
+.quick-search input:not([type="checkbox"]) {
   flex: 1;
   border: none;
   background: transparent;
@@ -1939,6 +1939,50 @@ details.panel[open] > summary {
 
 .quick-search input:focus {
   outline: none;
+}
+
+/* Operators toggle — kompaktowy pill z checkboxem */
+.qs-operators-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  font-size: 11px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  transition: border-color var(--t), color var(--t), background var(--t);
+  flex-shrink: 0;
+}
+.qs-operators-toggle:hover {
+  border-color: var(--accent-border);
+  color: var(--ink-2);
+}
+.qs-operators-toggle input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  margin: 0;
+}
+.qs-operators-toggle-text em {
+  font-style: normal;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: 0.8;
+}
+.qs-operators-toggle:has(input:checked) {
+  border-color: var(--accent-border);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.qs-operators-toggle:has(input:checked) .qs-operators-toggle-text em {
+  opacity: 1;
 }
 
 .sidebar-open .panel-toggle {
@@ -2295,6 +2339,7 @@ tbody tr.row-unmatched .row-head {
 
 .resizing {
   cursor: col-resize;
+  user-select: none;
   -webkit-user-select: none;
 }
 
@@ -2595,7 +2640,7 @@ kbd {
   margin-bottom: 6px;
   flex-wrap: wrap;
 }
-.quick-search-popup-row input {
+.quick-search-popup-row input:not([type="checkbox"]) {
   flex: 1;
   min-width: 180px;
   padding: 8px 12px;

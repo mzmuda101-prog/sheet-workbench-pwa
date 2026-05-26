@@ -429,6 +429,8 @@ function rowMatchesSingleTerm(row, term, criterion) {
 }
 
 function parseQueryTerms(query) {
+  // Operatory aktywne tylko gdy użytkownik świadomie to włączył
+  if (!quickSearchOperatorsEnabled) return { op: "single", terms: [query] };
   // && ma pierwszeństwo — jeśli jest, ignorujemy ||
   if (query.includes("&&")) {
     return { op: "and", terms: query.split("&&").map((t) => t.trim()).filter(Boolean) };

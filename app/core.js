@@ -110,6 +110,8 @@ const quickSearchPopupModeEl = document.getElementById("quickSearchPopupMode");
 const quickSearchPopupColumnsBtn = document.getElementById("quickSearchPopupColumnsBtn");
 const quickSearchPopupBtn = document.getElementById("quickSearchPopupBtn");
 const quickSearchPopupActionEl = document.getElementById("quickSearchPopupAction");
+const quickSearchOperatorsEl = document.getElementById("quickSearchOperators");
+const quickSearchPopupOperatorsEl = document.getElementById("quickSearchPopupOperators");
 const workbookInsightsEl = document.getElementById("workbookInsights");
 const sheetInsightsEl = document.getElementById("sheetInsights");
 const insightFlagsEl = document.getElementById("insightFlags");
@@ -138,6 +140,7 @@ let baseRows = [];
 let viewRows = [];
 let matchedRowIndexes = new Set(); // wiersze pasujące do quick search w trybie "zaznacz"
 let quickSearchHighlightMode = false; // true = zaznacz zamiast filtruj
+let quickSearchOperatorsEnabled = false; // true = &&/|| traktowane jako operatory
 let currentFileName = "";
 let currentSheetName = "";
 let currentHeaderRow = 1;
