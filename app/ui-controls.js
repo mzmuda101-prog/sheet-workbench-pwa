@@ -186,6 +186,10 @@ function resetFilterInputs() {
   columnSelections.filter1.clear();
   columnSelections.filter2.clear();
   columnSelections.date.clear();
+  quickSearchHighlightMode = false;
+  matchedRowIndexes = new Set();
+  if (quickSearchActionEl) quickSearchActionEl.value = "filter";
+  if (quickSearchPopupActionEl) quickSearchPopupActionEl.value = "filter";
   syncQuickSearchInputs();
   syncQuickSearchModeControls();
   updateColumnSummary();
@@ -755,6 +759,15 @@ function applyQuickSearch() {
   const popupActive = quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden");
   if (popupActive && quickSearchPopupModeEl) applyQuickSearchMode(getNormalizedSelectValue(quickSearchPopupModeEl));
   else if (quickSearchModeEl) applyQuickSearchMode(getNormalizedSelectValue(quickSearchModeEl));
+
+  // Odczytaj tryb akcji (filtruj / zaznacz)
+  const actionEl = (popupActive && quickSearchPopupActionEl) ? quickSearchPopupActionEl : quickSearchActionEl;
+  quickSearchHighlightMode = actionEl ? actionEl.value === "highlight" : false;
+
+  // Synchronizuj oba selecty akcji
+  if (quickSearchActionEl && actionEl) quickSearchActionEl.value = actionEl.value;
+  if (quickSearchPopupActionEl && actionEl) quickSearchPopupActionEl.value = actionEl.value;
+
   if (quickSearchPopupInput) quickSearchPopupInput.value = value;
   if (quickSearchEl) quickSearchEl.value = value;
   searchQueryEl.value = value;

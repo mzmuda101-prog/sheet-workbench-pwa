@@ -2272,6 +2272,27 @@ tbody tr.row-subheader:hover td { background: rgba(47,111,92,.12); }
 [data-theme="dark"] tbody tr.row-subheader:hover td { background: rgba(77,184,143,.15); }
 tbody tr:last-child td { border-bottom: none; }
 
+/* Tryb "zaznacz" w szybkim szukaniu */
+tbody tr.row-matched td {
+  background: color-mix(in srgb, var(--accent-light) 75%, transparent) !important;
+}
+tbody tr.row-matched .row-head {
+  background: color-mix(in srgb, var(--accent-light) 55%, transparent) !important;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+tbody tr.row-unmatched td,
+tbody tr.row-unmatched .row-head {
+  opacity: 0.35;
+}
+[data-theme="dark"] tbody tr.row-matched td {
+  background: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+}
+[data-theme="dark"] tbody tr.row-matched .row-head {
+  background: color-mix(in srgb, var(--accent) 18%, transparent) !important;
+  font-weight: 600;
+}
+
 .resizing {
   cursor: col-resize;
   -webkit-user-select: none;

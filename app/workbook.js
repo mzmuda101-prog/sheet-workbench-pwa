@@ -404,6 +404,41 @@ function combinePrimaryAndEmptyMatch(primaryMatched, emptyMatched, negated, hasP
   return true;
 }
 
+function rowMatchesSingleTerm(row, term, criterion) {
+  const values = row.values;
+  const q = term.trim().toLowerCase();
+  if (!q) return true;
+  for (const i of criterion.indexes) {
+    if (i >= values.length) continue;
+    const text = getDisplayValue(row, i).toLowerCase();
+    const altDate = parseDateFlexible(values[i]);
+    const candidates = [text];
+    if (altDate instanceof Date) {
+      const dd = String(altDate.getDate()).padStart(2, "0");
+      const mm = String(altDate.getMonth() + 1).padStart(2, "0");
+      const yyyy = String(altDate.getFullYear());
+      const yy = yyyy.slice(-2);
+      candidates.push(`${dd}-${mm}-${yy}`);
+      candidates.push(`${dd}-${mm}-${yyyy}`);
+    }
+    if (criterion.mode === "equals" && candidates.some((c) => c === q)) return true;
+    if (criterion.mode === "starts_with" && candidates.some((c) => c.startsWith(q))) return true;
+    if (criterion.mode === "contains" && candidates.some((c) => c.includes(q))) return true;
+  }
+  return false;
+}
+
+function parseQueryTerms(query) {
+  // && ma pierwszeństwo — jeśli jest, ignorujemy ||
+  if (query.includes("&&")) {
+    return { op: "and", terms: query.split("&&").map((t) => t.trim()).filter(Boolean) };
+  }
+  if (query.includes("||")) {
+    return { op: "or", terms: query.split("||").map((t) => t.trim()).filter(Boolean) };
+  }
+  return { op: "single", terms: [query] };
+}
+
 function rowMatchesTextFilter(row, criteria, onlyNonEmpty) {
   const values = row.values;
   let usedIndexes = new Set();
@@ -426,25 +461,17 @@ function rowMatchesTextFilter(row, criteria, onlyNonEmpty) {
     if (!hasQuery && !hasEmptyRule) continue;
 
     let textMatched = !hasQuery;
-    for (const i of criterion.indexes) {
-      if (!hasQuery) break;
-      if (i >= values.length) continue;
-      const text = getDisplayValue(row, i).toLowerCase();
-      const altDate = parseDateFlexible(values[i]);
-      const candidates = [text];
-      if (altDate instanceof Date) {
-        const dd = String(altDate.getDate()).padStart(2, "0");
-        const mm = String(altDate.getMonth() + 1).padStart(2, "0");
-        const yyyy = String(altDate.getFullYear());
-        const yy = yyyy.slice(-2);
-        candidates.push(`${dd}-${mm}-${yy}`);
-        candidates.push(`${dd}-${mm}-${yyyy}`);
+    if (hasQuery) {
+      const parsed = parseQueryTerms(query);
+      if (parsed.op === "and") {
+        textMatched = parsed.terms.every((term) => rowMatchesSingleTerm(row, term, criterion));
+      } else if (parsed.op === "or") {
+        textMatched = parsed.terms.some((term) => rowMatchesSingleTerm(row, term, criterion));
+      } else {
+        textMatched = rowMatchesSingleTerm(row, parsed.terms[0], criterion);
       }
-      if (criterion.mode === "equals" && candidates.some((c) => c === query)) textMatched = true;
-      if (criterion.mode === "starts_with" && candidates.some((c) => c.startsWith(query))) textMatched = true;
-      if (criterion.mode === "contains" && candidates.some((c) => c.includes(query))) textMatched = true;
-      if (textMatched) break;
     }
+
     const emptyMatched = rowMatchesEmptyMode(row, criterion.indexes, emptyMode);
     const matched = combinePrimaryAndEmptyMatch(textMatched, emptyMatched, criterion.negated, hasQuery, hasEmptyRule);
     if (!matched) return false;
@@ -679,11 +706,21 @@ function applyFilters() {
   };
   const onlyNonEmpty = onlyNonEmptyEl.checked;
 
-  viewRows = baseRows.filter((row) => {
+  const rowPasses = (row) => {
     if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;
     if (!rowMatchesDateFilter(row, dateFilter)) return false;
     return true;
-  });
+  };
+
+  if (quickSearchHighlightMode) {
+    // Tryb "zaznacz": wszystkie wiersze widoczne, zapamiętaj które pasują
+    viewRows = baseRows.slice();
+    matchedRowIndexes = new Set(baseRows.filter(rowPasses).map((r) => r.rowIndex0));
+  } else {
+    // Tryb "filtruj": tylko pasujące wiersze
+    matchedRowIndexes = new Set();
+    viewRows = baseRows.filter(rowPasses);
+  }
 }
 
 function sortRows() {

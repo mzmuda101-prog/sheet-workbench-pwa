@@ -799,6 +799,13 @@ function renderTable(modelOrHeaders, maybeRows) {
     tr.dataset.rowKey = getRowSelectionKey(row);
     if (focusedCellState && focusedCellState.rowKey === tr.dataset.rowKey) tr.classList.add("row-focused");
     if (row.isSubheader) tr.classList.add("row-subheader");
+    if (quickSearchHighlightMode && matchedRowIndexes.size > 0) {
+      if (matchedRowIndexes.has(row.rowIndex0)) {
+        tr.classList.add("row-matched");
+      } else {
+        tr.classList.add("row-unmatched");
+      }
+    }
     if (typeof row.rowIndex0 === "number") {
       tr.dataset.rowIndex = String(row.rowIndex0);
     }

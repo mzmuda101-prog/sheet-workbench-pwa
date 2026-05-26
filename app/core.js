@@ -76,6 +76,7 @@ const quickSearchEl = document.getElementById("quickSearch");
 const quickSearchModeEl = document.getElementById("quickSearchMode");
 const quickSearchColumnsBtn = document.getElementById("quickSearchColumnsBtn");
 const quickSearchBtn = document.getElementById("quickSearchBtn");
+const quickSearchActionEl = document.getElementById("quickSearchAction");
 const wideLongToggleEl = document.getElementById("wideLongToggle");
 
 const columnPickerEl = document.getElementById("columnPicker");
@@ -108,6 +109,7 @@ const quickSearchPopupInput = document.getElementById("quickSearchPopupInput");
 const quickSearchPopupModeEl = document.getElementById("quickSearchPopupMode");
 const quickSearchPopupColumnsBtn = document.getElementById("quickSearchPopupColumnsBtn");
 const quickSearchPopupBtn = document.getElementById("quickSearchPopupBtn");
+const quickSearchPopupActionEl = document.getElementById("quickSearchPopupAction");
 const workbookInsightsEl = document.getElementById("workbookInsights");
 const sheetInsightsEl = document.getElementById("sheetInsights");
 const insightFlagsEl = document.getElementById("insightFlags");
@@ -134,6 +136,8 @@ let workbook = null;
 let currentHeaders = [];
 let baseRows = [];
 let viewRows = [];
+let matchedRowIndexes = new Set(); // wiersze pasujące do quick search w trybie "zaznacz"
+let quickSearchHighlightMode = false; // true = zaznacz zamiast filtruj
 let currentFileName = "";
 let currentSheetName = "";
 let currentHeaderRow = 1;
@@ -193,7 +197,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260525-01";
+const APP_BUILD_VERSION = "20260526-01";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

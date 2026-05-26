@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=20260429-01" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
-    <link rel="stylesheet" href="styles/app.css?v=20260525-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260526-01" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -631,7 +631,7 @@
                 <line x1="7" y1="12" x2="13" y2="12" />
                 <line x1="7" y1="16" x2="15" y2="16" />
               </svg>
-              <span class="panel-title">Skróty</span>
+              <span class="panel-title">Skróty i info</span>
               <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
@@ -652,6 +652,11 @@
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>K</kbd> <span>Kolumny</span></div>
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>/</kbd> <span>Motyw</span></div>
               <div class="shortcut-row"><kbd>Esc</kbd> <span>Zamknij modal / panel</span></div>
+            </div>
+            <div class="shortcut-hint" style="margin-top:12px;">
+              <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:6px;">Operatory wyszukiwania</div>
+              <div class="shortcut-row"><kbd>||</kbd> <span><strong>LUB</strong> — wiersz zawiera przynajmniej jeden z wyrazów<br><em style="color:var(--ink-3);font-size:11px;">np. „Kowalski || Nowak"</em></span></div>
+              <div class="shortcut-row"><kbd>&&</kbd> <span><strong>I</strong> — wiersz zawiera wszystkie wyrazy jednocześnie<br><em style="color:var(--ink-3);font-size:11px;">np. „Kowalski && Faktura" · ma pierwszeństwo nad ||</em></span></div>
             </div>
             </div>
           </details>
@@ -675,6 +680,10 @@
                   <option value="contains">Zawiera</option>
                   <option value="exact">Dokladnie</option>
                 </select>
+                <select id="quickSearchAction" aria-label="Akcja szybkiego szukania" title="Filtruj – ukrywa niezaznaczone wiersze; Zaznacz – pokazuje wszystkie, wyróżnia pasujące">
+                  <option value="filter">Filtruj</option>
+                  <option value="highlight">Zaznacz</option>
+                </select>
                 <button class="btn btn-sm ghost" id="quickSearchColumnsBtn" type="button" title="Wybierz kolumny dla szybkiego szukania">
                   Kolumny
                 </button>
@@ -683,7 +692,7 @@
                     <circle cx="11" cy="11" r="8"></circle>
                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                   </svg>
-                  Filtruj
+                  Szukaj
                 </button>
               </div>
               <div class="table-actions">
@@ -758,8 +767,12 @@
             <option value="contains">Zawiera</option>
             <option value="exact">Dokladnie</option>
           </select>
+          <select id="quickSearchPopupAction" aria-label="Akcja szybkiego szukania w oknie">
+            <option value="filter">Filtruj</option>
+            <option value="highlight">Zaznacz</option>
+          </select>
           <button class="btn btn-sm ghost" id="quickSearchPopupColumnsBtn" type="button">Kolumny</button>
-          <button class="btn btn-sm" id="quickSearchPopupBtn" type="button">Filtruj</button>
+          <button class="btn btn-sm" id="quickSearchPopupBtn" type="button">Szukaj</button>
         </div>
         <p class="quick-search-popup-hint">Enter – zastosuj, Esc – zamknij</p>
       </div>
@@ -779,13 +792,13 @@
 
     <!-- Local xlsx-js-style (better style read/write, stable offline) -->
     <script src="lib/xlsx-js-style.bundle.min.js"></script>
-    <script src="app/core.js?v=20260525-01"></script>
-    <script src="app/language.js?v=20260525-01"></script>
-    <script src="app/analysis.js?v=20260525-01"></script>
-    <script src="app/workbook.js?v=20260525-01"></script>
-    <script src="app/table.js?v=20260525-01"></script>
-    <script src="app/formulas.js?v=20260525-01"></script>
-    <script src="app/ui-controls.js?v=20260525-01"></script>
-    <script src="app/bootstrap.js?v=20260525-01"></script>
+    <script src="app/core.js?v=20260526-01"></script>
+    <script src="app/language.js?v=20260526-01"></script>
+    <script src="app/analysis.js?v=20260526-01"></script>
+    <script src="app/workbook.js?v=20260526-01"></script>
+    <script src="app/table.js?v=20260526-01"></script>
+    <script src="app/formulas.js?v=20260526-01"></script>
+    <script src="app/ui-controls.js?v=20260526-01"></script>
+    <script src="app/bootstrap.js?v=20260526-01"></script>
   </body>
 </html>
