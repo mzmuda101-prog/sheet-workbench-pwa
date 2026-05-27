@@ -1,5 +1,11 @@
 // App bootstrap: event wiring, initial render, and runtime startup.
 
+if (window.MateuszCursorHint) {
+  window.MateuszCursorHint.initCursorHints({
+    fallbackHint: t("hintDefault"),
+  });
+}
+
 panelToggle.addEventListener("click", toggleSidebar);
 if (panelHandle) panelHandle.addEventListener("click", toggleSidebar);
 if (sidebarScrim) sidebarScrim.addEventListener("click", () => setSidebarOpen(false));

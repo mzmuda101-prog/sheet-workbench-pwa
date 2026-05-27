@@ -2773,6 +2773,68 @@ kbd {
 .toast.warning { border-left: 3px solid var(--warning); }
 .toast.warning .toast-icon { background: var(--warning-bg); color: var(--warning); }
 
+.cursor-hint {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 9998;
+  display: inline-flex;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+  will-change: transform, opacity;
+}
+
+.cursor-hint-scaler {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 86px;
+  max-width: min(260px, calc(100vw - 32px));
+  padding: 0.64rem 0.86rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, rgba(255, 255, 255, 0.36));
+  border-radius: 999px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--panel) 84%, white) 0%, color-mix(in srgb, var(--accent-light) 84%, white) 100%);
+  color: var(--accent);
+  box-shadow:
+    0 16px 34px color-mix(in srgb, var(--accent) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(14px);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-align: center;
+  text-transform: uppercase;
+  transform-origin: left bottom;
+  transition: transform 140ms ease;
+}
+
+.cursor-hint.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cursor-hint.smaller {
+  --hint-offset-x: 18;
+  --hint-offset-y: 22;
+}
+
+.cursor-hint.smaller .cursor-hint-scaler {
+  transform: scale(0.86);
+}
+
+[data-theme="dark"] .cursor-hint-scaler {
+  border-color: color-mix(in srgb, var(--accent) 45%, rgba(255, 255, 255, 0.2));
+  background:
+    linear-gradient(135deg, rgba(18, 31, 25, 0.92) 0%, rgba(28, 58, 44, 0.9) 100%);
+  color: #effff7;
+  box-shadow:
+    0 18px 40px rgba(5, 18, 12, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+}
+
 /* ===================================================
    RESPONSIVE
    =================================================== */

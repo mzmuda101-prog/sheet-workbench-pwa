@@ -34,7 +34,7 @@
           </div>
         </div>
         <div class="hero-right" id="heroRight">
-          <button class="panel-toggle" id="panelToggle" type="button" aria-label="Zwin/rozwin panel">
+          <button class="panel-toggle" id="panelToggle" type="button" aria-label="Zwin/rozwin panel" data-hint>
             Panel
           </button>
           <div class="lang-switch" role="group" aria-label="Przełącznik języka" id="langSwitch">
@@ -53,13 +53,13 @@
           <a href="https://portal-ogloszeniowy.vercel.app" target="_blank" rel="noopener"><button class="logo-badge" id="link2" title="Przejdź do strony Mateusz App | Portal Ogloszeniowy" aria-label="Przejdź do strony Mateusz App | Portal Ogloszeniowy">
             <img src="assets/images/logo-mateusz-orange.png" alt="Logo Mateusz" />
           </button></a>
-          <button class="logo-badge" id="brandRefresh" title="Odśwież aplikację" aria-label="Odśwież aplikację">
+          <button class="logo-badge" id="brandRefresh" title="Odśwież aplikację" aria-label="Odśwież aplikację" data-hint>
             <img src="assets/images/logo-refresh.png" alt="Logo Mateusz" />
           </button>
-          <button class="app-update-btn hidden" id="appUpdateBtn" type="button" aria-live="polite">
+          <button class="app-update-btn hidden" id="appUpdateBtn" type="button" aria-live="polite" data-hint>
             Aktualizuj
           </button>
-          <button class="theme-toggle" id="themeToggle" title="Zmień motyw (jasny / ciemny)" aria-label="Zmień motyw"></button>
+          <button class="theme-toggle" id="themeToggle" title="Zmień motyw (jasny / ciemny)" aria-label="Zmień motyw" data-hint></button>
         </div>
       </header>
 
@@ -79,7 +79,7 @@
               </svg>
             </summary>
             <div class="panel-body stack">
-              <label class="drop-zone" id="dropZone">
+              <label class="drop-zone" id="dropZone" data-hint data-hint-delay="1.5" data-hint-touch="on">
                 <div class="drop-icon">
                   <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -189,7 +189,7 @@
                   Odwróć
                 </label>
               </div>
-              <label class="qs-operators-toggle" title="Gdy włączone: && znaczy I, || znaczy LUB. Gdy wyłączone: te znaki są traktowane jako zwykły tekst.">
+              <label class="qs-operators-toggle" data-hint data-hint-delay="1.5" data-hint-touch="on">
                 <input type="checkbox" id="filterOperators" />
                 <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
               </label>
@@ -249,7 +249,7 @@
                   Odwróć
                 </label>
               </div>
-              <label class="qs-operators-toggle" title="Gdy włączone: && znaczy I, || znaczy LUB. Gdy wyłączone: te znaki są traktowane jako zwykły tekst.">
+              <label class="qs-operators-toggle" data-hint data-hint-delay="1.5" data-hint-touch="on">
                 <input type="checkbox" id="filterOperators2" />
                 <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
               </label>
@@ -674,7 +674,7 @@
 
         <!-- ====== MAIN ====== -->
         <main class="main">
-          <button class="sidebar-handle" id="panelHandle" type="button" aria-label="Zwin/rozwin panel">
+          <button class="sidebar-handle" id="panelHandle" type="button" aria-label="Zwin/rozwin panel" data-hint data-hint-delay="1.5" data-hint-touch="on">
             ‹
           </button>
           <section class="panel table-panel">
@@ -694,7 +694,7 @@
                   <option value="filter">Filtruj</option>
                   <option value="highlight">Zaznacz</option>
                 </select>
-                <label class="qs-operators-toggle" title="Gdy włączone: && znaczy I, || znaczy LUB. Gdy wyłączone: te znaki są traktowane jako zwykły tekst.">
+                <label class="qs-operators-toggle" data-hint data-hint-delay="1.5" data-hint-touch="on">
                   <input type="checkbox" id="quickSearchOperators" />
                   <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
                 </label>
@@ -710,14 +710,14 @@
                 </button>
               </div>
               <div class="table-actions">
-                <button class="btn btn-sm ghost hidden" id="wideLongToggle" type="button" aria-pressed="false" title="Przełącz widok blokowy na długi">
+                <button class="btn btn-sm ghost hidden" id="wideLongToggle" type="button" aria-pressed="false" title="Przełącz widok blokowy na długi" data-hint>
                   Wide-to-Long
                 </button>
-                <button class="btn btn-sm ghost" id="excelLayoutToggle" type="button" aria-pressed="false" title="Przełącz widok !cols/!rows">
+                <button class="btn btn-sm ghost" id="excelLayoutToggle" type="button" aria-pressed="false" title="Przełącz widok !cols/!rows" data-hint>
                   Widok Excel
                 </button>
                 <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
-                <button class="btn btn-sm ghost" id="readingToggle" type="button">Tryb szybkie szukanie</button>
+                <button class="btn btn-sm ghost" id="readingToggle" type="button" data-hint>Tryb szybkie szukanie</button>
                 <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport CSV</button>
               </div>
             </div>
@@ -785,7 +785,7 @@
             <option value="filter">Filtruj</option>
             <option value="highlight">Zaznacz</option>
           </select>
-          <label class="qs-operators-toggle" title="Gdy włączone: && znaczy I, || znaczy LUB. Gdy wyłączone: te znaki są traktowane jako zwykły tekst.">
+          <label class="qs-operators-toggle" data-hint data-hint-delay="1.5" data-hint-touch="on">
             <input type="checkbox" id="quickSearchPopupOperators" />
             <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
           </label>
@@ -807,11 +807,17 @@
     <!-- Toasts -->
     <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
     <div class="cell-tooltip hidden" id="cellTooltip" role="status" aria-live="polite"></div>
+    <div class="cursor-hint" id="cursorHint" aria-hidden="true">
+      <div class="cursor-hint-scaler">
+        <span id="cursorHintText">Kliknij</span>
+      </div>
+    </div>
 
     <!-- Local xlsx-js-style (better style read/write, stable offline) -->
     <script src="lib/xlsx-js-style.bundle.min.js"></script>
     <script src="app/core.js?v=20260526-02"></script>
     <script src="app/language.js?v=20260526-02"></script>
+    <script src="app/cursor-hint.js?v=20260526-02"></script>
     <script src="app/analysis.js?v=20260526-02"></script>
     <script src="app/workbook.js?v=20260526-02"></script>
     <script src="app/table.js?v=20260526-02"></script>
