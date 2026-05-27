@@ -107,6 +107,8 @@ function updateFilterBadge() {
   if (getNormalizedSelectValue(filterEmptyMode2El) !== "all") count += 1;
   if (filterNegateEl.checked) count += 1;
   if (filterNegate2El.checked) count += 1;
+  if (filterOperatorsEl?.checked) count += 1;
+  if (filterOperators2El?.checked) count += 1;
   if (onlyNonEmptyEl.checked) count += 1;
   if (getNormalizedSelectValue(dateModeEl) === "last_n_days") count += 1;
   if (dateFromEl.value.trim() || dateToEl.value.trim()) count += 1;
@@ -148,6 +150,13 @@ function syncQuickSearchModeControls() {
   if (quickSearchPopupModeEl) quickSearchPopupModeEl.value = mode;
 }
 
+function syncQuickSearchOperatorsControls() {
+  const enabled = !!filterOperatorsEl?.checked;
+  quickSearchOperatorsEnabled = enabled;
+  if (quickSearchOperatorsEl) quickSearchOperatorsEl.checked = enabled;
+  if (quickSearchPopupOperatorsEl) quickSearchPopupOperatorsEl.checked = enabled;
+}
+
 function applyQuickSearchMode(mode) {
   const normalizedQuickMode = normalizeSelectValue("quickSearchMode", mode);
   const normalized = normalizedQuickMode === "exact" ? "equals" : "contains";
@@ -176,6 +185,8 @@ function resetFilterInputs() {
   filterEmptyMode2El.value = "all";
   filterNegateEl.checked = false;
   filterNegate2El.checked = false;
+  if (filterOperatorsEl) filterOperatorsEl.checked = false;
+  if (filterOperators2El) filterOperators2El.checked = false;
   onlyNonEmptyEl.checked = false;
   dateModeEl.value = "between";
   dateFromEl.value = "";
@@ -195,6 +206,7 @@ function resetFilterInputs() {
   if (quickSearchPopupOperatorsEl) quickSearchPopupOperatorsEl.checked = false;
   syncQuickSearchInputs();
   syncQuickSearchModeControls();
+  syncQuickSearchOperatorsControls();
   updateColumnSummary();
   updateDateChipsActive();
   updateFilterBadge();
@@ -220,10 +232,10 @@ function openColumnPicker(key) {
   activePickerKey = key;
   if (columnPickerTitleEl) {
     columnPickerTitleEl.textContent = key === "filter1"
-      ? currentLang === "en" ? "Quick search columns" : "Kolumny szybkiego szukania"
+      ? t("quickSearchColumnsTitleShort")
       : key === "filter2"
-        ? currentLang === "en" ? "Text filter 2 columns" : "Kolumny filtru tekstowego 2"
-        : currentLang === "en" ? "Date filter columns" : "Kolumny filtru dat";
+        ? t("textFilter2ColumnsTitle")
+        : t("dateFilterColumnsTitle");
   }
   columnListEl.replaceChildren();
   columnSearchEl.value = "";
@@ -263,7 +275,7 @@ function openMeasurePicker() {
   }
   activePickerKey = "measures";
   if (columnPickerTitleEl) {
-    columnPickerTitleEl.textContent = currentLang === "en" ? "Select measures" : "Wybierz miary";
+    columnPickerTitleEl.textContent = t("selectMeasuresTitle");
   }
   columnListEl.replaceChildren();
   columnSearchEl.value = "";
@@ -770,6 +782,7 @@ function applyQuickSearch() {
   // Odczytaj i synchronizuj checkbox operatorów
   const operatorsEl = (popupActive && quickSearchPopupOperatorsEl) ? quickSearchPopupOperatorsEl : quickSearchOperatorsEl;
   quickSearchOperatorsEnabled = operatorsEl ? operatorsEl.checked : false;
+  if (filterOperatorsEl) filterOperatorsEl.checked = quickSearchOperatorsEnabled;
   if (quickSearchOperatorsEl) quickSearchOperatorsEl.checked = quickSearchOperatorsEnabled;
   if (quickSearchPopupOperatorsEl) quickSearchPopupOperatorsEl.checked = quickSearchOperatorsEnabled;
 
@@ -1107,10 +1120,11 @@ tbodyEl.addEventListener("click", (e) => {
 tbodyEl.addEventListener("dblclick", (e) => {
   const td = e.target.closest("td");
   if (!td || td.classList.contains("row-head")) return;
-  toast("Edycja komorek jest tymczasowo zablokowana, dopoki lepiej nie dopracujemy zapisu stylow i zgodnosci pliku.", "info");
+  toast(t("cellEditingFuture"), "info");
 });
 
-[searchQueryEl, searchQuery2El, onlyNonEmptyEl, dateModeEl, dateFromEl, dateToEl, lastDaysEl].forEach((el) => {
+[searchQueryEl, searchQuery2El, filterOperatorsEl, filterOperators2El, onlyNonEmptyEl, dateModeEl, dateFromEl, dateToEl, lastDaysEl].forEach((el) => {
+  if (!el) return;
   el.addEventListener("input", updateFilterBadge);
   el.addEventListener("change", updateFilterBadge);
 });
@@ -1121,6 +1135,9 @@ tbodyEl.addEventListener("dblclick", (e) => {
 
 searchQueryEl.addEventListener("input", syncQuickSearchInputs);
 filterModeEl.addEventListener("change", syncQuickSearchModeControls);
+if (filterOperatorsEl) {
+  filterOperatorsEl.addEventListener("change", syncQuickSearchOperatorsControls);
+}
 
 maxRowsEl.addEventListener("change", () => {
   saveMaxRowsPreference();

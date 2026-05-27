@@ -40,6 +40,8 @@ const I18N = {
     readingStandard: "Tryb standardowy",
     readingQuick: "Tryb szybkie szukanie",
     quickSearchColumns: "Kolumny",
+    quickSearchActionFilter: "Filtruj",
+    quickSearchActionHighlight: "Zaznacz",
     allColumns: "Wszystkie kolumny",
     selectedColumnsCount: "{count} kolumn",
     choosePreset: "Wybierz preset",
@@ -62,6 +64,10 @@ const I18N = {
     filtersReset: "Reset filtrow",
     firstLoadSheet: "Najpierw wczytaj arkusz",
     loadSheetToPickColumns: "Wczytaj arkusz, żeby wybrac kolumny",
+    quickSearchColumnsTitleShort: "Kolumny szybkiego szukania",
+    textFilter2ColumnsTitle: "Kolumny filtru tekstowego 2",
+    dateFilterColumnsTitle: "Kolumny filtru dat",
+    selectMeasuresTitle: "Wybierz miary",
     addedSortRule: "Dodano sortowanie do kolejki",
     noSortsToSave: "Brak sortowan do zapisania",
     presetNamePrompt: "Nazwa presetu sortowania:",
@@ -88,6 +94,30 @@ const I18N = {
     saveAsPrompt: "Podaj nazwe pliku (xlsx lub xlsm):",
     chooseFileFirst: "Najpierw wybierz plik",
     noSheet: "Brak arkusza",
+    xlsxMissingStatus: "Brak biblioteki XLSX",
+    xlsxMissingToast: "Brak biblioteki XLSX. Odśwież stronę lub sprawdź połączenie.",
+    xlsxMissingEmpty: "Aplikacja nie załadowała silnika arkuszy. Odśwież stronę i sprawdź połączenie z internetem.",
+    tableNoData: "Brak danych",
+    tableNoResults: "Brak wyników",
+    tableNoResultsHint: "Zmień filtry albo wybierz inny arkusz.",
+    formulaEditBlocked: "Edycja formuł jest zablokowana",
+    cellEditingFuture: "Edycja komórek jest tymczasowo zablokowana, dopóki lepiej nie dopracujemy zapisu stylów i zgodności pliku.",
+    sortRulesEmpty: "Brak aktywnych sortowań. Kliknij nagłówek tabeli albo dodaj regułę tutaj.",
+    sectionHeaderSet: "Ustawiono wiersz nagłówka {row}",
+    sectionOutsideLimit: "Ta sekcja nie mieści się w aktualnym limicie wierszy",
+    blockOutsideView: "Tego bloku nie widać jeszcze w aktualnym widoku arkusza",
+    kpiAboveTable: "Źródło KPI jest nad aktualną tabelą: wiersz {row}",
+    columnOutsideView: "Ta kolumna nie mieści się jeszcze w aktualnym widoku tabeli",
+    formulaOutsideView: "Ta formuła nie mieści się w aktualnym widoku tabeli",
+    wideLongOn: "Włączono Wide-to-Long",
+    wideLongOff: "Wrócono do klasycznego widoku",
+    positiveHeaderRow: "Podaj dodatni numer wiersza nagłówka.",
+    invalidHeaderRow: "Wiersz {row} nie wygląda na poprawny nagłówek dla tego arkusza.",
+    filteredFor: "Przefiltrowano widok dla: {value}",
+    freezeHeadersOn: "Zablokowano wiersze nagłówków",
+    freezeHeadersOff: "Odblokowano wiersze nagłówków",
+    headerDetected: "Wykryto wiersz nagłówka",
+    loadSheetToSearch: "Wczytaj arkusz, żeby szukać",
     duplicatedHeaders: "Zdublowane naglowki rozrozniono ({count})",
     themeToggleTitle: "Zmień motyw (jasny / ciemny)",
     themeToggleAria: "Zmień motyw",
@@ -170,6 +200,19 @@ const I18N = {
     aggregationNoData: "Wczytaj arkusz, aby uruchomić agregacje.",
     aggregationNoOptions: "Brak sensownych opcji grupowania lub mierzenia dla aktualnego źródła danych.",
     aggregationNoResults: "Aktualna kombinacja grupowania i mierzenia nie zwróciła żadnych wyników.",
+    noInsightFlags: "Brak istotnych flag dla aktualnego pliku.",
+    workbookInsightsEmpty: "Wczytaj plik, aby zobaczyć metadane skoroszytu.",
+    sheetInsightsEmpty: "Wczytaj arkusz, aby zobaczyć sygnały jakości danych i struktury.",
+    sectionsEmpty: "Wczytaj arkusz, aby wykryć sekcje i bloki layoutu.",
+    sheetSummaryEmpty: "Wczytaj arkusz, aby zobaczyć szybkie podsumowanie struktury i najważniejszych sygnałów.",
+    durationNoGroup: "Wykryj najpierw powtarzalne bloki kolumn. Ten panel najlepiej działa na arkuszach z cyklami albo seriami podobnych pól.",
+    durationNoConfig: "Wykryto bloki, ale nie udało się znaleźć pary typu osoba + od/do albo osoba + długość. Jeśli nagłówek jest nietypowy, moduł próbuje też zgadywać po danych, ale tu to wciąż za mało.",
+    durationNoRecords: "Bloki zostały rozpoznane, ale w aktualnym widoku nie ma rekordów z pełnymi danymi czasu dla tej samej wartości.",
+    repeatBlocksEmpty: "Brak wyraźnych powtarzalnych bloków dla aktualnego arkusza. Najlepiej działa na szerokich tabelach z cyklami, etapami albo seriami podobnych kolumn.",
+    kpiSummaryEmpty: "Brak wykrytych KPI lub podsumowań dla aktualnego arkusza.",
+    kpiNoSummary: "Brak podsumowania KPI.",
+    kpiListEmpty: "Nie wykryto wiarygodnych KPI nad aktualną tabelą danych.",
+    columnProfilesEmpty: "Wczytaj arkusz, aby zobaczyć profil kolumn i szybkie sygnały problemowości.",
     formulaSummaryFormulas: "Formuły",
     formulaSummaryMissing: "Bez wyniku",
     formulaSummaryErrors: "Z błędem",
@@ -221,6 +264,8 @@ const I18N = {
     readingStandard: "Standard mode",
     readingQuick: "Quick search mode",
     quickSearchColumns: "Columns",
+    quickSearchActionFilter: "Filter",
+    quickSearchActionHighlight: "Highlight",
     allColumns: "All columns",
     selectedColumnsCount: "{count} columns",
     choosePreset: "Choose preset",
@@ -245,6 +290,10 @@ const I18N = {
     filtersReset: "Filters reset",
     firstLoadSheet: "Load a sheet first",
     loadSheetToPickColumns: "Load a sheet to choose columns",
+    quickSearchColumnsTitleShort: "Quick search columns",
+    textFilter2ColumnsTitle: "Text filter 2 columns",
+    dateFilterColumnsTitle: "Date filter columns",
+    selectMeasuresTitle: "Select measures",
     addedSortRule: "Sort rule added to the queue",
     noSortsToSave: "No sort rules to save",
     presetNamePrompt: "Sort preset name:",
@@ -271,6 +320,30 @@ const I18N = {
     saveAsPrompt: "Enter a file name (xlsx or xlsm):",
     chooseFileFirst: "Choose a file first",
     noSheet: "No sheet selected",
+    xlsxMissingStatus: "XLSX library missing",
+    xlsxMissingToast: "XLSX library is missing. Refresh the page or check your connection.",
+    xlsxMissingEmpty: "The app did not load the spreadsheet engine. Refresh the page and check your internet connection.",
+    tableNoData: "No data",
+    tableNoResults: "No results",
+    tableNoResultsHint: "Change filters or choose another sheet.",
+    formulaEditBlocked: "Formula editing is blocked",
+    cellEditingFuture: "Cell editing is temporarily blocked until style saving and file compatibility are refined.",
+    sortRulesEmpty: "No active sort rules. Click a table header or add a rule here.",
+    sectionHeaderSet: "Header row set to {row}",
+    sectionOutsideLimit: "This section is outside the current row limit",
+    blockOutsideView: "This block is not visible in the current sheet view yet",
+    kpiAboveTable: "The KPI source is above the current table: row {row}",
+    columnOutsideView: "This column is not available in the current table view yet",
+    formulaOutsideView: "This formula is not available in the current table view",
+    wideLongOn: "Wide-to-Long enabled",
+    wideLongOff: "Back to classic view",
+    positiveHeaderRow: "Enter a positive header row number.",
+    invalidHeaderRow: "Row {row} does not look like a valid header for this sheet.",
+    filteredFor: "Filtered view for: {value}",
+    freezeHeadersOn: "Header rows locked",
+    freezeHeadersOff: "Header rows unlocked",
+    headerDetected: "Header row detected",
+    loadSheetToSearch: "Load a sheet to search",
     duplicatedHeaders: "Duplicate headers were disambiguated ({count})",
     themeToggleTitle: "Change theme (light / dark)",
     themeToggleAria: "Change theme",
@@ -353,6 +426,19 @@ const I18N = {
     aggregationNoData: "Load a sheet to run aggregations.",
     aggregationNoOptions: "No useful grouping or measure options for the current data source.",
     aggregationNoResults: "The current grouping and measure combination returned no results.",
+    noInsightFlags: "No important flags for the current file.",
+    workbookInsightsEmpty: "Load a file to see workbook metadata.",
+    sheetInsightsEmpty: "Load a sheet to see data quality and structure signals.",
+    sectionsEmpty: "Load a sheet to detect sections and layout blocks.",
+    sheetSummaryEmpty: "Load a sheet to see a quick structure summary and key signals.",
+    durationNoGroup: "Detect repeating column blocks first. This panel works best on sheets with cycles or series of similar fields.",
+    durationNoConfig: "Blocks were detected, but no person + from/to or person + duration pair could be found. If the header is unusual, the module also tries to infer from data, but there is still not enough here.",
+    durationNoRecords: "Blocks were recognized, but the current view has no records with complete time data for the same value.",
+    repeatBlocksEmpty: "No clear repeating blocks for the current sheet. This works best on wide tables with cycles, stages, or similar column series.",
+    kpiSummaryEmpty: "No KPI or summary values detected for the current sheet.",
+    kpiNoSummary: "No KPI summary.",
+    kpiListEmpty: "No reliable KPIs detected above the current data table.",
+    columnProfilesEmpty: "Load a sheet to see column profiles and quick issue signals.",
     formulaSummaryFormulas: "Formulas",
     formulaSummaryMissing: "No result",
     formulaSummaryErrors: "With error",
@@ -500,12 +586,30 @@ const STATIC_TRANSLATIONS = {
     quickSearchActionFilter: "Filtruj",
     quickSearchActionHighlight: "Zaznacz",
     quickSearchOperatorsLabel: "&&·||",
-    quickSearchOperatorsTitle: "Pozwól silnikowi odczytywać operatory && i || w zapytaniu",
+    quickSearchOperatorsTitle: "Pozwól silnikowi odczytywać operatory takie jak np. && i || w zapytaniu",
+    searchOperatorsToggle: "Operatory wyszukiwania",
     searchOperatorsTitle: "Operatory wyszukiwania",
+    arrowFocus: "przemieszczanie się fokusem wiersza po kliknięciu",
+    or: "LUB",
+    clearRowFocus: "Odznacz fokus wiersza",
+    afterCellClick: "(po wczesniejszym kliknieciu na komorke) =",
+    showCellSelection: " pojawienie się zaznaczenia komórki",
+    moveCellSelection: "przemieszczanie zaznaczeniem komórki",
+    clearCellSelection: "Odznacz komórkę",
+    quickSearch: "Szybkie szukanie",
+    columns: "Kolumny",
+    theme: "Motyw",
+    closeModalPanel: "Zamknij modal / panel",
+    orStrong: "LUB",
+    andStrong: "ORAZ",
+    searchOperatorOrRest: "— wiersz zawiera przynajmniej jeden z wyrazów",
     searchOperatorOr: "LUB — wiersz zawiera przynajmniej jeden z wyrazów",
     searchOperatorOrExample: "np. 'Kowalski || Nowak'",
-    searchOperatorAnd: "I — wiersz zawiera wszystkie wyrazy jednocześnie",
+    searchOperatorAndRest: "— wiersz zawiera wszystkie wyrazy jednocześnie",
+    searchOperatorAnd: "ORAZ — wiersz zawiera wszystkie wyrazy jednocześnie",
     searchOperatorAndExample: "np. 'Kowalski && Faktura' · ma pierwszeństwo nad ||",
+    searchOperatorNot: "wykluczenie pojedynczego warunku, np. 'Kowalski !J.'",
+    searchOperatorCombined: "możesz łączyć operatory, np. 'Kowalski && !Anulowana || Nowak'",
     statusNoData: "Brak danych",
     quickSearchPlaceholder: "Szybkie szukanie...",
     quickSearchAria: "Tryb szybkiego szukania",
@@ -623,12 +727,30 @@ const STATIC_TRANSLATIONS = {
     quickSearchActionFilter: "Filter",
     quickSearchActionHighlight: "Highlight",
     quickSearchOperatorsLabel: "&&·||",
-    quickSearchOperatorsTitle: "Allow the engine to interpret && and || operators in the query",
+    quickSearchOperatorsTitle: "Allow the engine to interpretfor example:  && and || operators in the query",
+    searchOperatorsToggle: "Search operators",
     searchOperatorsTitle: "Search operators",
+    arrowFocus: "move row focus after clicking a cell",
+    or: "OR",
+    clearRowFocus: "Clear row focus",
+    afterCellClick: "(after clicking a cell) =",
+    showCellSelection: " show cell selection",
+    moveCellSelection: "move the selected cell",
+    clearCellSelection: "Clear selected cell",
+    quickSearch: "Quick search",
+    columns: "Columns",
+    theme: "Theme",
+    closeModalPanel: "Close modal / panel",
+    orStrong: "OR",
+    andStrong: "AND",
+    searchOperatorOrRest: "— row contains at least one of the terms",
     searchOperatorOr: "OR — row contains at least one of the terms",
     searchOperatorOrExample: "e.g. \'Kowalski || Nowak\'",
+    searchOperatorAndRest: "— row contains all terms simultaneously",
     searchOperatorAnd: "AND — row contains all terms simultaneously",
     searchOperatorAndExample: "e.g. \'Kowalski && Invoice\' · takes precedence over ||",
+    searchOperatorNot: "exclude a single condition, e.g. 'Kowalski !J.'",
+    searchOperatorCombined: "operators can be combined, e.g. 'Kowalski && !Canceled || Nowak'",
     statusNoData: "No data",
     quickSearchPlaceholder: "Quick search...",
     quickSearchAria: "Quick search mode",
@@ -715,6 +837,25 @@ function setCheckboxText(controlId, text) {
   const control = document.getElementById(controlId);
   const span = control?.closest("label.checkbox")?.querySelector("span");
   if (span) span.textContent = text;
+}
+
+function setOperatorsToggleText(controlId, text, title) {
+  const control = document.getElementById(controlId);
+  const label = control?.closest(".qs-operators-toggle");
+  if (!label) return;
+  const span = label.querySelector(".qs-operators-toggle-text");
+  if (span) span.textContent = text;
+  if (title) {
+    label.setAttribute("title", title);
+    control.setAttribute("title", title);
+  }
+}
+
+function setShortcutTexts(copy) {
+  document.querySelectorAll("[data-shortcut-text]").forEach((el) => {
+    const key = el.dataset.shortcutText;
+    if (copy[key]) el.textContent = copy[key];
+  });
 }
 
 function setButtonLabel(selector, text) {
@@ -939,6 +1080,7 @@ function applyStaticTranslations() {
   setText("#filter1Pick", copy.choose);
   setFieldLabel("filterEmptyMode", copy.emptyOrNot);
   setCheckboxText("filterNegate", copy.invert);
+  setOperatorsToggleText("filterOperators", copy.searchOperatorsToggle, copy.quickSearchOperatorsTitle);
   setCheckboxText("onlyNonEmpty", copy.onlyRowsWithData);
   setText("#panel-text-filter-2 .panel-title", copy.textFilter2);
   setFieldLabel("searchQuery2", copy.search);
@@ -948,6 +1090,7 @@ function applyStaticTranslations() {
   setText("#filter2Pick", copy.choose);
   setFieldLabel("filterEmptyMode2", copy.emptyOrNot);
   setCheckboxText("filterNegate2", copy.invert);
+  setOperatorsToggleText("filterOperators2", copy.searchOperatorsToggle, copy.quickSearchOperatorsTitle);
   setText("#panel-date-filter .panel-title", copy.dateFilter);
   setFieldLabel("dateMode", copy.mode);
   setFieldLabel("lastDays", copy.lastDays);
@@ -1002,8 +1145,9 @@ function applyStaticTranslations() {
   setText("#panel-log .panel-title", copy.log);
   setAttr("#log", "aria-label", copy.logAria);
   setText("#panel-shortcuts .panel-title", copy.shortcuts);
-  setAttr("#quickSearchOperators", "title", copy.quickSearchOperatorsTitle);
-  setAttr("#quickSearchPopupOperators", "title", copy.quickSearchOperatorsTitle);
+  setOperatorsToggleText("quickSearchOperators", copy.searchOperatorsToggle, copy.quickSearchOperatorsTitle);
+  setOperatorsToggleText("quickSearchPopupOperators", copy.searchOperatorsToggle, copy.quickSearchOperatorsTitle);
+  setShortcutTexts(copy);
 
 
   const heroStatus = statusEl
@@ -1018,6 +1162,8 @@ function applyStaticTranslations() {
   setAttr("#quickSearchPopup", "aria-label", copy.quickSearchDialogAria);
   setAttr("#quickSearchMode", "aria-label", copy.quickSearchAria);
   setAttr("#quickSearchPopupMode", "aria-label", copy.quickSearchPopupModeAria);
+  setAttr("#quickSearchAction", "aria-label", copy.quickSearchAria);
+  setAttr("#quickSearchPopupAction", "aria-label", copy.quickSearchPopupModeAria);
   setAttr("#quickSearchColumnsBtn", "title", copy.quickSearchColumnsTitle);
   setAttr("#closePicker", "aria-label", copy.close);
 
@@ -1096,6 +1242,14 @@ function applySelectTranslations() {
       contains: "contains",
       exact: "equals",
     },
+    quickSearchAction: {
+      filter: "quickSearchActionFilter",
+      highlight: "quickSearchActionHighlight",
+    },
+    quickSearchPopupAction: {
+      filter: "quickSearchActionFilter",
+      highlight: "quickSearchActionHighlight",
+    },
     sortDirectionSelect: {
       asc: "sortAsc",
       desc: "sortDesc",
@@ -1130,6 +1284,8 @@ function applySelectTranslations() {
     "bez daty (wszystkie)": "all_empty",
     "dokładnie": "exact",
     "dokladnie": "exact",
+    "filtruj": "filter",
+    "zaznacz": "highlight",
     "rosnąco": "asc",
     "rosnaco": "asc",
     "malejąco": "desc",
@@ -1144,6 +1300,7 @@ function applySelectTranslations() {
     "displayMode", "filterMode", "filterMode2", "dateMode",
     "filterEmptyMode", "filterEmptyMode2", "dateEmptyMode",
     "quickSearchMode", "quickSearchPopupMode",
+    "quickSearchAction", "quickSearchPopupAction",
     "sortDirectionSelect", "formulaFilter"
   ];
 

@@ -256,7 +256,7 @@ function focusFormulaEntry(address) {
   const ref = XLSX.utils.decode_cell(address);
   const displayRow = currentDisplayModel.rows.find((row) => (row.sourceRowIndex0 ?? row.rowIndex0) === ref.r);
   if (!displayRow) {
-    toast("Ta formula nie miesci sie w aktualnym widoku tabeli", "info");
+    toast(t("formulaOutsideView"), "info");
     return;
   }
 

@@ -3,8 +3,8 @@
 function isXlsxAvailable(showFeedback = false) {
   const available = typeof window !== "undefined" && !!window.XLSX;
   if (!available && showFeedback) {
-    setStatus("Brak biblioteki XLSX");
-    toast("Brak biblioteki XLSX. Odśwież stronę lub sprawdź połączenie.", "error");
+    setStatus(t("xlsxMissingStatus"));
+    toast(t("xlsxMissingToast"), "error");
     log("Brak biblioteki XLSX (window.XLSX).", "error");
   }
   return available;
@@ -345,7 +345,7 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
     return;
   }
   if (parsed.type === "formula") {
-    toast("Edycja formul jest zablokowana", "warning");
+    toast(t("formulaEditBlocked"), "warning");
     return;
   }
   if (parsed.type === "date") {
@@ -428,17 +428,54 @@ function rowMatchesSingleTerm(row, term, criterion) {
   return false;
 }
 
-function parseQueryTerms(query) {
-  // Operatory aktywne tylko gdy użytkownik świadomie to włączył
-  if (!quickSearchOperatorsEnabled) return { op: "single", terms: [query] };
-  // && ma pierwszeństwo — jeśli jest, ignorujemy ||
-  if (query.includes("&&")) {
-    return { op: "and", terms: query.split("&&").map((t) => t.trim()).filter(Boolean) };
+function parseOperatorTerm(rawTerm, operatorsEnabled = false) {
+  let term = String(rawTerm || "").trim();
+  const parsed = { term, negated: false };
+  if (!operatorsEnabled || !term) return parsed;
+
+  if (term.startsWith("!") && term.length > 1) {
+    parsed.negated = true;
+    term = term.slice(1).trim();
   }
-  if (query.includes("||")) {
-    return { op: "or", terms: query.split("||").map((t) => t.trim()).filter(Boolean) };
+  parsed.term = term;
+  return parsed;
+}
+
+function parseAndQueryPart(queryPart) {
+  const terms = [];
+  const text = String(queryPart || "");
+  const notPattern = /(^|\s)!(\S+)/g;
+  let cursor = 0;
+  let match = notPattern.exec(text);
+  while (match) {
+    const before = text.slice(cursor, match.index).trim();
+    if (before) terms.push(parseOperatorTerm(before, true));
+    terms.push(parseOperatorTerm(`!${match[2]}`, true));
+    cursor = match.index + match[0].length;
+    match = notPattern.exec(text);
   }
-  return { op: "single", terms: [query] };
+  const after = text.slice(cursor).trim();
+  if (after) terms.push(parseOperatorTerm(after, true));
+  return terms.filter((term) => term.term);
+}
+
+function parseQueryTerms(query, operatorsEnabled = false) {
+  const fallback = { groups: [[parseOperatorTerm(query, operatorsEnabled)]].filter((group) => group[0].term) };
+  if (!operatorsEnabled) return fallback;
+
+  const groups = query
+    .split("||")
+    .map((orPart) => orPart
+      .split("&&")
+      .flatMap((term) => parseAndQueryPart(term)))
+    .filter((group) => group.length);
+
+  return groups.length ? { groups } : fallback;
+}
+
+function rowMatchesParsedTerm(row, parsedTerm, criterion) {
+  const matched = rowMatchesSingleTerm(row, parsedTerm.term, criterion);
+  return parsedTerm.negated ? !matched : matched;
 }
 
 function rowMatchesTextFilter(row, criteria, onlyNonEmpty) {
@@ -464,14 +501,8 @@ function rowMatchesTextFilter(row, criteria, onlyNonEmpty) {
 
     let textMatched = !hasQuery;
     if (hasQuery) {
-      const parsed = parseQueryTerms(query);
-      if (parsed.op === "and") {
-        textMatched = parsed.terms.every((term) => rowMatchesSingleTerm(row, term, criterion));
-      } else if (parsed.op === "or") {
-        textMatched = parsed.terms.some((term) => rowMatchesSingleTerm(row, term, criterion));
-      } else {
-        textMatched = rowMatchesSingleTerm(row, parsed.terms[0], criterion);
-      }
+      const parsed = parseQueryTerms(query, criterion.operatorsEnabled);
+      textMatched = parsed.groups.some((group) => group.every((term) => rowMatchesParsedTerm(row, term, criterion)));
     }
 
     const emptyMatched = rowMatchesEmptyMode(row, criterion.indexes, emptyMode);
@@ -571,7 +602,7 @@ function renderSortRules() {
   if (!sortRulesListEl) return;
   sortRulesListEl.replaceChildren();
   if (!multiSortState.length) {
-    sortRulesListEl.appendChild(createEmptyInsight(currentLang === "en" ? "No active sort rules. Click a table header or add a rule here." : "Brak aktywnych sortowan. Kliknij naglowek tabeli albo dodaj regule tutaj."));
+    sortRulesListEl.appendChild(createEmptyInsight(t("sortRulesEmpty")));
     return;
   }
   multiSortState.forEach((rule, index) => {
@@ -690,6 +721,7 @@ function applyFilters() {
       indexes: resolveIndexes(currentHeaders, columnSelections.filter1),
       emptyMode: getNormalizedSelectValue(filterEmptyModeEl),
       negated: filterNegateEl.checked,
+      operatorsEnabled: !!filterOperatorsEl?.checked,
     },
     {
       query: (searchQuery2El.value || "").trim().toLowerCase(),
@@ -697,6 +729,7 @@ function applyFilters() {
       indexes: resolveIndexes(currentHeaders, columnSelections.filter2),
       emptyMode: getNormalizedSelectValue(filterEmptyMode2El),
       negated: filterNegate2El.checked,
+      operatorsEnabled: !!filterOperators2El?.checked,
     },
   ];
 

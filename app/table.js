@@ -686,7 +686,7 @@ function renderTable(modelOrHeaders, maybeRows) {
 
   updateSortControls();
   if (!headers.length) {
-    setStatus("Brak danych");
+    setStatus(t("tableNoData"));
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
     setEmptyState(DEFAULT_EMPTY_TITLE, DEFAULT_EMPTY_SUB);
     return;
@@ -694,7 +694,7 @@ function renderTable(modelOrHeaders, maybeRows) {
   if (!rows.length) {
     setStatus("Wierszy: 0");
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
-    setEmptyState("Brak wynikow", "Zmien filtry albo wybierz inny arkusz.");
+    setEmptyState(t("tableNoResults"), t("tableNoResultsHint"));
     return;
   }
 

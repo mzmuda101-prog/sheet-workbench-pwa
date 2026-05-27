@@ -58,7 +58,7 @@ function renderInsightFlags(items) {
   if (!insightFlagsEl) return;
   insightFlagsEl.replaceChildren();
   if (!items || !items.length) {
-    insightFlagsEl.appendChild(createEmptyInsight("Brak istotnych flag dla aktualnego pliku."));
+    insightFlagsEl.appendChild(createEmptyInsight(t("noInsightFlags")));
     return;
   }
   items.forEach((item) => {
@@ -185,7 +185,7 @@ function renderSections() {
   if (!sectionNavigatorEl) return;
   sectionNavigatorEl.replaceChildren();
   if (!currentSections.length) {
-    sectionNavigatorEl.appendChild(createEmptyInsight("Wczytaj arkusz, aby wykryc sekcje i bloki layoutu."));
+    sectionNavigatorEl.appendChild(createEmptyInsight(t("sectionsEmpty")));
     return;
   }
 
@@ -234,7 +234,7 @@ function renderSheetInspectorSummary() {
   sheetInspectorSummaryEl.replaceChildren();
 
   if (!currentHeaders.length || !baseRows.length) {
-    sheetInspectorSummaryEl.appendChild(createEmptyInsight("Wczytaj arkusz, aby zobaczyc szybkie podsumowanie struktury i najwazniejszych sygnalow."));
+    sheetInspectorSummaryEl.appendChild(createEmptyInsight(t("sheetSummaryEmpty")));
     return;
   }
 
@@ -317,7 +317,7 @@ function focusSection(section) {
   if (section.action === "set-header" && section.headerRow) {
     if (autoHeaderRowEl) autoHeaderRowEl.checked = false;
     headerRowEl.value = String(section.headerRow);
-    toast(`Ustawiono wiersz nagłówka ${section.headerRow}`, "info");
+    toast(t("sectionHeaderSet", { row: section.headerRow }), "info");
     loadBtn.click();
     return;
   }
@@ -328,7 +328,7 @@ function focusSection(section) {
       rowEl.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
       return;
     }
-    toast("Ta sekcja nie miesci sie w aktualnym limicie wierszy", "info");
+    toast(t("sectionOutsideLimit"), "info");
     return;
   }
 
@@ -803,17 +803,17 @@ function renderDurationAnalysis() {
   const analysis = buildDurationAnalysis();
 
   if (analysis.status === "no-group") {
-    durationAnalysisSummaryEl.appendChild(createEmptyInsight("Wykryj najpierw powtarzalne bloki kolumn. Ten panel najlepiej dziala na arkuszach z cyklami albo seriami podobnych pol."));
+    durationAnalysisSummaryEl.appendChild(createEmptyInsight(t("durationNoGroup")));
     return;
   }
 
   if (analysis.status === "no-config") {
-    durationAnalysisSummaryEl.appendChild(createEmptyInsight("Wykryto bloki, ale nie udalo sie znalezc pary typu osoba + od/do albo osoba + dlugosc. Jesli naglowek jest nietypowy, modul probuje tez zgadywac po danych, ale tu to wciaz za malo."));
+    durationAnalysisSummaryEl.appendChild(createEmptyInsight(t("durationNoConfig")));
     return;
   }
 
   if (analysis.status === "no-records") {
-    durationAnalysisSummaryEl.appendChild(createEmptyInsight("Bloki zostaly rozpoznane, ale w aktualnym widoku nie ma rekordow z pelnymi danymi czasu dla tej samej wartosci."));
+    durationAnalysisSummaryEl.appendChild(createEmptyInsight(t("durationNoRecords")));
     return;
   }
 
@@ -2327,7 +2327,7 @@ function renderRepeatingBlocks() {
   if (!repeatBlockDetectorEl) return;
   repeatBlockDetectorEl.replaceChildren();
   if (!currentRepeatingBlocks.length) {
-    repeatBlockDetectorEl.appendChild(createEmptyInsight("Brak wyraznych powtarzalnych blokow dla aktualnego arkusza. Najlepiej dziala na szerokich tabelach z cyklami, etapami albo seriami podobnych kolumn."));
+    repeatBlockDetectorEl.appendChild(createEmptyInsight(t("repeatBlocksEmpty")));
     return;
   }
 
@@ -2400,7 +2400,7 @@ function focusRepeatingBlock(groupIndex, blockIndex) {
   const cells = theadEl.querySelectorAll(".guide-row .guide-cell");
   const cell = cells[block.startIndex];
   if (!cell) {
-    toast("Tego bloku nie widac jeszcze w aktualnym widoku arkusza", "info");
+    toast(t("blockOutsideView"), "info");
     return;
   }
   const targetLeft = Math.max(0, cell.offsetLeft - 64);
@@ -2804,8 +2804,8 @@ function renderKpiExtractor() {
   kpiListEl.replaceChildren();
 
   if (!currentHeaders.length || !currentKpiEntries.length) {
-    renderInsightList(kpiSummaryEl, [], "Brak wykrytych KPI lub podsumowan dla aktualnego arkusza.");
-    kpiListEl.appendChild(createEmptyInsight("Nie wykryto wiarygodnych KPI nad aktualna tabela danych."));
+    renderInsightList(kpiSummaryEl, [], t("kpiSummaryEmpty"));
+    kpiListEl.appendChild(createEmptyInsight(t("kpiListEmpty")));
     return;
   }
 
@@ -2818,7 +2818,7 @@ function renderKpiExtractor() {
         : `Wiersze nad wykrytym nagłówkiem ${currentKpiAnchorRow}`,
       tone: currentKpiAnchorRow === currentHeaderRow ? "" : "info",
     },
-  ], "Brak podsumowania KPI.");
+  ], t("kpiNoSummary"));
 
   currentKpiEntries.forEach((entry) => {
     const item = document.createElement("div");
@@ -2866,7 +2866,7 @@ function focusKpiEntry(address) {
   if (rowEl) {
     rowEl.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
   } else {
-    toast(`Źródło KPI jest nad aktualną tabelą: wiersz ${entry.rowIndex0 + 1}`, "info");
+    toast(t("kpiAboveTable", { row: entry.rowIndex0 + 1 }), "info");
     if (tableWrapEl) {
       tableWrapEl.scrollTo({ top: 0, behavior: "smooth" });
     }
@@ -3020,7 +3020,7 @@ function renderColumnProfiles() {
   if (!columnProfilerEl) return;
   columnProfilerEl.replaceChildren();
   if (!currentColumnProfiles.length) {
-    columnProfilerEl.appendChild(createEmptyInsight("Wczytaj arkusz, aby zobaczyc profil kolumn i szybkie sygnaly problemowosci."));
+    columnProfilerEl.appendChild(createEmptyInsight(t("columnProfilesEmpty")));
     return;
   }
 
@@ -3104,7 +3104,7 @@ function focusColumnProfile(colIdx) {
     syncHorizontalScrollbar();
     return;
   }
-  toast("Ta kolumna nie miesci sie jeszcze w aktualnym widoku tabeli", "info");
+  toast(t("columnOutsideView"), "info");
 }
 
 function renderInsights() {
@@ -3112,12 +3112,12 @@ function renderInsights() {
   renderInsightList(
     workbookInsightsEl,
     data.workbookRows || [],
-    "Wczytaj plik, aby zobaczyc metadane skoroszytu."
+    t("workbookInsightsEmpty")
   );
   renderInsightList(
     sheetInsightsEl,
     data.rows || [],
-    "Wczytaj arkusz, aby zobaczyc sygnaly jakosci danych i struktury."
+    t("sheetInsightsEmpty")
   );
   renderInsightFlags(data.flags || []);
 }

@@ -43,7 +43,7 @@ if (durationAnalysisSummaryEl) {
       renderSheetInspectorSummary();
       renderDurationAnalysis();
       renderAggregationWorkbench();
-      toast(tableViewMode === "long" ? "Wlaczono Wide-to-Long" : "Wrocono do klasycznego widoku", "info");
+      toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
       return;
     }
 
@@ -89,7 +89,7 @@ if (durationAnalysisListEl) {
     renderAggregationWorkbench();
     renderFormulaWorkbench();
     updateFilterBadge();
-    toast(`Przefiltrowano widok dla: ${entity}`, "info");
+    toast(t("filteredFor", { value: entity }), "info");
   });
 }
 if (aggregationWorkbenchSummaryEl) {
@@ -114,12 +114,12 @@ if (aggregationWorkbenchSummaryEl) {
     if (kind === "header-number") {
       const next = parseInt(control.value || "", 10);
       if (!Number.isFinite(next) || next < 1) {
-        toast("Podaj dodatni numer wiersza naglowka.", "warning");
+        toast(t("positiveHeaderRow"), "warning");
         control.value = String(aggregationWorkbenchState.customHeaderRow || currentHeaderRow);
         return;
       }
       if (!isValidAggregationHeaderRow(next)) {
-        toast(`Wiersz ${next} nie wyglada na poprawny naglowek dla tego arkusza.`, "error");
+        toast(t("invalidHeaderRow", { row: next }), "error");
         control.value = String(aggregationWorkbenchState.customHeaderRow || currentHeaderRow);
         return;
       }
@@ -203,7 +203,7 @@ if (aggregationWorkbenchListEl) {
     renderAggregationWorkbench();
     renderFormulaWorkbench();
     updateFilterBadge();
-    toast(`Przefiltrowano widok dla: ${value}`, "info");
+    toast(t("filteredFor", { value }), "info");
   });
 }
 if (columnProfilerEl) {
@@ -237,7 +237,7 @@ if (sheetInspectorSummaryEl) {
       renderSheetInspectorSummary();
       renderDurationAnalysis();
       renderAggregationWorkbench();
-      toast(tableViewMode === "long" ? "Wlaczono Wide-to-Long" : "Wrocono do klasycznego widoku", "info");
+      toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
       return;
     }
 
@@ -270,13 +270,13 @@ if (wideLongToggleEl) {
     renderActiveTable();
     renderDurationAnalysis();
     renderAggregationWorkbench();
-    toast(tableViewMode === "long" ? "Wlaczono Wide-to-Long" : "Wrocono do klasycznego widoku", "info");
+    toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
   });
 }
 if (freezeHeadersEl) {
   freezeHeadersEl.addEventListener("change", () => {
     applyFreezeHeaders();
-    toast(freezeHeadersEl.checked ? "Zablokowano wiersze naglowkow" : "Odblokowano wiersze naglowkow", "info");
+    toast(freezeHeadersEl.checked ? t("freezeHeadersOn") : t("freezeHeadersOff"), "info");
   });
   applyFreezeHeaders();
 }
@@ -346,7 +346,7 @@ sheetSelect.addEventListener("change", () => {
 if (autoHeaderRowEl) {
   autoHeaderRowEl.addEventListener("change", () => {
     if (applyAutoHeaderRowIfEnabled()) {
-      toast("Wykryto wiersz nagłówka", "info");
+      toast(t("headerDetected"), "info");
     }
   });
 }
@@ -412,7 +412,7 @@ document.addEventListener("keydown", (e) => {
       quickSearchPopupEl.classList.remove("hidden");
       quickSearchPopupInput.focus();
     } else if (!currentHeaders.length) {
-      toast("Wczytaj arkusz, żeby szukać", "info");
+      toast(t("loadSheetToSearch"), "info");
     }
   }
   // Escape or Q clears the current table focus/selection.
@@ -468,10 +468,10 @@ const xlsxReady = isXlsxAvailable(false);
 setRuntimeAvailability(xlsxReady);
 if (!xlsxReady) {
   setEmptyState(
-    "Brak biblioteki XLSX",
-    "Aplikacja nie zaladowala silnika arkuszy. Odswiez strone i sprawdz polaczenie z internetem."
+    t("xlsxMissingStatus"),
+    t("xlsxMissingEmpty")
   );
-  setStatus("Brak biblioteki XLSX");
+  setStatus(t("xlsxMissingStatus"));
 }
 
 window.addEventListener("beforeunload", (e) => {
