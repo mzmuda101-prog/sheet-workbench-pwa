@@ -1,8 +1,8 @@
 // =============================================================================
-// cursor-hint.js — podążający za kursorem dymek z podpowiedzią
+// *cursor-hint.js — podążający za kursorem dymek z podpowiedzią
 // =============================================================================
 //
-// WSZYSTKIE ATRYBUTY HTML (data-*) — ściągawka
+// *WSZYSTKIE ATRYBUTY HTML (data-*) — ściągawka
 // -----------------------------------------------------------------------------
 //
 // data-hint
@@ -66,7 +66,7 @@
 //   Przykład: data-hint-class="smaller"  ← jest już taka klasa w app.css
 //
 // -----------------------------------------------------------------------------
-// SEPARATOR LINII W TEKŚCIE HINTA
+// *SEPARATOR LINII W TEKŚCIE HINTA
 // -----------------------------------------------------------------------------
 //
 //   /|  (ukośnik + pipe) — ręczny podział na nową linię w treści hinta.
@@ -77,23 +77,23 @@
 //               i sortuj wyniki
 //
 // -----------------------------------------------------------------------------
-// KOMPLETNY PRZYKŁAD — element z pełnym zestawem atrybutów
+// *KOMPLETNY PRZYKŁAD — element z PEŁNYM zestawem atrybutów
 // -----------------------------------------------------------------------------
 //
 //   <button
-//     data-hint
-//     data-hint-pl="Pobierz kopię pliku /| jako XLSX"
-//     data-hint-en="Download a copy /| as XLSX"
-//     data-hint-delay="1.1"
-//     data-hint-touch="on"
-//     data-hint-touchdelay="0.8"
-//     data-hint-class="smaller"
+// -    data-hint
+// -    data-hint-pl="Pobierz kopię pliku /| jako XLSX"
+// -    data-hint-en="Download a copy /| as XLSX"
+// -    data-hint-delay="1.1"
+// -    data-hint-touch="on"
+// -    data-hint-touchdelay="0.8"
+// -    data-hint-class="smaller"
 //   >
 //     Zapisz
 //   </button>
 //
 // -----------------------------------------------------------------------------
-// CSS — customizacja offsetu dymka przez zmienne
+// *CSS — customizacja offsetu dymka przez zmienne
 // -----------------------------------------------------------------------------
 //
 //   --hint-offset-x  (domyślnie 22px) — poziome przesunięcie od kursora
@@ -106,30 +106,44 @@
 
 window.MateuszCursorHint = (() => {
   function createCursorHintController({ cursorHint, prefersReducedMotion = false, getFallbackHint = () => "" }) {
+    // Aktualna pozycja dymka (interpolowana, zmienia się co klatkę animacji)
     let cursorHintX = -999;
     let cursorHintY = -999;
+    // Docelowa pozycja dymka (ustawiana od razu przy ruchu myszy)
     let cursorHintTargetX = -999;
     let cursorHintTargetY = -999;
+    // ID klatki requestAnimationFrame — null gdy animacja nie jest aktywna
     let cursorHintFrame = null;
+    // ID setTimeout dla opóźnionego pokazania hinta — null gdy brak aktywnego timera
     let cursorHintTimer = null;
+    // Element na którym aktualnie czeka lub pokazuje hint
     let activeHintEl = null;
+    // Typ wskaźnika który aktywował hint ("mouse" | "touch" | "pen")
     let activePointerType = "";
 
+    // Sprawdza czy element jawnie zezwala na hint dotykowy przez data-hint-touch
     function allowsTouchHint(el) {
       const value = String(el.dataset.hintTouch || "").toLowerCase();
       return value === "on" || value === "true" || value === "1" || value === "yes";
     }
 
+    // Zwraca true gdy hint ma być zablokowany — np. brak elementu dymka w DOM,
+    // użytkownik preferuje reduced motion, albo dotyk bez jawnego zezwolenia,
+    // albo urządzenie z grubym wskaźnikiem (tablet) bez myszy
     function isDisabled(el, pointerType = "") {
       if (!cursorHint || prefersReducedMotion) return true;
       if (pointerType === "touch") return !allowsTouchHint(el);
+      // (pointer: coarse) = ekran dotykowy bez myszy — tam hint myszowy nie ma sensu
       return pointerType !== "mouse" && window.matchMedia("(pointer: coarse)").matches;
     }
 
+    // Czyta lang z <html lang="..."> i normalizuje do "pl" lub "en"
     function getCurrentLang() {
       return (document.documentElement.lang || "pl").toLowerCase().startsWith("en") ? "en" : "pl";
     }
 
+    // Zwraca tekst do wyświetlenia w hincie dla danego elementu.
+    // Kolejność priorytetów: data-hint-pl/en → data-hint → fallback globalny
     function getHintText(el) {
       const lang = getCurrentLang();
       const langKey = lang === "en" ? "hintEn" : "hintPl";
@@ -144,6 +158,8 @@ window.MateuszCursorHint = (() => {
       return getFallbackHint() || "";
     }
 
+    // Zwraca opóźnienie w ms dla danego elementu i typu wskaźnika.
+    // Mysz i dotyk mają osobne atrybuty i osobne wartości domyślne.
     function getHintDelayMs(el, pointerType = "") {
       if (pointerType === "touch") {
         // Dla dotyku używamy data-hint-touchdelay (osobny atrybut),
@@ -151,20 +167,24 @@ window.MateuszCursorHint = (() => {
         const rawTouch = el.dataset.hintTouchdelay || "";
         const parsedTouch = parseFloat(rawTouch.replace(",", "."));
         if (Number.isFinite(parsedTouch) && parsedTouch >= 0) return parsedTouch * 1000;
-        return 650; // domyślny delay dotyku
+        return 650; // domyślny delay dotyku gdy brak atrybutu
       }
+      // Mysz — czyta data-hint-delay, domyślnie 0 (od razu)
       const rawDelay = el.dataset.hintDelay || "";
       const parsedDelay = parseFloat(rawDelay.replace(",", "."));
       if (Number.isFinite(parsedDelay) && parsedDelay >= 0) return parsedDelay * 1000;
       return 0;
     }
 
-    // Oblicza docelową pozycję hinta z uwzględnieniem granic ekranu.
-    // Hint jest najpierw renderowany (niewidoczny) żeby znać jego rozmiar,
-    // potem pozycjonowany tak by nie wychodził poza viewport.
+    // Oblicza docelową pozycję dymka tak żeby nie wychodził poza viewport.
+    // Odczytuje rozmiar dymka przez getBoundingClientRect (działa bo dymek
+    // jest już w DOM, tylko niewidoczny — opacity/scale przez CSS).
+    // Zwraca też originX/Y dla transformOrigin żeby animacja scale
+    // zawsze wychodziła z narożnika bliższego kursorowi.
     function computeHintPosition(x, y) {
       if (!cursorHint) return { tx: x + 22, ty: y - 18, originX: "left", originY: "bottom" };
 
+      // Offset dymka od kursora — można nadpisać przez CSS custom properties
       const style = getComputedStyle(cursorHint);
       const parsedOffsetX = parseInt(style.getPropertyValue("--hint-offset-x"), 10);
       const parsedOffsetY = parseInt(style.getPropertyValue("--hint-offset-y"), 10);
@@ -175,6 +195,8 @@ window.MateuszCursorHint = (() => {
       const H = window.innerHeight;
       const MARGIN = 8; // minimalna odległość od krawędzi ekranu
 
+      // Rozmiar dymka znany dopiero po renderze — dlatego liczymy pozycję
+      // tutaj, a nie przed pokazaniem
       const rect = cursorHint.getBoundingClientRect();
       const hintW = rect.width || 0;
       const hintH = rect.height || 0;
@@ -197,51 +219,61 @@ window.MateuszCursorHint = (() => {
         originY = "top";
       }
 
-      // Zabezpieczenie przed lewą krawędzią
+      // Zabezpieczenia przed wyjściem poza lewą i dolną krawędź
+      // (rzadkie, ale możliwe przy bardzo wąskich lub niskich viewportach)
       if (tx < MARGIN) tx = MARGIN;
-
-      // Zabezpieczenie przed dolną krawędzią
       if (ty + hintH + MARGIN > H) ty = H - hintH - MARGIN;
 
       return { tx, ty, originX, originY };
     }
 
+    // Przesuwa dymek w kierunku pozycji (x, y) z płynną interpolacją (lerp).
+    // Każde wywołanie tylko aktualizuje target — animacja sama dobiegnie do celu.
     function moveCursorHint(x, y) {
       if (!cursorHint) return;
 
       const { tx, ty, originX, originY } = computeHintPosition(x, y);
 
+      // transformOrigin musi być ustawiony przed każdym ruchem bo może się
+      // zmienić gdy hint przeskakuje między narożnikami ekranu
       cursorHint.style.transformOrigin = `${originX} ${originY}`;
       cursorHintTargetX = tx;
       cursorHintTargetY = ty;
 
+      // Nie startuj nowej pętli animacji jeśli już działa
       if (cursorHintFrame !== null) return;
 
       const animateHint = () => {
+        // Lerp 24% per klatka — hint "goni" kursor z lekkim opóźnieniem
         cursorHintX += (cursorHintTargetX - cursorHintX) * 0.24;
         cursorHintY += (cursorHintTargetY - cursorHintY) * 0.24;
 
+        // Snap do celu gdy różnica jest sub-pikselowa — zatrzymuje pętlę rAF
         if (Math.abs(cursorHintTargetX - cursorHintX) < 0.2) cursorHintX = cursorHintTargetX;
         if (Math.abs(cursorHintTargetY - cursorHintY) < 0.2) cursorHintY = cursorHintTargetY;
 
         cursorHint.style.transform = `translate3d(${cursorHintX}px, ${cursorHintY}px, 0)`;
 
+        // Kontynuuj animację dopóki nie dotrzemy do celu
         if (cursorHintX !== cursorHintTargetX || cursorHintY !== cursorHintTargetY) {
           cursorHintFrame = window.requestAnimationFrame(animateHint);
         } else {
-          cursorHintFrame = null;
+          cursorHintFrame = null; // animacja skończona, pętla się zatrzyma
         }
       };
 
       cursorHintFrame = window.requestAnimationFrame(animateHint);
     }
 
+    // Anuluje oczekujący timer opóźnienia (jeśli istnieje)
     function clearCursorHintTimer() {
       if (cursorHintTimer === null) return;
       window.clearTimeout(cursorHintTimer);
       cursorHintTimer = null;
     }
 
+    // Wpisuje tekst do dymka, obsługując separator /| jako podział linii.
+    // Czyści span przed wpisaniem żeby nie dublować zawartości.
     function setHintText(hintContent) {
       const span = cursorHint && cursorHint.querySelector("span");
       if (!span) return;
@@ -253,29 +285,40 @@ window.MateuszCursorHint = (() => {
       });
     }
 
+    // Pokazuje hint natychmiast — ustawia tekst, klasę CSS i uruchamia animację pozycji
     function showCursorHint(el, x, y) {
       if (isDisabled(el, activePointerType)) return;
       setHintText(getHintText(el));
+      // Resetujemy className żeby wyczyścić poprzednią data-hint-class,
+      // potem dokładamy is-visible i ewentualną klasę z atrybutu
       cursorHint.className = `cursor-hint is-visible ${el.dataset.hintClass || ""}`.trim();
-      // transformOrigin zostanie ustawiony przez moveCursorHint po obliczeniu pozycji
       moveCursorHint(x, y);
     }
 
+    // Ostatnia zarejestrowana pozycja myszy podczas oczekiwania na timer —
+    // hint pojawi się dokładnie tam gdzie mysz stała gdy timer dobiegł
     let pendingHintX = 0;
     let pendingHintY = 0;
+    // Pozycja myszy przy ostatnim resecie timera — do pomiaru dystansu ruchu
     let lastMoveX = 0;
     let lastMoveY = 0;
-    const MOVE_THRESHOLD = 4; // px — ruch poniżej tego progu nie resetuje timera
+    // Minimalny ruch myszy (w px) który resetuje timer opóźnienia
+    const MOVE_THRESHOLD = 4;
 
+    // Planuje pokazanie hinta po zadanym opóźnieniu.
+    // Jeśli delay = 0, pokazuje od razu bez timera.
+    // Każde wywołanie anuluje poprzedni timer — timer liczy od nowa.
     function scheduleCursorHint(el, event) {
       clearCursorHintTimer();
       activeHintEl = el;
       activePointerType = event.pointerType || "mouse";
+      // Zapamiętaj pozycję — hint pojawi się tu gdy timer dobiegnie
       pendingHintX = event.clientX;
       pendingHintY = event.clientY;
 
       const delayMs = getHintDelayMs(el, activePointerType);
 
+      // Delay 0 → pokaż natychmiast, bez timera (pointermove nie będzie go resetować)
       if (delayMs <= 0) {
         showCursorHint(el, pendingHintX, pendingHintY);
         return;
@@ -283,29 +326,37 @@ window.MateuszCursorHint = (() => {
 
       cursorHintTimer = window.setTimeout(() => {
         cursorHintTimer = null;
+        // Sprawdź czy użytkownik nadal jest na tym samym elemencie —
+        // mógł zjechać myszą zanim timer dobiegł
         if (activeHintEl !== el) return;
         showCursorHint(el, pendingHintX, pendingHintY);
       }, delayMs);
     }
 
+    // Chowa hint i anuluje wszystkie aktywne timery i stany
     function hideCursorHint() {
       clearCursorHintTimer();
       activeHintEl = null;
       activePointerType = "";
       if (!cursorHint) return;
       cursorHint.classList.remove("is-visible");
+      // Wyślij dymek poza ekran żeby nie blokował kliknięć pod spodem
       cursorHintTargetX = -999;
       cursorHintTargetY = -999;
       moveCursorHint(-999, -999);
     }
 
+    // Podpina eventy na liście elementów. Pomija elementy już podpięte
+    // (data-cursor-hint-bound="1") — bezpieczne przy wielokrotnym wywołaniu
+    // np. przez MutationObserver gdy DOM się zmienia dynamicznie.
     function setupCursorHint(elements, clickCallback = null) {
       elements.forEach((el) => {
         if (!el || el.dataset.cursorHintBound === "1") return;
-        el.dataset.cursorHintBound = "1";
+        el.dataset.cursorHintBound = "1"; // znacznik "już podpięty"
 
+        // Mysz wchodzi na element — start timera (dotyk obsługuje pointerdown)
         el.addEventListener("pointerenter", (event) => {
-          event.stopPropagation();
+          event.stopPropagation(); // blokuj bąbelkowanie do rodzica który też może mieć hint
           if (event.pointerType === "touch" || isDisabled(el, event.pointerType || "mouse")) return;
           lastMoveX = event.clientX;
           lastMoveY = event.clientY;
@@ -316,30 +367,36 @@ window.MateuszCursorHint = (() => {
           event.stopPropagation();
           const pointerType = event.pointerType || activePointerType || "mouse";
           if (isDisabled(el, pointerType)) return;
+
           if (cursorHint && cursorHint.classList.contains("is-visible")) {
+            // Hint już widoczny — tylko przesuń za kursorem
             moveCursorHint(event.clientX, event.clientY);
           } else if (activeHintEl === el) {
+            // Hint jeszcze niewidoczny — sprawdź czy mysz ruszyła wystarczająco
+            // żeby zresetować timer (mikrodrgania ręki poniżej progu są ignorowane)
             const dx = event.clientX - lastMoveX;
             const dy = event.clientY - lastMoveY;
             if (Math.sqrt(dx * dx + dy * dy) >= MOVE_THRESHOLD) {
-              // Mysz rzeczywiście się ruszyła — resetuj timer
               lastMoveX = event.clientX;
               lastMoveY = event.clientY;
-              scheduleCursorHint(el, event);
+              scheduleCursorHint(el, event); // reset — odliczaj od nowa
             }
           }
         });
 
+        // Dotyk: timer startuje przy przyciśnięciu palca (nie przy wejściu)
         el.addEventListener("pointerdown", (event) => {
           if (event.pointerType !== "touch" || isDisabled(el, "touch")) return;
           event.stopPropagation();
           scheduleCursorHint(el, event);
         });
 
+        // Mysz opuszcza element lub palec się unosi — schowaj hint
         el.addEventListener("pointerleave", () => {
           hideCursorHint();
         });
 
+        // Kliknięcie / podniesienie palca / anulowanie — też chowaj
         el.addEventListener("pointerup", hideCursorHint);
         el.addEventListener("pointercancel", hideCursorHint);
 
@@ -352,9 +409,11 @@ window.MateuszCursorHint = (() => {
     return { setupCursorHint };
   }
 
+  // Publiczne API — inicjalizuje system hintów dla całej strony.
+  // Automatycznie podpina nowe elementy gdy pojawią się w DOM (MutationObserver).
   function initCursorHints({
     selector = "[data-hint], [data-hint-pl], [data-hint-en]",
-    fallbackHint = "",
+    fallbackHint = "", // tekst gdy element ma pusty data-hint (np. "Kliknij")
   } = {}) {
     const cursorHint = document.getElementById("cursorHint") || document.getElementById("cursor-hint");
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -364,8 +423,9 @@ window.MateuszCursorHint = (() => {
       getFallbackHint: () => fallbackHint,
     });
     const bindTargets = () => controller.setupCursorHint(document.querySelectorAll(selector));
-    bindTargets();
+    bindTargets(); // podepnij elementy istniejące przy starcie
     if ("MutationObserver" in window) {
+      // Obserwuj zmiany w DOM — np. dynamicznie dodawane przyciski w panelach
       const observer = new MutationObserver(bindTargets);
       observer.observe(document.body, { childList: true, subtree: true });
     }

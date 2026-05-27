@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=20260429-01" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
-    <link rel="stylesheet" href="styles/app.css?v=20260527-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260527-02" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -126,7 +126,8 @@
                 </label>
                 <label class="field">
                   Limit wierszy
-                  <input id="maxRows" type="number" min="1" value="200" />
+                  <input id="maxRows" type="number" min="1" value="200" data-hint-pl="Limit dotyczy tylko wyświetlania — filtry, szukanie i agregacje /| zawsze działają na wszystkich wierszach pliku."
+                  data-hint-en="The limit applies only to display — filters, search and aggregations /| always run on all rows of the file." data-hint-touch="on" />
                 </label>
               </div>
               <button class="btn full" id="loadBtn">
@@ -679,7 +680,8 @@
           </button>
           <section class="panel table-panel">
             <div class="table-toolbar">
-              <div class="status-badge" id="status">Brak danych</div>
+              <div class="status-badge" id="status" data-hint-pl="Limit dotyczy tylko wyświetlania — filtry, szukanie i agregacje /| zawsze działają na wszystkich wierszach pliku."
+              data-hint-en="The limit applies only to display — filters, search and aggregations /| always run on all rows of the file." data-hint-touch="on">Brak danych</div>
               <div class="quick-search hidden" id="quickSearchWrap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="11" cy="11" r="8" />
@@ -815,14 +817,14 @@
 
     <!-- Local xlsx-js-style (better style read/write, stable offline) -->
     <script src="lib/xlsx-js-style.bundle.min.js"></script>
-    <script src="app/core.js?v=20260527-01"></script>
-    <script src="app/language.js?v=20260527-01"></script>
-    <script src="app/cursor-hint.js?v=20260527-01"></script>
-    <script src="app/analysis.js?v=20260527-01"></script>
-    <script src="app/workbook.js?v=20260527-01"></script>
-    <script src="app/table.js?v=20260527-01"></script>
-    <script src="app/formulas.js?v=20260527-01"></script>
-    <script src="app/ui-controls.js?v=20260527-01"></script>
-    <script src="app/bootstrap.js?v=20260527-01"></script>
+    <script src="app/core.js?v=20260527-02"></script>
+    <script src="app/language.js?v=20260527-02"></script>
+    <script src="app/cursor-hint.js?v=20260527-02"></script>
+    <script src="app/analysis.js?v=20260527-02"></script>
+    <script src="app/workbook.js?v=20260527-02"></script>
+    <script src="app/table.js?v=20260527-02"></script>
+    <script src="app/formulas.js?v=20260527-02"></script>
+    <script src="app/ui-controls.js?v=20260527-02"></script>
+    <script src="app/bootstrap.js?v=20260527-02"></script>
   </body>
 </html>
