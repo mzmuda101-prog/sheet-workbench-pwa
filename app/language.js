@@ -611,25 +611,16 @@ const STATIC_TRANSLATIONS = {
     searchOperatorNot: "wykluczenie pojedynczego warunku, np. 'Kowalski !J.'",
     searchOperatorCombined: "możesz łączyć operatory, np. 'Kowalski && !Anulowana || Nowak'",
     hintDefault: "Kliknij",
-    hintPanelToggle: "Pokaż lub ukryj panel narzędzi",
     hintLangPl: "Przełącz język na polski",
     hintLangEn: "Switch language to English",
-    hintRefresh: "Odśwież aplikację i cache",
-    hintUpdate: "Wgraj nową wersję aplikacji",
-    hintTheme: "Zmień motyw jasny / ciemny",
-    hintDrop: "Przeciągnij lub wybierz plik XLSX",
     hintLoad: "Wczytaj wybrany arkusz",
     hintApplyFilters: "Zastosuj aktywne filtry",
     hintResetFilters: "Wyczyść wszystkie filtry",
     hintResetWidths: "Przywróć szerokości kolumn",
     hintSaveAs: "Pobierz kopię pliku",
-    hintPanelHandle: "Wysuń albo schowaj sidebar",
     hintQuickSearch: "Szukaj szybko w tabeli",
     hintQuickColumns: "Wybierz kolumny szukania",
     hintQuickApply: "Uruchom szybkie szukanie",
-    hintWideLong: "Przełącz Wide-to-Long",
-    hintExcelView: "Pokaż układ z Excela",
-    hintReading: "Tryb pracy z szybkim szukaniem",
     hintExportCsv: "Wyeksportuj widok do CSV",
     statusNoData: "Brak danych",
     quickSearchPlaceholder: "Szybkie szukanie...",
@@ -773,25 +764,16 @@ const STATIC_TRANSLATIONS = {
     searchOperatorNot: "exclude a single condition, e.g. 'Kowalski !J.'",
     searchOperatorCombined: "operators can be combined, e.g. 'Kowalski && !Canceled || Nowak'",
     hintDefault: "Click",
-    hintPanelToggle: "Show or hide the tools panel",
     hintLangPl: "Switch language to Polish",
     hintLangEn: "Switch language to English",
-    hintRefresh: "Refresh the app and cache",
-    hintUpdate: "Install the new app version",
-    hintTheme: "Switch light / dark theme",
-    hintDrop: "Drop or choose an XLSX file",
     hintLoad: "Load the selected sheet",
     hintApplyFilters: "Apply active filters",
     hintResetFilters: "Clear all filters",
     hintResetWidths: "Restore column widths",
     hintSaveAs: "Download a copy of the file",
-    hintPanelHandle: "Open or hide the sidebar",
     hintQuickSearch: "Quickly search the table",
     hintQuickColumns: "Choose search columns",
     hintQuickApply: "Run quick search",
-    hintWideLong: "Toggle Wide-to-Long",
-    hintExcelView: "Show Excel layout",
-    hintReading: "Quick search working mode",
     hintExportCsv: "Export the view to CSV",
     statusNoData: "No data",
     quickSearchPlaceholder: "Quick search...",
@@ -1106,17 +1088,12 @@ function applyStaticTranslations() {
   setAttr("#appUpdateBtn", "title", t("updateReady"));
   setAttr("#themeToggle", "title", t("themeToggleTitle"));
   setAttr("#themeToggle", "aria-label", t("themeToggleAria"));
-  setHint("#panelToggle", copy.hintPanelToggle);
-  setHint("#brandRefresh", copy.hintRefresh);
-  setHint("#appUpdateBtn", copy.hintUpdate);
-  setHint("#themeToggle", copy.hintTheme);
 
   setText("#panel-file-sheet .panel-title", copy.fileAndSheet);
   setHtml(".drop-text", copy.dropText);
   setText(".drop-or", copy.dropOr);
   setText(".drop-btn", copy.chooseFile);
   setAttr("#fileInput", "aria-label", copy.fileInputAria);
-  setHint("#dropZone", copy.hintDrop);
   setText("#fileNameText", currentFileName || copy.noFile);
   setFieldLabel("sheetSelect", copy.sheet);
   setFieldLabel("headerRow", copy.headerRow);
@@ -1217,10 +1194,6 @@ function applyStaticTranslations() {
   setAttr("#quickSearchAction", "aria-label", copy.quickSearchAria);
   setAttr("#quickSearchPopupAction", "aria-label", copy.quickSearchPopupModeAria);
   setAttr("#quickSearchColumnsBtn", "title", copy.quickSearchColumnsTitle);
-  setHint("#panelHandle", copy.hintPanelHandle);
-  setHint("#wideLongToggle", copy.hintWideLong);
-  setHint("#excelLayoutToggle", copy.hintExcelView);
-  setHint("#readingToggle", copy.hintReading);
   setAttr("#closePicker", "aria-label", copy.close);
 
   setText("#columnPickerTitle", copy.chooseColumns);
