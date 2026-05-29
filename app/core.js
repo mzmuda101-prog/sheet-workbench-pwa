@@ -203,7 +203,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260529-04";
+const APP_BUILD_VERSION = "20260529-05";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
@@ -313,37 +313,34 @@ function startTableTouchAxisLock(event) {
 
 function updateTableTouchAxisLock(event) {
   if (!tableWrapEl || !tableTouchAxisLock || !event.touches || event.touches.length !== 1) return;
+  // Oś już zablokowana — overflow pilnuje dalej, nie ma co robić per-klatkę
+  if (tableTouchAxisLock.mode) return;
+
   const touch = event.touches[0];
   const dx = touch.clientX - tableTouchAxisLock.startX;
   const dy = touch.clientY - tableTouchAxisLock.startY;
   const absX = Math.abs(dx);
   const absY = Math.abs(dy);
 
-  if (!tableTouchAxisLock.mode && Math.max(absX, absY) > 10) {
+  if (Math.max(absX, absY) > 10) {
     if (absY > absX * 1.1) {
       tableTouchAxisLock.mode = "vertical";
+      // Jednorazowy snap — usuwa ew. dryf przed detekcją kierunku
+      tableWrapEl.scrollLeft = tableTouchAxisLock.startScrollLeft;
+      // Blokada natywna: przeglądarka sama pilnuje osi, momentum działa normalnie
+      tableWrapEl.style.overflowX = "hidden";
     } else if (absX > absY * 1.1) {
       tableTouchAxisLock.mode = "horizontal";
+      tableWrapEl.scrollTop = tableTouchAxisLock.startScrollTop;
+      tableWrapEl.style.overflowY = "hidden";
     }
-  }
-
-  if (tableTouchAxisLock.mode === "vertical") {
-    tableWrapEl.scrollLeft = tableTouchAxisLock.startScrollLeft;
-    requestAnimationFrame(() => {
-      if (tableTouchAxisLock?.mode === "vertical") {
-        tableWrapEl.scrollLeft = tableTouchAxisLock.startScrollLeft;
-      }
-    });
-  } else if (tableTouchAxisLock.mode === "horizontal") {
-    tableWrapEl.scrollTop = tableTouchAxisLock.startScrollTop;
-    requestAnimationFrame(() => {
-      if (tableTouchAxisLock?.mode === "horizontal") {
-        tableWrapEl.scrollTop = tableTouchAxisLock.startScrollTop;
-      }
-    });
   }
 }
 
 function endTableTouchAxisLock() {
+  if (tableWrapEl && tableTouchAxisLock?.mode) {
+    tableWrapEl.style.overflowX = "";
+    tableWrapEl.style.overflowY = "";
+  }
   tableTouchAxisLock = null;
 }
