@@ -2073,6 +2073,7 @@ details.panel[open] > summary {
   --table-zoom: 1;
   overflow: auto;
   overscroll-behavior: contain;
+  will-change: scroll-position;
   min-width: 0;
   min-height: 0;
   flex: 1;
