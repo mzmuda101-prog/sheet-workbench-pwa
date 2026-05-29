@@ -46,18 +46,18 @@
 //   Domyślnie: 0 (pojawia się od razu).
 //   Przykład: data-hint-delay="1.1"  ← pojawi się po 1.1 sekundy bezruchu
 //
-// data-hint-touchdelay="0.65"
-//   Opóźnienie dla dotyku (przytrzymanie palca), w sekundach.
-//   NIEZALEŻNE od data-hint-delay — dotyk i mysz mają osobne timery.
-//   Wymaga data-hint-touch="on" żeby hint w ogóle działał na dotyk.
-//   Domyślnie: 0.65 (650ms).
-//   Przykład: data-hint-touchdelay="0.8"
+// data-hint-touch[="sekundy"]
+//   Włącza hint dla urządzeń dotykowych (przytrzymanie palca).
+//   Domyślnie hint działa tylko dla myszy — dodaj ten atrybut żeby
+//   włączyć obsługę dotyku. Czas przytrzymania i delay myszy są NIEZALEŻNE.
+//   Przy aktywnym timerze dotykowym blokowane jest systemowe context menu
+//   (iOS "Kopiuj / Szukaj", Android long-press menu) — brak przerywania hintu.
 //
-// data-hint-touch="on"
-//   Włącza hint dla urządzeń dotykowych. Domyślnie hint działa tylko
-//   dla myszy — dodaj ten atrybut jeśli chcesz obsługę dotyku.
-//   Akceptowane wartości: "on", "true", "1", "yes".
-//   Przykład: data-hint-touch="on"
+//   Warianty:
+//     data-hint-touch            ← dotyk włączony, domyślny delay (650ms)
+//     data-hint-touch="on"       ← to samo co powyżej
+//     data-hint-touch="0.8"      ← dotyk włączony, delay 800ms
+//     data-hint-touch="1.2"      ← dotyk włączony, delay 1200ms
 //
 // data-hint-class="nazwa-klasy"
 //   Dodatkowa klasa CSS doklejana do dymka gdy jest widoczny.
@@ -108,7 +108,6 @@
 // -    data-hint-en="Download a copy /| as XLSX"
 // -    data-hint-delay="1.1"
 // -    data-hint-touch="on"
-// -    data-hint-touchdelay="0.8"
 // -    data-hint-class="smaller"
 //   >
 //     Zapisz
@@ -147,10 +146,14 @@ window.MateuszCursorHint = (() => {
     // Typ wskaźnika który aktywował hint ("mouse" | "touch" | "pen")
     let activePointerType = "";
 
-    // Sprawdza czy element jawnie zezwala na hint dotykowy przez data-hint-touch
+    // Sprawdza czy element jawnie zezwala na hint dotykowy przez data-hint-touch.
+    // Akceptuje: brak wartości / "on" / "true" / "1" / "yes" / liczba dziesiętna (delay w sek.)
     function allowsTouchHint(el) {
-      const value = String(el.dataset.hintTouch || "").toLowerCase();
-      return value === "on" || value === "true" || value === "1" || value === "yes";
+      if (el.dataset.hintTouch === undefined) return false;
+      const value = String(el.dataset.hintTouch).toLowerCase();
+      if (value === "" || value === "on" || value === "true" || value === "1" || value === "yes") return true;
+      const num = parseFloat(value.replace(",", "."));
+      return Number.isFinite(num) && num >= 0;
     }
 
     // Zwraca true gdy hint ma być zablokowany — np. brak elementu dymka w DOM,
@@ -197,12 +200,12 @@ window.MateuszCursorHint = (() => {
     // Mysz i dotyk mają osobne atrybuty i osobne wartości domyślne.
     function getHintDelayMs(el, pointerType = "") {
       if (pointerType === "touch") {
-        // Dla dotyku używamy data-hint-touchdelay (osobny atrybut),
-        // data-hint-delay na dotyk nie ma wpływu.
-        const rawTouch = el.dataset.hintTouchdelay || "";
+        // Delay dotyku pochodzi z wartości data-hint-touch (np. "0.8" → 800ms).
+        // data-hint-delay nie ma wpływu na dotyk — osobne atrybuty, osobne timery.
+        const rawTouch = el.dataset.hintTouch || "";
         const parsedTouch = parseFloat(rawTouch.replace(",", "."));
-        if (Number.isFinite(parsedTouch) && parsedTouch >= 0) return parsedTouch * 1000;
-        return 650; // domyślny delay dotyku gdy brak atrybutu
+        if (Number.isFinite(parsedTouch) && parsedTouch >= 0) return Math.round(parsedTouch * 1000);
+        return 650; // domyślny delay gdy brak wartości liczbowej
       }
       // Mysz — czyta data-hint-delay, domyślnie 0 (od razu)
       const rawDelay = el.dataset.hintDelay || "";
@@ -463,6 +466,12 @@ window.MateuszCursorHint = (() => {
           if (event.pointerType !== "touch" || isDisabled(el, "touch")) return;
           event.stopPropagation();
           scheduleCursorHint(el, event);
+        });
+
+        // Blokuj systemowe context menu (iOS "Kopiuj/Szukaj", Android long-press)
+        // gdy hint dotykowy jest w trakcie oczekiwania lub już widoczny na tym elemencie
+        el.addEventListener("contextmenu", (event) => {
+          if (activeHintEl === el) event.preventDefault();
         });
 
         // Mysz opuszcza element lub palec się unosi — schowaj hint
