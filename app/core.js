@@ -203,7 +203,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260529-03";
+const APP_BUILD_VERSION = "20260529-04";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
@@ -307,6 +307,7 @@ function startTableTouchAxisLock(event) {
     startX: touch.clientX,
     startY: touch.clientY,
     startScrollLeft: tableWrapEl.scrollLeft,
+    startScrollTop: tableWrapEl.scrollTop,
   };
 }
 
@@ -318,10 +319,10 @@ function updateTableTouchAxisLock(event) {
   const absX = Math.abs(dx);
   const absY = Math.abs(dy);
 
-  if (!tableTouchAxisLock.mode && Math.max(absX, absY) > 8) {
-    if (absY > absX * 1.35) {
+  if (!tableTouchAxisLock.mode && Math.max(absX, absY) > 10) {
+    if (absY > absX * 1.1) {
       tableTouchAxisLock.mode = "vertical";
-    } else if (absX > absY * 1.15) {
+    } else if (absX > absY * 1.1) {
       tableTouchAxisLock.mode = "horizontal";
     }
   }
@@ -331,6 +332,13 @@ function updateTableTouchAxisLock(event) {
     requestAnimationFrame(() => {
       if (tableTouchAxisLock?.mode === "vertical") {
         tableWrapEl.scrollLeft = tableTouchAxisLock.startScrollLeft;
+      }
+    });
+  } else if (tableTouchAxisLock.mode === "horizontal") {
+    tableWrapEl.scrollTop = tableTouchAxisLock.startScrollTop;
+    requestAnimationFrame(() => {
+      if (tableTouchAxisLock?.mode === "horizontal") {
+        tableWrapEl.scrollTop = tableTouchAxisLock.startScrollTop;
       }
     });
   }
