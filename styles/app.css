@@ -2781,8 +2781,15 @@ kbd {
   display: inline-flex;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 140ms ease;
+  filter: blur(0px);
+  transition: opacity 140ms ease, filter 140ms ease;
   will-change: transform, opacity;
+}
+
+.cursor-hint.is-fading {
+  opacity: 0 !important;
+  filter: blur(6px) !important;
+  transition: opacity 460ms ease-out, filter 460ms ease-out !important;
 }
 
 .cursor-hint-scaler {
@@ -2790,7 +2797,7 @@ kbd {
   align-items: center;
   justify-content: center;
   min-width: 86px;
-  max-width: min(260px, calc(100vw - 32px));
+  max-width: min(1000px, calc(100vw - 32px));
   padding: 0.64rem 0.86rem;
   border: 1px solid color-mix(in srgb, var(--accent) 28%, rgba(255, 255, 255, 0.36));
   border-radius: 999px;

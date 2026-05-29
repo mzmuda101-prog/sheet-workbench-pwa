@@ -65,6 +65,23 @@
 //   np. inny kolor, rozmiar, wariant. Klasa jest usuwana gdy hint znika.
 //   Przykład: data-hint-class="smaller"  ← jest już taka klasa w app.css
 //
+// data-hint-duration="2.5"
+//   Czas po którym hint automatycznie znika, w sekundach.
+//   Odliczanie startuje w momencie gdy hint staje się widoczny (po delay).
+//   Mysz opuszczająca element nadal chowa hint normalnie — duration to
+//   tylko górny limit widoczności gdy kursor stoi w miejscu.
+//   Wartość: liczba dziesiętna, akceptuje przecinek i kropkę.
+//   Domyślnie: brak (hint znika tylko gdy mysz opuści element).
+//   Przykład: data-hint-duration="3"  ← hint zniknie po 3 sekundach
+//
+// data-hint-fade
+//   Włącza powolne zanikanie przez mgłę (blur + opacity, 460ms).
+//   Działa przy KAŻDYM ukryciu hinta — zarówno przez auto-hide (data-hint-duration)
+//   jak i przy normalnym opuszczeniu elementu myszą.
+//   Bez tego atrybutu hint znika szybko (140ms) — domyślne zachowanie.
+//   Atrybut nie wymaga wartości — samo jego obecność wystarczy.
+//   Przykład: data-hint-fade
+//
 // -----------------------------------------------------------------------------
 // *SEPARATOR LINII W TEKŚCIE HINTA
 // -----------------------------------------------------------------------------
@@ -116,6 +133,10 @@ window.MateuszCursorHint = (() => {
     let cursorHintFrame = null;
     // ID setTimeout dla opóźnionego pokazania hinta — null gdy brak aktywnego timera
     let cursorHintTimer = null;
+    // ID setTimeout dla automatycznego ukrycia hinta — null gdy brak aktywnego timera
+    let autoHideTimer = null;
+    // ID setTimeout dla opóźnionego sprzątania po powolnym fade-out — null gdy brak
+    let fadingOutTimer = null;
     // Element na którym aktualnie czeka lub pokazuje hint
     let activeHintEl = null;
     // Typ wskaźnika który aktywował hint ("mouse" | "touch" | "pen")
@@ -156,6 +177,15 @@ window.MateuszCursorHint = (() => {
 
       // brak wartości lub pusty atrybut → domyślny hint (np. "Kliknij")
       return getFallbackHint() || "";
+    }
+
+    // Zwraca czas auto-hide w ms dla danego elementu.
+    // 0 = brak auto-hide (domyślne zachowanie).
+    function getHintDurationMs(el) {
+      const raw = el.dataset.hintDuration || "";
+      const parsed = parseFloat(raw.replace(",", "."));
+      if (Number.isFinite(parsed) && parsed > 0) return parsed * 1000;
+      return 0;
     }
 
     // Zwraca opóźnienie w ms dla danego elementu i typu wskaźnika.
@@ -293,6 +323,15 @@ window.MateuszCursorHint = (() => {
       // potem dokładamy is-visible i ewentualną klasę z atrybutu
       cursorHint.className = `cursor-hint is-visible ${el.dataset.hintClass || ""}`.trim();
       moveCursorHint(x, y);
+      // Auto-hide: jeśli element ma data-hint-duration, ukryj po zadanym czasie
+      if (autoHideTimer) { window.clearTimeout(autoHideTimer); autoHideTimer = null; }
+      const durationMs = getHintDurationMs(el);
+      if (durationMs > 0) {
+        autoHideTimer = window.setTimeout(() => {
+          autoHideTimer = null;
+          hideCursorHint();
+        }, durationMs);
+      }
     }
 
     // Ostatnia zarejestrowana pozycja myszy podczas oczekiwania na timer —
@@ -333,17 +372,39 @@ window.MateuszCursorHint = (() => {
       }, delayMs);
     }
 
-    // Chowa hint i anuluje wszystkie aktywne timery i stany
-    function hideCursorHint() {
-      clearCursorHintTimer();
-      activeHintEl = null;
-      activePointerType = "";
+    // Finalizuje ukrycie — usuwa klasy i wysyła dymek poza ekran
+    function finishHide() {
       if (!cursorHint) return;
-      cursorHint.classList.remove("is-visible");
-      // Wyślij dymek poza ekran żeby nie blokował kliknięć pod spodem
+      cursorHint.classList.remove("is-fading", "is-visible");
       cursorHintTargetX = -999;
       cursorHintTargetY = -999;
       moveCursorHint(-999, -999);
+    }
+
+    // Chowa hint i anuluje wszystkie aktywne timery i stany.
+    // Jeśli element miał data-hint-fade, używa powolnego zanikania przez mgłę.
+    function hideCursorHint() {
+      clearCursorHintTimer();
+      if (autoHideTimer) { window.clearTimeout(autoHideTimer); autoHideTimer = null; }
+      if (fadingOutTimer) { window.clearTimeout(fadingOutTimer); fadingOutTimer = null; }
+
+      const fadingEl = activeHintEl; // zapamiętaj przed wyczyszczeniem stanu
+      activeHintEl = null;
+      activePointerType = "";
+      if (!cursorHint) return;
+
+      const slowFade = fadingEl && fadingEl.dataset.hintFade !== undefined
+        && cursorHint.classList.contains("is-visible");
+
+      if (slowFade) {
+        cursorHint.classList.add("is-fading");
+        fadingOutTimer = window.setTimeout(() => {
+          fadingOutTimer = null;
+          finishHide();
+        }, 480);
+      } else {
+        finishHide();
+      }
     }
 
     // Podpina eventy na liście elementów. Pomija elementy już podpięte
