@@ -354,7 +354,7 @@ function parseRepeatedHeader(header) {
   if (!raw) return null;
   const match = raw.match(/^(.*?)(\d+)$/);
   if (!match) return { base: raw, order: 1 };
-  const base = cleanSectionLabel(match[1]);
+  const base = cleanSectionLabel(match[1]).replace(/[_\-.\s]+$/, "");
   const order = Number(match[2]);
   if (!base || !Number.isFinite(order)) return { base: raw, order: 1 };
   return { base, order };
@@ -2120,6 +2120,7 @@ function buildGroupFromSignature(headers, startIndex, span, repeatCount, tableSt
     meta: `${repeatCount} bloków po ${span} kolumny`,
     prefixCount: startIndex,
     prefixLabel: startIndex > 0 ? formatColRange(tableStartCol, tableStartCol + startIndex - 1) : "",
+    longHeaders: uniqueBases.slice(),
     families: uniqueBases.slice(0, 8).map((label) => ({ label, count: repeatCount })),
     blocks,
   };

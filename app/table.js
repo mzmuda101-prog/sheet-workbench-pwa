@@ -14,10 +14,10 @@ function updateWideLongToggle() {
   wideLongToggleEl.classList.toggle("hidden", !available);
   wideLongToggleEl.setAttribute("aria-hidden", available ? "false" : "true");
   wideLongToggleEl.setAttribute("aria-pressed", tableViewMode === "long" ? "true" : "false");
-  wideLongToggleEl.textContent = tableViewMode === "long" ? "Widok klasyczny" : "Wide-to-Long";
+  wideLongToggleEl.textContent = tableViewMode === "long" ? t("classicView") : "Wide-to-Long";
   wideLongToggleEl.title = tableViewMode === "long"
-    ? "Wroc do klasycznego ukladu arkusza"
-    : "Przelacz wykryte bloki kolumn na dlugi widok analityczny";
+    ? t("backToClassicTitle")
+    : t("switchToLongTitle");
 }
 
 function buildWideDisplayModelFromRows(rows, options = {}) {
@@ -50,7 +50,7 @@ function buildLongViewModelFromRows(rows, group = getActiveRepeatingGroup(), opt
   const repeatedHeaders = Array.isArray(group.longHeaders) && group.longHeaders.length
     ? group.longHeaders.slice()
     : firstBlock.headers.map((header) => parseRepeatedHeader(header)?.base || cleanSectionLabel(header) || header);
-  const headers = [...prefixHeaders, "Nr bloku", "Blok", ...repeatedHeaders];
+  const headers = [...prefixHeaders, t("longColBlockNum"), t("longColBlock"), ...repeatedHeaders];
   const nextRows = [];
 
   rows.forEach((row) => {
