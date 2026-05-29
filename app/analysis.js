@@ -352,12 +352,27 @@ function focusSection(section) {
 function parseRepeatedHeader(header) {
   const raw = cleanSectionLabel(header);
   if (!raw) return null;
-  const match = raw.match(/^(.*?)(\d+)$/);
-  if (!match) return { base: raw, order: 1 };
-  const base = cleanSectionLabel(match[1]).replace(/[_\-.\s]+$/, "");
-  const order = Number(match[2]);
-  if (!base || !Number.isFinite(order)) return { base: raw, order: 1 };
-  return { base, order };
+
+  // Pattern 1: trailing digit — "Kwota1", "Wartość_2" → base="Kwota", order=1
+  const trailingMatch = raw.match(/^(.*?)(\d+)$/);
+  if (trailingMatch) {
+    const base = cleanSectionLabel(trailingMatch[1]).replace(/[_\-.\s]+$/, "");
+    const order = Number(trailingMatch[2]);
+    if (base && Number.isFinite(order)) return { base, order };
+  }
+
+  // Pattern 2: middle digit — "Kw1_Kwota", "Q2_Revenue", "M3 Zysk"
+  // Cyfra po krótkim prefiksie (max 6 znaków) + separator + reszta nazwy
+  const middleMatch = raw.match(/^([A-Za-zĄąĆćĘęŁłŃńÓóŚśŹźŻż]{1,6})(\d+)([_\-. ].+)$/);
+  if (middleMatch) {
+    const prefix = middleMatch[1];
+    const order = Number(middleMatch[2]);
+    const suffix = middleMatch[3].replace(/^[_\-. ]+/, "");
+    const base = `${prefix}_${suffix}`;
+    if (Number.isFinite(order)) return { base, order };
+  }
+
+  return { base: raw, order: 1 };
 }
 
 function normalizeAnalysisKey(value) {
@@ -1785,7 +1800,7 @@ function renderAggregationWorkbench() {
   aggregationSelect.value = aggregationWorkbenchState.aggregation;
 
   const matchField = document.createElement("label");
-  matchField.className = "field";
+  matchField.className = "field aggregation-click-match";
   matchField.append(t("aggregationMatchText"));
   const matchSelect = document.createElement("select");
   matchSelect.dataset.aggregationControl = "match";
@@ -1875,7 +1890,7 @@ const measureFilterField = document.createElement("label");
   havingValueInput.style.display = aggregationWorkbenchState.havingMode === "all" ? "none" : "inline-block";
   havingField.appendChild(havingValueInput);
 
-  [sourceField, scopeField, headerField, groupField, measureField, aggregationField, matchField, measureFilterField, showCountField, havingField].forEach((field) => controls.appendChild(field));
+  [sourceField, scopeField, headerField, groupField, measureField, aggregationField, measureFilterField, showCountField, havingField].forEach((field) => controls.appendChild(field));
   aggregationWorkbenchSummaryEl.appendChild(controls);
 
   const note = document.createElement("div");
@@ -1941,6 +1956,7 @@ const measureFilterField = document.createElement("label");
   searchWrap.appendChild(searchCount);
 
   aggregationWorkbenchListEl.appendChild(searchWrap);
+  aggregationWorkbenchListEl.appendChild(matchField);
 
   const showCount = Math.min(aggregationWorkbenchState.showCount, filteredEntries.length);
   filteredEntries.slice(0, showCount).forEach((entry, index) => {

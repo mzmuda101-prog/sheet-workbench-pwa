@@ -1308,6 +1308,25 @@ details.panel[open] > summary {
   flex: unset !important;
 }
 
+.aggregation-click-match {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 8px;
+  font-size: 11px;
+  color: var(--muted);
+  flex: unset !important;
+}
+
+.aggregation-click-match select {
+  font-size: 11px;
+  padding: 1px 4px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
 .aggregation-result-search {
   display: block !important;
   width: 100% !important;
