@@ -794,6 +794,7 @@ function renderTable(modelOrHeaders, maybeRows) {
   const rowsShown = rows.slice(0, limit);
   const mergeLayout = model.mode === "wide" ? computeMergeLayout(rowsShown, headers.length) : null;
 
+  const tbodyFragment = document.createDocumentFragment();
   rowsShown.forEach((row, rowPos) => {
     const tr = document.createElement("tr");
     tr.dataset.rowKey = getRowSelectionKey(row);
@@ -843,8 +844,9 @@ function renderTable(modelOrHeaders, maybeRows) {
       if (row.cellStyles && row.cellStyles[i]) applyCellStyle(td, row.cellStyles[i]);
       tr.appendChild(td);
     });
-    tbodyEl.appendChild(tr);
+    tbodyFragment.appendChild(tr);
   });
+  tbodyEl.appendChild(tbodyFragment);
 
   const modeLabel = model.mode === "long" ? " • tryb long" : "";
   setStatus(`Wierszy: ${rows.length} (pokazano: ${Math.min(rows.length, limit)})${modeLabel}`);

@@ -401,6 +401,7 @@ function attachResizeHandlers() {
   let active = null;
   let startX = 0;
   let startW = 0;
+  let rafId = null;
 
   const start = (e) => {
     const handle = e.target.closest(".col-resizer");
@@ -420,12 +421,17 @@ function attachResizeHandlers() {
     const delta = x - startX;
     const next = Math.max(80, Math.min(520, Math.round(startW + delta)));
     manualColumnWidths[active.colIndex] = next;
-    renderActiveTable();
+    if (rafId) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = null;
+      if (active) renderActiveTable();
+    });
   };
 
   const stop = () => {
     if (!active) return;
     active = null;
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     document.body.classList.remove("resizing");
   };
 
@@ -578,11 +584,18 @@ async function hardRefreshApp() {
   window.location.reload();
 }
 
+function formatFileSize(bytes) {
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
 async function handleFile(file) {
   if (!file) return;
   if (!isXlsxAvailable(true)) return;
   try {
-    setLoading(true, t("loadingFile"));
+    const sizeHint = file.size > 0 ? ` (${formatFileSize(file.size)})` : "";
+    setLoading(true, t("loadingFile") + sizeHint);
     const data = await file.arrayBuffer();
     try {
       workbook = XLSX.read(data, { cellDates: true, cellStyles: true });

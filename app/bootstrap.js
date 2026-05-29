@@ -304,9 +304,13 @@ if (readingToggle) {
     setReadingMode(enabled);
   });
 }
+const _debouncedRenderFormula = (() => {
+  let _tid;
+  return () => { clearTimeout(_tid); _tid = setTimeout(renderFormulaWorkbench, 280); };
+})();
 [formulaSearchEl, formulaFilterEl, formulaFunctionFilterEl].forEach((el) => {
   if (!el) return;
-  el.addEventListener("input", renderFormulaWorkbench);
+  el.addEventListener("input", _debouncedRenderFormula);
   el.addEventListener("change", renderFormulaWorkbench);
 });
 
