@@ -441,40 +441,161 @@ function parseOperatorTerm(rawTerm, operatorsEnabled = false) {
   return parsed;
 }
 
-function parseAndQueryPart(queryPart) {
-  const terms = [];
-  const text = String(queryPart || "");
-  const notPattern = /(^|\s)!(\S+)/g;
-  let cursor = 0;
-  let match = notPattern.exec(text);
-  while (match) {
-    const before = text.slice(cursor, match.index).trim();
-    if (before) terms.push(parseOperatorTerm(before, true));
-    terms.push(parseOperatorTerm(`!${match[2]}`, true));
-    cursor = match.index + match[0].length;
-    match = notPattern.exec(text);
+// Tokenize a flat string (no brackets) into NOT-aware terms split by && and ||
+// Returns an AST node: { type: "or", children: [ { type: "and", terms: [...] } ] }
+function parseFlatExpr(text) {
+  function parseAndPart(part) {
+    const terms = [];
+    const s = String(part || "");
+    const notPattern = /(^|\s)!(\S+)/g;
+    let cursor = 0;
+    let match = notPattern.exec(s);
+    while (match) {
+      const before = s.slice(cursor, match.index).trim();
+      if (before) terms.push({ term: before, negated: false });
+      terms.push({ term: match[2], negated: true });
+      cursor = match.index + match[0].length;
+      match = notPattern.exec(s);
+    }
+    const after = s.slice(cursor).trim();
+    if (after) terms.push({ term: after, negated: false });
+    return terms.filter((t) => t.term);
   }
-  const after = text.slice(cursor).trim();
-  if (after) terms.push(parseOperatorTerm(after, true));
-  return terms.filter((term) => term.term);
+
+  const andGroups = text.split("||").map((orPart) =>
+    orPart.split("&&").flatMap((t) => parseAndPart(t))
+  ).filter((g) => g.length);
+
+  return { type: "or", children: andGroups.map((g) => ({ type: "and", terms: g })) };
 }
 
+// Split a query string respecting {} brackets into segments with their surrounding operators.
+// Returns array of { segment: string|AST, op: "&&"|"||"|null, negated: bool }
+// bracket segments are pre-parsed into inner AST nodes.
+function tokenizeBrackets(query) {
+  const tokens = []; // { kind: "text"|"bracket", value: string, negated: bool }
+  let i = 0;
+  const s = String(query || "");
+  while (i < s.length) {
+    if (s[i] === "{") {
+      // Find matching closing bracket
+      let depth = 1;
+      let j = i + 1;
+      while (j < s.length && depth > 0) {
+        if (s[j] === "{") depth++;
+        else if (s[j] === "}") depth--;
+        j++;
+      }
+      const inner = s.slice(i + 1, j - 1);
+      tokens.push({ kind: "bracket", value: inner });
+      i = j;
+    } else {
+      // Collect text until next {
+      let j = i;
+      while (j < s.length && s[j] !== "{") j++;
+      tokens.push({ kind: "text", value: s.slice(i, j) });
+      i = j;
+    }
+  }
+  return tokens;
+}
+
+// Full query parser supporting {} grouping, &&, ||, !
+// Returns { groups: [ [term, ...], ... ] }
+// Evaluation: groups.some(group => group.every(term => match(term)))
+// A term is { term: string, negated: bool } OR { subExpr: AST, negated: bool }
+// where AST = { type:"or", children: [{type:"and", terms:[...]}] }
 function parseQueryTerms(query, operatorsEnabled = false) {
-  const fallback = { groups: [[parseOperatorTerm(query, operatorsEnabled)]].filter((group) => group[0].term) };
+  const raw = String(query || "").trim();
+  const simpleTerm = { term: raw, negated: false };
+  const fallback = { groups: raw ? [[simpleTerm]] : [] };
   if (!operatorsEnabled) return fallback;
 
-  const groups = query
-    .split("||")
-    .map((orPart) => orPart
-      .split("&&")
-      .flatMap((term) => parseAndQueryPart(term)))
-    .filter((group) => group.length);
+  const bracketTokens = tokenizeBrackets(raw);
+
+  // Re-assemble into a flat stream, replacing {…} with placeholders
+  // Then split by || (OR) and && (AND)
+  const BRACKET_PH = "\x00BRACKET_";
+  const brackets = [];
+  let flat = "";
+  for (const tok of bracketTokens) {
+    if (tok.kind === "bracket") {
+      const idx = brackets.length;
+      brackets.push(tok.value);
+      flat += `${BRACKET_PH}${idx}\x00`;
+    } else {
+      flat += tok.value;
+    }
+  }
+
+  // Split by || then &&
+  const orParts = flat.split("||");
+  // Each OR part is an AND group
+  const groups = [];
+  for (const orPart of orParts) {
+    const andParts = orPart.split("&&");
+    const andTerms = [];
+    for (const andPart of andParts) {
+      // Find bracket placeholders in this part
+      const phPattern = /!?\x00BRACKET_(\d+)\x00/g;
+      let cursor = 0;
+      let m = phPattern.exec(andPart);
+      const segments = [];
+      while (m) {
+        const before = andPart.slice(cursor, m.index).trim();
+        if (before) segments.push({ kind: "text", value: before });
+        segments.push({ kind: "bracket", index: parseInt(m[1], 10), negated: m[0].startsWith("!") });
+        cursor = m.index + m[0].length;
+        m = phPattern.exec(andPart);
+      }
+      const after = andPart.slice(cursor).trim();
+      if (after) segments.push({ kind: "text", value: after });
+
+      for (const seg of segments) {
+        if (seg.kind === "bracket") {
+          const innerAst = parseFlatExpr(brackets[seg.index]);
+          if (innerAst.children.length) {
+            andTerms.push({ subExpr: innerAst, negated: seg.negated });
+          }
+        } else {
+          // Parse text part for NOT and individual terms
+          const s = seg.value;
+          const notPattern = /(^|\s)!(\S+)/g;
+          let cur = 0;
+          let mt = notPattern.exec(s);
+          while (mt) {
+            const bef = s.slice(cur, mt.index).trim();
+            if (bef) andTerms.push({ term: bef, negated: false });
+            andTerms.push({ term: mt[2], negated: true });
+            cur = mt.index + mt[0].length;
+            mt = notPattern.exec(s);
+          }
+          const aft = s.slice(cur).trim();
+          if (aft) andTerms.push({ term: aft, negated: false });
+        }
+      }
+    }
+    const validTerms = andTerms.filter((t) => t.term || t.subExpr);
+    if (validTerms.length) groups.push(validTerms);
+  }
 
   return groups.length ? { groups } : fallback;
 }
 
+function rowMatchesAstNode(row, ast, criterion) {
+  // ast = { type: "or", children: [ { type: "and", terms: [...] } ] }
+  return ast.children.some((andGroup) =>
+    andGroup.terms.every((t) => rowMatchesParsedTerm(row, t, criterion))
+  );
+}
+
 function rowMatchesParsedTerm(row, parsedTerm, criterion) {
-  const matched = rowMatchesSingleTerm(row, parsedTerm.term, criterion);
+  let matched;
+  if (parsedTerm.subExpr) {
+    matched = rowMatchesAstNode(row, parsedTerm.subExpr, criterion);
+  } else {
+    matched = rowMatchesSingleTerm(row, parsedTerm.term, criterion);
+  }
   return parsedTerm.negated ? !matched : matched;
 }
 
