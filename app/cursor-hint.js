@@ -74,13 +74,18 @@
 //   Domyślnie: brak (hint znika tylko gdy mysz opuści element).
 //   Przykład: data-hint-duration="3"  ← hint zniknie po 3 sekundach
 //
-// data-hint-fade
-//   Włącza powolne zanikanie przez mgłę (blur + opacity, 460ms).
+// data-hint-fade[="sekundy"]
+//   Włącza powolne zanikanie przez mgłę (blur + opacity).
 //   Działa przy KAŻDYM ukryciu hinta — zarówno przez auto-hide (data-hint-duration)
 //   jak i przy normalnym opuszczeniu elementu myszą.
 //   Bez tego atrybutu hint znika szybko (140ms) — domyślne zachowanie.
-//   Atrybut nie wymaga wartości — samo jego obecność wystarczy.
-//   Przykład: data-hint-fade
+//
+//   Warianty:
+//     data-hint-fade              ← domyślny czas fade (460ms)
+//     data-hint-fade="0.5"        ← fade przez 0.5 sekundy
+//     data-hint-fade="1.2"        ← fade przez 1.2 sekundy
+//
+//   Wartość: liczba dziesiętna w sekundach (>0). Brak wartości lub 0 = 460ms.
 //
 // -----------------------------------------------------------------------------
 // *SEPARATOR LINII W TEKŚCIE HINTA
@@ -372,10 +377,11 @@ window.MateuszCursorHint = (() => {
       }, delayMs);
     }
 
-    // Finalizuje ukrycie — usuwa klasy i wysyła dymek poza ekran
+    // Finalizuje ukrycie — usuwa klasy, kasuje zmienną fade i wysyła dymek poza ekran
     function finishHide() {
       if (!cursorHint) return;
       cursorHint.classList.remove("is-fading", "is-visible");
+      cursorHint.style.removeProperty("--hint-fade-ms");
       cursorHintTargetX = -999;
       cursorHintTargetY = -999;
       moveCursorHint(-999, -999);
@@ -383,6 +389,7 @@ window.MateuszCursorHint = (() => {
 
     // Chowa hint i anuluje wszystkie aktywne timery i stany.
     // Jeśli element miał data-hint-fade, używa powolnego zanikania przez mgłę.
+    // Czas fade: data-hint-fade="0.5" → 500ms; samo data-hint-fade → 460ms (domyślnie).
     function hideCursorHint() {
       clearCursorHintTimer();
       if (autoHideTimer) { window.clearTimeout(autoHideTimer); autoHideTimer = null; }
@@ -397,11 +404,17 @@ window.MateuszCursorHint = (() => {
         && cursorHint.classList.contains("is-visible");
 
       if (slowFade) {
+        const rawFade = fadingEl.dataset.hintFade;
+        const parsedFade = parseFloat(String(rawFade).replace(",", "."));
+        const fadeDurationMs = Number.isFinite(parsedFade) && parsedFade > 0
+          ? Math.round(parsedFade * 1000)
+          : 460;
+        cursorHint.style.setProperty("--hint-fade-ms", `${fadeDurationMs}ms`);
         cursorHint.classList.add("is-fading");
         fadingOutTimer = window.setTimeout(() => {
           fadingOutTimer = null;
           finishHide();
-        }, 480);
+        }, fadeDurationMs + 20);
       } else {
         finishHide();
       }

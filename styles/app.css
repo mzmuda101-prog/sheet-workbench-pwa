@@ -2790,7 +2790,7 @@ kbd {
 .cursor-hint.is-fading {
   opacity: 0 !important;
   filter: blur(6px) !important;
-  transition: opacity 460ms ease-out, filter 460ms ease-out !important;
+  transition: opacity var(--hint-fade-ms, 460ms) ease-out, filter var(--hint-fade-ms, 460ms) ease-out !important;
 }
 
 .cursor-hint-scaler {
