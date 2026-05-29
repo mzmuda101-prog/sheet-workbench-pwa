@@ -132,9 +132,6 @@ if (aggregationWorkbenchSummaryEl) {
       aggregationWorkbenchState.customHeaderRow = next;
       aggregationWorkbenchState.headerRowChoice = "manual";
     }
-    if (kind === "group") aggregationWorkbenchState.groupBy = control.value || "";
-    if (kind === "group2") aggregationWorkbenchState.groupBy2 = control.value || "";
-    if (kind === "group3") aggregationWorkbenchState.groupBy3 = control.value || "";
     if (kind === "measure-pick") {
       // Obsluzone przez event click na przycisku
       return;
@@ -170,12 +167,16 @@ if (aggregationWorkbenchSummaryEl) {
     if (sidebarEl) sidebarEl.scrollTop = savedSidebarScroll;
   });
 
-  // Click handler for measure picker button
   aggregationWorkbenchSummaryEl.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-aggregation-control=\"measure-pick\"]");
-    if (!btn) return;
-    e.stopPropagation();
-    openMeasurePicker();
+    if (e.target.closest("[data-aggregation-control=\"measure-pick\"]")) {
+      e.stopPropagation();
+      openMeasurePicker();
+      return;
+    }
+    if (e.target.closest("[data-aggregation-control=\"groupby-pick\"]")) {
+      e.stopPropagation();
+      openGroupByPicker();
+    }
   });
 }
 if (aggregationWorkbenchListEl) {

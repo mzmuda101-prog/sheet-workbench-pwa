@@ -184,6 +184,7 @@ let durationAnalysisState = {
   showCount: 14,
 };
 let currentAggregationMeasureCandidates = [];
+let currentAggregationGroupOptions = [];
 let aggregationWorkbenchState = {
   sourceMode: "auto",
   scopeMode: "filtered",
@@ -202,7 +203,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260529-01";
+const APP_BUILD_VERSION = "20260529-02";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

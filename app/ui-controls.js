@@ -268,6 +268,54 @@ function closeColumnPicker() {
   }
 }
 
+function updateGroupByMaxLimit() {
+  if (activePickerKey !== "groupby") return;
+  const checkboxes = Array.from(columnListEl.querySelectorAll("input[type=checkbox]"));
+  const checkedCount = checkboxes.filter((cb) => cb.checked).length;
+  checkboxes.forEach((cb) => {
+    cb.disabled = !cb.checked && checkedCount >= 3;
+  });
+}
+
+function openGroupByPicker() {
+  if (!currentAggregationGroupOptions || !currentAggregationGroupOptions.length) {
+    toast(t("aggregationNoOptions"), "info");
+    return;
+  }
+  activePickerKey = "groupby";
+  if (columnPickerTitleEl) {
+    columnPickerTitleEl.textContent = t("groupByPickerTitle");
+  }
+  columnListEl.replaceChildren();
+  columnSearchEl.value = "";
+  const currentSelected = [
+    aggregationWorkbenchState.groupBy,
+    aggregationWorkbenchState.groupBy2,
+    aggregationWorkbenchState.groupBy3,
+  ].filter(Boolean);
+  currentAggregationGroupOptions.forEach((option, idx) => {
+    if (!option.value) return;
+    const row = document.createElement("div");
+    row.className = "field checkbox";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.id = `groupbypick-${idx}`;
+    input.value = option.value;
+    input.checked = currentSelected.includes(option.value);
+    if (currentSelected.length >= 3 && !input.checked) {
+      input.disabled = true;
+    }
+    const label = document.createElement("label");
+    label.htmlFor = input.id;
+    label.textContent = option.label;
+    row.appendChild(input);
+    row.appendChild(label);
+    columnListEl.appendChild(row);
+  });
+  columnPickerEl.classList.remove("hidden");
+  columnSearchEl.focus();
+}
+
 function openMeasurePicker() {
   if (!currentAggregationMeasureCandidates || !currentAggregationMeasureCandidates.length) {
     toast(t("aggregationNoOptions"), "info");
@@ -338,9 +386,14 @@ columnListEl.addEventListener("click", (e) => {
   const row = e.target.closest(".field.checkbox");
   if (!row) return;
   const cb = row.querySelector("input[type=checkbox]");
-  if (!cb) return;
+  if (!cb || cb.disabled) return;
   if (e.target === cb || e.target.tagName === "LABEL") return;
   cb.checked = !cb.checked;
+  cb.dispatchEvent(new Event("change", { bubbles: true }));
+});
+
+columnListEl.addEventListener("change", () => {
+  updateGroupByMaxLimit();
 });
 
 
@@ -949,6 +1002,10 @@ quickRangeButtons.forEach((btn) => {
 });
 
 selectAllBtn.addEventListener("click", () => {
+  if (activePickerKey === "groupby") {
+    toast(t("groupByLimitReached"), "info");
+    return;
+  }
   columnListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
     cb.checked = activePickerKey === "measures" && cb.value === "count_rows" ? false : true;
   });
@@ -966,6 +1023,15 @@ applyPickBtn.addEventListener("click", (e) => {
   const checked = Array.from(columnListEl.querySelectorAll("input[type=checkbox]"))
     .filter((cb) => cb.checked)
     .map((cb) => cb.value);
+  if (activePickerKey === "groupby") {
+    const selected = checked.slice(0, 3);
+    aggregationWorkbenchState.groupBy = selected[0] || "";
+    aggregationWorkbenchState.groupBy2 = selected[1] || "";
+    aggregationWorkbenchState.groupBy3 = selected[2] || "";
+    renderAggregationWorkbench();
+    closeColumnPicker();
+    return;
+  }
   if (activePickerKey === "measures") {
     aggregationWorkbenchState.measures = checked.length ? checked : ["count_rows"];
     renderAggregationWorkbench();

@@ -1578,6 +1578,7 @@ function renderAggregationWorkbench() {
   const result = buildAggregationWorkbenchResult();
   if (typeof currentAggregationMeasureCandidates !== "undefined") {
     currentAggregationMeasureCandidates = result.measures || [];
+    currentAggregationGroupOptions = result.groupOptions || [];
   }
   if (result.status === "empty") {
     aggregationWorkbenchSummaryEl.appendChild(createEmptyInsight(t("aggregationNoData")));
@@ -1704,49 +1705,30 @@ function renderAggregationWorkbench() {
   const groupField = document.createElement("label");
   groupField.className = "field";
   groupField.append(t("aggregationGroupBy"));
-  const groupSelect = document.createElement("select");
-  groupSelect.dataset.aggregationControl = "group";
-  groupField.appendChild(groupSelect);
-  result.groupOptions.forEach((option) => {
-    const opt = document.createElement("option");
-    opt.value = option.value;
-    opt.textContent = option.label;
-    opt.title = option.meta || "";
-    groupSelect.appendChild(opt);
+  const currentGroupLabels = [
+    aggregationWorkbenchState.groupBy,
+    aggregationWorkbenchState.groupBy2,
+    aggregationWorkbenchState.groupBy3,
+  ].filter(Boolean).map((val) => {
+    const opt = result.groupOptions.find((o) => o.value === val);
+    return opt ? opt.label : val;
   });
-  groupSelect.value = aggregationWorkbenchState.groupBy;
-
-  const groupField2 = document.createElement("label");
-  groupField2.className = "field";
-  groupField2.append(t("aggregationGroupBy2"));
-  const groupSelect2 = document.createElement("select");
-  groupSelect2.dataset.aggregationControl = "group2";
-  groupField2.appendChild(groupSelect2);
-  [{ value: "", label: t("aggregationNone") }, ...result.groupOptions].forEach((option) => {
-    const opt = document.createElement("option");
-    opt.value = option.value;
-    opt.textContent = option.label;
-    opt.title = option.meta || "";
-    opt.disabled = Boolean(option.value && option.value === aggregationWorkbenchState.groupBy);
-    groupSelect2.appendChild(opt);
-  });
-  groupSelect2.value = aggregationWorkbenchState.groupBy2;
-
-  const groupField3 = document.createElement("label");
-  groupField3.className = "field";
-  groupField3.append(t("aggregationGroupBy3"));
-  const groupSelect3 = document.createElement("select");
-  groupSelect3.dataset.aggregationControl = "group3";
-  groupField3.appendChild(groupSelect3);
-  [{ value: "", label: t("aggregationNone") }, ...result.groupOptions].forEach((option) => {
-    const opt = document.createElement("option");
-    opt.value = option.value;
-    opt.textContent = option.label;
-    opt.title = option.meta || "";
-    opt.disabled = Boolean(option.value && (option.value === aggregationWorkbenchState.groupBy || option.value === aggregationWorkbenchState.groupBy2));
-    groupSelect3.appendChild(opt);
-  });
-  groupSelect3.value = aggregationWorkbenchState.groupBy3;
+  const groupInput = document.createElement("input");
+  groupInput.type = "text";
+  groupInput.readOnly = true;
+  groupInput.className = "aggregation-measure-input";
+  groupInput.value = currentGroupLabels.length ? currentGroupLabels.join(", ") : t("aggregationNone");
+  groupInput.title = currentGroupLabels.join(", ");
+  const groupPickBtn = document.createElement("button");
+  groupPickBtn.type = "button";
+  groupPickBtn.className = "btn ghost btn-sm";
+  groupPickBtn.dataset.aggregationControl = "groupby-pick";
+  groupPickBtn.textContent = t("choose");
+  const groupRow = document.createElement("div");
+  groupRow.className = "picker-row";
+  groupRow.appendChild(groupInput);
+  groupRow.appendChild(groupPickBtn);
+  groupField.appendChild(groupRow);
 
   const measureField = document.createElement("label");
   measureField.className = "field";
@@ -1893,7 +1875,7 @@ const measureFilterField = document.createElement("label");
   havingValueInput.style.display = aggregationWorkbenchState.havingMode === "all" ? "none" : "inline-block";
   havingField.appendChild(havingValueInput);
 
-  [sourceField, scopeField, headerField, groupField, groupField2, groupField3, measureField, aggregationField, matchField, measureFilterField, showCountField, havingField].forEach((field) => controls.appendChild(field));
+  [sourceField, scopeField, headerField, groupField, measureField, aggregationField, matchField, measureFilterField, showCountField, havingField].forEach((field) => controls.appendChild(field));
   aggregationWorkbenchSummaryEl.appendChild(controls);
 
   const note = document.createElement("div");

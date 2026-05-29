@@ -1,8 +1,8 @@
 # Excel Workbench PWA
 
-Local, offline-first workbook workbench for exploring, filtering, restructuring, and lightly editing Excel files in the browser.
+A browser-based workbench for understanding, filtering, and lightly transforming Excel files — locally, offline, and without touching a server.
 
-It is built for the moments when classic Excel feels too heavy, too awkward, or simply unavailable, especially on tablets and PWA-style workflows where macros are not a realistic option.
+Built for the moments when Excel feels too heavy, too awkward, or simply unavailable — especially on tablets and PWA-style workflows where macros are not a realistic option.
 
 ## Screenshots
 
@@ -14,117 +14,126 @@ Main view with the sidebar expanded.
 
 ## Why This Exists
 
-This project came out of a real workflow need, not from a generic idea for "Excel in the browser".
+This project came out of a real workflow need, not a generic idea for "Excel in the browser."
 
-In practice, there are many situations where Excel starts to break down for everyday work:
+In practice, a lot of Excel work is not really about spreadsheet authoring. It is about:
 
-- the file is hard to understand quickly
-- the workflow is awkward on tablet or in a browser
-- the task would normally push you toward macros or complicated multi-step manual work
-- the data needs inspection, restructuring, or repeated analysis more than classic spreadsheet authoring
+- making sense of messy, deeply nested workbooks quickly
+- filtering and comparing data faster than standard Excel flows allow
+- doing analytical work safely on a tablet or in a browser
+- replacing some macro-heavy steps with simpler, browser-native tools
 
-This project exists because a lot of real Excel work is not really about spreadsheet authoring. It is about:
+Classic Excel is powerful, but it is also awkward for inspection workflows, unreliable on tablet, and out of reach once you need anything beyond basic filtering without VBA.
 
-- understanding messy workbooks quickly
-- filtering and comparing data faster than in standard Excel flows
-- working safely on iPad or in the browser
-- replacing some macro-shaped workflows with simpler local tools
+Excel Workbench PWA fills that gap — without claiming to be something it is not.
 
-The goal is not to clone Excel.
+**The goal is not to clone Excel.**  
+The goal is to build a workbench *around* Excel files: local-first, safe for source files, genuinely useful on a tablet, and better at inspection and structure discovery than Excel's own tooling.
 
-The goal is to build a workbench around Excel files:
+## What It Does
 
-- local-first
-- safe for source files
-- useful on desktop and tablet
-- better at inspection, filtering, structure discovery, and lightweight analysis
-- able to handle some tasks that normally require macros, VBA, or overly complicated Excel workflows
+### File handling
+- Open `.xlsx` and `.xlsm` files in the browser — no upload, no backend
+- Drag and drop or file picker
+- Auto-detect header rows, choose any sheet, configure starting column
+- Save modified workbooks back to `.xlsx` or export to CSV
 
-## What It Already Does
+### Filtering and search
+- Two independent text filters with multiple match modes (contains, starts with, equals)
+- Date filter with presets (last N days, custom range) and column selection
+- Quick search with highlight or filter mode and configurable column scope
+- Empty / non-empty filtering per column
+- Negate any filter
 
-- open `.xlsx` and `.xlsm` files locally in the browser
-- work without a backend
-- support offline usage through a service worker
-- choose sheet and header row
-- filter by text and date
-- sort and save working views
-- inspect workbook structure
-- detect repeated column blocks
-- switch some wide sheets into `Wide-to-Long`
-- run lightweight aggregation and duration analysis
-- browse formulas in a dedicated workbench
-- export CSV and save edited files
+### Sorting and working views
+- Multi-column sort with priority order
+- Saved sort presets for quick switching between common working states
+- Frozen header row
+- Adjustable column widths and zoom level
 
-## Product Direction
+### Workbook inspection
+- Sheet-level structural summary: column count, row count, data layout, header guess
+- Column profiler: data type, fill rate, numeric stats, date ranges per column
+- Section navigator for visually segmented sheets
+- Repeated block detector — identifies cycling column patterns (`od`, `do`, `od 2`, `do 2`, etc.)
+- KPI extractor for dashboard-style or summary-heavy sheets
 
-Excel Workbench PWA is intentionally focused on:
+### Aggregation workbench
+- Pivot-table-inspired grouping by up to three levels
+- Multiple simultaneous measures: count, sum, average, median, min, max, distinct count, earliest, latest
+- Source mode control — classic, Wide-to-Long, or auto
+- HAVING filter and result search
+- Scoped to current filtered view or the full sheet
 
-- browsing and understanding workbooks
-- workbench-style filtering and analysis
-- lightweight transformations that are safe in a browser
-- features that still make sense without VBA/macros
+### Wide-to-Long transformation
+- Detect wide operational sheets with repeating column cycles
+- Transform into a long-format view on the fly for cleaner aggregation and filtering
 
-It intentionally does not try to become a full Excel replacement.
+### Duration analysis
+- Auto-detect date-pair columns (`od` / `do`, start / end, from / to)
+- Compute durations, averages, and status breakdowns per entity
+- Built for operational and process-tracking sheets
+
+### Formula workbench
+- Browse all formulas across the sheet in one panel
+- Filter by function type, error type, or free-text search
+- Navigate directly to any formula location in the table
+
+### UI and experience
+- Full Polish / English UI with live language switching
+- Light and dark mode
+- Responsive layout — comfortable on both desktop and tablet
+- Smart cursor hints system
+- Glassmorphic visual design with depth and motion
+
+## Privacy and Data Safety
+
+Workbook files are processed entirely inside the browser.
+
+No file data is sent to a server. No accounts. No cloud storage. The app is designed so your Excel files stay on your device at every step — the only dependencies are the browser and a trusted build of the app.
+
+## Offline
+
+The app ships with a service worker and works fully offline after the first successful load. A background update mechanism checks for new versions and notifies you when one is available.
+
+## How It Is Built
+
+Excel Workbench PWA is built with vanilla JavaScript — no framework, no build step, no bundler. The core XLSX parsing library (`xlsx-js-style`) is bundled locally so the app can work fully offline without relying on a CDN.
+
+The codebase is split into focused modules (file IO, analysis engine, UI controls, language, table rendering, formula workbench) and shares a single global state with clearly defined boundaries. Playwright smoke tests cover core UI flows.
 
 ## Start Locally
-
-Use any simple static server, for example:
 
 ```bash
 python3 -m http.server 8001
 ```
 
-Then open:
-
-```text
-http://127.0.0.1:8001/
-```
+Then open `http://127.0.0.1:8001/`.
 
 ## Deploy
 
-This is a static app.
+This is a static app with no build step.
 
-For Vercel:
+For Vercel: set framework to `Other`, leave build command empty, set output directory to the repo root.
 
-- Framework: `Other`
-- Build command: none
-- Output directory: repo root
+## Install as PWA
 
-## Add To Home Screen
+On iPad / iPhone: open in Safari → Share → Add to Home Screen.
 
-On iPad / iPhone:
-
-1. Open the app in Safari.
-2. Tap Share.
-3. Choose `Add to Home Screen`.
-
-## Privacy And Data Safety
-
-Workbook files are processed locally in the browser.
-
-The app is designed so the Excel file does not need to leave the device. In practice, safety still depends on running a trusted version of the app.
-
-## Offline
-
-The app ships with a service worker and can work offline after the first successful load.
+On desktop: look for the install icon in the browser address bar.
 
 ## Public Roadmap
 
-Planned work and longer-term ideas are in [ROADMAP.md](./ROADMAP.md).
+Planned work and longer-term ideas live in [ROADMAP.md](./ROADMAP.md).
 
 ## Contributing
 
 Contributions, bug reports, UX suggestions, and workbook-based edge cases are welcome.
 
-If you want to contribute, please read [CONTRIBUTING.md](./CONTRIBUTING.md) first.
-
-## Notes
-
-Some deeper product and research notes are kept in separate files in this repo. They are useful for development context, but `README.md` and `ROADMAP.md` are the main public-facing entry points.
+Please read [CONTRIBUTING.md](./CONTRIBUTING.md) before contributing.
 
 ## License
 
-The source code of this project is available under the `MIT` license.
+Source code is available under the `MIT` license.
 
-Exception:
-the project logo, branding elements, screenshots, visual identity, and other presentation assets remain the property of Mateusz Zmuda and are not intended for reuse as ready-made branding or product presentation materials without explicit permission.
+Exception: the project logo, branding elements, screenshots, visual identity, and other presentation assets remain the property of Mateusz Zmuda and are not intended for reuse as ready-made branding or product presentation materials without explicit permission.
