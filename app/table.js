@@ -652,6 +652,9 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
   const samples = headers.map(() => []);
   for (let r = 0; r < limit; r++) {
     rows[r].values.forEach((v, i) => {
+      // Zabezpieczenie: wiersz może mieć więcej wartości niż nagłówków
+      // (np. uszkodzony/pusty model long) — pomijamy kolumny poza zakresem nagłówków.
+      if (i >= samples.length) return;
       const text = getDisplayValue(rows[r], i);
       const w = ctx.measureText(text).width;
       samples[i].push(w);

@@ -1449,6 +1449,134 @@ function computeAggregateMetric(values, aggregation) {
   return null;
 }
 
+// ── Scalanie grup wzorcem (pattern group-merging) ──────────────────────────────
+// Cel: różne warianty tej samej wartości liczyć jako JEDNĄ grupę w kartach agregacji.
+//   np. "Gr 1 J. Kowalski", "Gr1 J. Kowalski", "J. Kowalski" → wszystkie jako "J. Kowalski".
+//
+// Składnia wzorca (inspirowana SQL LIKE / glob, ale czytelniejsza):
+//   =          RDZEŃ — część, która zostaje i definiuje grupę (to, co zliczamy)
+//   literał    np. "Gr" — musi pasować dosłownie (ignoruje wielkość liter)
+//   *          cokolwiek, krótko        (≤ GROUP_WILD_SHORT znaków)
+//   **         cokolwiek, dłużej        (≤ GROUP_WILD_LONG znaków)
+//   #          tylko cyfry              (ciąg 1..GROUP_WILD_LONG)
+//   @          tylko litery             (ciąg 1..GROUP_WILD_LONG)
+//   ?          dokładnie jeden znak
+//   Tekst przed "=" to wiodący śmieć do ZDJĘCIA, po "=" to końcowy śmieć do zdjęcia.
+//   Śmieć zdejmujemy tylko, gdy pasuje (opcjonalnie) — wartości bez śmiecia zostają.
+// Przykłady:  Gr*=   → "Gr 1 J. Kowalski" → "J. Kowalski";  gołe "J. Kowalski" bez zmian
+//             =#     → "Faktura12" → "Faktura"  (zdejmij końcowe cyfry)
+//             @#=    → "AB12 Kowalski" → "Kowalski"
+const GROUP_WILD_SHORT = 3;    // pojedyncze *  (jeden krótki token śmiecia)
+const GROUP_WILD_LONG = 12;    // ** / # / @    (dłuższy ciąg)
+const GROUP_LETTER_CLASS = "A-Za-zÀ-ÿĄ-ž";  // litery łac. + PL/diakrytyki dla @
+const GROUP_SEP_CLASS = "\\s._\\-";          // separatory: spacja, _ . -
+
+// Zamień jedną stronę wzorca (przed lub po "=") na fragment regexpa.
+// `*`/`**` to "token śmiecia" ograniczony separatorem przy styku z rdzeniem —
+// dzięki temu nie wjeżdża w rdzeń (np. "Gr1 J. Kowalski" → zdejmuje "Gr1 ", nie "Gr1 J").
+// `#`/`@`/`?` są klasowe (cyfry/litery/jeden znak) i nie wymagają separatora.
+// Zwraca null, jeśli strona jest pusta (brak śmiecia do zdjęcia).
+function buildGroupNoiseRegex(side, anchor /* "lead" | "trail" */) {
+  const s = String(side || "");
+  if (!s) return null;
+  let body = "";
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === "*") {
+      if (s[i + 1] === "*") { body += `.{0,${GROUP_WILD_LONG}}`; i++; }
+      else { body += `.{0,${GROUP_WILD_SHORT}}`; }
+    } else if (ch === "#") {
+      body += `[0-9]{1,${GROUP_WILD_LONG}}`;
+    } else if (ch === "@") {
+      body += `[${GROUP_LETTER_CLASS}]{1,${GROUP_WILD_LONG}}`;
+    } else if (ch === "?") {
+      body += ".";
+    } else {
+      body += ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // literał — escape
+    }
+  }
+  let pattern;
+  if (anchor === "lead") {
+    // śmieć wiodący kończy się "any"-wildcardem → dopasowanie kończ na separatorze
+    pattern = /\*$/.test(s) ? `^(?:${body})(?<=[${GROUP_SEP_CLASS}])` : `^(?:${body})`;
+  } else {
+    // śmieć końcowy zaczyna się "any"-wildcardem → musi startować po separatorze
+    pattern = /^\*/.test(s) ? `(?<=[${GROUP_SEP_CLASS}])(?:${body})$` : `(?:${body})$`;
+  }
+  try { return new RegExp(pattern, "iu"); } catch { return null; }
+}
+
+function compileGroupPattern(pattern) {
+  const raw = String(pattern || "").trim();
+  const coreMatch = raw.match(/=+/);
+  if (!coreMatch) {
+    // bez kotwicy "=" nie wiadomo, co jest rdzeniem → tożsamość (bezpieczny fallback)
+    return (label) => String(label ?? "").trim();
+  }
+  const lead = raw.slice(0, coreMatch.index);
+  const trail = raw.slice(coreMatch.index + coreMatch[0].length);
+  const leadRe = buildGroupNoiseRegex(lead, "lead");
+  const trailRe = buildGroupNoiseRegex(trail, "trail");
+  const edgeTrim = new RegExp(`^[${GROUP_SEP_CLASS}]+|[${GROUP_SEP_CLASS}]+$`, "gu");
+  return (label) => {
+    const original = String(label ?? "").trim();
+    let core = original;
+    if (trailRe) core = core.replace(trailRe, "");
+    if (leadRe) core = core.replace(leadRe, "");
+    core = core.replace(edgeTrim, "").trim();
+    return core || original; // nigdy nie redukuj do pustego (np. "123" przy =#)
+  };
+}
+
+// Preset "Rozmyte" — bez wpisywania. Zdejmuje wiodący znacznik grupy:
+// krótki token liter + cyfry + separator, ale TYLKO gdy zawiera cyfrę i poprzedza literę.
+// "Gr 1 J. Kowalski" → "J. Kowalski";  "J. Kowalski" (inicjał, brak cyfry) → bez zmian.
+const FUZZY_LEAD_MARKER = /^[A-Za-zÀ-ÿĄ-ž]{1,6}[\s.]*[0-9]{1,4}[\s._\-]+(?=[A-Za-zÀ-ÿĄ-ž])/u;
+function fuzzyGroupTransform(label) {
+  const original = String(label ?? "").trim();
+  const core = original.replace(FUZZY_LEAD_MARKER, "").trim();
+  return core || original;
+}
+
+// Rejestr trybów scalania grup — ROZSZERZALNY: dodaj obiekt = nowa opcja w UI.
+//   id           unikalny klucz (zapis w stanie)
+//   labelKey     klucz i18n etykiety w <select>
+//   needsPattern czy pokazać input na wzorzec
+//   build(opts) → (label) => coreLabel   (opts.pattern = aktualny wzorzec)
+const AGGREGATION_GROUP_TRANSFORMS = [
+  {
+    id: "exact",
+    labelKey: "aggGroupExact",
+    needsPattern: false,
+    build: () => (label) => String(label ?? "").trim(),
+  },
+  {
+    id: "fuzzy",
+    labelKey: "aggGroupFuzzy",
+    needsPattern: false,
+    build: () => fuzzyGroupTransform,
+  },
+  {
+    id: "pattern",
+    labelKey: "aggGroupPattern",
+    needsPattern: true,
+    build: (opts) => compileGroupPattern(opts && opts.pattern),
+  },
+];
+
+function getAggregationGroupTransformDef(id) {
+  return AGGREGATION_GROUP_TRANSFORMS.find((def) => def.id === id) || AGGREGATION_GROUP_TRANSFORMS[0];
+}
+
+function getActiveGroupTransform() {
+  const def = getAggregationGroupTransformDef(aggregationWorkbenchState.groupMode);
+  try {
+    return def.build({ pattern: aggregationWorkbenchState.groupPattern }) || ((label) => String(label ?? "").trim());
+  } catch {
+    return (label) => String(label ?? "").trim();
+  }
+}
+
 function buildAggregationWorkbenchResult() {
   const context = getNormalizedAggregationWorkbenchContext();
   const { model, groupOptions, measures, measure } = context;
@@ -1474,6 +1602,7 @@ function buildAggregationWorkbenchResult() {
   const measureFilterMode = aggregationWorkbenchState.measureFilterMode || "all";
   const measureFilterValue = aggregationWorkbenchState.measureFilterValue || "";
   const buckets = new Map();
+  const groupTransform = getActiveGroupTransform();
   model.rows.forEach((row) => {
     if (measureFilterMode !== "all" && measureFilterValue && activeMeasures.length) {
       const rowMeasureText = activeMeasures
@@ -1488,7 +1617,9 @@ function buildAggregationWorkbenchResult() {
     }
     const groupLabels = groupIndexes.map((groupIdx) => {
       const rawGroup = row.values?.[groupIdx];
-      return String(getDisplayValue(row, groupIdx) || rawGroup || "(puste)").trim() || "(puste)";
+      const display = String(getDisplayValue(row, groupIdx) || rawGroup || "(puste)").trim() || "(puste)";
+      // Wzorzec/preset scala warianty do wspólnego rdzenia (np. Osoba1 → Osoba)
+      return groupTransform(display) || display;
     });
     const groupLabel = groupLabels.join(" / ");
     const key = groupLabels.map((label) => normalizeAnalysisKey(label) || "(puste)").join("\u001f");
@@ -1745,6 +1876,45 @@ function renderAggregationWorkbench() {
   groupRow.appendChild(groupPickBtn);
   groupField.appendChild(groupRow);
 
+  // Scalanie grup — Dokładnie / Rozmyte / Wzorzec (rejestr AGGREGATION_GROUP_TRANSFORMS)
+  // Steruje TYM, jak karty agregacji scalają warianty tej samej wartości (np. "Gr 1 J. Kowalski" → "J. Kowalski").
+  const groupModeField = document.createElement("label");
+  groupModeField.className = "field";
+  groupModeField.append(t("aggGroupMode"));
+  const groupModeSelect = document.createElement("select");
+  groupModeSelect.dataset.aggregationControl = "groupmode";
+  groupModeSelect.dataset.hint = "";
+  groupModeSelect.dataset.hintTouch = "on";
+  groupModeSelect.dataset.hintDuration = "7";
+  groupModeSelect.dataset.hintFade = "";
+  groupModeSelect.dataset.hintPl = "Scalanie grup: liczy różne warianty tej samej wartości /| jako jedną grupę w kartach. /| Rozmyte = automat (np. „Gr 1 J. Kowalski” → „J. Kowalski”). /| Wzorzec = własna reguła z = i * # @.";
+  groupModeSelect.dataset.hintEn = "Group merging: counts variants of the same value /| as one group in the cards. /| Fuzzy = automatic (e.g. “Gr 1 J. Kowalski” → “J. Kowalski”). /| Pattern = your own rule with = and * # @.";
+  AGGREGATION_GROUP_TRANSFORMS.forEach((def) => {
+    const opt = document.createElement("option");
+    opt.value = def.id;
+    opt.textContent = t(def.labelKey);
+    groupModeSelect.appendChild(opt);
+  });
+  groupModeSelect.value = aggregationWorkbenchState.groupMode;
+  groupModeField.appendChild(groupModeSelect);
+
+  const activeGroupDef = getAggregationGroupTransformDef(aggregationWorkbenchState.groupMode);
+  const groupPatternInput = document.createElement("input");
+  groupPatternInput.type = "text";
+  groupPatternInput.className = "aggregation-measurefilter-value";
+  groupPatternInput.dataset.aggregationControl = "grouppattern";
+  groupPatternInput.value = aggregationWorkbenchState.groupPattern || "";
+  groupPatternInput.placeholder = t("aggGroupPatternPlaceholder");
+  // Bogata, interaktywna legenda składni przez silnik cursor-hint (PL/EN, touch, dłuższy czas)
+  groupPatternInput.dataset.hint = "";
+  groupPatternInput.dataset.hintTouch = "on";
+  groupPatternInput.dataset.hintDuration = "9";
+  groupPatternInput.dataset.hintFade = "0.4";
+  groupPatternInput.dataset.hintPl = "Wzorzec scalania.  =  to RDZEŃ (zostaje, to liczymy). /| Przed/po = wpisz śmieć do zdjęcia: /| *  jeden token (krótki) · **  dłuższy /| #  cyfry · @  litery · ?  jeden znak /| „Gr” itp. = dosłownie (ignoruje wielkość liter). /| Przykłady:  Gr*=  → „Gr 1 J. Kowalski” = „J. Kowalski”;   =#  → „Faktura12” = „Faktura”.";
+  groupPatternInput.dataset.hintEn = "Merge pattern.  =  is the CORE (kept, what we count). /| Before/after = type the junk to strip: /| *  one token (short) · **  longer /| #  digits · @  letters · ?  one char /| „Gr” etc. = literal (case-insensitive). /| Examples:  Gr*=  → „Gr 1 J. Kowalski” = „J. Kowalski”;   =#  → „Faktura12” = „Faktura”.";
+  groupPatternInput.style.display = activeGroupDef.needsPattern ? "inline-block" : "none";
+  groupModeField.appendChild(groupPatternInput);
+
   const measureField = document.createElement("label");
   measureField.className = "field";
   measureField.append(t("aggregationMeasure"));
@@ -1799,28 +1969,19 @@ function renderAggregationWorkbench() {
   });
   aggregationSelect.value = aggregationWorkbenchState.aggregation;
 
-  const matchField = document.createElement("label");
-  matchField.className = "field aggregation-click-match";
-  matchField.append(t("aggregationMatchText"));
-  const matchSelect = document.createElement("select");
-  matchSelect.dataset.aggregationControl = "match";
-  [
-    { value: "contains", label: t("aggregationContains") },
-    { value: "exact", label: t("aggregationExact") },
-  ].forEach((item) => {
-    const option = document.createElement("option");
-    option.value = item.value;
-    option.textContent = item.label;
-    matchSelect.appendChild(option);
-  });
-  matchSelect.value = aggregationWorkbenchState.matchMode;
-  matchField.appendChild(matchSelect);
-
-const measureFilterField = document.createElement("label");
+  const measureFilterField = document.createElement("label");
   measureFilterField.className = "field";
   measureFilterField.append(t("aggregationMeasureFilter"));
   const measureFilterSelect = document.createElement("select");
   measureFilterSelect.dataset.aggregationControl = "measurefilter";
+  // Doprecyzowanie: filtr miary odejmuje WIERSZE (co wpada do liczenia) —
+  // to co innego niż „Scalanie grup", które skleja etykiety już policzonych grup.
+  measureFilterSelect.dataset.hint = "";
+  measureFilterSelect.dataset.hintTouch = "on";
+  measureFilterSelect.dataset.hintDuration = "7";
+  measureFilterSelect.dataset.hintFade = "";
+  measureFilterSelect.dataset.hintPl = "Filtr miary: liczy tylko WIERSZE, /| w których wartość miary pasuje. /| (To filtr wierszy — co inne­go niż „Scalanie grup”, /| które skleja etykiety już policzonych grup.) /| Np. miara „Status”, Zawiera „aktywny” → licz tylko aktywne.";
+  measureFilterSelect.dataset.hintEn = "Measure filter: counts only ROWS /| whose measure value matches. /| (A row filter — unlike „Group merging”, /| which merges labels of already-counted groups.) /| E.g. measure „Status”, Contains „active” → count only active.";
   [
     { value: "all", label: t("aggregationAll"), title: "" },
     { value: "contains", label: t("aggregationContains"), title: "" },
@@ -1890,7 +2051,7 @@ const measureFilterField = document.createElement("label");
   havingValueInput.style.display = aggregationWorkbenchState.havingMode === "all" ? "none" : "inline-block";
   havingField.appendChild(havingValueInput);
 
-  [sourceField, scopeField, headerField, groupField, measureField, aggregationField, measureFilterField, showCountField, havingField].forEach((field) => controls.appendChild(field));
+  [sourceField, scopeField, headerField, groupField, measureField, aggregationField, measureFilterField, groupModeField, showCountField, havingField].forEach((field) => controls.appendChild(field));
   aggregationWorkbenchSummaryEl.appendChild(controls);
 
   const note = document.createElement("div");
@@ -1956,7 +2117,6 @@ const measureFilterField = document.createElement("label");
   searchWrap.appendChild(searchCount);
 
   aggregationWorkbenchListEl.appendChild(searchWrap);
-  aggregationWorkbenchListEl.appendChild(matchField);
 
   const showCount = Math.min(aggregationWorkbenchState.showCount, filteredEntries.length);
   filteredEntries.slice(0, showCount).forEach((entry, index) => {
@@ -2011,12 +2171,28 @@ const measureFilterField = document.createElement("label");
 
     const actions = document.createElement("div");
     actions.className = "section-nav-actions";
+
+    const matchSel = document.createElement("select");
+    matchSel.className = "aggregation-card-match";
+    matchSel.dataset.aggregationControl = "match";
+    [
+      { value: "contains", label: t("aggregationContains") },
+      { value: "exact", label: t("aggregationExact") },
+    ].forEach(({ value, label }) => {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      matchSel.appendChild(opt);
+    });
+    matchSel.value = aggregationWorkbenchState.matchMode;
+
     const btn = document.createElement("button");
     btn.className = "btn ghost btn-sm";
     btn.type = "button";
     btn.dataset.aggregationAction = "filter-group";
     btn.dataset.aggregationValue = entry.filterLabel || entry.label;
     btn.textContent = t("aggregationSearchTable");
+    actions.appendChild(matchSel);
     actions.appendChild(btn);
 
     item.appendChild(top);

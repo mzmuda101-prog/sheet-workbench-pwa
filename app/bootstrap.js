@@ -138,6 +138,8 @@ if (aggregationWorkbenchSummaryEl) {
     }
     if (kind === "aggregation") aggregationWorkbenchState.aggregation = control.value || "count";
     if (kind === "match") aggregationWorkbenchState.matchMode = control.value || "contains";
+    if (kind === "groupmode") aggregationWorkbenchState.groupMode = control.value || "exact";
+    if (kind === "grouppattern") aggregationWorkbenchState.groupPattern = control.value || "";
     if (kind === "measurefilter") {
       aggregationWorkbenchState.measureFilterMode = control.value || "all";
       const valueInput = aggregationWorkbenchSummaryEl.querySelector("[data-aggregation-control=\"measurefilter-value\"]");
@@ -180,6 +182,15 @@ if (aggregationWorkbenchSummaryEl) {
   });
 }
 if (aggregationWorkbenchListEl) {
+  aggregationWorkbenchListEl.addEventListener("change", (e) => {
+    const control = e.target.closest("[data-aggregation-control='match']");
+    if (!control) return;
+    aggregationWorkbenchState.matchMode = control.value || "contains";
+    // Zsynchronizuj wszystkie inne selekty match w kartach
+    aggregationWorkbenchListEl.querySelectorAll("[data-aggregation-control='match']").forEach((sel) => {
+      sel.value = aggregationWorkbenchState.matchMode;
+    });
+  });
   aggregationWorkbenchListEl.addEventListener("keydown", (e) => {
     if (e.target.classList.contains("aggregation-result-search") && e.key === "Enter") {
       e.preventDefault();

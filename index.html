@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=20260429-01" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
-    <link rel="stylesheet" href="styles/app.css?v=20260529-06" />
+    <link rel="stylesheet" href="styles/app.css?v=20260530-02" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -553,8 +553,8 @@
             </div>
           </details>
 
-          <details class="panel" id="panel-aggregation-workbench" data-hint-pl="Grupuj wiersze po wybranych kolumnach i licz sumy, średnie, mediany i więcej — /| jak tabela przestawna, bez Excela." data-hint-en="Group rows by selected columns and calculate sums, averages, medians and more — /| like a pivot table, without Excel." data-hint-duration="5" data-hint-touch="on" data-hint-fade="1" data-hint-class="smaller">
-            <summary>
+          <details class="panel" id="panel-aggregation-workbench">
+            <summary data-hint-pl="Grupuj wiersze po wybranych kolumnach i licz sumy, średnie, mediany i więcej — /| jak tabela przestawna, bez Excela." data-hint-en="Group rows by selected columns and calculate sums, averages, medians and more — /| like a pivot table, without Excel." data-hint-duration="5" data-hint-touch="on" data-hint-fade="1" data-hint-class="smaller">
               <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M4 19h16" />
                 <path d="M7 16V9" />
@@ -669,6 +669,15 @@
               <div class="shortcut-row"><kbd>!</kbd> <span data-shortcut-text="searchOperatorNot">wykluczenie pojedynczego warunku</span></div>
               <div class="shortcut-row"><kbd>{&nbsp;}</kbd> <em data-shortcut-text="searchOperatorBracket" style="color:var(--ink-3);font-size:11px;">nawiasy {} wymuszają kolejność, np. „{Kowalski || Nowak} && Faktura"</em></div>
               <div class="shortcut-row"><kbd>info:</kbd><span data-shortcut-text="searchOperatorCombined">możesz łączyć operatory, np. „Kowalski && !Anulowana || Nowak"</span></div>
+            </div>
+            <div class="shortcut-hint" style="margin-top:12px;">
+              <div data-shortcut-text="aggGroupLegendTitle" style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:6px;">Scalanie grup (agregacje)</div>
+              <div class="shortcut-row"><kbd>=</kbd> <span data-shortcut-text="aggGroupLegendCore">rdzeń — to zostaje i jest zliczane jako grupa</span></div>
+              <div class="shortcut-row"><kbd>*</kbd> <span data-shortcut-text="aggGroupLegendStar">jeden krótki „token" śmiecia (do separatora)</span></div>
+              <div class="shortcut-row"><kbd>**</kbd> <span data-shortcut-text="aggGroupLegendStar2">dłuższy śmieć (kilka tokenów)</span></div>
+              <div class="shortcut-row"><kbd>#</kbd> <span data-shortcut-text="aggGroupLegendHash">tylko cyfry</span> · <kbd>@</kbd> <span data-shortcut-text="aggGroupLegendAt">tylko litery</span> · <kbd>?</kbd> <span data-shortcut-text="aggGroupLegendQ">jeden znak</span></div>
+              <div class="shortcut-row"><kbd>Gr</kbd> <span data-shortcut-text="aggGroupLegendLiteral">tekst dosłowny (ignoruje wielkość liter)</span></div>
+              <div class="shortcut-row"><kbd>Gr*=</kbd> <em data-shortcut-text="aggGroupLegendExample" style="color:var(--ink-3);font-size:11px;">scala „Gr 1 J. Kowalski" + „J. Kowalski" → jedna grupa. Tryb „Rozmyte" robi to automatycznie.</em></div>
             </div>
             </div>
           </details>
@@ -818,14 +827,14 @@
 
     <!-- Local xlsx-js-style (better style read/write, stable offline) -->
     <script src="lib/xlsx-js-style.bundle.min.js"></script>
-    <script src="app/core.js?v=20260529-06"></script>
-    <script src="app/language.js?v=20260529-06"></script>
-    <script src="app/cursor-hint.js?v=20260529-06"></script>
-    <script src="app/analysis.js?v=20260529-06"></script>
-    <script src="app/workbook.js?v=20260529-06"></script>
-    <script src="app/table.js?v=20260529-06"></script>
-    <script src="app/formulas.js?v=20260529-06"></script>
-    <script src="app/ui-controls.js?v=20260529-06"></script>
-    <script src="app/bootstrap.js?v=20260529-06"></script>
+    <script src="app/core.js?v=20260530-02"></script>
+    <script src="app/language.js?v=20260530-02"></script>
+    <script src="app/cursor-hint.js?v=20260530-02"></script>
+    <script src="app/analysis.js?v=20260530-02"></script>
+    <script src="app/workbook.js?v=20260530-02"></script>
+    <script src="app/table.js?v=20260530-02"></script>
+    <script src="app/formulas.js?v=20260530-02"></script>
+    <script src="app/ui-controls.js?v=20260530-02"></script>
+    <script src="app/bootstrap.js?v=20260530-02"></script>
   </body>
 </html>
