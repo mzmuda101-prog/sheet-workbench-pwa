@@ -449,7 +449,6 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-
   if (e.key === "Escape" && !columnPickerEl.classList.contains("hidden")) {
     e.preventDefault();
     closeColumnPicker();

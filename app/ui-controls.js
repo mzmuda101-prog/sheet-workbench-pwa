@@ -336,6 +336,20 @@ function openMeasurePicker() {
     input.id = `measurepick-${idx}`;
     input.value = candidate.key;
     input.checked = currentSet.has(candidate.key);
+    // count_rows (Liczebność) wzajemnie wyklucza się z miarami kolumnowymi:
+    // silnik agregacji i tak nadpisuje pozostałe miary, gdy obecne jest count_rows,
+    // więc nie pozwalamy zmieszać ich w jednym wyborze.
+    input.addEventListener("change", () => {
+      if (!input.checked) return;
+      if (candidate.key === "count_rows") {
+        columnListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => {
+          if (cb !== input) cb.checked = false;
+        });
+      } else {
+        const countRowsCb = columnListEl.querySelector('input[value="count_rows"]');
+        if (countRowsCb) countRowsCb.checked = false;
+      }
+    });
     const label = document.createElement("label");
     label.htmlFor = input.id;
     label.textContent = candidate.label;
@@ -1030,8 +1044,7 @@ clearAllBtn.addEventListener("click", () => {
   });
 });
 
-applyPickBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
+applyPickBtn.addEventListener("click", () => {
   if (!activePickerKey) return;
   const checked = Array.from(columnListEl.querySelectorAll("input[type=checkbox]"))
     .filter((cb) => cb.checked)
@@ -1161,8 +1174,7 @@ columnPickerEl.addEventListener("click", (e) => {
 
 columnPickerEl.addEventListener("keydown", handlePickerKeydown);
 
-closePickerBtn.addEventListener("click", (e) => {
-  e.stopPropagation();
+closePickerBtn.addEventListener("click", () => {
   closeColumnPicker();
 });
 columnSearchEl.addEventListener("input", filterColumnList);

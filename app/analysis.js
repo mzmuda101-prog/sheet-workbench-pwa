@@ -10,7 +10,7 @@ function valuesEqual(a, b) {
 function makeHeadersUnique(headers) {
   const seen = new Map();
   return headers.map((header, index) => {
-    const base = String(header || `Kolumna ${index + 1}`).trim() || `Kolumna ${index + 1}`;
+    const base = String(header || t("colFallback", { n: index + 1 })).trim() || t("colFallback", { n: index + 1 });
     const count = seen.get(base) || 0;
     seen.set(base, count + 1);
     return count ? `${base} (${count + 1})` : base;
@@ -88,11 +88,11 @@ function getCellDisplayText(sheet, rowAbs, colAbs) {
 }
 
 function inferSectionKindLabel(kind) {
-  if (kind === "table") return "Tabela";
-  if (kind === "group") return "Blok";
-  if (kind === "candidate") return "Nagłówek";
-  if (kind === "subheader") return "Sekcja";
-  return "Układ";
+  if (kind === "table") return t("secKindTable");
+  if (kind === "group") return t("secKindGroup");
+  if (kind === "candidate") return t("secKindCandidate");
+  if (kind === "subheader") return t("secKindSubheader");
+  return t("secKindLayout");
 }
 
 function addSection(sections, seen, entry) {
@@ -112,8 +112,8 @@ function detectSections(sheet, headerRow, data) {
 
   addSection(sections, seen, {
     kind: "table",
-    label: "Tabela danych",
-    meta: `Nagłówek: wiersz ${headerRow} • kolumny ${formatColRange(data.startCol || 0, (data.startCol || 0) + data.headers.length - 1)}`,
+    label: t("secTableData"),
+    meta: t("secMetaHeader", { row: headerRow, cols: formatColRange(data.startCol || 0, (data.startCol || 0) + data.headers.length - 1) }),
     tone: "info",
     action: "scroll-top",
   });
@@ -131,7 +131,7 @@ function detectSections(sheet, headerRow, data) {
     if (filled < 2) continue;
     addSection(sections, seen, {
       kind: "candidate",
-      label: r + 1 === headerRow ? `Aktualny wiersz nagłówka: ${r + 1}` : `Możliwy wiersz nagłówka: ${r + 1}`,
+      label: r + 1 === headerRow ? t("secCurrentHeaderRow", { row: r + 1 }) : t("secPossibleHeaderRow", { row: r + 1 }),
       meta: texts.join(" • "),
       tone: r + 1 === headerRow ? "info" : "",
       action: r + 1 === headerRow ? "scroll-top" : "set-header",
@@ -154,7 +154,7 @@ function detectSections(sheet, headerRow, data) {
       addSection(sections, seen, {
         kind: "group",
         label,
-        meta: `Wiersz ${merge.s.r + 1} • kolumny ${formatColRange(merge.s.c, merge.e.c)}`,
+        meta: t("secMetaRowCols", { row: merge.s.r + 1, cols: formatColRange(merge.s.c, merge.e.c) }),
         tone: isAboveHeader ? "" : "info",
         action: overlapsTable ? "scroll-col" : "set-header",
         colIndex: Math.max(0, merge.s.c - (data.startCol || 0)),
@@ -171,7 +171,7 @@ function detectSections(sheet, headerRow, data) {
       addSection(sections, seen, {
         kind: "subheader",
         label: cleanSectionLabel(firstText),
-        meta: `Wiersz danych ${row.rowIndex0 + 1}`,
+        meta: t("secMetaDataRow", { row: row.rowIndex0 + 1 }),
         tone: "",
         action: "scroll-row",
         rowIndex0: row.rowIndex0,
@@ -209,7 +209,7 @@ function renderSections() {
 
     const meta = document.createElement("div");
     meta.className = "section-nav-meta";
-    meta.textContent = section.meta || "Sekcja arkusza";
+    meta.textContent = section.meta || t("secFallback");
 
     const actions = document.createElement("div");
     actions.className = "section-nav-actions";
@@ -219,7 +219,7 @@ function renderSections() {
     primary.type = "button";
     primary.dataset.sectionIndex = String(index);
     primary.dataset.sectionAction = section.action || "scroll-top";
-    primary.textContent = section.action === "set-header" ? "Ustaw nagłówek" : "Skocz";
+    primary.textContent = section.action === "set-header" ? t("secSetHeader") : t("secJump");
     actions.appendChild(primary);
 
     item.appendChild(top);
@@ -241,17 +241,17 @@ function renderSheetInspectorSummary() {
   const blockCount = currentRepeatingBlocks.reduce((sum, group) => sum + (Array.isArray(group.blocks) ? group.blocks.length : 0), 0);
   const flaggedProfiles = currentColumnProfiles.filter((profile) => Array.isArray(profile.flags) && profile.flags.length).length;
   const chips = [
-    { label: "Kolumny", value: String(currentHeaders.length) },
-    { label: "Sekcje", value: String(currentSections.length), tone: currentSections.length ? "" : "info" },
-    { label: "Bloki", value: String(blockCount), tone: blockCount ? "info" : "" },
-    { label: "Kolumny z flagami", value: String(flaggedProfiles), tone: flaggedProfiles ? "warning" : "" },
+    { label: t("inspColumns"), value: String(currentHeaders.length) },
+    { label: t("inspChipSections"), value: String(currentSections.length), tone: currentSections.length ? "" : "info" },
+    { label: t("inspChipBlocks"), value: String(blockCount), tone: blockCount ? "info" : "" },
+    { label: t("inspChipFlagged"), value: String(flaggedProfiles), tone: flaggedProfiles ? "warning" : "" },
   ];
 
   const topProfile = currentColumnProfiles[0];
   if (topProfile) {
     chips.push({
-      label: "Top sygnal",
-      value: topProfile.flags.length ? `${topProfile.header} • ${topProfile.flags[0]}` : `${topProfile.header} • ${topProfile.type}`,
+      label: t("inspTopSignal"),
+      value: topProfile.flags.length ? `${topProfile.header} • ${t("profFlag_" + topProfile.flags[0])}` : `${topProfile.header} • ${t("profType_" + topProfile.type)}`,
       tone: topProfile.flags.length ? "warning" : "info",
       wide: true,
     });
@@ -284,7 +284,7 @@ function renderSheetInspectorSummary() {
     btn.type = "button";
     btn.dataset.inspectorAction = "set-header";
     btn.dataset.inspectorHeaderRow = String(suggestedHeader.headerRow);
-    btn.textContent = `Ustaw naglowek: ${suggestedHeader.headerRow}`;
+    btn.textContent = t("inspSetHeaderRow", { row: suggestedHeader.headerRow });
     actions.appendChild(btn);
   }
 
@@ -293,7 +293,7 @@ function renderSheetInspectorSummary() {
     btn.className = "btn ghost btn-sm";
     btn.type = "button";
     btn.dataset.inspectorAction = "toggle-long";
-    btn.textContent = tableViewMode === "long" ? "Wroc do widoku klasycznego" : "Przelacz na Wide-to-Long";
+    btn.textContent = tableViewMode === "long" ? t("inspBackToClassic") : t("inspSwitchToLong");
     actions.appendChild(btn);
   }
 
@@ -303,7 +303,7 @@ function renderSheetInspectorSummary() {
     btn.type = "button";
     btn.dataset.inspectorAction = "focus-col";
     btn.dataset.profileColIndex = String(topProfile.colIdx);
-    btn.textContent = `Skocz do kolumny: ${topProfile.header}`;
+    btn.textContent = t("inspJumpToCol", { header: topProfile.header });
     actions.appendChild(btn);
   }
 
@@ -386,20 +386,18 @@ function normalizeAnalysisKey(value) {
 
 function pluralizeDays(days) {
   const n = Math.abs(days);
+  if (currentLang === "en") return n === 1 ? "day" : "days";
   if (n === 1) return "dzien";
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 >= 2 && mod10 <= 4 && !(mod100 >= 12 && mod100 <= 14)) return "dni";
   return "dni";
 }
 
 function formatDurationDays(days) {
-  if (!Number.isFinite(days)) return "brak";
+  if (!Number.isFinite(days)) return t("durationNone");
   const rounded = Math.max(0, Math.round(days));
   const months = Math.floor(rounded / 30);
   const restDays = rounded % 30;
   const parts = [];
-  if (months > 0) parts.push(`${months} mies.`);
+  if (months > 0) parts.push(`${months} ${t("durationMonthsShort")}`);
   if (restDays > 0 || !parts.length) parts.push(`${restDays} ${pluralizeDays(restDays)}`);
   return parts.join(" ");
 }
@@ -836,13 +834,13 @@ function renderDurationAnalysis() {
   summaryGrid.className = "sheet-inspector-summary";
   [
     { label: pluralizeEntityLabel(analysis.config.entityLabel), value: String(analysis.summary.uniqueEntities) },
-    { label: "Rekordy czasu", value: String(analysis.summary.totalDurationRecords) },
-    { label: "Sredni czas", value: formatDurationDays(analysis.summary.averageDays) },
-    { label: "Mediana", value: formatDurationDays(analysis.summary.medianDays) },
-    { label: "Min", value: formatDurationDays(analysis.summary.minDays) },
-    { label: "Max", value: formatDurationDays(analysis.summary.maxDays) },
-    { label: "W toku", value: String(analysis.summary.totalOpen), tone: analysis.summary.totalOpen ? "info" : "" },
-    { label: "Zamkniete", value: String(analysis.summary.totalClosed) },
+    { label: t("durationRecordsCount"), value: String(analysis.summary.totalDurationRecords) },
+    { label: t("durationAvgTime"), value: formatDurationDays(analysis.summary.averageDays) },
+    { label: t("durationMedian"), value: formatDurationDays(analysis.summary.medianDays) },
+    { label: t("durationMin"), value: formatDurationDays(analysis.summary.minDays) },
+    { label: t("durationMax"), value: formatDurationDays(analysis.summary.maxDays) },
+    { label: t("durationInProgress"), value: String(analysis.summary.totalOpen), tone: analysis.summary.totalOpen ? "info" : "" },
+    { label: t("durationClosed"), value: String(analysis.summary.totalClosed) },
   ].forEach((item) => {
     const chip = document.createElement("div");
     chip.className = `sheet-inspector-chip${item.tone ? ` ${item.tone}` : ""}`;
@@ -865,13 +863,13 @@ function renderDurationAnalysis() {
   note.className = "duration-analysis-note";
   const filtered = analysis.summary.visibleRows !== analysis.summary.sourceRows;
   note.textContent = filtered
-    ? `Analiza dotyczy aktualnie przefiltrowanego widoku (${analysis.summary.visibleRows} z ${analysis.summary.sourceRows} wierszy). Otwarte rekordy bez daty "do" sa liczone do dzisiaj.`
-    : 'Analiza dotyczy calego aktualnego widoku arkusza. Otwarte rekordy bez daty "do" sa liczone do dzisiaj.';
+    ? t("durationNoteFiltered", { visible: analysis.summary.visibleRows, source: analysis.summary.sourceRows })
+    : t("durationNoteFull");
   if (analysis.config.inferred) {
-    note.textContent += " Uklad kolumn zostal czesciowo odgadniety na podstawie danych, bo naglowek nie byl idealny.";
+    note.textContent += t("durationNoteInferred");
   }
   if (analysis.helperMode && Number.isFinite(analysis.helperHeaderRow) && analysis.helperHeaderRow !== currentHeaderRow) {
-    note.textContent += ` Do tej analizy uzyto pomocniczo wiersza naglowka ${analysis.helperHeaderRow}, bo lepiej pasowal niz aktualnie wybrany ${currentHeaderRow}.`;
+    note.textContent += t("durationNoteHelper", { row: analysis.helperHeaderRow, current: currentHeaderRow });
   }
   durationAnalysisSummaryEl.appendChild(note);
 
@@ -880,13 +878,13 @@ function renderDurationAnalysis() {
 
   const statusField = document.createElement("label");
   statusField.className = "field";
-  statusField.append("Status");
+  statusField.append(t("durationStatusLabel"));
   const statusSelect = document.createElement("select");
   statusSelect.dataset.durationControl = "status";
   [
-    { value: "all", label: "Wszystkie" },
-    { value: "closed", label: "Tylko zamkniete" },
-    { value: "open", label: "Tylko otwarte" },
+    { value: "all", label: t("durationStatusAll") },
+    { value: "closed", label: t("durationStatusClosed") },
+    { value: "open", label: t("durationStatusOpen") },
   ].forEach((item) => {
     const option = document.createElement("option");
     option.value = item.value;
@@ -898,15 +896,15 @@ function renderDurationAnalysis() {
 
   const sortField = document.createElement("label");
   sortField.className = "field";
-  sortField.append("Sortuj po");
+  sortField.append(t("durationSortLabel"));
   const sortSelect = document.createElement("select");
   sortSelect.dataset.durationControl = "sort";
   [
-    { value: "avg", label: "Sredniej" },
-    { value: "median", label: "Medianie" },
-    { value: "count", label: "Liczbie rekordow" },
-    { value: "max", label: "Maksimum" },
-    { value: "min", label: "Minimum" },
+    { value: "avg", label: t("durationSortAvg") },
+    { value: "median", label: t("durationSortMedian") },
+    { value: "count", label: t("durationSortCount") },
+    { value: "max", label: t("durationSortMax") },
+    { value: "min", label: t("durationSortMin") },
   ].forEach((item) => {
     const option = document.createElement("option");
     option.value = item.value;
@@ -918,13 +916,13 @@ function renderDurationAnalysis() {
 
   const countField = document.createElement("label");
   countField.className = "field";
-  countField.append("Pokaz rekordow");
+  countField.append(t("durationShowLabel"));
   const countSelect = document.createElement("select");
   countSelect.dataset.durationControl = "count";
   ["14", "24", "40", "80", "999"].forEach((value) => {
     const option = document.createElement("option");
     option.value = value;
-    option.textContent = value === "999" ? "Wszystkie" : value;
+    option.textContent = value === "999" ? t("durationShowAll") : value;
     countSelect.appendChild(option);
   });
   countSelect.value = String(durationAnalysisState.showCount);
@@ -942,7 +940,7 @@ function renderDurationAnalysis() {
     toggleBtn.className = "btn ghost btn-sm";
     toggleBtn.type = "button";
     toggleBtn.dataset.durationAction = "toggle-long";
-    toggleBtn.textContent = tableViewMode === "long" ? "Widok klasyczny" : "Wide-to-Long";
+    toggleBtn.textContent = tableViewMode === "long" ? t("durationViewClassic") : "Wide-to-Long";
     actions.appendChild(toggleBtn);
   }
   if (filtered) {
@@ -950,7 +948,7 @@ function renderDurationAnalysis() {
     resetBtn.className = "btn ghost btn-sm";
     resetBtn.type = "button";
     resetBtn.dataset.durationAction = "reset-filters";
-    resetBtn.textContent = "Pokaz calosc";
+    resetBtn.textContent = t("durationShowFull");
     actions.appendChild(resetBtn);
   }
   durationAnalysisSummaryEl.appendChild(actions);
@@ -959,8 +957,8 @@ function renderDurationAnalysis() {
   listNote.className = "duration-analysis-note";
   const visibleCount = Math.min(durationAnalysisState.showCount, analysis.entries.length);
   listNote.textContent = analysis.entries.length > visibleCount
-    ? `Pokazano ${visibleCount} z ${analysis.entries.length} wynikow.`
-    : `Pokazano wszystkie wyniki: ${analysis.entries.length}.`;
+    ? t("durationShownPartial", { shown: visibleCount, total: analysis.entries.length })
+    : t("durationShownAll", { total: analysis.entries.length });
   durationAnalysisListEl.appendChild(listNote);
 
   analysis.entries.slice(0, durationAnalysisState.showCount).forEach((entry, index) => {
@@ -992,9 +990,16 @@ function renderDurationAnalysis() {
 
     const meta = document.createElement("div");
     meta.className = "duration-person-meta";
-    const avgDaysText = entry.averageDays !== null ? `${Math.round(entry.averageDays * 10) / 10} dni` : "brak";
-    const medianDaysText = entry.medianDays !== null ? `${Math.round(entry.medianDays * 10) / 10} dni` : "brak";
-    meta.textContent = `Srednio ${avgDaysText} • mediana ${medianDaysText} • rekordy ${entry.count} • w toku ${entry.openCount} • zakres ${formatDurationDays(entry.minDays)} -> ${formatDurationDays(entry.maxDays)}`;
+    const avgDaysText = entry.averageDays !== null ? t("durationDaysUnit", { n: Math.round(entry.averageDays * 10) / 10 }) : t("durationNone");
+    const medianDaysText = entry.medianDays !== null ? t("durationDaysUnit", { n: Math.round(entry.medianDays * 10) / 10 }) : t("durationNone");
+    meta.textContent = t("durationMetaLine", {
+      avg: avgDaysText,
+      median: medianDaysText,
+      count: entry.count,
+      open: entry.openCount,
+      min: formatDurationDays(entry.minDays),
+      max: formatDurationDays(entry.maxDays),
+    });
 
     const actionsRow = document.createElement("div");
     actionsRow.className = "section-nav-actions";
@@ -1004,7 +1009,7 @@ function renderDurationAnalysis() {
     filterBtn.type = "button";
     filterBtn.dataset.durationAction = "filter-entity";
     filterBtn.dataset.durationEntity = entry.entity;
-    filterBtn.textContent = "Pokaz w tabeli";
+    filterBtn.textContent = t("durationShowInTable");
     actionsRow.appendChild(filterBtn);
 
     item.appendChild(top);
@@ -1140,18 +1145,14 @@ function scoreAggregationGroupProfile(profile, totalRows) {
 
 function describeAggregationGroupProfile(profile) {
   if (!profile) return "";
+  const knownKinds = ["person", "category", "entity", "place", "item", "time", "id", "other"];
   const kind = classifyAggregationHeader(profile.header);
-  const labels = {
-    person: "osoba/wlasciciel",
-    category: "status/kategoria",
-    entity: "klient/firma",
-    place: "miejsce/dzial",
-    item: "produkt/projekt",
-    time: "czas/data",
-    id: "identyfikator",
-    other: "kolumna",
-  };
-  return `${labels[kind] || "kolumna"} • ${profile.uniqueCount} unikalnych • ${profile.nonEmptyCount} niepustych`;
+  const kindKey = knownKinds.includes(kind) ? kind : "other";
+  return t("aggGroupProfileMeta", {
+    kind: t("aggGroupKind_" + kindKey),
+    unique: profile.uniqueCount,
+    nonEmpty: profile.nonEmptyCount,
+  });
 }
 
 function detectAggregationDateRangeCandidates(model, profiles) {
@@ -2047,7 +2048,7 @@ function renderAggregationWorkbench() {
   havingValueInput.value = String(aggregationWorkbenchState.havingValue);
   havingValueInput.min = "0";
   havingValueInput.step = "1";
-  havingValueInput.title = "Podaj wartosc progową (np. 10 oznacza >10)";
+  havingValueInput.title = t("aggHavingTitle");
   havingValueInput.style.display = aggregationWorkbenchState.havingMode === "all" ? "none" : "inline-block";
   havingField.appendChild(havingValueInput);
 
@@ -2296,7 +2297,7 @@ function buildGroupFromSignature(headers, startIndex, span, repeatCount, tableSt
     const blockStart = startIndex + (i * span);
     const blockEnd = blockStart + span - 1;
     blocks.push({
-      label: mergedLabels.get(blockStart) || `Blok ${i + 1}`,
+      label: mergedLabels.get(blockStart) || t("blkFallbackLabel", { n: i + 1 }),
       span,
       startIndex: blockStart,
       endIndex: blockEnd,
@@ -2307,9 +2308,9 @@ function buildGroupFromSignature(headers, startIndex, span, repeatCount, tableSt
   }
 
   return {
-    label: repeatCount >= 2 ? `Powtarzalny układ: ${repeatCount} bloków` : "Powtarzalny układ kolumn",
+    label: repeatCount >= 2 ? t("blkSignatureLabel", { n: repeatCount }) : t("blkSignatureLabelSingle"),
     kind: "repeating-signature",
-    meta: `${repeatCount} bloków po ${span} kolumny`,
+    meta: t("blkSignatureMeta", { n: repeatCount, span }),
     prefixCount: startIndex,
     prefixLabel: startIndex > 0 ? formatColRange(tableStartCol, tableStartCol + startIndex - 1) : "",
     longHeaders: uniqueBases.slice(),
@@ -2414,9 +2415,9 @@ function detectSuffixedCycleBlocks(headers, tableStartCol, mergedLabels) {
 
   const firstStart = Math.min(...blocks.map((block) => block.startIndex));
   return [{
-    label: `Powtarzalny układ: ${blocks.length} cykli`,
+    label: t("blkCycleLabel", { n: blocks.length }),
     kind: "suffixed-cycle",
-    meta: `${blocks.length} cykli • ${repeatedBases.length} pól w schemacie`,
+    meta: t("blkCycleMeta", { n: blocks.length, fields: repeatedBases.length }),
     prefixCount: firstStart,
     prefixLabel: firstStart > 0 ? formatColRange(tableStartCol, tableStartCol + firstStart - 1) : "",
     longHeaders: repeatedBases.slice(),
@@ -2482,9 +2483,9 @@ function detectRepeatingBlocks(sheet, headerRow, data) {
         .slice(0, 8);
 
       groups.push({
-        label: `Powtarzalny układ: ${blocks.length} bloków`,
+        label: t("blkSignatureLabel", { n: blocks.length }),
         kind: "merged",
-        meta: `${blocks.length} bloków po ${span} kolumny • ${blocks[0].label} -> ${blocks[blocks.length - 1].label}`,
+        meta: t("blkMergedMeta", { n: blocks.length, span, first: blocks[0].label, last: blocks[blocks.length - 1].label }),
         prefixCount: blocks[0].startIndex,
         prefixLabel: blocks[0].startIndex > 0 ? formatColRange(tableStartCol, tableStartCol + blocks[0].startIndex - 1) : "",
         families,
@@ -2509,7 +2510,7 @@ function renderRepeatingBlocks() {
   currentRepeatingBlocks.forEach((group, groupIndex) => {
     const summary = document.createElement("div");
     summary.className = "repeat-summary";
-    const prefixNote = group.prefixCount ? ` • stałe kolumny przed blokami: ${group.prefixLabel}` : "";
+    const prefixNote = group.prefixCount ? t("blkPrefixNote", { cols: group.prefixLabel }) : "";
     summary.textContent = `${group.meta || group.label}${prefixNote}`;
     repeatBlockDetectorEl.appendChild(summary);
 
@@ -2526,7 +2527,7 @@ function renderRepeatingBlocks() {
 
       const badge = document.createElement("div");
       badge.className = "repeat-block-badge";
-      badge.textContent = `${block.span} kol.`;
+      badge.textContent = t("blkSpanBadge", { n: block.span });
 
       top.appendChild(title);
       top.appendChild(badge);
@@ -2534,7 +2535,7 @@ function renderRepeatingBlocks() {
       const meta = document.createElement("div");
       meta.className = "repeat-block-meta";
       const headerPreview = block.headers.slice(0, 4).join(" • ");
-      meta.textContent = `Kolumny ${formatColRange(block.startAbs, block.endAbs)}${headerPreview ? ` • ${headerPreview}` : ""}`;
+      meta.textContent = `${t("blkColumnsMeta", { range: formatColRange(block.startAbs, block.endAbs) })}${headerPreview ? ` • ${headerPreview}` : ""}`;
 
       const actions = document.createElement("div");
       actions.className = "section-nav-actions";
@@ -2544,7 +2545,7 @@ function renderRepeatingBlocks() {
       btn.type = "button";
       btn.dataset.repeatGroupIndex = String(groupIndex);
       btn.dataset.repeatBlockIndex = String(blockIndex);
-      btn.textContent = "Skocz do bloku";
+      btn.textContent = t("blkJumpTo");
       actions.appendChild(btn);
 
       item.appendChild(top);
@@ -2609,17 +2610,17 @@ function collectWorkbookStats(wb, fileName) {
 
 function collectSheetInsights() {
   const workbookItems = currentWorkbookStats ? [
-    { label: "Arkusze", value: String(currentWorkbookStats.sheets) },
-    { label: "Ukryte arkusze", value: String(currentWorkbookStats.hiddenSheets), tone: currentWorkbookStats.hiddenSheets ? "warning" : "" },
-    { label: "Very hidden", value: String(currentWorkbookStats.veryHiddenSheets), tone: currentWorkbookStats.veryHiddenSheets ? "warning" : "" },
-    { label: "Nazwane zakresy", value: String(currentWorkbookStats.definedNames), tone: currentWorkbookStats.definedNames ? "info" : "" },
+    { label: t("inspSheets"), value: String(currentWorkbookStats.sheets) },
+    { label: t("inspHiddenSheets"), value: String(currentWorkbookStats.hiddenSheets), tone: currentWorkbookStats.hiddenSheets ? "warning" : "" },
+    { label: t("inspVeryHidden"), value: String(currentWorkbookStats.veryHiddenSheets), tone: currentWorkbookStats.veryHiddenSheets ? "warning" : "" },
+    { label: t("inspDefinedNames"), value: String(currentWorkbookStats.definedNames), tone: currentWorkbookStats.definedNames ? "info" : "" },
   ] : [];
 
   if (!currentHeaders.length || !baseRows.length) {
     return {
       workbookRows: workbookItems,
       rows: [],
-      flags: currentWorkbookStats?.hasMacros ? [{ label: "Plik makr .xlsm", tone: "warning" }] : [],
+      flags: currentWorkbookStats?.hasMacros ? [{ label: t("inspMacroFile"), tone: "warning" }] : [],
     };
   }
 
@@ -2657,18 +2658,18 @@ function collectSheetInsights() {
   });
 
   const sheetItems = [
-    { label: "Widoczne / wszystkie wiersze", value: `${visibleRows} / ${totalRows}`, tone: visibleRows !== totalRows ? "info" : "" },
-    { label: "Kolumny", value: String(totalCols) },
-    { label: "Formuły", value: String(currentSheetStats?.formulaCount || 0), tone: (currentSheetStats?.formulaCount || 0) ? "info" : "" },
+    { label: t("inspVisibleAllRows"), value: `${visibleRows} / ${totalRows}`, tone: visibleRows !== totalRows ? "info" : "" },
+    { label: t("inspColumns"), value: String(totalCols) },
+    { label: t("inspFormulas"), value: String(currentSheetStats?.formulaCount || 0), tone: (currentSheetStats?.formulaCount || 0) ? "info" : "" },
     {
-      label: "Scalenia (zakresy / komorki)",
+      label: t("inspMerges"),
       value: `${currentSheetStats?.mergeRegions || 0} / ${currentSheetStats?.mergedCells || 0}`,
       tone: (currentSheetStats?.mergeRegions || 0) ? "info" : "",
     },
-    { label: "Ukryte kolumny / wiersze", value: `${currentSheetStats?.hiddenColumns || 0} / ${currentSheetStats?.hiddenRows || 0}`, tone: ((currentSheetStats?.hiddenColumns || 0) || (currentSheetStats?.hiddenRows || 0)) ? "warning" : "" },
-    { label: "Kolumny liczbowe / datowe", value: `${numericColumns} / ${dateColumns}` },
-    { label: "Rzadkie kolumny", value: `${sparseColumns} (${formatPercent(sparseColumns, totalCols)})`, tone: sparseColumns ? "warning" : "" },
-    { label: "Długie teksty", value: String(longTextColumns), tone: longTextColumns ? "info" : "" },
+    { label: t("inspHiddenColsRows"), value: `${currentSheetStats?.hiddenColumns || 0} / ${currentSheetStats?.hiddenRows || 0}`, tone: ((currentSheetStats?.hiddenColumns || 0) || (currentSheetStats?.hiddenRows || 0)) ? "warning" : "" },
+    { label: t("inspNumericDateCols"), value: `${numericColumns} / ${dateColumns}` },
+    { label: t("inspSparseCols"), value: `${sparseColumns} (${formatPercent(sparseColumns, totalCols)})`, tone: sparseColumns ? "warning" : "" },
+    { label: t("inspLongText"), value: String(longTextColumns), tone: longTextColumns ? "info" : "" },
   ];
 
   const flags = [];
@@ -2678,16 +2679,16 @@ function collectSheetInsights() {
   const hasStartDateHeader = normalizedHeaders.some((header) => /\b(od|start|data od|from|poczatek|rozpoczecie|created)\b/.test(header));
   const hasEndDateHeader = normalizedHeaders.some((header) => /\b(do|end|data do|to|until|koniec|zakonczenie|closed)\b/.test(header));
   const processSignalCount = [hasStatusHeader, hasOwnerHeader, hasStartDateHeader && hasEndDateHeader].filter(Boolean).length;
-  if (processSignalCount >= 2) flags.push({ label: "Wygląda jak arkusz procesu / SLA", tone: "info" });
-  if (currentWorkbookStats?.hasMacros) flags.push({ label: "Plik makr .xlsm", tone: "warning" });
-  if (duplicateHeaders) flags.push({ label: `Zdublowane nagłówki: ${duplicateHeaders}`, tone: "warning" });
-  if (duplicateRows) flags.push({ label: `Duplikaty wierszy: ${duplicateRows}`, tone: duplicateRows > 0 ? "warning" : "" });
+  if (processSignalCount >= 2) flags.push({ label: t("flagProcessSheet"), tone: "info" });
+  if (currentWorkbookStats?.hasMacros) flags.push({ label: t("inspMacroFile"), tone: "warning" });
+  if (duplicateHeaders) flags.push({ label: t("flagDuplicateHeaders", { n: duplicateHeaders }), tone: "warning" });
+  if (duplicateRows) flags.push({ label: t("flagDuplicateRows", { n: duplicateRows }), tone: duplicateRows > 0 ? "warning" : "" });
   if ((currentSheetStats?.formulaMissingResultCount || 0) > 0) {
-    flags.push({ label: `Formuły bez wyniku: ${currentSheetStats.formulaMissingResultCount}`, tone: "warning" });
+    flags.push({ label: t("flagFormulasNoResult", { n: currentSheetStats.formulaMissingResultCount }), tone: "warning" });
   }
-  if ((currentSheetStats?.commentCount || 0) > 0) flags.push({ label: `Komentarze: ${currentSheetStats.commentCount}`, tone: "info" });
-  if ((currentSheetStats?.hyperlinkCount || 0) > 0) flags.push({ label: `Linki: ${currentSheetStats.hyperlinkCount}`, tone: "info" });
-  if (currentWorkbookStats?.veryHiddenSheets) flags.push({ label: "Są arkusze very hidden", tone: "warning" });
+  if ((currentSheetStats?.commentCount || 0) > 0) flags.push({ label: t("flagComments", { n: currentSheetStats.commentCount }), tone: "info" });
+  if ((currentSheetStats?.hyperlinkCount || 0) > 0) flags.push({ label: t("flagLinks", { n: currentSheetStats.hyperlinkCount }), tone: "info" });
+  if (currentWorkbookStats?.veryHiddenSheets) flags.push({ label: t("flagVeryHiddenSheets"), tone: "warning" });
 
   return {
     workbookRows: workbookItems,
@@ -2985,12 +2986,12 @@ function renderKpiExtractor() {
   }
 
   renderInsightList(kpiSummaryEl, [
-    { label: "Kandydaci KPI", value: String(currentKpiEntries.length), tone: "info" },
+    { label: t("kpiCandidates"), value: String(currentKpiEntries.length), tone: "info" },
     {
-      label: "Źródło",
+      label: t("kpiSource"),
       value: currentKpiAnchorRow === currentHeaderRow
-        ? `Wiersze nad nagłówkiem ${currentHeaderRow}`
-        : `Wiersze nad wykrytym nagłówkiem ${currentKpiAnchorRow}`,
+        ? t("kpiRowsAboveHeader", { row: currentHeaderRow })
+        : t("kpiRowsAboveDetected", { row: currentKpiAnchorRow }),
       tone: currentKpiAnchorRow === currentHeaderRow ? "" : "info",
     },
   ], t("kpiNoSummary"));
@@ -3007,14 +3008,19 @@ function renderKpiExtractor() {
     value.className = "kpi-value";
     value.textContent = entry.value;
     value.title = entry.aliases?.length
-      ? `${entry.label}: ${entry.value}\nRowniez jako: ${entry.aliases.join(", ")}`
+      ? t("kpiTitleAliases", { label: entry.label, value: entry.value, aliases: entry.aliases.join(", ") })
       : `${entry.label}: ${entry.value}`;
 
     const meta = document.createElement("div");
     meta.className = "kpi-meta";
     meta.textContent = entry.aliases?.length
-      ? `${entry.address} • etykieta ${entry.labelAddress} • również jako: ${entry.aliases.slice(0, 2).join(", ")}${entry.aliases.length > 2 ? ` +${entry.aliases.length - 2}` : ""}`
-      : `${entry.address} • etykieta ${entry.labelAddress}`;
+      ? t("kpiMetaAliases", {
+          address: entry.address,
+          labelAddress: entry.labelAddress,
+          aliases: entry.aliases.slice(0, 2).join(", "),
+          more: entry.aliases.length > 2 ? ` +${entry.aliases.length - 2}` : "",
+        })
+      : t("kpiMetaPlain", { address: entry.address, labelAddress: entry.labelAddress });
 
     const actions = document.createElement("div");
     actions.className = "section-nav-actions";
@@ -3023,7 +3029,7 @@ function renderKpiExtractor() {
     btn.className = "btn ghost btn-sm";
     btn.type = "button";
     btn.dataset.kpiAddress = entry.address;
-    btn.textContent = "Pokaż źródło";
+    btn.textContent = t("kpiShowSource");
 
     actions.appendChild(btn);
     item.appendChild(label);
@@ -3138,7 +3144,7 @@ function collectColumnProfiles() {
     let score = 0;
 
     if (stats.nonEmpty && stats.nonEmpty / totalRows <= 0.4) {
-      flags.push("rzadka");
+      flags.push("sparse");
       score += 2;
     }
     if (type === "mixed") {
@@ -3146,19 +3152,19 @@ function collectColumnProfiles() {
       score += 3;
     }
     if (stats.longTextCount > 0) {
-      flags.push("dlugie teksty");
+      flags.push("longText");
       score += 1;
     }
     if (uniqueCount > Math.max(20, totalRows * 0.9) && type === "tekst") {
-      flags.push("prawie same unikalne");
+      flags.push("mostlyUnique");
       score += 1;
     }
     if (stats.formulaCount > 0 && stats.formulaCount / stats.nonEmpty >= 0.8) {
-      flags.push("kolumna formul");
+      flags.push("formulaColumn");
       score += 1;
     }
     if (emptyCount === totalRows) {
-      flags.push("pusta");
+      flags.push("empty");
       score += 4;
     }
 
@@ -3212,14 +3218,14 @@ function renderColumnProfiles() {
 
     const kind = document.createElement("div");
     kind.className = "column-profile-kind";
-    kind.textContent = profile.type;
+    kind.textContent = t("profType_" + profile.type);
 
     top.appendChild(title);
     top.appendChild(kind);
 
     const meta = document.createElement("div");
     meta.className = "column-profile-meta";
-    meta.textContent = `Kolumna ${XLSX.utils.encode_col(profile.colAbs)} • puste ${profile.emptyPct}% • unikalne ${profile.uniqueCount}`;
+    meta.textContent = t("profMeta", { col: XLSX.utils.encode_col(profile.colAbs), empty: profile.emptyPct, unique: profile.uniqueCount });
 
     const stats = document.createElement("div");
     stats.className = "column-profile-stats";
@@ -3242,7 +3248,7 @@ function renderColumnProfiles() {
       profile.flags.forEach((flag) => {
         const badge = document.createElement("div");
         badge.className = "column-profile-flag";
-        badge.textContent = flag;
+        badge.textContent = t("profFlag_" + flag);
         flags.appendChild(badge);
       });
       item.appendChild(top);
@@ -3261,7 +3267,7 @@ function renderColumnProfiles() {
     btn.className = "btn ghost btn-sm";
     btn.type = "button";
     btn.dataset.profileColIndex = String(profile.colIdx);
-    btn.textContent = "Skocz do kolumny";
+    btn.textContent = t("profJumpToCol");
     actions.appendChild(btn);
     item.appendChild(actions);
 
