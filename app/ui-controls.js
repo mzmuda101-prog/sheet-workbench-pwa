@@ -1065,6 +1065,36 @@ if (scrollTopFabEl && tableWrapEl) {
   if (btn) btn.addEventListener("click", () => replayPop(btn, "btn-pop"));
 });
 
+// Zwijanie paska narzędzi nad tabelą — zsuwa rząd przycisków (i quick-search),
+// zostawiając tylko status. Daje tabeli więcej miejsca, zwłaszcza na telefonach.
+function updateToolbarToggleLabel() {
+  if (!toolbarToggleEl) return;
+  const collapsed = !!tablePanelEl && tablePanelEl.classList.contains("toolbar-collapsed");
+  const label = collapsed ? t("toolbarExpand") : t("toolbarCollapse");
+  toolbarToggleEl.setAttribute("aria-label", label);
+  toolbarToggleEl.setAttribute("title", label);
+  toolbarToggleEl.setAttribute("aria-expanded", String(!collapsed));
+}
+
+function setToolbarCollapsed(collapsed) {
+  if (!tablePanelEl) return;
+  tablePanelEl.classList.toggle("toolbar-collapsed", !!collapsed);
+  updateToolbarToggleLabel();
+  try {
+    localStorage.setItem(TOOLBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch (e) {}
+  syncTableViewportHeight();
+}
+
+if (toolbarToggleEl) {
+  toolbarToggleEl.addEventListener("click", () => {
+    const next = !tablePanelEl.classList.contains("toolbar-collapsed");
+    setToolbarCollapsed(next);
+    replayPop(toolbarToggleEl, "btn-pop");
+  });
+  setToolbarCollapsed(localStorage.getItem(TOOLBAR_COLLAPSED_KEY) === "1");
+}
+
 tbodyEl.addEventListener("pointerenter", (e) => {
   const td = e.target.closest("td");
   if (!td || td.classList.contains("row-head")) return;

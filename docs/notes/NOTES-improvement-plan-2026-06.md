@@ -151,6 +151,23 @@ płynny morph kształtu/pozycji/koloru przez CSS `transition` + glassmorphism + 
   podmiana `sw.js` (nowy CACHE_VERSION) → `visibilitychange` → przycisk „Aktualizuj" + toast
   się pojawiają, zero błędów. Build → `20260602-06`.
 
+### Osobne ToDo (poza planem czerwcowym) — ✅ ZROBIONE (2 czerwca, build `20260602-07`)
+- **Zwijany pasek narzędzi nad tabelą (mobile)** — `#toolbarToggle` (chevron) tuż za statusem
+  zsuwa/wysuwa `.table-actions` + quick-search (animacja `max-height`), zostawiając tylko status →
+  więcej miejsca na tabelę na telefonie. **Funkcja mobile-only** (`@media max-width:768px`): na
+  desktopie toggle ukryty (`.btn.toolbar-toggle{display:none}` — wyższa specyficzność niż `.btn`,
+  bo inaczej `.btn{display:inline-flex}` wygrywał) i klasa `toolbar-collapsed` jest bezczynna, więc
+  układ desktopu (status + przyciski w jednej linii) nietknięty. Na mobile `.table-actions`/
+  `.quick-search` dostają `flex-basis:100%` → przyciski w osobnej linii pod [status + strzałka].
+  Stan zapamiętany w `localStorage` (`TOOLBAR_COLLAPSED_KEY`), etykieta i18n w `I18N`
+  (toolbarCollapse/toolbarExpand, odświeżana w `applyLanguage`), „plumknięcie" przy kliknięciu
+  (uogólniony `.btn-pop`). Logika: `setToolbarCollapsed`/`updateToolbarToggleLabel` w ui-controls.js.
+  Zweryfikowane Playwrightem (collapse/expand, persist po reloadzie, PL/EN, desktop ukryty) + screenshoty.
+- **Glassmorphism paneli Apple-style** — `.panel` dostał: półprzezroczyste tło + górny `linear-gradient`
+  „sheen", mocniejszy `backdrop-filter: blur(22px) saturate(1.8)`, warstwowy miękki cień i wewnętrzną
+  krawędź światła u góry (`inset 0 1px 0 ...`). Osobny wariant `[data-theme="dark"] .panel`.
+  Zweryfikowane screenshotami (jasny + ciemny) — frosted, czyste, Apple-like.
+
 ### 6. Handle sidebara na mobilkach
 - Już częściowo zrobione — przejrzeć i poprawić/zmienić, jeśli znajdzie się lepsze
   miejsce/pomysł. Nie przebudowa od zera.

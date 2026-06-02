@@ -33,6 +33,7 @@ const freezeHeadersEl = document.getElementById("freezeHeaders");
 const excelLayoutToggleEl = document.getElementById("excelLayoutToggle");
 const loadBtn = document.getElementById("loadBtn");
 const loadSampleBtn = document.getElementById("loadSampleBtn");
+const toolbarToggleEl = document.getElementById("toolbarToggle");
 
 const searchQueryEl = document.getElementById("searchQuery");
 const searchQuery2El = document.getElementById("searchQuery2");
@@ -208,12 +209,13 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260602-06";
+const APP_BUILD_VERSION = "20260602-08";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
 const EXCEL_LAYOUT_KEY = "excel-workbench-excel-layout";
 const SORT_PRESETS_KEY = "excel-workbench-sort-presets";
+const TOOLBAR_COLLAPSED_KEY = "excel-workbench-toolbar-collapsed";
 const INTRO_PLAYED_KEY = "introPlayed";
 
 function log(msg, type = "info") {

@@ -642,17 +642,45 @@ body.splashing {
   100% { scale: 1; }
 }
 .sidebar-handle.handle-pop { animation: popPlop 380ms cubic-bezier(0.34, 1.56, 0.64, 1); }
-.toggle-pill.btn-pop { animation: popPlopLight 260ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.btn-pop { animation: popPlopLight 260ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+/* Zwijanie paska narzędzi nad tabelą — funkcja mobilna (oszczędność miejsca na
+   telefonie). Na desktopie toggle ukryty, a klasa toolbar-collapsed jest bezczynna,
+   więc układ desktopu (status + przyciski w jednej linii) pozostaje nietknięty. */
+.btn.toolbar-toggle { display: none; flex-shrink: 0; }
+.toolbar-toggle-chevron { transition: transform var(--t); }
+.table-actions,
+.quick-search { transition: max-height var(--t-slow) ease, opacity var(--t); }
+
+@media (max-width: 768px) {
+  .btn.toolbar-toggle { display: inline-flex; margin-left: auto; }
+  /* Przyciski i quick-search w osobnej, pełnej linii pod paskiem [status + strzałka] */
+  .table-actions,
+  .quick-search { flex-basis: 100%; max-height: 320px; }
+  .table-panel.toolbar-collapsed .toolbar-toggle-chevron { transform: rotate(180deg); }
+  .table-panel.toolbar-collapsed .table-actions,
+  .table-panel.toolbar-collapsed .quick-search {
+    max-height: 0;
+    opacity: 0;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .table-panel.toolbar-collapsed .table-toolbar { padding-bottom: 4px; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .app-update-btn:not(.hidden) { animation: none; }
   .sidebar-handle.handle-pop,
-  .toggle-pill.btn-pop { animation: none; }
+  .btn-pop { animation: none; }
   .toggle-pill,
   .toggle-pill::before,
   .scroll-top-fab,
   .scroll-top-fab .fab-arrow,
-  .scroll-top-fab .fab-label { transition: none; }
+  .scroll-top-fab .fab-label,
+  .toolbar-toggle-chevron,
+  .table-actions,
+  .quick-search { transition: none; }
 }
 
 /* ===================================================
@@ -965,14 +993,31 @@ body.splashing {
    PANEL
    =================================================== */
 .panel {
-  background: var(--panel);
-  -webkit-backdrop-filter: var(--glass);
-  backdrop-filter: var(--glass);
+  /* Apple-style frosted glass: półprzezroczyste tło + górny „sheen", mocniejszy
+     blur/saturate, warstwowy miękki cień i wewnętrzna krawędź światła u góry. */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, white 12%, transparent) 0%, transparent 46%),
+    var(--panel);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  backdrop-filter: blur(22px) saturate(1.8);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   padding: 14px;
-  box-shadow: var(--shadow-xs);
+  box-shadow:
+    0 1px 1px rgba(18, 30, 23, 0.03),
+    0 10px 30px -18px rgba(18, 30, 23, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
   min-width: 0;
+}
+
+[data-theme="dark"] .panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 46%),
+    var(--panel);
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.2),
+    0 14px 34px -18px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .panel.compact { padding: 12px 14px; }

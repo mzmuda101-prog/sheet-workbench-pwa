@@ -372,6 +372,8 @@ const I18N = {
     cellStatsAvg: "Średnia",
     cellStatsMin: "Min",
     cellStatsMax: "Maks",
+    toolbarCollapse: "Zwiń pasek narzędzi",
+    toolbarExpand: "Rozwiń pasek narzędzi",
   },
   en: {
     locale: "en-US",
@@ -740,6 +742,8 @@ const I18N = {
     cellStatsAvg: "Average",
     cellStatsMin: "Min",
     cellStatsMax: "Max",
+    toolbarCollapse: "Collapse toolbar",
+    toolbarExpand: "Expand toolbar",
   },
 };
 
@@ -1737,5 +1741,6 @@ function applyLanguage(lang) {
   renderAggregationWorkbench();
   renderFormulaWorkbench();
   updateCellStats();
+  updateToolbarToggleLabel();
   updateLangSwitchIndicator();
 }
