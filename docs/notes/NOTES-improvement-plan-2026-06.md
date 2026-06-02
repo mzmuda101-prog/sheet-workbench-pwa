@@ -120,6 +120,17 @@ płynny morph kształtu/pozycji/koloru przez CSS `transition` + glassmorphism + 
   scale/puls). Morph kształtu zarezerwowany wyłącznie dla FAB (jego sens). Strzałka `↑` w FAB
   była nie wycentrowana → `left:50% + translate(-50%,-50%)` w stanie collapsed, zjeżdża do
   `left:20px` przy rozwinięciu (miejsce na etykietę). Build → `20260602-04`.
+- **„Plumknięcie" / pop pojawienia (Mateusz, 2 czerwca, build `20260602-05`):** spodobała mu się
+  animacja handle Schowaj/Wysuń na mobilkach — poprosił o lekki pop (skala „plop") dodany do
+  handle GENERALNIE (desktop+mobile, nie tylko mobile) oraz lekko do przełączników toolbara.
+  Zrobione keyframes `popPlop` (handle, mocniej) / `popPlopLight` (przełączniki, lekko) skalujące
+  **niezależną właściwością `scale:`** — NIE `transform` — bo handle pozycjonuje się przez
+  `transform: translateY/translateX(-50%)` i scale przez transform by to zepsuł. Wyzwalane JS:
+  `replayPop(el, cls)` (remove→reflow→add, re-triggerowalne); handle „plumka" w `setSidebarOpen`
+  TYLKO przy realnej zmianie stanu (`prevSidebarOpenState`, więc bez popu na init/`setSidebarOpen(true)`
+  przy starcie); przełączniki — pop na każdy klik (listener na wideLong/excelLayout/reading).
+  Reduced-motion zeruje. Zweryfikowane Playwrightem (brak popu na load, handle-pop+popPlop po zmianie,
+  btn-pop+popPlopLight po kliknięciu, zero błędów).
 - Reduced-motion: `@media (prefers-reduced-motion: reduce)` zeruje te animacje/transitiony.
 - Zweryfikowane Playwrightem: toggle radius 8px→999px + kropka scale(1), reading aria-pressed,
   FAB hidden→visible→hover 44→128→scroll-to-0→hidden + i18n PL/EN, update btn animationName

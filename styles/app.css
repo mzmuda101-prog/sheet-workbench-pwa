@@ -627,8 +627,27 @@ body.splashing {
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 80%, transparent) 0%, color-mix(in srgb, var(--panel) 90%, transparent) 100%);
 }
 
+/* „Plumknięcie" — lekki pop pojawienia (zapożyczony feel z handle Schowaj/Wysuń).
+   Skalujemy NIEZALEŻNĄ właściwością `scale:`, żeby nie nadpisać `transform`
+   pozycjonującego handle (translateY/translateX). Stosowane: handle (mocniej,
+   desktop+mobile) i przełączniki toolbara (lekko). */
+@keyframes popPlop {
+  0%   { scale: 0.84; }
+  55%  { scale: 1.06; }
+  100% { scale: 1; }
+}
+@keyframes popPlopLight {
+  0%   { scale: 0.95; }
+  55%  { scale: 1.035; }
+  100% { scale: 1; }
+}
+.sidebar-handle.handle-pop { animation: popPlop 380ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.toggle-pill.btn-pop { animation: popPlopLight 260ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+
 @media (prefers-reduced-motion: reduce) {
   .app-update-btn:not(.hidden) { animation: none; }
+  .sidebar-handle.handle-pop,
+  .toggle-pill.btn-pop { animation: none; }
   .toggle-pill,
   .toggle-pill::before,
   .scroll-top-fab,

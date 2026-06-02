@@ -213,14 +213,27 @@ function resetFilterInputs() {
   if (typeof setSecondFilterVisible === "function") setSecondFilterVisible(false);
 }
 
+// Re-triggerowalny pop: zdejmij klasę, wymuś reflow, dodaj — odpala animację od nowa.
+function replayPop(el, cls) {
+  if (!el) return;
+  el.classList.remove(cls);
+  void el.offsetWidth; // reflow, żeby animacja mogła zagrać ponownie
+  el.classList.add(cls);
+}
+
+let prevSidebarOpenState = null;
 function setSidebarOpen(open) {
   const shouldOpen = !!open;
+  // „Plumknięcie" handle tylko przy realnej zmianie stanu (nie przy starcie/init).
+  const stateChanged = prevSidebarOpenState !== null && prevSidebarOpenState !== shouldOpen;
+  prevSidebarOpenState = shouldOpen;
   rootEl.classList.toggle("sidebar-open", shouldOpen);
   if (sidebarScrim) sidebarScrim.classList.toggle("hidden", !shouldOpen);
   if (panelToggle) {
     panelToggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
     panelToggle.textContent = shouldOpen ? t("panelOpen") : t("panelClosed");
   }
+  if (stateChanged) replayPop(panelHandle, "handle-pop");
   requestAnimationFrame(() => syncSidebarHandle());
   window.setTimeout(() => syncSidebarHandle(), 270);
 }
@@ -1046,6 +1059,11 @@ if (scrollTopFabEl && tableWrapEl) {
     tableWrapEl.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
   });
 }
+
+// Lekkie „plumknięcie" przełączników trybu przy kliknięciu (ten sam feel co handle).
+[wideLongToggleEl, excelLayoutToggleEl, readingToggle].forEach((btn) => {
+  if (btn) btn.addEventListener("click", () => replayPop(btn, "btn-pop"));
+});
 
 tbodyEl.addEventListener("pointerenter", (e) => {
   const td = e.target.closest("td");
