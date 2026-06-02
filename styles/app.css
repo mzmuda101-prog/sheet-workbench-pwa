@@ -2356,6 +2356,52 @@ tbody td.cell-selected.cell-selected {
     inset 0 -1px 0 color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
+/* Prostokąt zaznaczenia (kotwica → koniec) — wypełnienie zakresu pod komórką aktywną */
+tbody td.cell-in-range {
+  background: color-mix(in srgb, var(--accent-light) 46%, white) !important;
+}
+[data-theme="dark"] tbody td.cell-in-range {
+  background: color-mix(in srgb, var(--accent-light) 58%, var(--panel)) !important;
+}
+
+/* Pasek statystyk komórek (Excel-style) — pojawia się tylko przy zaznaczonym zakresie */
+.cell-stats-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-top: 8px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--r-sm, 8px);
+  background: var(--surface);
+  font-size: 12.5px;
+  color: var(--ink-2, inherit);
+  animation: cellStatsIn 0.12s ease;
+}
+.cell-stats-bar.hidden { display: none; }
+.cell-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
+}
+.cell-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+.cell-stat-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+@keyframes cellStatsIn {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .cell-editor {
   width: 100%;
   border: 1px solid var(--border);

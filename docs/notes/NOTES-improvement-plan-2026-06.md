@@ -48,11 +48,25 @@ Kolejność i zakres uzgodnione; każdy większy krok = osobny commit (bezpieczn
 - Cel: onboarding bez własnego pliku, bez ujawniania prywatnych danych (offline).
   Rozwiązuje też problem z ToDo: nowi nie wiedzą, jak działa Wide-to-Long.
 
-### 3. B — Pasek statystyk na dole (Excel-style status bar) ⭐
-- Pojawia się **tylko** przy zaznaczeniu komórek/wierszy z liczbami; w spoczynku znika
-  (nie zabiera miejsca tabeli).
-- Pokazuje: liczbę zaznaczonych komórek, Σ suma, średnia, min, max.
-- Reuse istniejącej selekcji komórek + logiki agregacji.
+### 3. B — Pasek statystyk na dole (Excel-style status bar) — ✅ ZROBIONE (2 czerwca 2026)
+- Pojawia się **tylko** przy zaznaczeniu zakresu (≥2 komórek); pojedyncza komórka = cisza
+  (jak w Excelu). W spoczynku `hidden`, nie zabiera miejsca tabeli.
+- Pokazuje: `Zakres RxC`, `Liczba` (niepuste komórki) + gdy są liczby: `Suma`, `Średnia`,
+  `Min`, `Maks`. Formatowanie przez `toLocaleString(I18N[currentLang].locale)` (PL przecinek).
+- **Model zakresu = prostokąt kotwica↔koniec**: `focusedCellState` (klik) = kotwica,
+  `selectedCellState` (Shift+strzałki / Shift+klik) = ruchomy koniec. Idealnie mapuje istniejący
+  dual-state, zero nowego stanu globalnego.
+- Implementacja w `table.js`: `getSelectionRectangle()`, `parseCellNumber()` (tolerancyjny:
+  spacje/nbsp = tysiące, `,`/`.` = dziesiętny, `%`), `computeSelectionStats()`, `formatStatNumber()`,
+  `syncRangeHighlightInDom()` (klasa `.cell-in-range`), `updateCellStats()`. Wpięte w
+  `setFocusedCell`/`setSelectedCell` (też gałąź czyszczenia) + koniec `renderTable` + `applyLanguage`.
+- **Shift+klik** dodany w `ui-controls.js` (handler `tbodyEl` click) → zakres myszą/dotykiem
+  bez klawiatury (tablet). i18n: klucze w `I18N` (PL+EN), świadomie NIE w STATIC_TRANSLATIONS
+  (omija dual-dict trap). DOM: `<div id="cellStatsBar">` po `#tableScrollbar` w `.table-panel`.
+- Zweryfikowane Playwrightem (przykładowy plik → zakres Shift+strzałki i Shift+klik):
+  pasek startuje hidden → pokazuje Σ=54/śr=13,5/min=9/maks=18 dla 4×1, podświetlenie zakresu,
+  live-switch PL→EN etykiet (13,5→13.5), znika po Shift+Esc, zero błędów konsoli. Smoke-test OK.
+- Build bump: `20260602-01` → `20260602-02` (`scripts/bump-version.js`).
 
 ### 4. D — Pogrupowanie sidebara w sekcje — ✅ ZROBIONE (2 czerwca 2026)
 - 14 paneli owinięte w **5 sekcji** `<section class="sidebar-group">` z nagłówkami (PL/EN,

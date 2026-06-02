@@ -153,20 +153,28 @@ function setFocusedCell(rowKey, colIndex0, options = {}) {
   if (!rowKey || !Number.isFinite(colIndex0) || colIndex0 < 0) {
     focusedCellState = null;
     syncFocusedCellInDom({ clearMissing: false });
+    syncRangeHighlightInDom();
+    updateCellStats();
     return;
   }
   focusedCellState = { rowKey, colIndex0 };
   syncFocusedCellInDom(options);
+  syncRangeHighlightInDom();
+  updateCellStats();
 }
 
 function setSelectedCell(rowKey, colIndex0, options = {}) {
   if (!rowKey || !Number.isFinite(colIndex0) || colIndex0 < 0) {
     selectedCellState = null;
     syncSelectedCellInDom({ clearMissing: false });
+    syncRangeHighlightInDom();
+    updateCellStats();
     return;
   }
   selectedCellState = { rowKey, colIndex0 };
   syncSelectedCellInDom(options);
+  syncRangeHighlightInDom();
+  updateCellStats();
 }
 
 function moveFocusedCell(rowDelta, colDelta) {
@@ -195,6 +203,155 @@ function moveSelectedCell(rowDelta, colDelta) {
   const nextRow = currentDisplayModel.rows[nextRowIndex];
   setSelectedCell(getRowSelectionKey(nextRow), nextColIndex, { scroll: true });
   return true;
+}
+
+// --- Pasek statystyk komórek (Excel-style) ------------------------------
+// Zakres = prostokąt od kotwicy (focusedCellState) do ruchomego końca
+// (selectedCellState). Istnieje tylko gdy obie komórki są ustawione.
+function getSelectionRectangle() {
+  if (!focusedCellState || !selectedCellState) return null;
+  const model = currentDisplayModel;
+  if (!model?.rows?.length) return null;
+  const anchorRowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
+  const endRowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === selectedCellState.rowKey);
+  if (anchorRowIdx < 0 || endRowIdx < 0) return null;
+  const rowStart = Math.min(anchorRowIdx, endRowIdx);
+  const rowEnd = Math.max(anchorRowIdx, endRowIdx);
+  const colMin = Math.min(focusedCellState.colIndex0, selectedCellState.colIndex0);
+  const colMax = Math.max(focusedCellState.colIndex0, selectedCellState.colIndex0);
+  const rowKeys = new Set();
+  for (let i = rowStart; i <= rowEnd; i++) rowKeys.add(getRowSelectionKey(model.rows[i]));
+  return {
+    model,
+    rowStart,
+    rowEnd,
+    colMin,
+    colMax,
+    rowKeys,
+    rowCount: rowEnd - rowStart + 1,
+    colCount: colMax - colMin + 1,
+  };
+}
+
+// Tolerancyjne parsowanie liczby z komórki: liczba wprost, albo string z
+// separatorami PL/EN (spacje/nbsp jako tysiące, przecinek lub kropka jako
+// dziesiętny), z opcjonalnym znakiem procenta.
+function parseCellNumber(raw, display) {
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  let s = display != null && String(display).trim() ? String(display) : String(raw ?? "");
+  s = s.trim();
+  if (!s) return null;
+  const percent = /%\s*$/.test(s);
+  s = s.replace(/[^\d.,\-]/g, "");
+  if (!s || s === "-" || s === "." || s === ",") return null;
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
+  let normalized;
+  if (lastComma > lastDot) {
+    // przecinek to separator dziesiętny → kropki to tysiące
+    normalized = s.replace(/\./g, "").replace(/,/g, ".");
+  } else {
+    // kropka dziesiętna (lub brak przecinka) → przecinki to tysiące
+    normalized = s.replace(/,/g, "");
+  }
+  const n = Number(normalized);
+  if (!Number.isFinite(n)) return null;
+  return percent ? n / 100 : n;
+}
+
+function computeSelectionStats(rect) {
+  if (!rect) return null;
+  const { model, rowStart, rowEnd, colMin, colMax } = rect;
+  let cellCount = 0;
+  let numericCount = 0;
+  let sum = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  for (let r = rowStart; r <= rowEnd; r++) {
+    const row = model.rows[r];
+    if (!row) continue;
+    for (let c = colMin; c <= colMax; c++) {
+      const display = getDisplayValue(row, c);
+      if (display != null && String(display).trim()) cellCount += 1;
+      const num = parseCellNumber(row.values?.[c], display);
+      if (num != null && Number.isFinite(num)) {
+        numericCount += 1;
+        sum += num;
+        if (num < min) min = num;
+        if (num > max) max = num;
+      }
+    }
+  }
+  return {
+    cellCount,
+    numericCount,
+    sum,
+    avg: numericCount ? sum / numericCount : 0,
+    min: numericCount ? min : 0,
+    max: numericCount ? max : 0,
+  };
+}
+
+function formatStatNumber(n) {
+  const locale = (I18N[currentLang] && I18N[currentLang].locale) || "pl-PL";
+  const rounded = Math.round(n * 1e6) / 1e6;
+  return rounded.toLocaleString(locale, { maximumFractionDigits: 6 });
+}
+
+function syncRangeHighlightInDom() {
+  tbodyEl.querySelectorAll("td.cell-in-range").forEach((c) => c.classList.remove("cell-in-range"));
+  const rect = getSelectionRectangle();
+  if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) return;
+  rect.rowKeys.forEach((rowKey) => {
+    const tr = tbodyEl.querySelector(`tr[data-row-key="${CSS.escape(rowKey)}"]`);
+    if (!tr) return;
+    for (let c = rect.colMin; c <= rect.colMax; c++) {
+      const td = tr.querySelector(`td[data-col-index="${c}"]`);
+      if (td) td.classList.add("cell-in-range");
+    }
+  });
+}
+
+function updateCellStats() {
+  if (!cellStatsBarEl) return;
+  const rect = getSelectionRectangle();
+  // Jedna komórka = cisza (jak w Excelu — pasek pojawia się przy zakresie).
+  if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) {
+    cellStatsBarEl.classList.add("hidden");
+    cellStatsBarEl.replaceChildren();
+    return;
+  }
+  const stats = computeSelectionStats(rect);
+  if (!stats || stats.cellCount === 0) {
+    cellStatsBarEl.classList.add("hidden");
+    cellStatsBarEl.replaceChildren();
+    return;
+  }
+  const parts = [
+    [t("cellStatsRange"), `${rect.rowCount}×${rect.colCount}`],
+    [t("cellStatsCount"), formatStatNumber(stats.cellCount)],
+  ];
+  if (stats.numericCount > 0) {
+    parts.push([t("cellStatsSum"), formatStatNumber(stats.sum)]);
+    parts.push([t("cellStatsAvg"), formatStatNumber(stats.avg)]);
+    parts.push([t("cellStatsMin"), formatStatNumber(stats.min)]);
+    parts.push([t("cellStatsMax"), formatStatNumber(stats.max)]);
+  }
+  const frag = document.createDocumentFragment();
+  parts.forEach(([label, value]) => {
+    const chip = document.createElement("span");
+    chip.className = "cell-stat";
+    const l = document.createElement("span");
+    l.className = "cell-stat-label";
+    l.textContent = label;
+    const v = document.createElement("span");
+    v.className = "cell-stat-value";
+    v.textContent = value;
+    chip.append(l, v);
+    frag.appendChild(chip);
+  });
+  cellStatsBarEl.replaceChildren(frag);
+  cellStatsBarEl.classList.remove("hidden");
 }
 
 function shouldIgnoreTableArrowNavigation() {
@@ -855,6 +1012,8 @@ function renderTable(modelOrHeaders, maybeRows) {
   setStatus(`Wierszy: ${rows.length} (pokazano: ${Math.min(rows.length, limit)})${modeLabel}`);
   syncFocusedCellInDom({ clearMissing: true });
   syncSelectedCellInDom({ clearMissing: true });
+  syncRangeHighlightInDom();
+  updateCellStats();
   syncHorizontalScrollbar();
   applyZoom();
   applyFreezeHeaders();

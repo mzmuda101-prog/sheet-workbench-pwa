@@ -1322,6 +1322,12 @@ tbodyEl.addEventListener("click", (e) => {
   const rowKey = tr?.dataset.rowKey || "";
   const colIndex0 = parseInt(td.dataset.colIndex || "", 10);
   if (!rowKey || !Number.isFinite(colIndex0)) return;
+  // Shift+klik rozszerza zaznaczenie do prostokąta (kotwica = ostatnia komórka focus).
+  // Pozwala zbudować zakres myszą/dotykiem (tablet), bez klawiatury.
+  if (e.shiftKey && focusedCellState) {
+    setSelectedCell(rowKey, colIndex0, { scroll: false });
+    return;
+  }
   setFocusedCell(rowKey, colIndex0, { scroll: false });
 });
 

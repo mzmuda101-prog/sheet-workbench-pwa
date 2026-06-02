@@ -366,6 +366,12 @@ const I18N = {
     formulaAddresses: "Adresy",
     formulaOutsideTable: "poza tabelą",
     formulaEmptyResult: "pusty wynik",
+    cellStatsRange: "Zakres",
+    cellStatsCount: "Liczba",
+    cellStatsSum: "Suma",
+    cellStatsAvg: "Średnia",
+    cellStatsMin: "Min",
+    cellStatsMax: "Maks",
   },
   en: {
     locale: "en-US",
@@ -728,6 +734,12 @@ const I18N = {
     formulaAddresses: "Addresses",
     formulaOutsideTable: "outside table",
     formulaEmptyResult: "empty result",
+    cellStatsRange: "Range",
+    cellStatsCount: "Count",
+    cellStatsSum: "Sum",
+    cellStatsAvg: "Average",
+    cellStatsMin: "Min",
+    cellStatsMax: "Max",
   },
 };
 
@@ -1717,5 +1729,6 @@ function applyLanguage(lang) {
   renderDurationAnalysis();
   renderAggregationWorkbench();
   renderFormulaWorkbench();
+  updateCellStats();
   updateLangSwitchIndicator();
 }
