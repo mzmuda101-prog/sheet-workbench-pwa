@@ -168,27 +168,40 @@ płynny morph kształtu/pozycji/koloru przez CSS `transition` + glassmorphism + 
   krawędź światła u góry (`inset 0 1px 0 ...`). Osobny wariant `[data-theme="dark"] .panel`.
   Zweryfikowane screenshotami (jasny + ciemny) — frosted, czyste, Apple-like.
 
-### 6. Handle sidebara na mobilkach
-- Już częściowo zrobione — przejrzeć i poprawić/zmienić, jeśli znajdzie się lepsze
-  miejsce/pomysł. Nie przebudowa od zera.
+### 6. Handle sidebara na mobilkach — ✅ ZROBIONE (2 czerwca 2026)
+- Domknięte w tej sesji bez osobnej przebudowy: morph pasek→pigułka „Schowaj panel" na dole,
+  naprawione przewijanie palcem (touch axis-lock + overscroll-behavior), „plumknięcie" przy
+  otwarciu/zamknięciu, pełne tłumaczenia PL/EN (CSS custom property na etykietę). Mateusz uznał
+  za wystarczające — bez dalszych zmian.
 
-## Dług techniczny i18n — DO UJEDNOLICENIA (uzgodnione 2 czerwca 2026)
+---
+## ✅ PLAN CZERWCOWY ZAMKNIĘTY (2 czerwca 2026)
+Wszystkie etapy zrobione: szybkie wygrane, A (przykładowy plik), B (pasek statystyk), C (update PWA),
+D (grupy sidebara + scalenie filtrów), morph + plumknięcie, osobne ToDo (zwijany toolbar mobile +
+glassmorphism), dług i18n (fallback + walidator), pkt 6 (handle). Build na koniec: `20260602-09`.
+Dalsze kierunki — patrz „Pomysły na później" poniżej.
 
-System tłumaczeń ma **dwa równoległe słowniki** i to powtarzalne źródło bugów:
-- `I18N` — konsumowany przez `t(key)` (dynamiczne stringi budowane w JS).
-- `STATIC_TRANSLATIONS` — konsumowany przez `applyStaticTranslations` (`copy.key`, statyczny DOM).
+## Dług techniczny i18n — ✅ UJEDNOLICONE (2 czerwca 2026, build `20260602-09`)
 
-Klucz zdefiniowany w jednym słowniku, a konsumowany mechanizmem drugiego → po cichu zwraca
-surowy klucz albo „undefined". Złapane już 3 razy: `choose`, `hintDefault` (były tylko w STATIC,
-wołane przez `t()` → surowy klucz) oraz `sampleBtn` (w I18N, wołany przez `copy` → „undefined").
+System miał **dwa równoległe słowniki** = powtarzalne źródło bugów (złapane 3×: `choose`,
+`hintDefault` → surowy klucz; `sampleBtn` → „undefined"):
+- `I18N` — przez `t(key)` (dynamiczne stringi w JS).
+- `STATIC_TRANSLATIONS` — przez `applyStaticTranslations` (`copy.key`, statyczny DOM).
 
-Cel: ujednolicić i uodpornić tłumaczenia, żeby dodanie nowego tekstu było intuicyjne i nie
-wymagało pamiętania, do którego słownika trafić. Propozycje (do wyboru / łączenia):
-- `t()` z fallbackiem do `STATIC_TRANSLATIONS` (i odwrotnie) — najtańszy, eliminuje całą klasę bugów.
-- albo jeden wspólny słownik / jedno źródło prawdy z dwoma „widokami".
-- walidator dev-time (jak `/tmp/check-all-keys.js`): wszystkie klucze `t()` istnieją w słowniku,
-  wszystkie `copy.X` też — uruchamiany np. w smoke-teście, żeby CI łapał braki.
-- spójna konwencja nazewnictwa kluczy + krótkie README sekcji i18n.
+**Rozwiązanie (wdrożone):**
+1. `t()` — łańcuch fallbacków: `I18N[lang] → STATIC[lang] → I18N.pl → STATIC.pl → key`.
+   Tekst w „drugim" słowniku nie zwraca już surowego klucza.
+2. `applyStaticTranslations` — `copy` to teraz **scalony słownik**
+   `{...I18N.pl, ...STATIC.pl, ...I18N[lang], ...STATIC[lang]}` (STATIC bieżącego języka wygrywa,
+   reszta to fallback) → `copy.X` nigdy nie jest „undefined".
+3. **Walidator dev-time** `scripts/check-i18n.js` (+ `npm run check:i18n`, wpięty w `npm test`
+   PRZED smoke-testem): wyłuskuje literały obiektów I18N/STATIC (dopasowanie nawiasów + `Function`),
+   skanuje `t("…")` i `copy.X` w `app/*.js`, sprawdza pokrycie i parytet PL/EN. Pomija dynamiczne
+   prefiksy (`t("profType_" + x)` — peek na `+`). Exit 1 przy braku pokrycia.
+   Aktualny stan: I18N 368/368 (pl/en), STATIC 174/174, 312 literalnych `t()`, 109 `copy.X` — wszystko OK.
+
+**Konwencja na przyszłość:** nowy tekst dodawaj do JEDNEGO słownika (statyczny DOM → STATIC;
+budowany w JS → I18N) w OBU językach; fallback i walidator pilnują reszty. `npm test` złapie braki.
 
 ## Pomysły na później (zaakceptowane kierunkowo, nie teraz)
 

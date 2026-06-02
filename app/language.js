@@ -748,8 +748,16 @@ const I18N = {
 };
 
 function t(key, vars = {}) {
-  const dictionary = I18N[currentLang] || I18N.pl;
-  let value = dictionary[key] ?? I18N.pl[key] ?? key;
+  const lang = currentLang;
+  // Jedno źródło prawdy z fallbackiem: I18N bieżącego języka → STATIC bieżącego →
+  // I18N.pl → STATIC.pl → sam klucz. Dzięki temu tekst zdefiniowany w „drugim"
+  // słowniku nie zwraca już surowego klucza. Walidacja: scripts/check-i18n.js.
+  let value =
+    I18N[lang]?.[key] ??
+    STATIC_TRANSLATIONS[lang]?.[key] ??
+    I18N.pl[key] ??
+    STATIC_TRANSLATIONS.pl[key] ??
+    key;
   Object.entries(vars).forEach(([name, replacement]) => {
     value = value.replaceAll(`{${name}}`, String(replacement));
   });
@@ -1408,7 +1416,15 @@ function getNormalizedSelectValue(select) {
 }
 
 function applyStaticTranslations() {
-  const copy = STATIC_TRANSLATIONS[currentLang] || STATIC_TRANSLATIONS.pl;
+  const lang = currentLang;
+  // Scalony słownik: STATIC bieżącego języka wygrywa, ale brakujące klucze spadają
+  // na I18N i na pl — żeby odczyt pola nigdy nie był „undefined" (patrz check-i18n.js).
+  const copy = {
+    ...I18N.pl,
+    ...STATIC_TRANSLATIONS.pl,
+    ...(I18N[lang] || {}),
+    ...(STATIC_TRANSLATIONS[lang] || {}),
+  };
   document.documentElement.lang = currentLang;
   document.title = copy.title;
   BASE_TITLE = copy.title;
