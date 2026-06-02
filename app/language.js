@@ -136,6 +136,7 @@ const I18N = {
     sidebarOpenAria: "Otworz panel filtrow",
     sidebarHideTitle: "Schowaj filtry",
     sidebarShowTitle: "Pokaz filtry",
+    sidebarHandleLabel: "Wysuń",
     emptyTitle: "Wysuń sidebar-a i wczytaj plik Excel",
     emptySub: "możesz tam przeciągnąć plik lub wybrać go bezpośrednio z dysku",
     sampleBtn: "Wypróbuj na przykładowym pliku",
@@ -497,6 +498,7 @@ const I18N = {
     sidebarOpenAria: "Open filters panel",
     sidebarHideTitle: "Hide filters",
     sidebarShowTitle: "Show filters",
+    sidebarHandleLabel: "Open",
     emptyTitle: "Slide out the sidebar and load an Excel file",
     emptySub: "you can drag a file there or pick it directly from disk",
     sampleBtn: "Try a sample file",
@@ -815,6 +817,7 @@ const STATIC_TRANSLATIONS = {
     emptyOrNot: "Puste / niepuste komórki",
     invert: "Odwróć",
     onlyRowsWithData: "Tylko wiersze z danymi",
+    freezeHeadersLabel: "Zablokuj wiersze nagłówków",
     dateFilter: "Filtr dat",
     lastDays: "Ostatnie dni",
     from: "Od",
@@ -869,6 +872,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchOperatorsTitle: "Włącz operatory: || (LUB), && (ORAZ), ! (wyklucz), {…} (grupowanie)",
     searchOperatorsToggle: "Operatory wyszukiwania",
     searchOperatorsTitle: "Operatory wyszukiwania",
+    arrows: "Strzałki",
     arrowFocus: "przemieszczanie się fokusem wiersza po kliknięciu",
     or: "LUB",
     clearRowFocus: "Odznacz fokus wiersza",
@@ -988,6 +992,7 @@ const STATIC_TRANSLATIONS = {
     emptyOrNot: "Empty / non-empty cells",
     invert: "Invert",
     onlyRowsWithData: "Only rows with data",
+    freezeHeadersLabel: "Freeze header rows",
     dateFilter: "Date filter",
     lastDays: "Last days",
     from: "From",
@@ -1042,6 +1047,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchOperatorsTitle: "Enable operators: || (OR), && (AND), ! (exclude), {…} (grouping)",
     searchOperatorsToggle: "Search operators",
     searchOperatorsTitle: "Search operators",
+    arrows: "Arrow keys",
     arrowFocus: "move row focus after clicking a cell",
     or: "OR",
     clearRowFocus: "Clear row focus",
@@ -1173,8 +1179,12 @@ function setFieldLabel(controlId, text) {
 
 function setCheckboxText(controlId, text) {
   const control = document.getElementById(controlId);
-  const span = control?.closest("label.checkbox")?.querySelector("span");
-  if (span) span.textContent = text;
+  const label = control?.closest("label.checkbox");
+  if (!label) return;
+  const span = label.querySelector("span");
+  if (span) { span.textContent = text; return; }
+  const textNode = Array.from(label.childNodes).find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+  if (textNode) textNode.textContent = ` ${text}`;
 }
 
 function setOperatorsToggleText(controlId, text, title) {
@@ -1428,6 +1438,7 @@ function applyStaticTranslations() {
   setCheckboxText("filterNegate", copy.invert);
   setOperatorsToggleText("filterOperators", copy.searchOperatorsToggle, copy.quickSearchOperatorsTitle);
   setCheckboxText("onlyNonEmpty", copy.onlyRowsWithData);
+  setCheckboxText("freezeHeaders", copy.freezeHeadersLabel);
   setText("#filter2BlockTitle", copy.filterBlock2);
   setButtonLabel("#addFilter2Btn", copy.addSecondFilter);
   setButtonLabel("#removeFilter2Btn", copy.removeFilter);
@@ -1466,18 +1477,18 @@ function applyStaticTranslations() {
   setText("#panel-view .panel-title", copy.view);
   setFieldLabel("zoomLevel", copy.zoom);
   setText("#panel-workbench-analysis .panel-title", copy.workbenchAnalysis);
-  setText('#panel-workbench-analysis .insight-subtitle:nth-of-type(1)', copy.file);
-  setText('#panel-workbench-analysis .insight-subtitle:nth-of-type(2)', copy.sheetSection);
-  setText('#panel-workbench-analysis .insight-subtitle:nth-of-type(3)', copy.flags);
+  setText('#subtitle-workbook', copy.file);
+  setText('#subtitle-sheet', copy.sheetSection);
+  setText('#subtitle-flags', copy.flags);
   setText("#panel-kpi-extractor .panel-title", copy.kpiSummary);
   setText("#panel-kpi-extractor .panel-hint", copy.kpiHint);
   setText("#panel-sheet-inspector .panel-title", copy.sheetLayout);
   setText("#panel-sheet-inspector .panel-hint", copy.sheetLayoutHint);
-  setText('#panel-sheet-inspector .insight-subtitle:nth-of-type(1)', copy.mapAndColumns);
-  setText('#panel-sheet-inspector .inspector-map-section .insight-mini-title:nth-of-type(1)', copy.sectionsJumps);
-  setText('#panel-sheet-inspector .inspector-map-section:nth-of-type(2) .insight-mini-title', copy.columnsSignals);
-  setText('#panel-sheet-inspector .insight-subtitle:nth-of-type(2)', copy.blockDetector);
-  setText('#panel-sheet-inspector .insight-subtitle:nth-of-type(3)', copy.durationAnalysis);
+  setText('#subtitle-map', copy.mapAndColumns);
+  setText('#mini-title-sections', copy.sectionsJumps);
+  setText('#mini-title-columns', copy.columnsSignals);
+  setText('#subtitle-blocks', copy.blockDetector);
+  setText('#subtitle-duration', copy.durationAnalysis);
   const inspectorHints = document.querySelectorAll("#panel-sheet-inspector .panel-hint");
   if (inspectorHints[0]) inspectorHints[0].textContent = copy.sheetLayoutHint;
   if (inspectorHints[1]) inspectorHints[1].textContent = copy.mapHint;

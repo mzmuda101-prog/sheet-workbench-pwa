@@ -748,7 +748,7 @@ body.splashing {
 }
 
 .sidebar-handle::after {
-  content: "Wysun";
+  content: var(--handle-open-label, "Wysun");
   position: absolute;
   top: calc(50% + 8px);
   left: 50%;

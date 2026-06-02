@@ -1445,6 +1445,8 @@ function syncSidebarHandle() {
     panelHandle.setAttribute("aria-expanded", isSidebarOpen() ? "true" : "false");
     panelHandle.setAttribute("aria-label", isSidebarOpen() ? t("sidebarCloseAria") : t("sidebarOpenAria"));
     panelHandle.setAttribute("title", isSidebarOpen() ? t("sidebarHideTitle") : t("sidebarShowTitle"));
+    panelHandle.style.setProperty("--handle-open-label", `"${t("sidebarHandleLabel")}"`);
+
     if (isSidebarOpen() && sidebarEl) {
       const rect = sidebarEl.getBoundingClientRect();
       const overlap = 8;

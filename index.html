@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=20260429-01" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
-    <link rel="stylesheet" href="styles/app.css?v=20260530-02" />
+    <link rel="stylesheet" href="styles/app.css?v=20260602-01" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -490,11 +490,11 @@
               </svg>
             </summary>
             <div class="panel-body insights-block">
-              <div class="insight-subtitle">Plik</div>
+              <div class="insight-subtitle" id="subtitle-workbook">Plik</div>
               <div class="insight-list" id="workbookInsights"></div>
-              <div class="insight-subtitle">Arkusz</div>
+              <div class="insight-subtitle" id="subtitle-sheet">Arkusz</div>
               <div class="insight-list" id="sheetInsights"></div>
-              <div class="insight-subtitle">Flagi</div>
+              <div class="insight-subtitle" id="subtitle-flags">Flagi</div>
               <div class="insight-flags" id="insightFlags"></div>
             </div>
           </details>
@@ -535,24 +535,24 @@
               <div class="panel-hint">Jedno miejsce na orientacje w arkuszu: sekcje, kolumny, powtarzalne bloki i szybkie sygnaly o ukladzie danych.</div>
               <div class="sheet-inspector-summary" id="sheetInspectorSummary"></div>
 
-              <div class="insight-subtitle">Mapa arkusza i kolumn</div>
+              <div class="insight-subtitle" id="subtitle-map">Mapa arkusza i kolumn</div>
               <div class="panel-hint">Tu masz jednoczesnie szybkie skoki po sekcjach oraz profil kolumn, zeby latwiej rozumiec uklad arkusza bez przeskakiwania miedzy dwoma podobnymi blokami.</div>
               <div class="inspector-map-grid">
                 <div class="inspector-map-section">
-                  <div class="insight-mini-title">Sekcje i skoki</div>
+                  <div class="insight-mini-title" id="mini-title-sections">Sekcje i skoki</div>
                   <div class="section-nav-list" id="sectionNavigator"></div>
                 </div>
                 <div class="inspector-map-section">
-                  <div class="insight-mini-title">Kolumny i sygnaly</div>
+                  <div class="insight-mini-title" id="mini-title-columns">Kolumny i sygnaly</div>
                   <div class="column-profiler-list" id="columnProfiler"></div>
                 </div>
               </div>
 
-              <div class="insight-subtitle">Wykrywacz bloków</div>
+              <div class="insight-subtitle" id="subtitle-blocks">Wykrywacz bloków</div>
               <div class="panel-hint">Pomocniczy widok dla szerokich arkuszy z cyklami, turami albo powtarzalnymi sekcjami kolumn.</div>
               <div class="repeat-blocks-list" id="repeatBlockDetector"></div>
 
-              <div class="insight-subtitle">Analiza czasu / osob</div>
+              <div class="insight-subtitle" id="subtitle-duration">Analiza czasu / osob</div>
               <div class="panel-hint">Lokalna analiza dla wykrytych blokow: laczenie tych samych osob lub innych wartosci w jednej kolumnie i liczenie srednich czasow na podstawie dat lub dlugosci.</div>
               <div class="duration-analysis-summary" id="durationAnalysisSummary"></div>
               <div class="duration-analysis-list" id="durationAnalysisList"></div>
@@ -659,10 +659,10 @@
             </summary>
             <div class="panel-body">
               <div class="shortcut-hint">
-              <div class="shortcut-row"><kbd>Strzałki</kbd> <span data-shortcut-text="arrowFocus">przemieszczanie się fokusem wiersza po kliknięciu</span></div>
+              <div class="shortcut-row"><kbd data-shortcut-text="arrows">Strzałki</kbd> <span data-shortcut-text="arrowFocus">przemieszczanie się fokusem wiersza po kliknięciu</span></div>
               <div class="shortcut-row"><kbd>Esc</kbd> <span data-shortcut-text="or">LUB</span> <kbd>Q</kbd> <span data-shortcut-text="clearRowFocus">Odznacz fokus wiersza</span></div>
               <div class="shortcut-row"><kbd>Shift</kbd> <span data-shortcut-text="afterCellClick">(po wczesniejszym kliknieciu na komorke) =</span><span data-shortcut-text="showCellSelection"> pojawienie się zaznaczenia komórki</span></div>
-              <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd>Strzałki</kbd> <span>=</span> <span data-shortcut-text="moveCellSelection">przemieszczanie zaznaczeniem komórki</span></div>
+              <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd data-shortcut-text="arrows">Strzałki</kbd> <span>=</span> <span data-shortcut-text="moveCellSelection">przemieszczanie zaznaczeniem komórki</span></div>
               <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd>Esc</kbd> <span data-shortcut-text="or">LUB</span> <kbd>Q</kbd> <span data-shortcut-text="clearCellSelection">Odznacz komórkę</span></div>
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>F</kbd> <span data-shortcut-text="quickSearch">Szybkie szukanie</span></div>
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Enter</kbd> <span data-shortcut-text="filter">Filtruj</span></div>
@@ -843,14 +843,14 @@
 
     <!-- Local xlsx-js-style (better style read/write, stable offline) -->
     <script src="lib/xlsx-js-style.bundle.min.js"></script>
-    <script src="app/core.js?v=20260530-02"></script>
-    <script src="app/language.js?v=20260530-02"></script>
-    <script src="app/cursor-hint.js?v=20260530-02"></script>
-    <script src="app/analysis.js?v=20260530-02"></script>
-    <script src="app/workbook.js?v=20260530-02"></script>
-    <script src="app/table.js?v=20260530-02"></script>
-    <script src="app/formulas.js?v=20260530-02"></script>
-    <script src="app/ui-controls.js?v=20260530-02"></script>
-    <script src="app/bootstrap.js?v=20260530-02"></script>
+    <script src="app/core.js?v=20260602-01"></script>
+    <script src="app/language.js?v=20260602-01"></script>
+    <script src="app/cursor-hint.js?v=20260602-01"></script>
+    <script src="app/analysis.js?v=20260602-01"></script>
+    <script src="app/workbook.js?v=20260602-01"></script>
+    <script src="app/table.js?v=20260602-01"></script>
+    <script src="app/formulas.js?v=20260602-01"></script>
+    <script src="app/ui-controls.js?v=20260602-01"></script>
+    <script src="app/bootstrap.js?v=20260602-01"></script>
   </body>
 </html>
