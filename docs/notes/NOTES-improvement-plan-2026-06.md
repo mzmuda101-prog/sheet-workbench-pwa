@@ -136,10 +136,20 @@ płynny morph kształtu/pozycji/koloru przez CSS `transition` + glassmorphism + 
   FAB hidden→visible→hover 44→128→scroll-to-0→hidden + i18n PL/EN, update btn animationName
   `updateMorphIn, updatePulse`. Zero błędów. Build `20260602-02 → 20260602-03`.
 
-### 5. C — Powiadomienia o aktualizacji (PWA)
+### 5. C — Powiadomienia o aktualizacji (PWA) — ✅ ZROBIONE (2 czerwca 2026)
 - Problem: użytkownicy z PWA na ekranie głównym siedzą na starej wersji.
-- Service Worker (`sw.js`) + `SKIP_WAITING` + istniejący `#appUpdateBtn` + toast
-  „Nowa wersja — odśwież". Podpiąć `updatefound` / `controllerchange`.
+- **Okazało się przeterminowane — logika BYŁA już w `bootstrap.js`** (SW `SKIP_WAITING`,
+  rejestracja, `updatefound`→`statechange`, `registration.waiting` na starcie,
+  `controllerchange`→reload, `showAppUpdate` = odkrycie `#appUpdateBtn` + `toast(updateAvailable)`,
+  klik→postMessage SKIP_WAITING). Klucze i18n (updateNow/updateReady/updateAvailable/refreshingApp)
+  PL+EN obecne. Styl morph przycisku dodaliśmy wcześniej (build -03/-04).
+- **Realny gap dodany (-06):** `registration.update()` leciał TYLKO raz na starcie → PWA wznowiona
+  z ikony na ekranie głównym nie wykrywała nowego buildu. Dodano `checkForUpdate()` na
+  `visibilitychange` (powrót na pierwszy plan) + `setInterval` co 30 min. To dokładnie adresuje
+  motywację punktu.
+- Zweryfikowane E2E (Playwright): kopia aplikacji serwowana, strona kontrolowana przez SW →
+  podmiana `sw.js` (nowy CACHE_VERSION) → `visibilitychange` → przycisk „Aktualizuj" + toast
+  się pojawiają, zero błędów. Build → `20260602-06`.
 
 ### 6. Handle sidebara na mobilkach
 - Już częściowo zrobione — przejrzeć i poprawić/zmienić, jeśli znajdzie się lepsze

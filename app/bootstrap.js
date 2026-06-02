@@ -548,5 +548,15 @@ if ("serviceWorker" in navigator) {
     });
 
     registration.update().catch(() => {});
+
+    // PWA wznowiona z tła / trzymana otwarta: sprawdź nową wersję przy powrocie na
+    // pierwszy plan oraz okresowo. Bez tego użytkownik z ikony na ekranie głównym
+    // siedzi na starym buildzie aż do pełnego przeładowania. update() po znalezieniu
+    // nowego sw.js sam odpali updatefound → showAppUpdate (przycisk + toast).
+    const checkForUpdate = () => registration.update().catch(() => {});
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") checkForUpdate();
+    });
+    window.setInterval(checkForUpdate, 30 * 60 * 1000);
   }).catch(() => {});
 }
