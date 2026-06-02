@@ -210,6 +210,7 @@ function resetFilterInputs() {
   updateColumnSummary();
   updateDateChipsActive();
   updateFilterBadge();
+  if (typeof setSecondFilterVisible === "function") setSecondFilterVisible(false);
 }
 
 function setSidebarOpen(open) {
@@ -663,6 +664,90 @@ async function handleFile(file) {
   }
 }
 
+// Przykładowy arkusz procesowy/SLA generowany lokalnie w pamięci (xlsx-js-style).
+// Pokazuje: powtarzalne bloki (od/do/Długość ×3) → Wide-to-Long, analizę czasu,
+// agregacje, filtry dat oraz KPI (wiersze podsumowania nad nagłówkiem).
+// Lekki (kilkanaście wierszy) — generacja jest natychmiastowa, nic nie jest wysyłane.
+function buildSampleWorkbookArrayBuffer() {
+  const owners = ["Anna Kowalska", "Jan Nowak", "Piotr Wiśniewski", "Maria Wójcik", "Tomasz Lewandowski"];
+  const statuses = ["Zamknięte", "W trakcie", "PRZETERMINOWANY"];
+  const base = new Date(2026, 0, 6);
+  const addDays = (date, n) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
+  const daysBetween = (a, b) => Math.round((b - a) / 86400000);
+  // Daty zapisujemy jako stringi ISO (YYYY-MM-DD): ten build xlsx-js-style gubi
+  // gołe obiekty Date przy zapisie, a parseDateFlexible aplikacji i tak parsuje ISO.
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  const headerRow = ["Teren", "Opiekun", "Status", "od", "do", "Długość", "od2", "do2", "Długość2", "od3", "do3", "Długość3"];
+  const rows = [];
+  let closed = 0, inProgress = 0, overdue = 0;
+
+  for (let i = 0; i < 16; i++) {
+    const teren = `Teren ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
+    const opiekun = owners[i % owners.length];
+    const status = statuses[i % 3];
+    if (status === "Zamknięte") closed += 1;
+    else if (status === "W trakcie") inProgress += 1;
+    else overdue += 1;
+
+    // Cykl 1 — zawsze zamknięty
+    const od1 = addDays(base, i * 6);
+    const do1 = addDays(od1, 9 + (i % 5) * 3);
+    // Cykl 2 — obecny dla ~2/3 wierszy
+    const hasC2 = i % 3 !== 2;
+    const od2 = hasC2 ? addDays(do1, 4) : null;
+    const do2 = hasC2 ? addDays(od2, 7 + (i % 4) * 2) : null;
+    // Cykl 3 — dla ~1/3 wierszy, część otwarta (brak "do" → liczone do dzisiaj)
+    const hasC3 = i % 3 === 0;
+    const startC3Base = hasC2 ? do2 : do1;
+    const od3 = hasC3 ? addDays(startC3Base, 5) : null;
+    const open3 = hasC3 && i % 2 === 0;
+    const do3 = hasC3 && !open3 ? addDays(od3, 11 + (i % 3) * 4) : null;
+
+    rows.push([
+      teren, opiekun, status,
+      iso(od1), iso(do1), daysBetween(od1, do1),
+      od2 ? iso(od2) : "", do2 ? iso(do2) : "", hasC2 ? daysBetween(od2, do2) : "",
+      od3 ? iso(od3) : "", do3 ? iso(do3) : "", (hasC3 && !open3) ? daysBetween(od3, do3) : "",
+    ]);
+  }
+
+  const aoa = [
+    ["Raport: Obieg terenów 2026"],
+    ["Terenów łącznie", rows.length, "", "Zamknięte", closed, "", "W trakcie", inProgress, "", "Przeterminowane", overdue],
+    [],
+    headerRow,
+    ...rows,
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Obieg terenów");
+  return XLSX.write(wb, { bookType: "xlsx", type: "array" });
+}
+
+async function loadSampleFile() {
+  if (!isXlsxAvailable(true)) return;
+  let buffer;
+  try {
+    buffer = buildSampleWorkbookArrayBuffer();
+  } catch (err) {
+    toast(t("sampleLoadFailed"), "error");
+    log("Blad przy generowaniu przykladowego pliku.", "error");
+    return;
+  }
+  const file = new File([buffer], t("sampleFileName"), {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  await handleFile(file);
+  // Auto-wykryj wiersz nagłówka (pomija wiersze KPI) i od razu wczytaj arkusz do tabeli.
+  if (workbook) {
+    if (autoHeaderRowEl) autoHeaderRowEl.checked = true;
+    applyAutoHeaderRowIfEnabled();
+    loadBtn.click();
+  }
+}
+
 function escapeCsv(value) {
   const raw = String(value ?? "");
   if (raw.includes("\"") || raw.includes(",") || raw.includes("\n")) {
@@ -747,6 +832,38 @@ fileInput.addEventListener("change", (e) => {
   const file = e.target.files[0];
   handleFile(file);
 });
+
+if (loadSampleBtn) {
+  loadSampleBtn.addEventListener("click", loadSampleFile);
+}
+
+// Drugi filtr tekstowy: domyślnie ukryty, odsłaniany przyciskiem "+ Dodaj drugi filtr".
+const addFilter2Btn = document.getElementById("addFilter2Btn");
+const removeFilter2Btn = document.getElementById("removeFilter2Btn");
+const filter2Block = document.getElementById("filter2Block");
+function setSecondFilterVisible(show) {
+  if (filter2Block) filter2Block.classList.toggle("hidden", !show);
+  if (addFilter2Btn) addFilter2Btn.classList.toggle("hidden", show);
+}
+if (addFilter2Btn) {
+  addFilter2Btn.addEventListener("click", () => {
+    setSecondFilterVisible(true);
+    if (searchQuery2El) searchQuery2El.focus();
+  });
+}
+if (removeFilter2Btn) {
+  removeFilter2Btn.addEventListener("click", () => {
+    if (searchQuery2El) searchQuery2El.value = "";
+    if (filterMode2El) filterMode2El.value = "contains";
+    if (filterEmptyMode2El) filterEmptyMode2El.value = "all";
+    if (filterNegate2El) filterNegate2El.checked = false;
+    if (filterOperators2El) filterOperators2El.checked = false;
+    columnSelections.filter2.clear();
+    updateColumnSummary();
+    updateFilterBadge();
+    setSecondFilterVisible(false);
+  });
+}
 
 loadBtn.addEventListener("click", () => {
   if (!isXlsxAvailable(true)) return;

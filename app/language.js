@@ -138,6 +138,7 @@ const I18N = {
     sidebarShowTitle: "Pokaz filtry",
     emptyTitle: "Wysuń sidebar-a i wczytaj plik Excel",
     emptySub: "możesz tam przeciągnąć plik lub wybrać go bezpośrednio z dysku",
+    sampleBtn: "Wypróbuj na przykładowym pliku",
     measureOccurrences: "Liczba rekordów / wystąpień",
     aggregationGroupBy: "Grupuj po",
     aggregationGroupBy2: "Potem po",
@@ -339,6 +340,9 @@ const I18N = {
     aggGroupProfileMeta: "{kind} • {unique} unikalnych • {nonEmpty} niepustych",
     choose: "Wybierz",
     hintDefault: "Kliknij",
+    loadingSample: "Generuję przykładowy plik...",
+    sampleFileName: "Przyklad-obieg-terenow.xlsx",
+    sampleLoadFailed: "Nie udało się wygenerować przykładu",
     repeatBlocksEmpty: "Brak wyraźnych powtarzalnych bloków dla aktualnego arkusza. Najlepiej działa na szerokich tabelach z cyklami, etapami albo seriami podobnych kolumn.",
     kpiSummaryEmpty: "Brak wykrytych KPI lub podsumowań dla aktualnego arkusza.",
     kpiNoSummary: "Brak podsumowania KPI.",
@@ -495,6 +499,7 @@ const I18N = {
     sidebarShowTitle: "Show filters",
     emptyTitle: "Slide out the sidebar and load an Excel file",
     emptySub: "you can drag a file there or pick it directly from disk",
+    sampleBtn: "Try a sample file",
     measureOccurrences: "Record / occurrence count",
     aggregationGroupBy: "Group by",
     aggregationGroupBy2: "Then by",
@@ -696,6 +701,9 @@ const I18N = {
     aggGroupProfileMeta: "{kind} • {unique} unique • {nonEmpty} non-empty",
     choose: "Choose",
     hintDefault: "Click",
+    loadingSample: "Generating a sample file...",
+    sampleFileName: "Sample-territory-process.xlsx",
+    sampleLoadFailed: "Could not generate the sample",
     repeatBlocksEmpty: "No clear repeating blocks for the current sheet. This works best on wide tables with cycles, stages, or similar column series.",
     kpiSummaryEmpty: "No KPI or summary values detected for the current sheet.",
     kpiNoSummary: "No KPI summary.",
@@ -774,6 +782,11 @@ const STATIC_TRANSLATIONS = {
     panelToggleAria: "Zwin/rozwin panel",
     link1Title: "Przejdź do strony Mateusz App | formularz i eksport Excel",
     link2Title: "Przejdź do strony Mateusz App | Portal Ogloszeniowy",
+    groupData: "Dane",
+    groupWork: "Filtry i widok roboczy",
+    groupInspect: "Inspekcja arkusza",
+    groupAnalyze: "Agregacje i formuły",
+    groupHelp: "Pomoc",
     fileAndSheet: "Plik i arkusz",
     dropText: "Przeciągnij plik <strong>.xlsx</strong>",
     dropOr: "lub",
@@ -788,6 +801,11 @@ const STATIC_TRANSLATIONS = {
     loadSheet: "Wczytaj arkusz",
     textFilter1: "Filtr tekstowy 1",
     textFilter2: "Filtr tekstowy 2",
+    textFilters: "Filtry tekstowe",
+    filterBlock1: "Filtr 1",
+    filterBlock2: "Filtr 2",
+    addSecondFilter: "+ Dodaj drugi filtr",
+    removeFilter: "Usuń",
     search: "Szukaj",
     searchInvoice: "np. faktura",
     searchClient: "np. klient",
@@ -937,6 +955,11 @@ const STATIC_TRANSLATIONS = {
     panelToggleAria: "Collapse/expand panel",
     link1Title: "Go to Mateusz App | form and Excel export",
     link2Title: "Go to Mateusz App | Listings Portal",
+    groupData: "Data",
+    groupWork: "Filters & working view",
+    groupInspect: "Sheet inspection",
+    groupAnalyze: "Aggregation & formulas",
+    groupHelp: "Help",
     fileAndSheet: "File and sheet",
     dropText: "Drag a <strong>.xlsx</strong> file",
     dropOr: "or",
@@ -951,6 +974,11 @@ const STATIC_TRANSLATIONS = {
     loadSheet: "Load sheet",
     textFilter1: "Text filter 1",
     textFilter2: "Text filter 2",
+    textFilters: "Text filters",
+    filterBlock1: "Filter 1",
+    filterBlock2: "Filter 2",
+    addSecondFilter: "+ Add a second filter",
+    removeFilter: "Remove",
     search: "Search",
     searchInvoice: "e.g. invoice",
     searchClient: "e.g. client",
@@ -1371,6 +1399,11 @@ function applyStaticTranslations() {
   setAttr("#themeToggle", "title", t("themeToggleTitle"));
   setAttr("#themeToggle", "aria-label", t("themeToggleAria"));
 
+  setText("#group-data-title", copy.groupData);
+  setText("#group-work-title", copy.groupWork);
+  setText("#group-inspect-title", copy.groupInspect);
+  setText("#group-analyze-title", copy.groupAnalyze);
+  setText("#group-help-title", copy.groupHelp);
   setText("#panel-file-sheet .panel-title", copy.fileAndSheet);
   setHtml(".drop-text", copy.dropText);
   setText(".drop-or", copy.dropOr);
@@ -1383,7 +1416,9 @@ function applyStaticTranslations() {
   setFieldLabel("displayMode", copy.displayMode);
   setFieldLabel("maxRows", copy.rowsLimit);
   setButtonLabel("#loadBtn", copy.loadSheet);
-  setText("#panel-text-filter-1 .panel-title", copy.textFilter1);
+  setButtonLabel("#loadSampleBtn", t("sampleBtn"));
+  setText("#panel-text-filters .panel-title", copy.textFilters);
+  setText("#filter1BlockTitle", copy.filterBlock1);
   setFieldLabel("searchQuery", copy.search);
   setAttr("#searchQuery", "placeholder", copy.searchInvoice);
   setFieldLabel("filterMode", copy.mode);
@@ -1393,7 +1428,9 @@ function applyStaticTranslations() {
   setCheckboxText("filterNegate", copy.invert);
   setOperatorsToggleText("filterOperators", copy.searchOperatorsToggle, copy.quickSearchOperatorsTitle);
   setCheckboxText("onlyNonEmpty", copy.onlyRowsWithData);
-  setText("#panel-text-filter-2 .panel-title", copy.textFilter2);
+  setText("#filter2BlockTitle", copy.filterBlock2);
+  setButtonLabel("#addFilter2Btn", copy.addSecondFilter);
+  setButtonLabel("#removeFilter2Btn", copy.removeFilter);
   setFieldLabel("searchQuery2", copy.search);
   setAttr("#searchQuery2", "placeholder", copy.searchClient);
   setFieldLabel("filterMode2", copy.mode);

@@ -67,6 +67,8 @@
       <div class="workspace">
         <!-- ====== SIDEBAR ====== -->
         <aside class="sidebar">
+          <section class="sidebar-group" id="group-data">
+            <div class="sidebar-group-head"><span class="sidebar-group-title" id="group-data-title">Dane</span></div>
           <details class="panel" id="panel-file-sheet" open>
             <summary>
               <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -140,120 +142,121 @@
               </button>
             </div>
           </details>
+          </section>
 
-          <details class="panel" id="panel-text-filter-1">
+          <section class="sidebar-group" id="group-work">
+            <div class="sidebar-group-head"><span class="sidebar-group-title" id="group-work-title">Filtry i widok roboczy</span></div>
+          <details class="panel" id="panel-text-filters">
             <summary>
               <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
-              <span class="panel-title">Filtr tekstowy 1</span>
+              <span class="panel-title">Filtry tekstowe</span>
               <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </summary>
             <div class="panel-body stack">
-              <label class="field">
-                Szukaj
-                <input id="searchQuery" type="text" placeholder="np. faktura" />
-              </label>
-              <div class="row">
+              <div class="filter-block stack" id="filter1Block">
+                <div class="filter-block-title" id="filter1BlockTitle">Filtr 1</div>
                 <label class="field">
-                  Tryb
-                  <select id="filterMode">
-                    <option value="contains">Zawiera</option>
-                    <option value="starts_with">Zaczyna się</option>
-                    <option value="equals">Równa się</option>
-                  </select>
+                  Szukaj
+                  <input id="searchQuery" type="text" placeholder="np. faktura" />
                 </label>
-                <label class="field">
-                  Kolumny
-                  <div class="picker-row">
-                    <input id="filter1Columns" type="text" readonly value="Wszystkie kolumny" />
-                    <button class="btn ghost btn-sm" id="filter1Pick" type="button">Wybierz</button>
-                  </div>
-                </label>
-              </div>
-              <div class="row">
-                <label class="field">
-                  Puste / niepuste komórki
-                  <select id="filterEmptyMode">
-                    <option value="all">dowolnie</option>
-                    <option value="any_non_empty">komórka niepusta (przynajmniej jedna)</option>
-                    <option value="all_non_empty">komórki niepuste (wszystkie)</option>
-                    <option value="any_empty">komórka pusta (przynajmniej jedna)</option>
-                    <option value="all_empty">komórki puste (wszystkie)</option>
-                  </select>
+                <div class="row">
+                  <label class="field">
+                    Tryb
+                    <select id="filterMode">
+                      <option value="contains">Zawiera</option>
+                      <option value="starts_with">Zaczyna się</option>
+                      <option value="equals">Równa się</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    Kolumny
+                    <div class="picker-row">
+                      <input id="filter1Columns" type="text" readonly value="Wszystkie kolumny" />
+                      <button class="btn ghost btn-sm" id="filter1Pick" type="button">Wybierz</button>
+                    </div>
+                  </label>
+                </div>
+                <div class="row">
+                  <label class="field">
+                    Puste / niepuste komórki
+                    <select id="filterEmptyMode">
+                      <option value="all">dowolnie</option>
+                      <option value="any_non_empty">komórka niepusta (przynajmniej jedna)</option>
+                      <option value="all_non_empty">komórki niepuste (wszystkie)</option>
+                      <option value="any_empty">komórka pusta (przynajmniej jedna)</option>
+                      <option value="all_empty">komórki puste (wszystkie)</option>
+                    </select>
+                  </label>
+                  <label class="field checkbox">
+                    <input id="filterNegate" type="checkbox" />
+                    Odwróć
+                  </label>
+                </div>
+                <label class="qs-operators-toggle" data-hint data-hint-delay="1.1" data-hint-touch="on">
+                  <input type="checkbox" id="filterOperators" />
+                  <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
                 </label>
                 <label class="field checkbox">
-                  <input id="filterNegate" type="checkbox" />
-                  Odwróć
+                  <input id="onlyNonEmpty" type="checkbox" />
+                  Tylko wiersze z danymi
                 </label>
               </div>
-              <label class="qs-operators-toggle" data-hint data-hint-delay="1.1" data-hint-touch="on">
-                <input type="checkbox" id="filterOperators" />
-                <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
-              </label>
-              <label class="field checkbox">
-                <input id="onlyNonEmpty" type="checkbox" />
-                Tylko wiersze z danymi
-              </label>
-            </div>
-          </details>
 
-          <details class="panel" id="panel-text-filter-2">
-            <summary>
-              <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <span class="panel-title">Filtr tekstowy 2</span>
-              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </summary>
-            <div class="panel-body stack">
-              <label class="field">
-                Szukaj
-                <input id="searchQuery2" type="text" placeholder="np. klient" />
-              </label>
-              <div class="row">
+              <button class="btn ghost full" id="addFilter2Btn" type="button">+ Dodaj drugi filtr</button>
+
+              <div class="filter-block stack hidden" id="filter2Block">
+                <div class="divider"></div>
+                <div class="filter-block-head">
+                  <div class="filter-block-title" id="filter2BlockTitle">Filtr 2</div>
+                  <button class="btn ghost btn-sm" id="removeFilter2Btn" type="button">Usuń</button>
+                </div>
                 <label class="field">
-                  Tryb
-                  <select id="filterMode2">
-                    <option value="contains">Zawiera</option>
-                    <option value="starts_with">Zaczyna się</option>
-                    <option value="equals">Równa się</option>
-                  </select>
+                  Szukaj
+                  <input id="searchQuery2" type="text" placeholder="np. klient" />
                 </label>
-                <label class="field">
-                  Kolumny
-                  <div class="picker-row">
-                    <input id="filter2Columns" type="text" readonly value="Wszystkie kolumny" />
-                    <button class="btn ghost btn-sm" id="filter2Pick" type="button">Wybierz</button>
-                  </div>
+                <div class="row">
+                  <label class="field">
+                    Tryb
+                    <select id="filterMode2">
+                      <option value="contains">Zawiera</option>
+                      <option value="starts_with">Zaczyna się</option>
+                      <option value="equals">Równa się</option>
+                    </select>
+                  </label>
+                  <label class="field">
+                    Kolumny
+                    <div class="picker-row">
+                      <input id="filter2Columns" type="text" readonly value="Wszystkie kolumny" />
+                      <button class="btn ghost btn-sm" id="filter2Pick" type="button">Wybierz</button>
+                    </div>
+                  </label>
+                </div>
+                <div class="row">
+                  <label class="field">
+                    Puste / niepuste komórki
+                    <select id="filterEmptyMode2">
+                      <option value="all">dowolnie</option>
+                      <option value="any_non_empty">komórka niepusta (przynajmniej jedna)</option>
+                      <option value="all_non_empty">komórki niepuste (wszystkie)</option>
+                      <option value="any_empty">komórka pusta (przynajmniej jedna)</option>
+                      <option value="all_empty">komórki puste (wszystkie)</option>
+                    </select>
+                  </label>
+                  <label class="field checkbox">
+                    <input id="filterNegate2" type="checkbox" />
+                    Odwróć
+                  </label>
+                </div>
+                <label class="qs-operators-toggle" data-hint data-hint-delay="1.1" data-hint-touch="on">
+                  <input type="checkbox" id="filterOperators2" />
+                  <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
                 </label>
               </div>
-              <div class="row">
-                <label class="field">
-                  Puste / niepuste komórki
-                  <select id="filterEmptyMode2">
-                    <option value="all">dowolnie</option>
-                    <option value="any_non_empty">komórka niepusta (przynajmniej jedna)</option>
-                    <option value="all_non_empty">komórki niepuste (wszystkie)</option>
-                    <option value="any_empty">komórka pusta (przynajmniej jedna)</option>
-                    <option value="all_empty">komórki puste (wszystkie)</option>
-                  </select>
-                </label>
-                <label class="field checkbox">
-                  <input id="filterNegate2" type="checkbox" />
-                  Odwróć
-                </label>
-              </div>
-              <label class="qs-operators-toggle" data-hint data-hint-delay="1.1" data-hint-touch="on">
-                <input type="checkbox" id="filterOperators2" />
-                <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
-              </label>
             </div>
           </details>
 
@@ -469,7 +472,10 @@
               </label>
             </div>
           </details>
+          </section>
 
+          <section class="sidebar-group" id="group-inspect">
+            <div class="sidebar-group-head"><span class="sidebar-group-title" id="group-inspect-title">Inspekcja arkusza</span></div>
           <details class="panel" id="panel-workbench-analysis">
             <summary>
               <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -552,7 +558,10 @@
               <div class="duration-analysis-list" id="durationAnalysisList"></div>
             </div>
           </details>
+          </section>
 
+          <section class="sidebar-group" id="group-analyze">
+            <div class="sidebar-group-head"><span class="sidebar-group-title" id="group-analyze-title">Agregacje i formuły</span></div>
           <details class="panel" id="panel-aggregation-workbench">
             <summary data-hint-pl="Grupuj wiersze po wybranych kolumnach i licz sumy, średnie, mediany i więcej — /| jak tabela przestawna, bez Excela." data-hint-en="Group rows by selected columns and calculate sums, averages, medians and more — /| like a pivot table, without Excel." data-hint-duration="5" data-hint-touch="on" data-hint-fade="1" data-hint-class="smaller">
               <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -613,7 +622,10 @@
               <div class="formula-list" id="formulaWorkbenchList"></div>
             </div>
           </details>
+          </section>
 
+          <section class="sidebar-group" id="group-help">
+            <div class="sidebar-group-head"><span class="sidebar-group-title" id="group-help-title">Pomoc</span></div>
           <details class="panel" id="panel-log">
             <summary>
               <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -681,6 +693,7 @@
             </div>
             </div>
           </details>
+          </section>
         </aside>
 
         <!-- ====== MAIN ====== -->
@@ -738,6 +751,9 @@
               <div class="empty-icon">XLSX/M</div>
               <div class="empty-title" id="emptyTitle">Wysuń sidebar-a i wczytaj plik Excel</div>
               <div class="empty-sub" id="emptySub">możesz tam przeciągnąć plik lub wybrać go bezpośrednio z dysku</div>
+              <button class="btn ghost empty-sample-btn" id="loadSampleBtn" type="button" data-hint data-hint-pl="Wczyta lokalnie wygenerowany przykładowy arkusz — bez wysyłania czegokolwiek" data-hint-en="Loads a locally generated sample sheet — nothing is uploaded" data-hint-delay="1.1" data-hint-touch="on">
+                Wypróbuj na przykładowym pliku
+              </button>
             </div>
 
             <div class="table-wrap hidden" id="tableWrap">

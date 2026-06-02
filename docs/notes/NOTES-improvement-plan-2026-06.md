@@ -27,8 +27,12 @@ Kolejność i zakres uzgodnione; każdy większy krok = osobny commit (bezpieczn
       pokazywały surowe klucze (klucze istniały tylko w `STATIC_TRANSLATIONS`, nie w `I18N`).
       Toasty i puste stany były już wcześniej czyste. Pozostaje świadomy edge: `entityLabel`
       (Osoba/Właściciel) wyprowadzany z danych — wymagałby przerobienia `pluralizeEntityLabel`.
-- [ ] (z ToDo) Detekcja dat dla nagłówków `od2`/`do2`/`data2` bez wymuszania Wide-to-Long —
-      realny bug poprawności, nie tylko wygoda. **NASTĘPNE.**
+- [x] Detekcja dat `od2`/`do2`/`data2` w normalnym trybie — **zweryfikowana jako już działająca**
+      (naprawiona wcześniej przez `parseRepeatedHeader`): klasyfikacja nagłówka, miary agregacji,
+      pary od/do, analiza czasu, parsowanie wartości (też seriale Excela) i filtr dat wszystkie
+      zdejmują sufiks. Jedyny realny gap znaleziony i naprawiony: flaga „arkusz procesu / SLA"
+      (`collectSheetInsights`) — `normalizedHeaders` używa teraz bazowego nagłówka, więc arkusze
+      z cyklicznymi `od2/do2` dostają flagę bez Wide-to-Long. To był kolejny „przeterminowany" punkt ToDo.
 
 > Uwaga procesowa: niektóre punkty ToDo bywają nieaktualne (np. martwy kod był już usunięty,
 > toasty/puste stany już przetłumaczone). Zawsze najpierw weryfikujemy w kodzie, czy punkt
@@ -50,16 +54,30 @@ Kolejność i zakres uzgodnione; każdy większy krok = osobny commit (bezpieczn
 - Pokazuje: liczbę zaznaczonych komórek, Σ suma, średnia, min, max.
 - Reuse istniejącej selekcji komórek + logiki agregacji.
 
-### 4. D — Pogrupowanie sidebara w sekcje
-- Z 14 paneli → **5 grup** (4–6 wg ustaleń, 3 to za mało):
-  | Sekcja | Co wchodzi |
+### 4. D — Pogrupowanie sidebara w sekcje — ✅ ZROBIONE (2 czerwca 2026)
+- 14 paneli owinięte w **5 sekcji** `<section class="sidebar-group">` z nagłówkami (PL/EN,
+  przez STATIC_TRANSLATIONS + setText, te same co tytuły paneli). Bez przenoszenia bloków
+  (grupy = ciągłe zakresy DOM), więc zero ryzyka regresji; `:has(#panel-X[open])` i
+  `querySelectorAll("details.panel")` działają dalej bo panele zachowały ID/klasy.
+  | Sekcja (id) | Co wchodzi |
   |---|---|
-  | Dane | Plik i arkusz · Widok |
-  | Filtry | Filtr tekstowy (1+2 scalone) · Filtr dat · Akcje · Sortowanie i presety |
-  | Inspekcja | Analiza workbench · Układ arkusza · KPI |
-  | Analiza | Agregacje · Formula Workbench |
-  | Pomoc | Log · Skróty i info |
-- **Scalić dwa filtry tekstowe** w jeden panel z „+ dodaj filtr" (jak sort-builder).
+  | Dane (`group-data`) | Plik i arkusz |
+  | Filtry i widok roboczy (`group-work`) | Filtr 1, Filtr 2, Filtr dat, Akcje, Sortowanie, Widok |
+  | Inspekcja arkusza (`group-inspect`) | Analiza workbench, KPI, Układ arkusza |
+  | Analiza (`group-analyze`) | Agregacje, Formula Workbench |
+  | Pomoc (`group-help`) | Log, Skróty i info |
+  - Decyzja: „Widok" (zoom/freeze) trafił do grupy roboczej z filtrami (a nie do „Dane"),
+    bo to kontrola widoku roboczego i pozwoliło uniknąć przenoszenia bloku HTML. Zweryfikowane
+    wizualnie (Playlwright screenshot, PL i EN, brak błędów konsoli).
+- [x] ZROBIONE (2 czerwca): **scalenie dwóch filtrów tekstowych** w jeden panel
+  `#panel-text-filters` „Filtry tekstowe". Filtr 1 zawsze widoczny; Filtr 2 ukryty za
+  przyciskiem „+ Dodaj drugi filtr" (z opcją „Usuń" czyszczącą jego stan). WSZYSTKIE ID inputów
+  zachowane (searchQuery/searchQuery2, filterMode/2, filter1/2Columns+Pick, filterEmptyMode/2,
+  filterNegate/2, filterOperators/2, onlyNonEmpty) → silnik filtrów (workbook.js applyFilters)
+  NIETKNIĘTY, zero refaktoru. i18n przez STATIC+setText (textFilters/filterBlock1/2/
+  addSecondFilter/removeFilter). resetFilterInputs() chowa Filtr 2. Zweryfikowane screenshotem PL+EN.
+- [x] Kolizja nazw: grupa „ANALIZA" → przemianowana na **„Agregacje i formuły"** (PL) /
+  „Aggregation & formulas" (EN), żeby nie zgrzytała z panelem „Analiza workbench" w Inspekcji.
 
 ### 5. C — Powiadomienia o aktualizacji (PWA)
 - Problem: użytkownicy z PWA na ekranie głównym siedzą na starej wersji.
@@ -69,6 +87,24 @@ Kolejność i zakres uzgodnione; każdy większy krok = osobny commit (bezpieczn
 ### 6. Handle sidebara na mobilkach
 - Już częściowo zrobione — przejrzeć i poprawić/zmienić, jeśli znajdzie się lepsze
   miejsce/pomysł. Nie przebudowa od zera.
+
+## Dług techniczny i18n — DO UJEDNOLICENIA (uzgodnione 2 czerwca 2026)
+
+System tłumaczeń ma **dwa równoległe słowniki** i to powtarzalne źródło bugów:
+- `I18N` — konsumowany przez `t(key)` (dynamiczne stringi budowane w JS).
+- `STATIC_TRANSLATIONS` — konsumowany przez `applyStaticTranslations` (`copy.key`, statyczny DOM).
+
+Klucz zdefiniowany w jednym słowniku, a konsumowany mechanizmem drugiego → po cichu zwraca
+surowy klucz albo „undefined". Złapane już 3 razy: `choose`, `hintDefault` (były tylko w STATIC,
+wołane przez `t()` → surowy klucz) oraz `sampleBtn` (w I18N, wołany przez `copy` → „undefined").
+
+Cel: ujednolicić i uodpornić tłumaczenia, żeby dodanie nowego tekstu było intuicyjne i nie
+wymagało pamiętania, do którego słownika trafić. Propozycje (do wyboru / łączenia):
+- `t()` z fallbackiem do `STATIC_TRANSLATIONS` (i odwrotnie) — najtańszy, eliminuje całą klasę bugów.
+- albo jeden wspólny słownik / jedno źródło prawdy z dwoma „widokami".
+- walidator dev-time (jak `/tmp/check-all-keys.js`): wszystkie klucze `t()` istnieją w słowniku,
+  wszystkie `copy.X` też — uruchamiany np. w smoke-teście, żeby CI łapał braki.
+- spójna konwencja nazewnictwa kluczy + krótkie README sekcji i18n.
 
 ## Pomysły na później (zaakceptowane kierunkowo, nie teraz)
 

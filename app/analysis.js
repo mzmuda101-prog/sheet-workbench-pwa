@@ -2673,7 +2673,9 @@ function collectSheetInsights() {
   ];
 
   const flags = [];
-  const normalizedHeaders = currentHeaders.map((header) => normalizeAnalysisKey(header));
+  // Bazowy nagłówek (bez sufiksu cyklu, np. "od2" -> "od"), żeby sygnały procesu/SLA
+  // łapały też powtarzalne bloki w trybie wide, nie tylko po Wide-to-Long.
+  const normalizedHeaders = currentHeaders.map((header) => normalizeAnalysisKey(parseRepeatedHeader(header)?.base || header));
   const hasStatusHeader = normalizedHeaders.some((header) => /\b(status|stage|etap|stan|alert|priority|priorytet)\b/.test(header));
   const hasOwnerHeader = normalizedHeaders.some((header) => /\b(imie|nazwisko|osoba|pracownik|owner|assignee|agent|opiekun)\b/.test(header));
   const hasStartDateHeader = normalizedHeaders.some((header) => /\b(od|start|data od|from|poczatek|rozpoczecie|created)\b/.test(header));

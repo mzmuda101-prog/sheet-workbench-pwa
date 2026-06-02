@@ -30,6 +30,7 @@ const zoomLevelEl = document.getElementById("zoomLevel");
 const freezeHeadersEl = document.getElementById("freezeHeaders");
 const excelLayoutToggleEl = document.getElementById("excelLayoutToggle");
 const loadBtn = document.getElementById("loadBtn");
+const loadSampleBtn = document.getElementById("loadSampleBtn");
 
 const searchQueryEl = document.getElementById("searchQuery");
 const searchQuery2El = document.getElementById("searchQuery2");

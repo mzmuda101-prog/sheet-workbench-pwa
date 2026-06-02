@@ -13,6 +13,10 @@ function isXlsxAvailable(showFeedback = false) {
 function setRuntimeAvailability(isAvailable) {
   fileInput.disabled = !isAvailable;
   loadBtn.disabled = !isAvailable;
+  if (loadSampleBtn) {
+    loadSampleBtn.disabled = !isAvailable;
+    loadSampleBtn.classList.toggle("hidden", !isAvailable);
+  }
   saveAsBtn.disabled = !isAvailable;
   if (excelLayoutToggleEl) {
     excelLayoutToggleEl.disabled = !isAvailable;

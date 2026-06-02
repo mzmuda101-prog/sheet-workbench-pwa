@@ -491,6 +491,7 @@ body.splashing {
   max-width: none;
   max-height: calc(100vh - 95px);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-right: 2px;
   z-index: 30;
   transform: translateX(calc(-100% - clamp(16px, 2.4vw, 28px)));
@@ -598,6 +599,55 @@ body.splashing {
 
 .sidebar > * {
   flex-shrink: 0;
+}
+
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sidebar-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 6px 0;
+  margin-top: 6px;
+}
+
+.sidebar-group:first-child .sidebar-group-head {
+  margin-top: 0;
+}
+
+.sidebar-group-head::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.sidebar-group-title {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.filter-block-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--ink-3);
+}
+
+.filter-block-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .sidebar-open .sidebar {
@@ -2074,6 +2124,10 @@ details.panel[open] > summary {
   color: var(--muted);
   max-width: 260px;
   line-height: 1.6;
+}
+
+.empty-sample-btn {
+  margin-top: 14px;
 }
 
 /* ===================================================
