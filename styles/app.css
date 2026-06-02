@@ -2968,6 +2968,9 @@ kbd {
     letter-spacing: 0.04em;
     font-size: 11px;
   }
+  /* html[lang="en"] .sidebar-open .sidebar-handle::after { 
+    content: "Hide panel"; 
+} */
   .quick-search {
     width: 100%;
     flex-wrap: wrap;
