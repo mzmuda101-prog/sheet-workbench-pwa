@@ -93,6 +93,38 @@ Kolejność i zakres uzgodnione; każdy większy krok = osobny commit (bezpieczn
 - [x] Kolizja nazw: grupa „ANALIZA" → przemianowana na **„Agregacje i formuły"** (PL) /
   „Aggregation & formulas" (EN), żeby nie zgrzytała z panelem „Analiza workbench" w Inspekcji.
 
+### 4b. „Morph pill" — wspólny język animacji (2 czerwca 2026) ✅
+Mateuszowi bardzo spodobała się animacja handle sidebara na mobilkach (morfująca pigułka:
+płynny morph kształtu/pozycji/koloru przez CSS `transition` + glassmorphism + kapsuła
+`border-radius:999px` + badge `::before` ze zmiennym glifem). Poprosił o przeniesienie tego
+„feelu" w inne miejsca. Wybrane 3 (NIE pasek statystyk):
+- **Przełączniki trybu (toolbar)** — `.toggle-pill` na `#wideLongToggle`/`#excelLayoutToggle`/
+  `#readingToggle`. W stanie `[aria-pressed="true"]`/`.active` morfują z zaokrąglonego
+  prostokąta (`--r-sm`) w pełną kapsułę w kolorze akcentu, z „wjeżdżającą" białą kropką stanu
+  (`::before scale(0)→scale(1)`). Dodano `aria-pressed` do `readingToggle` w `setReadingMode`
+  (pozostałe dwa już je miały). Specyficzność: `.btn.ghost.toggle-pill[aria-pressed="true"]`.
+- **Przycisk Aktualizuj (PWA)** — `.app-update-btn:not(.hidden)` dostaje `updateMorphIn`
+  (wjazd scale+radius) + `updatePulse` (pulsująca poświata, nieskończona). Styl GOTOWY pod
+  Feature C (JS usuwa `.hidden`, gdy jest nowa wersja).
+- **FAB „do góry"** — nowy `#scrollTopFab` w `.table-panel` (`position:relative` dodane).
+  Jak handle sidebara: kółko 44px rozwija się w pigułkę z etykietą na hover/focus
+  (`width 44→128px`, label `max-width 0→90`). Widoczny gdy `tableWrapEl.scrollTop > 120`
+  (próg 240 był za wysoki — przykładowy plik przewija się max ~229px). Klik → `scrollTo top`
+  (smooth; `auto` przy reduced-motion). i18n w STATIC (`scrollTop`/`scrollTopAria`, PL+EN).
+- **PUŁAPKA do zapamiętania:** `--t-slow` = `"250ms ease"` (zawiera już timing-function).
+  Użycie `var(--t-slow) cubic-bezier(...)` w `animation`/`transition` daje DWA timing-functions
+  → cała deklaracja odrzucana po cichu. Dla własnego easingu podawać jawny czas
+  (`260ms cubic-bezier(...)`), NIE `var(--t-slow)`.
+- **Korekta (Mateusz, 2 czerwca):** przełączniki i przycisk Aktualizuj NIE mają morfować
+  zaokrąglenia rogów — zostają na stałym `--r-sm`/pigułce (zmienia się tylko kolor + kropka +
+  scale/puls). Morph kształtu zarezerwowany wyłącznie dla FAB (jego sens). Strzałka `↑` w FAB
+  była nie wycentrowana → `left:50% + translate(-50%,-50%)` w stanie collapsed, zjeżdża do
+  `left:20px` przy rozwinięciu (miejsce na etykietę). Build → `20260602-04`.
+- Reduced-motion: `@media (prefers-reduced-motion: reduce)` zeruje te animacje/transitiony.
+- Zweryfikowane Playwrightem: toggle radius 8px→999px + kropka scale(1), reading aria-pressed,
+  FAB hidden→visible→hover 44→128→scroll-to-0→hidden + i18n PL/EN, update btn animationName
+  `updateMorphIn, updatePulse`. Zero błędów. Build `20260602-02 → 20260602-03`.
+
 ### 5. C — Powiadomienia o aktualizacji (PWA)
 - Problem: użytkownicy z PWA na ekranie głównym siedzą na starej wersji.
 - Service Worker (`sw.js`) + `SKIP_WAITING` + istniejący `#appUpdateBtn` + toast

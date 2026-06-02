@@ -1014,6 +1014,7 @@ function renderTable(modelOrHeaders, maybeRows) {
   syncSelectedCellInDom({ clearMissing: true });
   syncRangeHighlightInDom();
   updateCellStats();
+  if (typeof updateScrollTopFab === "function") updateScrollTopFab();
   syncHorizontalScrollbar();
   applyZoom();
   applyFreezeHeaders();

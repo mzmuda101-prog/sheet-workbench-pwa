@@ -11,6 +11,7 @@ const tableWrapEl = document.getElementById("tableWrap");
 const tableScrollbarEl = document.getElementById("tableScrollbar");
 const tableScrollbarInnerEl = document.getElementById("tableScrollbarInner");
 const cellStatsBarEl = document.getElementById("cellStatsBar");
+const scrollTopFabEl = document.getElementById("scrollTopFab");
 const emptyStateEl = document.getElementById("emptyState");
 const emptyTitleEl = document.getElementById("emptyTitle");
 const emptySubEl = document.getElementById("emptySub");
@@ -207,7 +208,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260602-02";
+const APP_BUILD_VERSION = "20260602-04";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

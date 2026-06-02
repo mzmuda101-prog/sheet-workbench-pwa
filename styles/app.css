@@ -469,6 +469,174 @@ body.splashing {
 }
 
 /* ===================================================
+   MORPH PILL — wspólny język animacji zapożyczony z handle sidebara:
+   płynny morph kształtu/koloru + kapsuła + mały badge ze stanem.
+   Używany w: przełącznikach trybu (toolbar), przycisku Aktualizuj, FAB „do góry".
+   =================================================== */
+
+/* (1) Przycisk Aktualizuj (PWA) — gdy widoczny: wjazd-morph + delikatny puls uwagi.
+   Styl gotowy pod Feature C (JD usuwa .hidden, gdy jest nowa wersja). */
+.app-update-btn:not(.hidden) {
+  animation:
+    updateMorphIn 260ms cubic-bezier(0.22, 1, 0.36, 1),
+    updatePulse 2.4s ease-in-out 0.5s infinite;
+}
+@keyframes updateMorphIn {
+  from { transform: scale(0.6); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+@keyframes updatePulse {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 42%, transparent); }
+  55%      { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
+/* (2) Przełączniki trybu w toolbarze — w stanie aktywnym wypełniają się kolorem
+   akcentu z „wjeżdżającą" kropką stanu. Zaokrąglenie rogów pozostaje STAŁE
+   (bez morfowania prostokąt→kapsuła) — morph kształtu zarezerwowany dla FAB. */
+.toggle-pill {
+  position: relative;
+  transition:
+    background var(--t-slow),
+    border-color var(--t-slow),
+    color var(--t-slow),
+    padding var(--t-slow),
+    box-shadow var(--t-slow),
+    transform var(--t-fast);
+}
+.toggle-pill::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  transform: translateY(-50%) scale(0);
+  opacity: 0;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), opacity var(--t);
+  pointer-events: none;
+}
+.btn.ghost.toggle-pill[aria-pressed="true"],
+.btn.ghost.toggle-pill.active {
+  padding-left: 25px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow:
+    0 6px 16px color-mix(in srgb, var(--accent) 26%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.btn.ghost.toggle-pill[aria-pressed="true"]:hover:not(:disabled),
+.btn.ghost.toggle-pill.active:hover:not(:disabled) {
+  background: var(--accent-h);
+  border-color: var(--accent-h);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+.toggle-pill[aria-pressed="true"]::before,
+.toggle-pill.active::before {
+  transform: translateY(-50%) scale(1);
+  opacity: 1;
+}
+
+/* (3) FAB „do góry" — handle przy dolnej krawędzi tabeli; jak handle sidebara
+   rozwija się z kółka w pigułkę z etykietą na hover/focus. */
+.scroll-top-fab {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  width: 44px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 72%, transparent) 0%, color-mix(in srgb, var(--panel) 84%, transparent) 100%);
+  color: var(--accent);
+  cursor: pointer;
+  overflow: hidden;
+  opacity: 0;
+  transform: translateY(10px) scale(0.9);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 6;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  box-shadow:
+    0 14px 30px rgba(18, 30, 23, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition:
+    width var(--t-slow),
+    padding var(--t-slow),
+    opacity var(--t),
+    transform var(--t-slow),
+    background var(--t),
+    border-color var(--t),
+    box-shadow var(--t);
+}
+.scroll-top-fab.is-visible {
+  opacity: 0.9;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+.scroll-top-fab:hover,
+.scroll-top-fab:focus-visible {
+  width: 128px;
+  padding: 0 16px 0 38px;
+  opacity: 1;
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 48%, var(--border));
+  box-shadow:
+    0 18px 36px rgba(18, 30, 23, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+.scroll-top-fab .fab-arrow {
+  position: absolute;
+  /* Wyśrodkowana w kółku (collapsed); przy rozwinięciu zjeżdża w lewo na etykietę */
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+  transition: left var(--t-slow);
+}
+.scroll-top-fab:hover .fab-arrow,
+.scroll-top-fab:focus-visible .fab-arrow {
+  left: 20px;
+}
+.scroll-top-fab .fab-label {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: max-width var(--t-slow), opacity var(--t);
+}
+.scroll-top-fab:hover .fab-label,
+.scroll-top-fab:focus-visible .fab-label {
+  max-width: 90px;
+  opacity: 1;
+}
+[data-theme="dark"] .scroll-top-fab {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--panel) 80%, transparent) 0%, color-mix(in srgb, var(--panel) 90%, transparent) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-update-btn:not(.hidden) { animation: none; }
+  .toggle-pill,
+  .toggle-pill::before,
+  .scroll-top-fab,
+  .scroll-top-fab .fab-arrow,
+  .scroll-top-fab .fab-label { transition: none; }
+}
+
+/* ===================================================
    WORKSPACE
    =================================================== */
 .workspace {
@@ -1944,6 +2112,7 @@ details.panel[open] > summary {
    =================================================== */
 .table-panel { padding-bottom: 0; }
 .table-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: var(--table-panel-height, calc(100dvh - 136px));

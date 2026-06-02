@@ -962,6 +962,8 @@ const STATIC_TRANSLATIONS = {
     allFunctions: "Wszystkie funkcje",
     noResult: "Bez wyniku",
     withError: "Z błędem",
+    scrollTop: "Do góry",
+    scrollTopAria: "Przewiń tabelę do góry",
   },
   en: {
     title: "Excel Workbench",
@@ -1137,6 +1139,8 @@ const STATIC_TRANSLATIONS = {
     allFunctions: "All functions",
     noResult: "No result",
     withError: "With error",
+    scrollTop: "Back to top",
+    scrollTopAria: "Scroll table to top",
   },
 };
 
@@ -1550,6 +1554,9 @@ function applyStaticTranslations() {
   setText("#exportCsvBtn", copy.exportCsv);
   setText("#resetSortBtn", copy.resetSort);
   setText("#loadingText", t("loadingGeneric"));
+  setText("#scrollTopFab .fab-label", copy.scrollTop);
+  setAttr("#scrollTopFab", "aria-label", copy.scrollTopAria);
+  setAttr("#scrollTopFab", "title", copy.scrollTopAria);
 
   if (langButtons.length) {
     langButtons.forEach((button) => {

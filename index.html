@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=20260429-01" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
-    <link rel="stylesheet" href="styles/app.css?v=20260602-02" />
+    <link rel="stylesheet" href="styles/app.css?v=20260602-04" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -735,14 +735,14 @@
                 </button>
               </div>
               <div class="table-actions">
-                <button class="btn btn-sm ghost hidden" id="wideLongToggle" type="button" aria-pressed="false" title="Przełącz widok blokowy na długi" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
+                <button class="btn btn-sm ghost toggle-pill hidden" id="wideLongToggle" type="button" aria-pressed="false" title="Przełącz widok blokowy na długi" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
                   Wide-to-Long
                 </button>
-                <button class="btn btn-sm ghost" id="excelLayoutToggle" type="button" aria-pressed="false" title="Przełącz widok !cols/!rows" data-hint data-hint-pl="Pokaż układ z Excela" data-hint-en="Show Excel layout" data-hint-delay="1.1">
+                <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" title="Przełącz widok !cols/!rows" data-hint data-hint-pl="Pokaż układ z Excela" data-hint-en="Show Excel layout" data-hint-delay="1.1">
                   Widok Excel
                 </button>
                 <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
-                <button class="btn btn-sm ghost" id="readingToggle" type="button" data-hint data-hint-pl="Tryb pracy z szybkim szukaniem" data-hint-en="Quick search working mode" data-hint-delay="1.1">Tryb szybkie szukanie</button>
+                <button class="btn btn-sm ghost toggle-pill" id="readingToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Tryb pracy z szybkim szukaniem" data-hint-en="Quick search working mode" data-hint-delay="1.1">Tryb szybkie szukanie</button>
                 <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport CSV</button>
               </div>
             </div>
@@ -766,6 +766,10 @@
               <div class="table-scrollbar-inner" id="tableScrollbarInner"></div>
             </div>
             <div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div>
+            <button class="scroll-top-fab" id="scrollTopFab" type="button" aria-label="Przewiń tabelę do góry" title="Przewiń tabelę do góry">
+              <span class="fab-arrow" aria-hidden="true">↑</span>
+              <span class="fab-label">Do góry</span>
+            </button>
           </section>
         </main>
       </div>
@@ -844,14 +848,14 @@
 
     <!-- Local xlsx-js-style (better style read/write, stable offline) -->
     <script src="lib/xlsx-js-style.bundle.min.js"></script>
-    <script src="app/core.js?v=20260602-02"></script>
-    <script src="app/language.js?v=20260602-02"></script>
-    <script src="app/cursor-hint.js?v=20260602-02"></script>
-    <script src="app/analysis.js?v=20260602-02"></script>
-    <script src="app/workbook.js?v=20260602-02"></script>
-    <script src="app/table.js?v=20260602-02"></script>
-    <script src="app/formulas.js?v=20260602-02"></script>
-    <script src="app/ui-controls.js?v=20260602-02"></script>
-    <script src="app/bootstrap.js?v=20260602-02"></script>
+    <script src="app/core.js?v=20260602-04"></script>
+    <script src="app/language.js?v=20260602-04"></script>
+    <script src="app/cursor-hint.js?v=20260602-04"></script>
+    <script src="app/analysis.js?v=20260602-04"></script>
+    <script src="app/workbook.js?v=20260602-04"></script>
+    <script src="app/table.js?v=20260602-04"></script>
+    <script src="app/formulas.js?v=20260602-04"></script>
+    <script src="app/ui-controls.js?v=20260602-04"></script>
+    <script src="app/bootstrap.js?v=20260602-04"></script>
   </body>
 </html>

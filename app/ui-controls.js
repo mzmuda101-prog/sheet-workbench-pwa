@@ -1014,6 +1014,7 @@ if (tableWrapEl && tableScrollbarEl) {
 
   tableWrapEl.addEventListener("scroll", () => {
     hideCellTooltip();
+    updateScrollTopFab();
     if (syncingHorizontalScroll) return;
     syncingHorizontalScroll = true;
     tableScrollbarEl.scrollLeft = tableWrapEl.scrollLeft;
@@ -1030,6 +1031,20 @@ if (tableWrapEl && tableScrollbarEl) {
       syncingHorizontalScroll = false;
     });
   }, { passive: true });
+}
+
+// FAB „do góry" — handle przy dolnej krawędzi tabeli, który (jak handle sidebara)
+// rozwija się w pigułkę z etykietą na hover/focus. Widoczny dopiero po przewinięciu.
+function updateScrollTopFab() {
+  if (!scrollTopFabEl || !tableWrapEl) return;
+  const show = tableWrapEl.scrollTop > 120;
+  scrollTopFabEl.classList.toggle("is-visible", show);
+}
+
+if (scrollTopFabEl && tableWrapEl) {
+  scrollTopFabEl.addEventListener("click", () => {
+    tableWrapEl.scrollTo({ top: 0, behavior: prefersReducedMotion ? "auto" : "smooth" });
+  });
 }
 
 tbodyEl.addEventListener("pointerenter", (e) => {
@@ -1466,6 +1481,7 @@ function syncSidebarHandle() {
 
 function setReadingMode(enabled) {
   rootEl.classList.toggle("reading", enabled);
+  if (readingToggle) readingToggle.setAttribute("aria-pressed", String(enabled));
   if (enabled) {
     if (quickSearchWrap) quickSearchWrap.classList.remove("hidden");
     if (readingToggle) readingToggle.textContent = t("readingStandard");
