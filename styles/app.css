@@ -993,31 +993,38 @@ body.splashing {
    PANEL
    =================================================== */
 .panel {
-  /* Apple-style frosted glass: półprzezroczyste tło + górny „sheen", mocniejszy
-     blur/saturate, warstwowy miękki cień i wewnętrzna krawędź światła u góry. */
+  /* Apple „liquid glass": półprzezroczyste tło + górny „sheen", mocny blur/saturate
+     z lekkim podbiciem jasności, warstwowy miękki cień, jasna krawędź specularna
+     u góry, delikatny pełnokrawędziowy pierścień światła i subtelna głębia u dołu. */
   background:
-    linear-gradient(180deg, color-mix(in srgb, white 12%, transparent) 0%, transparent 46%),
+    linear-gradient(180deg, color-mix(in srgb, white 16%, transparent) 0%, transparent 40%),
     var(--panel);
-  -webkit-backdrop-filter: blur(22px) saturate(1.8);
-  backdrop-filter: blur(22px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.9) brightness(1.02);
+  backdrop-filter: blur(24px) saturate(1.9) brightness(1.02);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   padding: 14px;
   box-shadow:
-    0 1px 1px rgba(18, 30, 23, 0.03),
-    0 10px 30px -18px rgba(18, 30, 23, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+    0 1px 1px rgba(18, 30, 23, 0.04),
+    0 12px 32px -16px rgba(18, 30, 23, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 -12px 26px -20px rgba(18, 30, 23, 0.14);
   min-width: 0;
 }
 
 [data-theme="dark"] .panel {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 46%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%),
     var(--panel);
+  -webkit-backdrop-filter: blur(26px) saturate(1.7) brightness(1.04);
+  backdrop-filter: blur(26px) saturate(1.7) brightness(1.04);
   box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.2),
-    0 14px 34px -18px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    0 1px 1px rgba(0, 0, 0, 0.25),
+    0 16px 36px -16px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -12px 26px -20px rgba(0, 0, 0, 0.32);
 }
 
 .panel.compact { padding: 12px 14px; }

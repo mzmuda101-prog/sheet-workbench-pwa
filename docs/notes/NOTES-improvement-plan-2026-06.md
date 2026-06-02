@@ -167,6 +167,10 @@ płynny morph kształtu/pozycji/koloru przez CSS `transition` + glassmorphism + 
   „sheen", mocniejszy `backdrop-filter: blur(22px) saturate(1.8)`, warstwowy miękki cień i wewnętrzną
   krawędź światła u góry (`inset 0 1px 0 ...`). Osobny wariant `[data-theme="dark"] .panel`.
   Zweryfikowane screenshotami (jasny + ciemny) — frosted, czyste, Apple-like.
+  - **Refinement (Mateusz, build `20260602-10`):** podciągnięte w stronę „liquid glass" —
+    `blur(24px) saturate(1.9) brightness(1.02)` (dark: 26/1.7/1.04), mocniejszy specular na górnej
+    krawędzi (`inset 0 1px 0 rgba(255,255,255,.72)`), delikatny pełnokrawędziowy pierścień światła
+    (`inset 0 0 0 1px ...`) i subtelna głębia u dołu (`inset 0 -12px 26px -20px ...`). Lekko, ale widać.
 
 ### 6. Handle sidebara na mobilkach — ✅ ZROBIONE (2 czerwca 2026)
 - Domknięte w tej sesji bez osobnej przebudowy: morph pasek→pigułka „Schowaj panel" na dole,

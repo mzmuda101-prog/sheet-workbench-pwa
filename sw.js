@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260602-09";
+const CACHE_VERSION = "20260602-10";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
 
@@ -6,16 +6,16 @@ const APP_ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
-  "./styles/app.css?v=20260602-09",
+  "./styles/app.css?v=20260602-10",
   "./lib/xlsx-js-style.bundle.min.js",
-  "./app/core.js?v=20260602-09",
-  "./app/language.js?v=20260602-09",
-  "./app/analysis.js?v=20260602-09",
-  "./app/workbook.js?v=20260602-09",
-  "./app/table.js?v=20260602-09",
-  "./app/formulas.js?v=20260602-09",
-  "./app/ui-controls.js?v=20260602-09",
-  "./app/bootstrap.js?v=20260602-09",
+  "./app/core.js?v=20260602-10",
+  "./app/language.js?v=20260602-10",
+  "./app/analysis.js?v=20260602-10",
+  "./app/workbook.js?v=20260602-10",
+  "./app/table.js?v=20260602-10",
+  "./app/formulas.js?v=20260602-10",
+  "./app/ui-controls.js?v=20260602-10",
+  "./app/bootstrap.js?v=20260602-10",
   "./assets/images/favicon.png?v=20260429-01",
   "./assets/images/apple-touch-icon.png?v=20260429-01",
   "./assets/images/icon-512.png",
