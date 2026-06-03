@@ -349,13 +349,23 @@ dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
   dropZone.classList.remove("dragover");
   const file = e.dataTransfer.files[0];
-  handleFile(file);
+  handleFile(file); // drag-drop nie daje uchwytu FSA → zapis przez picker / pobranie
 });
+
+// Gdy dostępne File System Access API, kliknięcie/aktywacja strefy otwiera plik
+// przez showOpenFilePicker (zwraca uchwyt → zapis w miejscu). Bez FSA: natywny <input>.
+if (canOpenFSA) {
+  dropZone.addEventListener("click", (e) => {
+    e.preventDefault();
+    openWorkbookViaFsa();
+  });
+}
 
 dropZone.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") {
     e.preventDefault();
-    fileInput.click();
+    if (canOpenFSA) openWorkbookViaFsa();
+    else fileInput.click();
   }
 });
 
@@ -396,6 +406,24 @@ document.addEventListener("keydown", (e) => {
       return;
     }
   }
+  // Enter lub znak drukowalny na zaznaczonej komórce otwiera edytor (jak w Excelu).
+  if (!meta && !e.altKey && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
+    if (e.key === "Enter") {
+      const td = findCellElement(focusedCellState);
+      if (td) {
+        e.preventDefault();
+        openCellEditor(td);
+        return;
+      }
+    } else if (e.key.length === 1) {
+      const td = findCellElement(focusedCellState);
+      if (td) {
+        e.preventDefault();
+        openCellEditor(td, { initialChar: e.key });
+        return;
+      }
+    }
+  }
   if (meta && e.key === "Enter") {
     e.preventDefault();
     applyFilterBtn.click();
@@ -403,6 +431,12 @@ document.addEventListener("keydown", (e) => {
   if (meta && e.altKey && e.key.toLowerCase() === "s") {
     e.preventDefault();
     saveAsBtn.click();
+  }
+  // Ctrl/⌘+S: zapis w miejscu (gdy włączony), inaczej "Zapisz jako…".
+  if (meta && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    if (saveBtn && !saveBtn.disabled) saveBtn.click();
+    else saveAsBtn.click();
   }
   if (meta && e.shiftKey && e.key.toLowerCase() === "e") {
     e.preventDefault();
@@ -484,6 +518,13 @@ renderFormulaWorkbench();
 populateSortColumnSelect();
 renderSortPresets();
 updateWideLongToggle();
+
+// Z File System Access API "Zapisz" nadpisuje plik w miejscu — odblokuj przycisk.
+// Bez FSA pozostaje wyłączony (fallback: "Zapisz jako…"). Tytuł ustawia language.js.
+if (canFSA && saveBtn) {
+  saveBtn.disabled = false;
+  saveBtn.removeAttribute("aria-disabled");
+}
 
 const xlsxReady = isXlsxAvailable(false);
 setRuntimeAvailability(xlsxReady);

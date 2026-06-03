@@ -346,21 +346,39 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
   if (!parsed || parsed.value === null) {
     delete sheet[cellRef];
+    recordPendingEdit(currentSheetName, cellRef, null); // null = usunięcie przy zapisie
     return;
   }
   if (parsed.type === "formula") {
     toast(t("formulaEditBlocked"), "warning");
     return;
   }
+  // Zachowaj styl (.s) i format liczbowy (.z) z poprzedniej komórki, jeśli były —
+  // edycja samej wartości nie powinna gubić formatowania odczytanego z pliku.
+  const prev = sheet[cellRef];
+  const cell = {};
+  if (prev && prev.s) cell.s = prev.s;
+  if (prev && prev.z) cell.z = prev.z;
   if (parsed.type === "date") {
-    sheet[cellRef] = { v: parsed.value, t: "d" };
-    return;
+    cell.v = parsed.value;
+    cell.t = "d";
+  } else if (parsed.type === "number") {
+    cell.v = parsed.value;
+    cell.t = "n";
+  } else {
+    cell.v = parsed.value;
+    cell.t = "s";
   }
-  if (parsed.type === "number") {
-    sheet[cellRef] = { v: parsed.value, t: "n" };
-    return;
-  }
-  sheet[cellRef] = { v: parsed.value, t: "s" };
+  sheet[cellRef] = cell;
+  // Zarejestruj edycję do naniesienia metodą ZIP-patch przy zapisie (zachowuje plik).
+  recordPendingEdit(currentSheetName, cellRef, { v: cell.v, t: cell.t });
+}
+
+// Zapamiętuje pojedynczą edycję komórki w pendingEdits[sheetName][cellRef].
+function recordPendingEdit(sheetName, cellRef, payload) {
+  if (!sheetName) return;
+  if (!pendingEdits[sheetName]) pendingEdits[sheetName] = {};
+  pendingEdits[sheetName][cellRef] = payload;
 }
 
 function getDateRange() {

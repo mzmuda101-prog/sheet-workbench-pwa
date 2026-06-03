@@ -2536,6 +2536,29 @@ tbody td.cell-has-fill:not([style*="background"]) {
   background: rgba(77,184,143,.12);
 }
 
+/* [EN] Inline cell editor – input overlays the cell while editing */
+tbody td.cell-editing {
+  position: relative;
+  overflow: visible;
+}
+input.cell-editor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: calc(7px * var(--table-zoom)) calc(11px * var(--table-zoom));
+  border: 2px solid var(--accent);
+  border-radius: 2px;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  font: inherit;
+  font-size: calc(12.5px * var(--table-zoom));
+  outline: none;
+  z-index: 5;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
+}
+
 tbody tr.row-focused td {
   background: color-mix(in srgb, var(--accent-light) 54%, white) !important;
   box-shadow:

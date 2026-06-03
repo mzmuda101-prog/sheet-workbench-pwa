@@ -618,13 +618,15 @@ function formatFileSize(bytes) {
   return `${bytes} B`;
 }
 
-async function handleFile(file) {
+async function handleFile(file, fileHandle = null) {
   if (!file) return;
   if (!isXlsxAvailable(true)) return;
   try {
     const sizeHint = file.size > 0 ? ` (${formatFileSize(file.size)})` : "";
     setLoading(true, t("loadingFile") + sizeHint);
     const data = await file.arrayBuffer();
+    originalFileBytes = new Uint8Array(data); // do zapisu metodą ZIP-patch (zachowanie pliku)
+    pendingEdits = {}; // świeży plik → brak naniesionych edycji
     try {
       workbook = XLSX.read(data, { cellDates: true, cellStyles: true });
     } catch {
@@ -649,6 +651,7 @@ async function handleFile(file) {
     multiSortState = [];
     sortState = { col: "", dir: "asc" };
     currentFileName = file.name;
+    currentFileHandle = fileHandle; // uchwyt FSA (z showOpenFilePicker) lub null dla <input>/drop
     currentStartCol = 0;
     currentMerges = [];
     currentHeaderStyles = [];
@@ -796,34 +799,145 @@ function exportCsv() {
   toast(t("csvExported"), "success");
 }
 
-function saveWorkbook() {
-  if (!isXlsxAvailable(true)) return;
-  if (!workbook) {
-    toast(t("noFileToSave"), "warning");
-    return;
-  }
-  const base = currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : "excel-workbench";
-  const ext = currentFileName && currentFileName.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
-  if (ext === "xlsm") {
-    const ok = window.confirm(t("xlsmConfirm"));
-    if (!ok) return;
-  }
-  const filename = `${base}_edited.${ext}`;
-  XLSX.writeFile(workbook, filename, { bookType: ext });
-  setDirtyState(false);
-  toast(t("fileSaved"), "success");
-  log(`Zapisano plik: ${filename}`, "success");
+// Typy plików dla pickerów File System Access API.
+const FSA_FILE_TYPES = [
+  {
+    description: "Excel",
+    accept: {
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+      "application/vnd.ms-excel.sheet.macroEnabled.12": [".xlsm"],
+    },
+  },
+];
+
+// Upewnij się, że mamy zgodę na zapis do uchwytu (FSA wymaga aktywacji użytkownika).
+async function ensureWritePermission(handle) {
+  const opts = { mode: "readwrite" };
+  if ((await handle.queryPermission(opts)) === "granted") return true;
+  if ((await handle.requestPermission(opts)) === "granted") return true;
+  return false;
 }
 
-function saveWorkbookAs() {
+// Buduje bajty pliku wyjściowego. Preferuje ZIP-patch (zachowuje tabele, wykresy,
+// style i formuły oryginału); gdy brak oryginału lub patch zawiedzie — fallback do
+// XLSX.write (xlsx-js-style), który gubi część elementów, ale zawsze działa.
+async function buildOutputBytes(ext) {
+  if (originalFileBytes && typeof buildPatchedXlsx === "function" && typeof JSZip !== "undefined") {
+    try {
+      return await buildPatchedXlsx(originalFileBytes, pendingEdits);
+    } catch (err) {
+      log("ZIP-patch nie powiódł się — zapis przez xlsx-js-style (możliwa utrata tabel/wykresów).", "warning");
+    }
+  }
+  return XLSX.write(workbook, { bookType: ext, type: "array", cellStyles: true });
+}
+
+// Zapis wprost do uchwytu pliku (nadpisanie w miejscu) bez pobierania.
+async function writeWorkbookToHandle(handle, ext) {
+  const data = await buildOutputBytes(ext);
+  const writable = await handle.createWritable();
+  await writable.write(data);
+  await writable.close();
+}
+
+// Pobranie pliku (fallback dla przeglądarek bez FSA, np. iOS Safari / Firefox).
+async function downloadWorkbook(name, ext) {
+  const data = await buildOutputBytes(ext);
+  const blob = new Blob([data], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  setDirtyState(false);
+  toast(t("fileSaved"), "success");
+  log(`Zapisano plik: ${name}`, "success");
+}
+
+function workbookBaseName() {
+  return currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : "excel-workbench";
+}
+
+// "Zapisz": nadpisz oryginał w miejscu (FSA). Przy braku uchwytu — picker zapisu;
+// bez FSA — fallback do "Zapisz jako…" (pobranie).
+async function saveWorkbook() {
   if (!isXlsxAvailable(true)) return;
   if (!workbook) {
     toast(t("noFileToSave"), "warning");
     return;
   }
-  const base = currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : "excel-workbench";
-  const suggested = `${base}_edited.xlsx`;
-  const nameRaw = window.prompt(t("saveAsPrompt"), suggested);
+  // Nadpisanie istniejącego uchwytu (oryginalny plik otwarty przez FSA lub wybrany wcześniej).
+  if (currentFileHandle) {
+    const handleName = currentFileHandle.name || currentFileName || "";
+    const ext = handleName.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
+    // Ostrzeżenie przy KAŻDYM nadpisaniu w miejscu — to jedyna nieodwracalna operacja.
+    // Docelowo (gdy testy round-tripu będą pewniejsze) można to poluzować np. do
+    // jednorazowego potwierdzenia per plik/sesja.
+    if (!window.confirm(t("saveInPlaceWarn"))) return;
+    if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
+    try {
+      if (!(await ensureWritePermission(currentFileHandle))) {
+        toast(t("savePermissionDenied"), "warning");
+        return;
+      }
+      await writeWorkbookToHandle(currentFileHandle, ext);
+      setDirtyState(false);
+      toast(t("fileSaved"), "success");
+      log(`Zapisano plik: ${handleName}`, "success");
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      toast(t("saveFailed"), "error");
+      log("Blad przy zapisie pliku.", "error");
+    }
+    return;
+  }
+  // Brak uchwytu, ale FSA dostępne → picker zapisu (zapamiętaj uchwyt do kolejnych zapisów).
+  if (canFSA) {
+    await saveWorkbookAs();
+    return;
+  }
+  // Brak FSA → pobranie kopii.
+  saveWorkbookAs();
+}
+
+// "Zapisz jako…": z FSA otwiera picker (i zapamiętuje uchwyt); bez FSA — pobranie kopii.
+async function saveWorkbookAs() {
+  if (!isXlsxAvailable(true)) return;
+  if (!workbook) {
+    toast(t("noFileToSave"), "warning");
+    return;
+  }
+  const base = workbookBaseName();
+  const defaultExt = currentFileName && currentFileName.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
+
+  if (canFSA) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: `${base}.${defaultExt}`,
+        types: FSA_FILE_TYPES,
+      });
+      const ext = handle.name && handle.name.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
+      if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
+      await writeWorkbookToHandle(handle, ext);
+      currentFileHandle = handle;
+      setDirtyState(false);
+      toast(t("fileSaved"), "success");
+      log(`Zapisano plik: ${handle.name || base}`, "success");
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      toast(t("saveFailed"), "error");
+      log("Blad przy zapisie pliku.", "error");
+    }
+    return;
+  }
+
+  // Fallback bez FSA: zapytaj o nazwę i pobierz kopię.
+  const nameRaw = window.prompt(t("saveAsPrompt"), `${base}_edited.xlsx`);
   if (!nameRaw) return;
   let name = nameRaw.trim();
   if (!name) return;
@@ -831,14 +945,28 @@ function saveWorkbookAs() {
     name = `${name}.xlsx`;
   }
   const ext = name.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
-  if (ext === "xlsm") {
-    const ok = window.confirm(t("xlsmConfirm"));
-    if (!ok) return;
+  if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
+  await downloadWorkbook(name, ext);
+}
+
+// Otwarcie pliku przez File System Access API — daje uchwyt do zapisu w miejscu.
+async function openWorkbookViaFsa() {
+  if (!canOpenFSA) return;
+  try {
+    const [handle] = await window.showOpenFilePicker({
+      types: FSA_FILE_TYPES,
+      multiple: false,
+    });
+    if (!handle) return;
+    const file = await handle.getFile();
+    await handleFile(file, handle);
+  } catch (err) {
+    if (err && err.name === "AbortError") return;
+    // Picker FSA mimo wszystko zawiódł (np. nierozpoznany webview/iframe) —
+    // cofnij się do natywnego <input>, nie pokazuj błędu.
+    log("FSA picker niedostępny — fallback do natywnego wyboru pliku.", "warning");
+    fileInput.click();
   }
-  XLSX.writeFile(workbook, name, { bookType: ext });
-  setDirtyState(false);
-  toast(t("fileSaved"), "success");
-  log(`Zapisano plik: ${name}`, "success");
 }
 
 fileInput.addEventListener("change", (e) => {
@@ -1369,7 +1497,11 @@ if (resetSortBtn) {
   });
 }
 saveBtn.addEventListener("click", () => {
-  toast(t("webSaveInfo"), "info");
+  if (!canFSA) {
+    toast(t("webSaveInfo"), "info");
+    return;
+  }
+  saveWorkbook();
 });
 saveAsBtn.addEventListener("click", saveWorkbookAs);
 resetWidthsBtn.addEventListener("click", () => {
@@ -1394,10 +1526,126 @@ tbodyEl.addEventListener("click", (e) => {
   setFocusedCell(rowKey, colIndex0, { scroll: false });
 });
 
+// --- Edycja komórki (inline input) ---------------------------------------
+// Edycja działa tylko w trybie "wide": wiersze long-view są syntetyczne i nie
+// mapują się 1:1 na komórki arkusza. Zapis idzie przez updateSheetCell()
+// (workbook.js), który zachowuje styl/format i blokuje formuły.
+let activeCellEditor = null;
+
+function getRowByKey(rowKey) {
+  if (!rowKey || !currentDisplayModel || !Array.isArray(currentDisplayModel.rows)) return null;
+  return currentDisplayModel.rows.find((r) => getRowSelectionKey(r) === rowKey) || null;
+}
+
+function formatDateForEdit(d) {
+  const pad = (n) => String(n).padStart(2, "0");
+  const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  if (d.getHours() || d.getMinutes() || d.getSeconds()) {
+    return `${base} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  return base;
+}
+
+function cellEditString(row, i) {
+  const raw = Array.isArray(row.values) ? row.values[i] : null;
+  if (raw == null || raw === "") return "";
+  if (raw instanceof Date) return formatDateForEdit(raw);
+  return String(raw);
+}
+
+function openCellEditor(td, options = {}) {
+  if (activeCellEditor || !td || td.classList.contains("row-head")) return;
+  if (!workbook || !currentDisplayModel) return;
+  if (currentDisplayModel.mode !== "wide") {
+    toast(t("editWideOnly"), "info");
+    return;
+  }
+  const tr = td.parentElement;
+  const rowKey = tr?.dataset.rowKey || "";
+  const colIndex0 = parseInt(td.dataset.colIndex || "", 10);
+  if (!rowKey || !Number.isFinite(colIndex0)) return;
+  const row = getRowByKey(rowKey);
+  if (!row) return;
+  if (row.isLongViewRow || row.isSubheader) {
+    toast(t("editBlockedRow"), "info");
+    return;
+  }
+
+  setFocusedCell(rowKey, colIndex0, { scroll: false });
+
+  const prevText = td.dataset.fullText != null ? td.dataset.fullText : td.textContent;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "cell-editor";
+  input.setAttribute("aria-label", t("editCellAria"));
+  const initialChar = options.initialChar;
+  input.value = initialChar != null ? initialChar : cellEditString(row, colIndex0);
+  td.classList.add("cell-editing");
+  td.appendChild(input);
+  activeCellEditor = { td, input };
+
+  let finished = false;
+  const close = () => {
+    if (finished) return;
+    finished = true;
+    input.remove();
+    td.classList.remove("cell-editing");
+    activeCellEditor = null;
+  };
+  const commit = (move) => {
+    if (finished) return;
+    const parsed = parseInputValue(input.value);
+    if (parsed && parsed.type === "formula") {
+      toast(t("formulaEditBlocked"), "warning");
+      input.focus();
+      return;
+    }
+    updateSheetCell(row.rowIndex0, colIndex0, parsed);
+    const newVal = parsed ? parsed.value : null;
+    if (Array.isArray(row.values)) row.values[colIndex0] = newVal;
+    if (Array.isArray(row.rawValues)) row.rawValues[colIndex0] = newVal;
+    const display = newVal == null ? "" : toDisplay(newVal);
+    if (Array.isArray(row.display)) row.display[colIndex0] = display;
+    close();
+    td.textContent = display;
+    td.dataset.fullText = display;
+    setDirtyState(true);
+    if (move) {
+      setFocusedCell(rowKey, colIndex0, { scroll: false });
+      moveFocusedCell(move.row || 0, move.col || 0);
+    }
+    updateCellStats();
+  };
+
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      commit({ row: 1 });
+    } else if (e.key === "Tab") {
+      e.preventDefault();
+      commit({ col: e.shiftKey ? -1 : 1 });
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+      td.textContent = prevText;
+    }
+  });
+  input.addEventListener("blur", () => commit(null));
+
+  input.focus();
+  if (initialChar != null) {
+    const end = input.value.length;
+    input.setSelectionRange(end, end);
+  } else {
+    input.select();
+  }
+}
+
 tbodyEl.addEventListener("dblclick", (e) => {
   const td = e.target.closest("td");
   if (!td || td.classList.contains("row-head")) return;
-  toast(t("cellEditingFuture"), "info");
+  openCellEditor(td);
 });
 
 [searchQueryEl, searchQuery2El, filterOperatorsEl, filterOperators2El, onlyNonEmptyEl, dateModeEl, dateFromEl, dateToEl, lastDaysEl].forEach((el) => {

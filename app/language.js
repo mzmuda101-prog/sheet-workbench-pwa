@@ -93,6 +93,9 @@ const I18N = {
     noFileToSave: "Brak pliku do zapisu",
     xlsmConfirm: "Plik .xlsm moze utracic makra. Kontynuowac zapis?",
     fileSaved: "Zapisano plik",
+    saveFailed: "Nie udało się zapisać pliku",
+    savePermissionDenied: "Brak zgody na zapis do pliku",
+    saveInPlaceWarn: "Zapis NADPISZE oryginalny plik w miejscu. Funkcja jest nowa — na czas testów zrób wcześniej kopię pliku albo użyj „Zapisz jako…”. Kontynuować nadpisywanie?",
     saveAsPrompt: "Podaj nazwe pliku (xlsx lub xlsm):",
     chooseFileFirst: "Najpierw wybierz plik",
     noSheet: "Brak arkusza",
@@ -103,7 +106,9 @@ const I18N = {
     tableNoResults: "Brak wyników",
     tableNoResultsHint: "Zmień filtry albo wybierz inny arkusz.",
     formulaEditBlocked: "Edycja formuł jest zablokowana",
-    cellEditingFuture: "Edycja komórek jest tymczasowo zablokowana, dopóki lepiej nie dopracujemy zapisu stylów i zgodności pliku.",
+    editWideOnly: "Edycja komórek działa tylko w trybie szerokim (wide).",
+    editBlockedRow: "Tej komórki nie można edytować (wiersz pochodny lub podnagłówek).",
+    editCellAria: "Edycja komórki",
     sortRulesEmpty: "Brak aktywnych sortowań. Kliknij nagłówek tabeli albo dodaj regułę tutaj.",
     sectionHeaderSet: "Ustawiono wiersz nagłówka {row}",
     sectionOutsideLimit: "Ta sekcja nie mieści się w aktualnym limicie wierszy",
@@ -463,6 +468,9 @@ const I18N = {
     noFileToSave: "No file to save",
     xlsmConfirm: ".xlsm files may lose macros. Continue saving?",
     fileSaved: "File saved",
+    saveFailed: "Could not save the file",
+    savePermissionDenied: "Write permission denied",
+    saveInPlaceWarn: "This will OVERWRITE the original file in place. The feature is new — while testing, keep a backup copy first or use “Save as…”. Continue overwriting?",
     saveAsPrompt: "Enter a file name (xlsx or xlsm):",
     chooseFileFirst: "Choose a file first",
     noSheet: "No sheet selected",
@@ -473,7 +481,9 @@ const I18N = {
     tableNoResults: "No results",
     tableNoResultsHint: "Change filters or choose another sheet.",
     formulaEditBlocked: "Formula editing is blocked",
-    cellEditingFuture: "Cell editing is temporarily blocked until style saving and file compatibility are refined.",
+    editWideOnly: "Cell editing works only in wide mode.",
+    editBlockedRow: "This cell can't be edited (derived row or subheader).",
+    editCellAria: "Edit cell",
     sortRulesEmpty: "No active sort rules. Click a table header or add a rule here.",
     sectionHeaderSet: "Header row set to {row}",
     sectionOutsideLimit: "This section is outside the current row limit",
@@ -852,7 +862,8 @@ const STATIC_TRANSLATIONS = {
     resetFilters: "Reset filtrow",
     resetWidths: "Reset szerokosci",
     save: "Zapisz",
-    saveTitle: "Wersja webowa nie zapisuje do oryginalnego pliku. Użyj „Zapisz jako…”.",
+    saveTitle: "Ta przeglądarka nie pozwala nadpisać oryginału w miejscu — użyj „Zapisz jako…”, aby zapisać kopię pliku.",
+    saveTitleFsa: "Nadpisuje oryginalny plik w miejscu (Ctrl/⌘+S). Na czas testów rób kopię pliku albo używaj „Zapisz jako…”.",
     saveAs: "Zapisz jako...",
     sortingPresets: "Sortowanie i presety",
     sortColumn: "Kolumna sortowania",
@@ -1030,6 +1041,7 @@ const STATIC_TRANSLATIONS = {
     resetWidths: "Reset widths",
     save: "Save",
     saveTitle: "The web version does not save back to the original file. Use “Save as...”.",
+    saveTitleFsa: "Overwrites the original file in place (Ctrl/⌘+S). While testing, keep a backup or use “Save as…”.",
     saveAs: "Save as...",
     sortingPresets: "Sorting and presets",
     sortColumn: "Sort column",
@@ -1500,7 +1512,15 @@ function applyStaticTranslations() {
   setButtonLabel("#resetFiltersBtn", copy.resetFilters);
   setButtonLabel("#resetWidthsBtn", copy.resetWidths);
   setText("#saveBtn", copy.save);
-  setAttr("#saveBtn", "title", copy.saveTitle);
+  // Podpowiedź przez silnik cursor-hint (data-hint-pl/en), nie natywny title.
+  // Z FSA: ostrzeżenie o nadpisaniu w miejscu; bez FSA: wyjaśnienie fallbacku.
+  // Ustawiamy OBA języki (silnik sam wybiera wg currentLang i czyta atrybuty na żywo).
+  const saveBtnEl = document.getElementById("saveBtn");
+  if (saveBtnEl) {
+    const fsa = typeof canFSA !== "undefined" && canFSA;
+    saveBtnEl.dataset.hintPl = fsa ? STATIC_TRANSLATIONS.pl.saveTitleFsa : STATIC_TRANSLATIONS.pl.saveTitle;
+    saveBtnEl.dataset.hintEn = fsa ? STATIC_TRANSLATIONS.en.saveTitleFsa : STATIC_TRANSLATIONS.en.saveTitle;
+  }
   setButtonLabel("#saveAsBtn", copy.saveAs);
   setText("#panel-sort-workbench .panel-title", copy.sortingPresets);
   setFieldLabel("sortColumnSelect", copy.sortColumn);

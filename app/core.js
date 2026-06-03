@@ -148,6 +148,32 @@ let matchedRowIndexes = new Set(); // wiersze pasujące do quick search w trybie
 let quickSearchHighlightMode = false; // true = zaznacz zamiast filtruj
 let quickSearchOperatorsEnabled = false; // true = &&/|| traktowane jako operatory
 let currentFileName = "";
+// Oryginalne bajty wczytanego pliku (Uint8Array). Służą do zapisu metodą ZIP-patch:
+// podmieniamy tylko wartości edytowanych komórek w sheet.xml, zachowując tabele,
+// wykresy, style i formuły. null = brak (np. nieobsługiwany przypadek) → fallback XLSX.write.
+let originalFileBytes = null;
+// Zarejestrowane edycje komórek do naniesienia przy zapisie:
+// { [sheetName]: { [cellRef]: { v, t } | null } }  (null = usunięcie komórki)
+let pendingEdits = {};
+// Uchwyt pliku z File System Access API (jeśli plik otwarto przez showOpenFilePicker
+// lub zapisano przez showSaveFilePicker). Pozwala nadpisać oryginał w miejscu.
+// null = plik wczytany przez <input>/drag-drop (brak uchwytu) lub przeglądarka bez FSA.
+let currentFileHandle = null;
+// Czy działamy w osadzonym (cross-origin) iframe, np. podgląd webu w VS Code.
+// File System Access API jest tam wystawione w window, ale jego wywołanie rzuca
+// SecurityError ("Cross origin sub frames aren't allowed to show a file picker"),
+// więc musimy je tam wyłączyć i wrócić do natywnego <input> / pobierania.
+const isEmbeddedFrame = (() => {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true; // brak dostępu do window.top = cross-origin iframe
+  }
+})();
+// Wykrycie File System Access API. Zapis w miejscu i picker tylko gdy dostępne
+// i NIE w osadzonym iframe; inaczej fallback do pobrania pliku (iOS Safari, Firefox, VS Code preview).
+const canFSA = typeof window !== "undefined" && "showSaveFilePicker" in window && !isEmbeddedFrame;
+const canOpenFSA = typeof window !== "undefined" && "showOpenFilePicker" in window && !isEmbeddedFrame;
 let currentSheetName = "";
 let currentHeaderRow = 1;
 let currentStartCol = 0;
