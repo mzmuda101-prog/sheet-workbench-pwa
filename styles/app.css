@@ -998,9 +998,9 @@ body.splashing {
      u góry, delikatny pełnokrawędziowy pierścień światła i subtelna głębia u dołu. */
   background:
     linear-gradient(180deg, color-mix(in srgb, white 16%, transparent) 0%, transparent 40%),
-    var(--panel);
-  -webkit-backdrop-filter: blur(24px) saturate(1.9) brightness(1.02);
-  backdrop-filter: blur(24px) saturate(1.9) brightness(1.02);
+    color-mix(in srgb, var(--panel) 74%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(1.95) brightness(1.02);
+  backdrop-filter: blur(26px) saturate(1.95) brightness(1.02);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   padding: 14px;
@@ -1016,9 +1016,9 @@ body.splashing {
 [data-theme="dark"] .panel {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%),
-    var(--panel);
-  -webkit-backdrop-filter: blur(26px) saturate(1.7) brightness(1.04);
-  backdrop-filter: blur(26px) saturate(1.7) brightness(1.04);
+    color-mix(in srgb, var(--panel) 78%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(1.75) brightness(1.04);
+  backdrop-filter: blur(28px) saturate(1.75) brightness(1.04);
   box-shadow:
     0 1px 1px rgba(0, 0, 0, 0.25),
     0 16px 36px -16px rgba(0, 0, 0, 0.6),
