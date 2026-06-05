@@ -690,6 +690,52 @@ function resolveXfStyle(styleIndex, wb) {
   };
 }
 
+// Domyślny rozmiar czcionki skoroszytu (fonts[0]) — baza do skalowania względnego.
+// Excel domyślnie to Calibri 11pt; jeśli nie da się odczytać, zakładamy 11.
+function getWorkbookDefaultFontSize(wb) {
+  const fonts = wb?.Styles?.Fonts || wb?.Styles?.fonts;
+  const f0 = Array.isArray(fonts) ? fonts[0] : null;
+  const sz = f0 ? Number(f0.sz ?? f0.Sz ?? f0.size ?? f0.Size) : 0;
+  return sz > 0 ? sz : 11;
+}
+
+// Mapuje nazwę czcionki z pliku Excel na stos CSS: najpierw oryginalna nazwa
+// (użyta, jeśli zainstalowana — np. Calibri na Windows), potem web-safe zamienniki
+// i rodzina ogólna. Dzięki temu na każdym systemie wygląd jest najbliższy Excelowi
+// bez ryzyka „braku" czcionki.
+function excelFontToCssStack(name) {
+  const n = String(name || "").trim();
+  if (!n) return "";
+  const FALLBACKS = {
+    "calibri": "'Segoe UI', Candara, Optima, sans-serif",
+    "calibri light": "'Segoe UI Light', 'Segoe UI', sans-serif",
+    "aptos": "'Segoe UI', sans-serif",
+    "aptos narrow": "'Segoe UI', sans-serif",
+    "arial": "Helvetica, 'Helvetica Neue', sans-serif",
+    "arial narrow": "'Arial Narrow', Arial, sans-serif",
+    "arial black": "Arial, sans-serif",
+    "helvetica": "'Helvetica Neue', Arial, sans-serif",
+    "tahoma": "Geneva, Verdana, sans-serif",
+    "verdana": "Geneva, sans-serif",
+    "segoe ui": "Candara, sans-serif",
+    "trebuchet ms": "'Lucida Grande', sans-serif",
+    "century gothic": "'Apple Gothic', sans-serif",
+    "times new roman": "Times, serif",
+    "times": "serif",
+    "cambria": "Georgia, serif",
+    "georgia": "'Times New Roman', serif",
+    "garamond": "'Apple Garamond', Georgia, serif",
+    "book antiqua": "Palatino, 'Palatino Linotype', serif",
+    "palatino linotype": "Palatino, serif",
+    "courier new": "Courier, monospace",
+    "consolas": "'Lucida Console', Monaco, monospace",
+    "lucida console": "Monaco, monospace",
+    "comic sans ms": "'Comic Sans', cursive",
+  };
+  const fallback = FALLBACKS[n.toLowerCase()] || "sans-serif";
+  return `"${n}", ${fallback}`;
+}
+
 function extractCellStyle(cell, wb) {
   if (!cell) return null;
   let style = null;
@@ -712,11 +758,20 @@ function extractCellStyle(cell, wb) {
   const hasCustomAlign = isCustomAlignment(alignment);
   const hasBorder = hasCustomBorder(border);
 
+  // Czcionka jak w Excelu: rodzina (nazwa) + względny rozmiar wobec domyślnej.
+  const fontName = (font && (font.name || font.Name || font.rFont)) || "";
+  const rawFontSize = font ? Number(font.sz ?? font.Sz ?? font.size ?? font.Size) : 0;
+  const baseFontSize = getWorkbookDefaultFontSize(wb);
+  const fontFamily = fontName ? excelFontToCssStack(fontName) : "";
+  const fontScale = rawFontSize > 0 && baseFontSize > 0 ? rawFontSize / baseFontSize : 0;
+
   const styleOut = {
     fillColor,
     hasCustomFill,
     fontColor,
     hasCustomFontColor,
+    fontFamily,
+    fontScale,
     bold: !!(font && (font.bold || font.b || font.Bold)),
     italic: !!(font && (font.italic || font.i || font.Italic)),
     underline: !!(font && (font.underline || font.u || font.Underline)),
@@ -745,6 +800,10 @@ function applyCellStyle(td, style) {
     td.style.background = hexToRgba(style.fillColor, 0.28) || td.style.background;
   }
   if (style.hasCustomFontColor && style.fontColor) td.style.color = style.fontColor;
+  if (style.fontFamily) td.style.fontFamily = style.fontFamily;
+  if (style.fontScale && Math.abs(style.fontScale - 1) > 0.01) {
+    td.style.setProperty("--cell-font-scale", String(Math.round(style.fontScale * 1000) / 1000));
+  }
   if (style.bold) td.style.fontWeight = "700";
   if (style.italic) td.style.fontStyle = "italic";
   if (style.underline) td.style.textDecoration = "underline";
@@ -864,7 +923,11 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
       // (np. uszkodzony/pusty model long) — pomijamy kolumny poza zakresem nagłówków.
       if (i >= samples.length) return;
       const text = getDisplayValue(rows[r], i);
-      const w = ctx.measureText(text).width;
+      let w = ctx.measureText(text).width;
+      // Komórki z większą czcionką (jak w Excelu) potrzebują szerszej kolumny,
+      // by tekst się nie uciął — skalujemy zmierzoną szerokość proporcjonalnie.
+      const cellStyle = rows[r].cellStyles && rows[r].cellStyles[i];
+      if (cellStyle && cellStyle.fontScale > 1) w *= cellStyle.fontScale;
       samples[i].push(w);
     });
   }
@@ -1030,6 +1093,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     rowHead.className = "row-head";
     rowHead.textContent = model.rowHeadFormatter ? model.rowHeadFormatter(row, rowPos) : String(row.rowIndex0 + 1);
     tr.appendChild(rowHead);
+    const matchedCols = highlightMatchedCells ? matchedCellsByRow.get(row.rowIndex0) : null;
     row.values.forEach((v, i) => {
       const mergeKey = `${rowPos}:${i}`;
       if (mergeLayout && mergeLayout.covered.has(mergeKey)) return;
@@ -1041,6 +1105,7 @@ function renderTable(modelOrHeaders, maybeRows) {
       if (selectedCellState && selectedCellState.rowKey === tr.dataset.rowKey && selectedCellState.colIndex0 === i) {
         td.classList.add("cell-selected");
       }
+      if (matchedCols && matchedCols.has(i)) td.classList.add("cell-filter-match");
 
       if (mergeLayout) {
         const anchor = mergeLayout.anchors.get(mergeKey);

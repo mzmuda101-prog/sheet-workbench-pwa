@@ -426,26 +426,34 @@ function combinePrimaryAndEmptyMatch(primaryMatched, emptyMatched, negated, hasP
   return true;
 }
 
-function rowMatchesSingleTerm(row, term, criterion) {
+// Czy pojedyncza komórka (row, kolumna i) dopasowuje zapytanie q w danym trybie.
+// Wyłuskane z rowMatchesSingleTerm, by współdzielić tę samą logikę kandydatów
+// (m.in. warianty dat dd-mm-yy / dd-mm-yyyy) z podświetlaniem pasujących komórek.
+function cellMatchesTerm(row, i, q, mode) {
   const values = row.values;
+  if (i >= values.length) return false;
+  const text = getDisplayValue(row, i).toLowerCase();
+  const altDate = parseDateFlexible(values[i]);
+  const candidates = [text];
+  if (altDate instanceof Date) {
+    const dd = String(altDate.getDate()).padStart(2, "0");
+    const mm = String(altDate.getMonth() + 1).padStart(2, "0");
+    const yyyy = String(altDate.getFullYear());
+    const yy = yyyy.slice(-2);
+    candidates.push(`${dd}-${mm}-${yy}`);
+    candidates.push(`${dd}-${mm}-${yyyy}`);
+  }
+  if (mode === "equals") return candidates.some((c) => c === q);
+  if (mode === "starts_with") return candidates.some((c) => c.startsWith(q));
+  if (mode === "contains") return candidates.some((c) => c.includes(q));
+  return false;
+}
+
+function rowMatchesSingleTerm(row, term, criterion) {
   const q = term.trim().toLowerCase();
   if (!q) return true;
   for (const i of criterion.indexes) {
-    if (i >= values.length) continue;
-    const text = getDisplayValue(row, i).toLowerCase();
-    const altDate = parseDateFlexible(values[i]);
-    const candidates = [text];
-    if (altDate instanceof Date) {
-      const dd = String(altDate.getDate()).padStart(2, "0");
-      const mm = String(altDate.getMonth() + 1).padStart(2, "0");
-      const yyyy = String(altDate.getFullYear());
-      const yy = yyyy.slice(-2);
-      candidates.push(`${dd}-${mm}-${yy}`);
-      candidates.push(`${dd}-${mm}-${yyyy}`);
-    }
-    if (criterion.mode === "equals" && candidates.some((c) => c === q)) return true;
-    if (criterion.mode === "starts_with" && candidates.some((c) => c.startsWith(q))) return true;
-    if (criterion.mode === "contains" && candidates.some((c) => c.includes(q))) return true;
+    if (cellMatchesTerm(row, i, q, criterion.mode)) return true;
   }
   return false;
 }
@@ -856,6 +864,53 @@ function applyCurrentSort() {
   renderFormulaWorkbench();
 }
 
+// Zbiera „surowe" pozytywne (nie-zanegowane) szukane frazy z drzewa zapytania.
+// Zanegowane terminy i całe zanegowane pod-wyrażenia pomijamy — nie ma jednej
+// komórki „dzięki której" wiersz przeszedł negację, więc nie ma czego podświetlać.
+function gatherPositiveTermStrings(parsed) {
+  const out = [];
+  const walkTerm = (term) => {
+    if (!term || term.negated) return;
+    if (term.subExpr) walkAst(term.subExpr);
+    else if (term.term) out.push(term.term.trim().toLowerCase());
+  };
+  const walkAst = (ast) => {
+    ast.children.forEach((andGroup) => andGroup.terms.forEach(walkTerm));
+  };
+  parsed.groups.forEach((group) => group.forEach(walkTerm));
+  return out.filter(Boolean);
+}
+
+// Dla wiersza, który przeszedł filtr, wyznacza zbiór indeksów kolumn, których
+// zawartość pozytywnie pasuje do filtrów tekstowych / zakresu dat. To podstawa
+// subtelnego podświetlenia „komórek powodujących trafienie".
+function collectMatchingCellsForRow(row, criteria, dateFilter) {
+  const cols = new Set();
+  for (const criterion of criteria) {
+    if (criterion.negated || !criterion.query) continue;
+    const parsed = parseQueryTerms(criterion.query, criterion.operatorsEnabled);
+    const positiveTerms = gatherPositiveTermStrings(parsed);
+    for (const q of positiveTerms) {
+      for (const i of criterion.indexes) {
+        if (cellMatchesTerm(row, i, q, criterion.mode)) cols.add(i);
+      }
+    }
+  }
+  const range = dateFilter && dateFilter.range;
+  if (dateFilter && !dateFilter.negated && range && (range.from || range.to)) {
+    for (const idx of dateFilter.indexes) {
+      if (idx >= row.values.length) continue;
+      const raw = row.rawValues ? row.rawValues[idx] : row.values[idx];
+      const d = parseDateFlexible(raw ?? getDisplayValue(row, idx));
+      if (!d) continue;
+      if (range.from && d < range.from) continue;
+      if (range.to && d > range.to) continue;
+      cols.add(idx);
+    }
+  }
+  return cols;
+}
+
 function applyFilters() {
   const criteria = [
     {
@@ -883,6 +938,7 @@ function applyFilters() {
     negated: dateNegateEl.checked,
   };
   const onlyNonEmpty = onlyNonEmptyEl.checked;
+  highlightMatchedCells = !!(highlightMatchCellsEl && highlightMatchCellsEl.checked);
 
   const rowPasses = (row) => {
     if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;
@@ -890,14 +946,27 @@ function applyFilters() {
     return true;
   };
 
+  matchedCellsByRow = new Map();
+  const collectCells = (row) => {
+    if (!highlightMatchedCells) return;
+    const cols = collectMatchingCellsForRow(row, criteria, dateFilter);
+    if (cols.size) matchedCellsByRow.set(row.rowIndex0, cols);
+  };
+
   if (quickSearchHighlightMode) {
     // Tryb "zaznacz": wszystkie wiersze widoczne, zapamiętaj które pasują
     viewRows = baseRows.slice();
-    matchedRowIndexes = new Set(baseRows.filter(rowPasses).map((r) => r.rowIndex0));
+    matchedRowIndexes = new Set();
+    baseRows.forEach((row) => {
+      if (!rowPasses(row)) return;
+      matchedRowIndexes.add(row.rowIndex0);
+      collectCells(row);
+    });
   } else {
     // Tryb "filtruj": tylko pasujące wiersze
     matchedRowIndexes = new Set();
     viewRows = baseRows.filter(rowPasses);
+    viewRows.forEach(collectCells);
   }
 }
 

@@ -909,6 +909,7 @@ const STATIC_TRANSLATIONS = {
     emptyOrNot: "Puste / niepuste komórki",
     invert: "Odwróć",
     onlyRowsWithData: "Tylko wiersze z danymi",
+    highlightMatchCells: "Podświetl pasujące komórki",
     freezeHeadersLabel: "Zablokuj wiersze nagłówków",
     dateFilter: "Filtr dat",
     lastDays: "Ostatnie dni",
@@ -1087,6 +1088,7 @@ const STATIC_TRANSLATIONS = {
     emptyOrNot: "Empty / non-empty cells",
     invert: "Invert",
     onlyRowsWithData: "Only rows with data",
+    highlightMatchCells: "Highlight matching cells",
     freezeHeadersLabel: "Freeze header rows",
     dateFilter: "Date filter",
     lastDays: "Last days",
@@ -1544,6 +1546,7 @@ function applyStaticTranslations() {
   setCheckboxText("filterNegate", copy.invert);
   setOperatorsToggleText("filterOperators", copy.searchOperatorsToggle, copy.quickSearchOperatorsTitle);
   setCheckboxText("onlyNonEmpty", copy.onlyRowsWithData);
+  setCheckboxText("highlightMatchCells", copy.highlightMatchCells);
   setCheckboxText("freezeHeaders", copy.freezeHeadersLabel);
   setText("#filter2BlockTitle", copy.filterBlock2);
   setButtonLabel("#addFilter2Btn", copy.addSecondFilter);

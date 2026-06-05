@@ -188,6 +188,9 @@ function resetFilterInputs() {
   if (filterOperatorsEl) filterOperatorsEl.checked = false;
   if (filterOperators2El) filterOperators2El.checked = false;
   onlyNonEmptyEl.checked = false;
+  if (highlightMatchCellsEl) highlightMatchCellsEl.checked = false;
+  highlightMatchedCells = false;
+  matchedCellsByRow = new Map();
   dateModeEl.value = "between";
   dateFromEl.value = "";
   dateToEl.value = "";

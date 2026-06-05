@@ -51,6 +51,7 @@ const filterEmptyMode2El = document.getElementById("filterEmptyMode2");
 const filterNegate2El = document.getElementById("filterNegate2");
 const filterOperators2El = document.getElementById("filterOperators2");
 const onlyNonEmptyEl = document.getElementById("onlyNonEmpty");
+const highlightMatchCellsEl = document.getElementById("highlightMatchCells");
 const applyFilterBtn = document.getElementById("applyFilterBtn");
 const filterBadgeEl = document.getElementById("filterBadge");
 const sortColumnSelectEl = document.getElementById("sortColumnSelect");
@@ -147,6 +148,11 @@ let baseRows = [];
 let viewRows = [];
 let matchedRowIndexes = new Set(); // wiersze pasujące do quick search w trybie "zaznacz"
 let quickSearchHighlightMode = false; // true = zaznacz zamiast filtruj
+// Mapa rowIndex0 -> Set(colIndex) komórek, które pozytywnie dopasowały filtr.
+// Wypełniana tylko gdy highlightMatchedCells === true. Służy do subtelnego
+// podświetlenia w siatce komórek „dzięki którym" wiersz przeszedł filtr.
+let matchedCellsByRow = new Map();
+let highlightMatchedCells = false; // true = podświetl pasujące komórki po filtrowaniu
 let quickSearchOperatorsEnabled = false; // true = &&/|| traktowane jako operatory
 let currentFileName = "";
 // Oryginalne bajty wczytanego pliku (Uint8Array). Służą do zapisu metodą ZIP-patch:
