@@ -596,11 +596,85 @@ function normalizeHexColor(input) {
   return null;
 }
 
-function colorFromStyleNode(node) {
+// Legacy 56-kolorowa paleta indeksowana Excela (color indexed="N").
+// 64/65 = automatyczny foreground/background → null (traktujemy jak domyślny).
+const INDEXED_COLORS = [
+  "#000000","#FFFFFF","#FF0000","#00FF00","#0000FF","#FFFF00","#FF00FF","#00FFFF",
+  "#000000","#FFFFFF","#FF0000","#00FF00","#0000FF","#FFFF00","#FF00FF","#00FFFF",
+  "#800000","#008000","#000080","#808000","#800080","#008080","#C0C0C0","#808080",
+  "#9999FF","#993366","#FFFFCC","#CCFFFF","#660066","#FF8080","#0066CC","#CCCCFF",
+  "#000080","#FF00FF","#FFFF00","#00FFFF","#800080","#800000","#008080","#0000FF",
+  "#00CCFF","#CCFFFF","#CCFFCC","#FFFF99","#99CCFF","#FF99CC","#CC99FF","#FFCC99",
+  "#3366FF","#33CCCC","#99CC00","#FFCC00","#FF9900","#FF6600","#666699","#969696",
+  "#003366","#339966","#003300","#333300","#993300","#993366","#333399","#333333",
+  null, null,
+];
+
+// Domyślna paleta motywu Office (2013+). Indeksy jak w atrybucie color theme="N":
+// 0/1 (tło1/tekst1) są zamienione względem clrScheme — zgodnie z tym, co pokazuje Excel.
+const THEME_COLORS = [
+  "#FFFFFF", "#000000", "#E7E6E6", "#44546A",
+  "#4472C4", "#ED7D31", "#A5A5A5", "#FFC000",
+  "#5B9BD5", "#70AD47", "#0563C1", "#954F72",
+];
+
+// Tint motywu wg OOXML: modyfikuje LUMINANCJĘ w HSL (nie per-kanał).
+function applyColorTint(hex, tint) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex || "");
+  if (!m || !tint) return hex;
+  const num = parseInt(m[1], 16);
+  let r = ((num >> 16) & 255) / 255;
+  let g = ((num >> 8) & 255) / 255;
+  let b = (num & 255) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h = 0, s = 0, l = (max + min) / 2;
+  const d = max - min;
+  if (d !== 0) {
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0);
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h /= 6;
+  }
+  l = tint < 0 ? l * (1 + tint) : l * (1 - tint) + tint;
+  l = Math.min(1, Math.max(0, l));
+  let R, G, B;
+  if (s === 0) { R = G = B = l; }
+  else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    R = hue2rgb(p, q, h + 1 / 3); G = hue2rgb(p, q, h); B = hue2rgb(p, q, h - 1 / 3);
+  }
+  const toHex = (v) => Math.round(v * 255).toString(16).padStart(2, "0");
+  return `#${toHex(R)}${toHex(G)}${toHex(B)}`;
+}
+
+// Rozwiązuje kolor węzła stylu. Przy podanym `resolveTheme` obsługuje też
+// color indexed="N" oraz color theme="N" (+ tint) — Excel tak zwykle zapisuje
+// kolory czcionek. Bez flagi: tylko rgb/auto (jak dotąd — dla teł/obramowań).
+function colorFromStyleNode(node, resolveTheme = false) {
   if (!node || typeof node !== "object") return null;
-  const rgb = node.rgb ?? node.RGB;
-  const direct = normalizeHexColor(rgb);
+  const direct = normalizeHexColor(node.rgb ?? node.RGB);
   if (direct) return direct;
+  if (resolveTheme) {
+    const tint = Number(node.tint ?? node.Tint) || 0;
+    const idx = node.indexed ?? node.Indexed;
+    if (Number.isInteger(idx) && INDEXED_COLORS[idx]) {
+      return tint ? applyColorTint(INDEXED_COLORS[idx], tint) : INDEXED_COLORS[idx];
+    }
+    const themeIdx = node.theme ?? node.Theme;
+    if (Number.isInteger(themeIdx) && THEME_COLORS[themeIdx]) {
+      return applyColorTint(THEME_COLORS[themeIdx], tint);
+    }
+  }
   const auto = normalizeHexColor(node.auto);
   if (auto) return auto;
   return null;
@@ -736,23 +810,116 @@ function excelFontToCssStack(name) {
   return `"${n}", ${fallback}`;
 }
 
-function extractCellStyle(cell, wb) {
-  if (!cell) return null;
-  let style = null;
-  if (cell.s && typeof cell.s === "object") {
-    style = cell.s;
-  } else if (Number.isFinite(cell.s)) {
-    style = resolveXfStyle(cell.s, wb);
+function decodeXmlEntities(s) {
+  return String(s)
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, d) => String.fromCharCode(+d))
+    .replace(/&amp;/g, "&");
+}
+
+// Parsuje surowy XML arkusza → Map<cellRef, xfIndex> z atrybutów <c r="A1" s="N">.
+function parseCellStyleIndices(sheetXml) {
+  const map = new Map();
+  const re = /<c\s+r="([A-Z]+\d+)"([^>]*)>/g;
+  let m;
+  while ((m = re.exec(sheetXml))) {
+    const sMatch = /\bs="(\d+)"/.exec(m[2]);
+    if (sMatch) map.set(m[1], parseInt(sMatch[1], 10));
   }
-  if (!style || typeof style !== "object") return null;
+  return map;
+}
 
-  const fill = style.fill || style.Fill || null;
-  const font = style.font || style.Font || null;
-  const border = style.border || style.Border || null;
-  const alignment = style.alignment || style.Alignment || null;
+// Odzyskuje mapę stylów per arkusz wprost z pliku .xlsx (JSZip), bo ten build
+// xlsx-js-style nie wystawia indeksu stylu na komórce. Zwraca
+// Map<sheetName, Map<cellRef, xfIndex>> albo null (brak JSZip / błąd / nie-xlsx).
+async function buildStyleIndexMap(bytes, wb) {
+  if (typeof JSZip === "undefined" || !bytes || !wb) return null;
+  try {
+    const zip = await JSZip.loadAsync(bytes);
+    const wbXml = await zip.file("xl/workbook.xml")?.async("string");
+    const relsXml = await zip.file("xl/_rels/workbook.xml.rels")?.async("string");
+    if (!wbXml || !relsXml) return null;
 
-  const fillColor = colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor);
-  const fontColor = colorFromStyleNode(font?.color || font?.Color);
+    const ridToPath = new Map();
+    const relRe = /<Relationship\b[^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"[^>]*?\/?>/g;
+    let rm;
+    while ((rm = relRe.exec(relsXml))) {
+      const target = rm[2];
+      if (!/worksheets\//.test(target)) continue;
+      let path = decodeXmlEntities(target);
+      if (path.startsWith("/")) path = path.slice(1);
+      else if (!path.startsWith("xl/")) path = "xl/" + path.replace(/^\.\//, "");
+      ridToPath.set(rm[1], path);
+    }
+
+    const result = new Map();
+    const sheetRe = /<sheet\b[^>]*?name="([^"]+)"[^>]*?r:id="([^"]+)"[^>]*?\/?>/g;
+    let sm;
+    while ((sm = sheetRe.exec(wbXml))) {
+      const name = decodeXmlEntities(sm[1]);
+      const path = ridToPath.get(sm[2]);
+      const file = path ? zip.file(path) : null;
+      if (!file) continue;
+      const xml = await file.async("string");
+      result.set(name, parseCellStyleIndices(xml));
+    }
+    return result.size ? result : null;
+  } catch {
+    return null;
+  }
+}
+
+// Rozwiązuje styl z indeksu xf (s="N" z surowego XML komórki) → font/fill/border.
+// KLUCZOWE: ten build xlsx-js-style przy odczycie wrzuca do `cell.s` tylko fill,
+// gubiąc font/border/alignment — ale pełne tabele są w `wb.Styles.CellXf/Fonts/...`
+// (Fonts mają już policzony color.rgb), więc po odzyskaniu indeksu wszystko wraca.
+function resolveXfStyleFromIndex(sIdx, wb) {
+  if (!Number.isInteger(sIdx) || !wb || !wb.Styles) return null;
+  const st = wb.Styles;
+  const xfs = st.CellXf || st.CellXfs || st.cellXfs;
+  const xf = Array.isArray(xfs) ? xfs[sIdx] : null;
+  if (!xf) return null;
+  const pick = (a, b) => {
+    const v = a ?? b;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const fontId = pick(xf.fontId, xf.fontid);
+  const fillId = pick(xf.fillId, xf.fillid);
+  const borderId = pick(xf.borderId, xf.borderid);
+  const fonts = st.Fonts || st.fonts || [];
+  const fills = st.Fills || st.fills || [];
+  const borders = st.Borders || st.borders || [];
+  return {
+    fontId,
+    font: fontId != null ? fonts[fontId] : null,
+    fill: fillId != null ? fills[fillId] : null,
+    border: borderId != null ? borders[borderId] : null,
+    alignment: xf.alignment || xf.Alignment || null,
+  };
+}
+
+function extractCellStyle(cell, wb, xfStyle = null) {
+  const cellS = cell && cell.s && typeof cell.s === "object" ? cell.s : null;
+  if (!cellS && !xfStyle) return null;
+
+  // Źródła: font/border/alignment bierzemy z xf (cell.s ich nie ma w tym buildzie),
+  // a fill z xf (autorytatywny, ma rgb) lub z samego cell.s (bywa węzłem fill).
+  const cellFillNode = cellS && (cellS.patternType != null || cellS.PatternType != null || cellS.fgColor || cellS.FgColor)
+    ? cellS
+    : (cellS?.fill || cellS?.Fill || null);
+  const fill = (xfStyle && xfStyle.fill) || cellFillNode || null;
+  const border = (xfStyle && xfStyle.border) || cellS?.border || cellS?.Border || null;
+  const alignment = (xfStyle && xfStyle.alignment) || cellS?.alignment || cellS?.Alignment || null;
+  const rawFont = (xfStyle && xfStyle.font) || cellS?.font || cellS?.Font || null;
+  // Font domyślny skoroszytu (fontId 0) zostawiamy natywnemu wyglądowi aplikacji —
+  // inaczej KAŻDA komórka dostałaby kolor/rodzinę domyślną (psułoby też dark mode).
+  const isDefaultFont = xfStyle ? xfStyle.fontId === 0 : false;
+  const font = isDefaultFont ? null : rawFont;
+
+  const fillColor = colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor, true);
+  const fontColor = colorFromStyleNode(font?.color || font?.Color, true);
   const hasCustomFill = !isDefaultLikeFill(fill, fillColor);
   const hasCustomFontColor = !isDefaultLikeFontColor(fontColor);
   const hasCustomAlign = isCustomAlignment(alignment);
@@ -795,13 +962,13 @@ function applyEdgeBorder(td, edge) {
 
 function applyCellStyle(td, style) {
   if (!style) return;
-  if (style.hasCustomFill && style.fillColor) {
+  if (cellStyleShowFills && style.hasCustomFill && style.fillColor) {
     td.classList.add("cell-has-fill");
     td.style.background = hexToRgba(style.fillColor, 0.28) || td.style.background;
   }
-  if (style.hasCustomFontColor && style.fontColor) td.style.color = style.fontColor;
-  if (style.fontFamily) td.style.fontFamily = style.fontFamily;
-  if (style.fontScale && Math.abs(style.fontScale - 1) > 0.01) {
+  if (cellStyleShowFontColors && style.hasCustomFontColor && style.fontColor) td.style.color = style.fontColor;
+  if (cellStyleShowFonts && style.fontFamily) td.style.fontFamily = style.fontFamily;
+  if (cellStyleShowFonts && style.fontScale && Math.abs(style.fontScale - 1) > 0.01) {
     td.style.setProperty("--cell-font-scale", String(Math.round(style.fontScale * 1000) / 1000));
   }
   if (style.bold) td.style.fontWeight = "700";
@@ -811,7 +978,7 @@ function applyCellStyle(td, style) {
   if (style.vertical) td.style.verticalAlign = style.vertical;
   if (style.wrapText) td.style.whiteSpace = "normal";
 
-  if (style.hasBorder && style.border && typeof style.border === "object") {
+  if (cellStyleShowBorders && style.hasBorder && style.border && typeof style.border === "object") {
     const t = applyEdgeBorder(td, style.border.top || style.border.Top);
     const r = applyEdgeBorder(td, style.border.right || style.border.Right);
     const b = applyEdgeBorder(td, style.border.bottom || style.border.Bottom);
@@ -1142,13 +1309,16 @@ function buildRows(sheet, headerRow, wb) {
   const colMeta = sheet["!cols"] || [];
   const rowMeta = sheet["!rows"] || [];
   const merges = Array.isArray(sheet["!merges"]) ? sheet["!merges"] : [];
+  const styleIndexForSheet = currentStyleIndexMap ? currentStyleIndexMap.get(currentSheetName) : null;
+  const xfStyleAt = (ref) => (styleIndexForSheet ? resolveXfStyleFromIndex(styleIndexForSheet.get(ref), wb) : null);
   const rawHeaders = [];
   const headerStyles = [];
   for (let c = range.s.c; c <= range.e.c; c++) {
-    const cell = sheet[XLSX.utils.encode_cell({ r: headerRow - 1, c })];
+    const ref = XLSX.utils.encode_cell({ r: headerRow - 1, c });
+    const cell = sheet[ref];
     const v = cell ? cell.v : null;
     rawHeaders.push(v ? String(v).trim() : XLSX.utils.encode_col(c));
-    headerStyles.push(wb ? extractCellStyle(cell, wb) : null);
+    headerStyles.push(wb ? extractCellStyle(cell, wb, xfStyleAt(ref)) : null);
   }
   const headers = makeHeadersUnique(rawHeaders);
   const duplicateHeaderCount = rawHeaders.length - new Set(rawHeaders).size;
@@ -1163,7 +1333,8 @@ function buildRows(sheet, headerRow, wb) {
     const cellStyles = [];
     let any = false;
     for (let c = range.s.c; c <= range.e.c; c++) {
-      const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+      const ref = XLSX.utils.encode_cell({ r, c });
+      const cell = sheet[ref];
       let v = cell ? cell.v : null;
       let shown = cell && cell.w ? String(cell.w) : toDisplay(v);
       shown = localizeDisplayedDate(v, shown, cell);
@@ -1179,7 +1350,7 @@ function buildRows(sheet, headerRow, wb) {
       }
       values.push(v);
       display.push(shown);
-      cellStyles.push(wb ? extractCellStyle(cell, wb) : null);
+      cellStyles.push(wb ? extractCellStyle(cell, wb, xfStyleAt(ref)) : null);
       if (v !== null && v !== "") any = true;
     }
     if (!any) continue;

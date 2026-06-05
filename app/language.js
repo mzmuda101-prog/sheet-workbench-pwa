@@ -911,6 +911,11 @@ const STATIC_TRANSLATIONS = {
     onlyRowsWithData: "Tylko wiersze z danymi",
     highlightMatchCells: "Podświetl pasujące komórki",
     freezeHeadersLabel: "Zablokuj wiersze nagłówków",
+    cellStyleOptionsTitle: "Style komórek z pliku",
+    showFontColors: "Pokaż kolory czcionek",
+    showCellFills: "Pokaż wypełnienia komórek",
+    showCellFonts: "Pokaż czcionki z pliku",
+    showCellBorders: "Pokaż obramowania",
     dateFilter: "Filtr dat",
     lastDays: "Ostatnie dni",
     from: "Od",
@@ -1090,6 +1095,11 @@ const STATIC_TRANSLATIONS = {
     onlyRowsWithData: "Only rows with data",
     highlightMatchCells: "Highlight matching cells",
     freezeHeadersLabel: "Freeze header rows",
+    cellStyleOptionsTitle: "Cell styles from file",
+    showFontColors: "Show font colors",
+    showCellFills: "Show cell fills",
+    showCellFonts: "Show file fonts",
+    showCellBorders: "Show borders",
     dateFilter: "Date filter",
     lastDays: "Last days",
     from: "From",
@@ -1548,6 +1558,11 @@ function applyStaticTranslations() {
   setCheckboxText("onlyNonEmpty", copy.onlyRowsWithData);
   setCheckboxText("highlightMatchCells", copy.highlightMatchCells);
   setCheckboxText("freezeHeaders", copy.freezeHeadersLabel);
+  setText("#cellStyleOptionsTitle", copy.cellStyleOptionsTitle);
+  setCheckboxText("showFontColors", copy.showFontColors);
+  setCheckboxText("showCellFills", copy.showCellFills);
+  setCheckboxText("showCellFonts", copy.showCellFonts);
+  setCheckboxText("showCellBorders", copy.showCellBorders);
   setText("#filter2BlockTitle", copy.filterBlock2);
   setButtonLabel("#addFilter2Btn", copy.addSecondFilter);
   setButtonLabel("#removeFilter2Btn", copy.removeFilter);

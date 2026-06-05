@@ -31,6 +31,10 @@ const displayModeEl = document.getElementById("displayMode");
 const maxRowsEl = document.getElementById("maxRows");
 const zoomLevelEl = document.getElementById("zoomLevel");
 const freezeHeadersEl = document.getElementById("freezeHeaders");
+const showFontColorsEl = document.getElementById("showFontColors");
+const showCellFillsEl = document.getElementById("showCellFills");
+const showCellFontsEl = document.getElementById("showCellFonts");
+const showCellBordersEl = document.getElementById("showCellBorders");
 const excelLayoutToggleEl = document.getElementById("excelLayoutToggle");
 const loadBtn = document.getElementById("loadBtn");
 const loadSampleBtn = document.getElementById("loadSampleBtn");
@@ -153,6 +157,16 @@ let quickSearchHighlightMode = false; // true = zaznacz zamiast filtruj
 // podświetlenia w siatce komórek „dzięki którym" wiersz przeszedł filtr.
 let matchedCellsByRow = new Map();
 let highlightMatchedCells = false; // true = podświetl pasujące komórki po filtrowaniu
+// Map<sheetName, Map<cellRef, xfIndex>> odzyskana z surowego .xlsx (JSZip) — bo ten
+// build xlsx-js-style gubi font/border/alignment z cell.s; indeks pozwala je odtworzyć
+// z wb.Styles.CellXf/Fonts/Fills. null = brak (sample, nie-xlsx, błąd) → fallback do cell.s.
+let currentStyleIndexMap = null;
+// Opcjonalne pokazywanie stylów komórek z pliku (panel „Widok"). Domyślnie wszystko
+// włączone — odwzorowanie Excela. Czytane w applyCellStyle przy każdym renderze.
+let cellStyleShowFontColors = true;
+let cellStyleShowFills = true;
+let cellStyleShowFonts = true; // rodzina + rozmiar
+let cellStyleShowBorders = true;
 let quickSearchOperatorsEnabled = false; // true = &&/|| traktowane jako operatory
 let currentFileName = "";
 // Oryginalne bajty wczytanego pliku (Uint8Array). Służą do zapisu metodą ZIP-patch:
@@ -247,6 +261,7 @@ const APP_BUILD_VERSION = "20260606-01";
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
 const EXCEL_LAYOUT_KEY = "excel-workbench-excel-layout";
+const CELL_STYLE_PREFS_KEY = "excel-workbench-cell-style-prefs";
 const SORT_PRESETS_KEY = "excel-workbench-sort-presets";
 const TOOLBAR_COLLAPSED_KEY = "excel-workbench-toolbar-collapsed";
 const INTRO_PLAYED_KEY = "introPlayed";

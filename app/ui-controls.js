@@ -635,6 +635,8 @@ async function handleFile(file, fileHandle = null) {
     } catch {
       workbook = XLSX.read(data, { cellDates: true });
     }
+    // Odzyskaj mapę indeksów stylów z surowego pliku (font/kolor/rozmiar jak w Excelu).
+    currentStyleIndexMap = await buildStyleIndexMap(originalFileBytes, workbook);
     sheetSelect.replaceChildren();
     workbook.SheetNames.forEach((s) => {
       const opt = document.createElement("option");
@@ -1767,6 +1769,7 @@ initIntroSplash();
 initTheme();
 loadMaxRowsPreference();
 loadExcelLayoutPreference();
+loadCellStylePreferences();
 attachResizeHandlers();
 applyZoom();
 updateNetworkBadge();

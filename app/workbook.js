@@ -55,6 +55,35 @@ function isExcelLayoutEnabled() {
   return excelLayoutToggleEl.getAttribute("aria-pressed") === "true";
 }
 
+// Wczytuje flagi pokazywania stylów komórek z checkboxów do zmiennych modułu
+// (czytanych potem per komórka w applyCellStyle — szybciej niż odpytywać DOM).
+function syncCellStyleFlags() {
+  cellStyleShowFontColors = !showFontColorsEl || showFontColorsEl.checked;
+  cellStyleShowFills = !showCellFillsEl || showCellFillsEl.checked;
+  cellStyleShowFonts = !showCellFontsEl || showCellFontsEl.checked;
+  cellStyleShowBorders = !showCellBordersEl || showCellBordersEl.checked;
+}
+
+function saveCellStylePreferences() {
+  localStorage.setItem(CELL_STYLE_PREFS_KEY, JSON.stringify({
+    fontColors: cellStyleShowFontColors,
+    fills: cellStyleShowFills,
+    fonts: cellStyleShowFonts,
+    borders: cellStyleShowBorders,
+  }));
+}
+
+function loadCellStylePreferences() {
+  let prefs = {};
+  try { prefs = JSON.parse(localStorage.getItem(CELL_STYLE_PREFS_KEY) || "{}") || {}; } catch { prefs = {}; }
+  const set = (el, val) => { if (el) el.checked = val !== false; }; // brak zapisu = domyślnie włączone
+  set(showFontColorsEl, prefs.fontColors);
+  set(showCellFillsEl, prefs.fills);
+  set(showCellFontsEl, prefs.fonts);
+  set(showCellBordersEl, prefs.borders);
+  syncCellStyleFlags();
+}
+
 function setExcelLayoutEnabled(enabled) {
   if (!excelLayoutToggleEl) return;
   const next = !!enabled;

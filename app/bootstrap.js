@@ -298,6 +298,14 @@ if (freezeHeadersEl) {
   });
   applyFreezeHeaders();
 }
+[showFontColorsEl, showCellFillsEl, showCellFontsEl, showCellBordersEl].forEach((el) => {
+  if (!el) return;
+  el.addEventListener("change", () => {
+    syncCellStyleFlags();
+    saveCellStylePreferences();
+    renderActiveTable();
+  });
+});
 window.addEventListener("resize", () => {
   syncTableViewportHeight();
   syncFrozenHeaderMetrics();
