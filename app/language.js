@@ -862,8 +862,6 @@ const STATIC_TRANSLATIONS = {
     resetFilters: "Reset filtrow",
     resetWidths: "Reset szerokosci",
     save: "Zapisz",
-    saveTitle: "Ta przeglądarka nie pozwala nadpisać oryginału w miejscu — użyj „Zapisz jako…”, aby zapisać kopię pliku.",
-    saveTitleFsa: "Nadpisuje oryginalny plik w miejscu (Ctrl/⌘+S). Na czas testów rób kopię pliku albo używaj „Zapisz jako…”.",
     saveAs: "Zapisz jako...",
     sortingPresets: "Sortowanie i presety",
     sortColumn: "Kolumna sortowania",
@@ -1040,8 +1038,6 @@ const STATIC_TRANSLATIONS = {
     resetFilters: "Reset filters",
     resetWidths: "Reset widths",
     save: "Save",
-    saveTitle: "The web version does not save back to the original file. Use “Save as...”.",
-    saveTitleFsa: "Overwrites the original file in place (Ctrl/⌘+S). While testing, keep a backup or use “Save as…”.",
     saveAs: "Save as...",
     sortingPresets: "Sorting and presets",
     sortColumn: "Sort column",
@@ -1512,15 +1508,8 @@ function applyStaticTranslations() {
   setButtonLabel("#resetFiltersBtn", copy.resetFilters);
   setButtonLabel("#resetWidthsBtn", copy.resetWidths);
   setText("#saveBtn", copy.save);
-  // Podpowiedź przez silnik cursor-hint (data-hint-pl/en), nie natywny title.
-  // Z FSA: ostrzeżenie o nadpisaniu w miejscu; bez FSA: wyjaśnienie fallbacku.
-  // Ustawiamy OBA języki (silnik sam wybiera wg currentLang i czyta atrybuty na żywo).
-  const saveBtnEl = document.getElementById("saveBtn");
-  if (saveBtnEl) {
-    const fsa = typeof canFSA !== "undefined" && canFSA;
-    saveBtnEl.dataset.hintPl = fsa ? STATIC_TRANSLATIONS.pl.saveTitleFsa : STATIC_TRANSLATIONS.pl.saveTitle;
-    saveBtnEl.dataset.hintEn = fsa ? STATIC_TRANSLATIONS.en.saveTitleFsa : STATIC_TRANSLATIONS.en.saveTitle;
-  }
+  // Podpowiedź (#saveBtn) jest statyczna w index.html przez silnik cursor-hint
+  // (data-hint-pl/en) — language.js jej nie ustawia.
   setButtonLabel("#saveAsBtn", copy.saveAs);
   setText("#panel-sort-workbench .panel-title", copy.sortingPresets);
   setFieldLabel("sortColumnSelect", copy.sortColumn);
