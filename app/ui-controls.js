@@ -800,7 +800,7 @@ function exportCsv() {
   toast(t("csvExported"), "success");
 }
 
-// Typy plików dla pickerów File System Access API.
+// Typy plików dla OTWIERANIA (showOpenFilePicker) — akceptuj oba formaty.
 const FSA_FILE_TYPES = [
   {
     description: "Excel",
@@ -810,6 +810,22 @@ const FSA_FILE_TYPES = [
     },
   },
 ];
+
+// Typy dla ZAPISU (showSaveFilePicker) — TYLKO format zgodny z plikiem bazowym.
+// Podanie obu (xlsx+xlsm) sprawiało, że mobilny picker (np. Samsung Internet)
+// dolepiał .xlsm do pliku z treścią xlsx → plik nie do otwarcia. Jeden typ to wyklucza.
+function fsaSaveTypes(ext) {
+  if (ext === "xlsm") {
+    return [{
+      description: "Skoroszyt Excel z makrami",
+      accept: { "application/vnd.ms-excel.sheet.macroEnabled.12": [".xlsm"] },
+    }];
+  }
+  return [{
+    description: "Skoroszyt Excel",
+    accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
+  }];
+}
 
 // Upewnij się, że mamy zgodę na zapis do uchwytu (FSA wymaga aktywacji użytkownika).
 async function ensureWritePermission(handle) {
@@ -834,15 +850,19 @@ async function buildOutputBytes(ext) {
 }
 
 // Zapis wprost do uchwytu pliku (nadpisanie w miejscu) bez pobierania.
+// Dane owijamy w Blob — write(Blob) jest szerzej wspierane niż write(Uint8Array)
+// (niektóre implementacje FSA, np. Samsung Internet, zapisywały 0 B z surowego bufora).
 async function writeWorkbookToHandle(handle, ext) {
   const data = await buildOutputBytes(ext);
   const writable = await handle.createWritable();
-  await writable.write(data);
+  await writable.write(new Blob([data]));
   await writable.close();
 }
 
 // Pobranie pliku (fallback dla przeglądarek bez FSA, np. iOS Safari / Firefox).
-async function downloadWorkbook(name, ext) {
+// opts.toastKey / opts.toastType pozwalają dać inny komunikat, gdy pobranie jest
+// ratunkiem po nieudanym zapisie w miejscu (a nie zwykłym "Zapisz jako…").
+async function downloadWorkbook(name, ext, opts = {}) {
   const data = await buildOutputBytes(ext);
   const blob = new Blob([data], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -856,12 +876,29 @@ async function downloadWorkbook(name, ext) {
   link.remove();
   URL.revokeObjectURL(url);
   setDirtyState(false);
-  toast(t("fileSaved"), "success");
+  toast(t(opts.toastKey || "fileSaved"), opts.toastType || "success");
   log(`Zapisano plik: ${name}`, "success");
 }
 
 function workbookBaseName() {
   return currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : "excel-workbench";
+}
+
+// Ratunkowe pobranie kopii, gdy zapis przez FSA zawiódł (np. wadliwa implementacja
+// na Samsung Internet dająca plik 0 B). Pobranie działa na każdej przeglądarce Chromium,
+// więc użytkownik dostaje działający plik zamiast błędu. Bez regresji na Chrome/iPad
+// (uruchamia się tylko w gałęzi błędu zapisu w miejscu).
+async function tryDownloadFallback(ext) {
+  try {
+    log("Zapis w miejscu nie powiódł się — pobieram kopię pliku.", "warning");
+    await downloadWorkbook(`${workbookBaseName()}.${ext}`, ext, {
+      toastKey: "saveFellBackToDownload",
+      toastType: "warning",
+    });
+  } catch (err) {
+    toast(t("saveFailed"), "error");
+    log("Blad przy zapisie pliku.", "error");
+  }
 }
 
 // "Zapisz": nadpisz oryginał w miejscu (FSA). Przy braku uchwytu — picker zapisu;
@@ -892,8 +929,7 @@ async function saveWorkbook() {
       log(`Zapisano plik: ${handleName}`, "success");
     } catch (err) {
       if (err && err.name === "AbortError") return;
-      toast(t("saveFailed"), "error");
-      log("Blad przy zapisie pliku.", "error");
+      await tryDownloadFallback(ext); // np. Samsung Internet: ratuj pobraniem kopii
     }
     return;
   }
@@ -920,9 +956,11 @@ async function saveWorkbookAs() {
     try {
       const handle = await window.showSaveFilePicker({
         suggestedName: `${base}.${defaultExt}`,
-        types: FSA_FILE_TYPES,
+        types: fsaSaveTypes(defaultExt),
       });
-      const ext = handle.name && handle.name.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
+      // Format = ten, który podaliśmy pickerowi (zgodny z plikiem bazowym).
+      // Nie czytamy handle.name, bo mobilne pickery potrafią dolepić zły sufiks.
+      const ext = defaultExt;
       if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
       await writeWorkbookToHandle(handle, ext);
       currentFileHandle = handle;
@@ -931,8 +969,8 @@ async function saveWorkbookAs() {
       log(`Zapisano plik: ${handle.name || base}`, "success");
     } catch (err) {
       if (err && err.name === "AbortError") return;
-      toast(t("saveFailed"), "error");
-      log("Blad przy zapisie pliku.", "error");
+      // używamy defaultExt (ext żyje tylko w try) — np. Samsung Internet: ratuj pobraniem
+      await tryDownloadFallback(defaultExt);
     }
     return;
   }
