@@ -669,6 +669,7 @@ async function handleFile(file, fileHandle = null) {
     renderRepeatingBlocks();
     renderDurationAnalysis();
     populateSortColumnSelect();
+    populateEditColumnSelect();
     renderSortPresets();
     toast(t("fileLoaded"), "success");
     log(`Wczytano plik: ${file.name}`, "success");
@@ -1057,6 +1058,7 @@ loadBtn.addEventListener("click", () => {
       updateColumnSummary();
       updateFilterBadge();
       populateSortColumnSelect();
+      populateEditColumnSelect();
       renderActiveTable();
       renderInsights();
       renderKpiExtractor();

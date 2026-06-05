@@ -109,6 +109,34 @@ const I18N = {
     editWideOnly: "Edycja komórek działa tylko w trybie szerokim (wide).",
     editBlockedRow: "Tej komórki nie można edytować (wiersz pochodny lub podnagłówek).",
     editCellAria: "Edycja komórki",
+    editToolsPanel: "Narzędzia edycji",
+    editScopeLabel: "Zakres",
+    editColumnLabel: "Kolumna",
+    editOpLabel: "Operacja",
+    editPatternModeLabel: "Tryb",
+    editPatternLabel: "Wzorzec",
+    editFindLabel: "Znajdź",
+    editReplaceLabel: "Zamień na",
+    editRegexLabel: "Wyrażenie regularne",
+    editCaseLabel: "Wielkość liter",
+    editApply: "Zastosuj",
+    editScopeColumn: "Kolumna",
+    editScopeSelection: "Zaznaczenie",
+    editOpPattern: "Zdejmij śmieć wzorcem",
+    editOpReplace: "Znajdź i zamień",
+    editOpCase: "Zmiana wielkości",
+    editPModePattern: "Wzorzec",
+    editPModeFuzzy: "Rozmyte",
+    editCaseUpper: "WIELKIE",
+    editCaseLower: "małe",
+    editCaseTitle: "Jak Nazwa Własna",
+    editErrNoPattern: "Podaj wzorzec (np. Gr*= albo =#)",
+    editErrNoFind: "Podaj tekst do znalezienia",
+    editErrBadRegex: "Niepoprawne wyrażenie regularne",
+    editErrNoColumn: "Wybierz kolumnę",
+    editErrNoSelection: "Najpierw zaznacz zakres komórek",
+    editToolApplied: "Zmieniono {count} komórek",
+    editToolNoChange: "Brak zmian do zastosowania",
     sortRulesEmpty: "Brak aktywnych sortowań. Kliknij nagłówek tabeli albo dodaj regułę tutaj.",
     sectionHeaderSet: "Ustawiono wiersz nagłówka {row}",
     sectionOutsideLimit: "Ta sekcja nie mieści się w aktualnym limicie wierszy",
@@ -484,6 +512,34 @@ const I18N = {
     editWideOnly: "Cell editing works only in wide mode.",
     editBlockedRow: "This cell can't be edited (derived row or subheader).",
     editCellAria: "Edit cell",
+    editToolsPanel: "Edit tools",
+    editScopeLabel: "Scope",
+    editColumnLabel: "Column",
+    editOpLabel: "Operation",
+    editPatternModeLabel: "Mode",
+    editPatternLabel: "Pattern",
+    editFindLabel: "Find",
+    editReplaceLabel: "Replace with",
+    editRegexLabel: "Regular expression",
+    editCaseLabel: "Letter case",
+    editApply: "Apply",
+    editScopeColumn: "Column",
+    editScopeSelection: "Selection",
+    editOpPattern: "Strip noise by pattern",
+    editOpReplace: "Find & replace",
+    editOpCase: "Change case",
+    editPModePattern: "Pattern",
+    editPModeFuzzy: "Fuzzy",
+    editCaseUpper: "UPPERCASE",
+    editCaseLower: "lowercase",
+    editCaseTitle: "Title Case",
+    editErrNoPattern: "Enter a pattern (e.g. Gr*= or =#)",
+    editErrNoFind: "Enter text to find",
+    editErrBadRegex: "Invalid regular expression",
+    editErrNoColumn: "Choose a column",
+    editErrNoSelection: "Select a cell range first",
+    editToolApplied: "Changed {count} cells",
+    editToolNoChange: "No changes to apply",
     sortRulesEmpty: "No active sort rules. Click a table header or add a rule here.",
     sectionHeaderSet: "Header row set to {row}",
     sectionOutsideLimit: "This section is outside the current row limit",
@@ -1511,6 +1567,18 @@ function applyStaticTranslations() {
   // Podpowiedź (#saveBtn) jest statyczna w index.html przez silnik cursor-hint
   // (data-hint-pl/en) — language.js jej nie ustawia.
   setButtonLabel("#saveAsBtn", copy.saveAs);
+  // Panel "Narzędzia edycji"
+  setText("#panel-edit-tools .panel-title", copy.editToolsPanel);
+  setFieldLabel("editScope", copy.editScopeLabel);
+  setFieldLabel("editColumnSelect", copy.editColumnLabel);
+  setFieldLabel("editOp", copy.editOpLabel);
+  setFieldLabel("editPatternMode", copy.editPatternModeLabel);
+  setFieldLabel("editPatternInput", copy.editPatternLabel);
+  setFieldLabel("editFind", copy.editFindLabel);
+  setFieldLabel("editReplace", copy.editReplaceLabel);
+  setCheckboxText("editRegex", copy.editRegexLabel);
+  setFieldLabel("editCaseMode", copy.editCaseLabel);
+  setText("#applyEditToolBtn", copy.editApply);
   setText("#panel-sort-workbench .panel-title", copy.sortingPresets);
   setFieldLabel("sortColumnSelect", copy.sortColumn);
   setFieldLabel("sortDirectionSelect", copy.direction);
@@ -1604,6 +1672,10 @@ function applySelectTranslations() {
       values: "values",
       formulas: "formulas",
     },
+    editScope: { column: "editScopeColumn", selection: "editScopeSelection" },
+    editOp: { pattern: "editOpPattern", replace: "editOpReplace", case: "editOpCase" },
+    editPatternMode: { pattern: "editPModePattern", fuzzy: "editPModeFuzzy" },
+    editCaseMode: { upper: "editCaseUpper", lower: "editCaseLower", title: "editCaseTitle" },
     filterMode: {
       contains: "contains",
       starts_with: "startsWith",
@@ -1708,7 +1780,8 @@ function applySelectTranslations() {
     "filterEmptyMode", "filterEmptyMode2", "dateEmptyMode",
     "quickSearchMode", "quickSearchPopupMode",
     "quickSearchAction", "quickSearchPopupAction",
-    "sortDirectionSelect", "formulaFilter"
+    "sortDirectionSelect", "formulaFilter",
+    "editScope", "editOp", "editPatternMode", "editCaseMode"
   ];
 
   ids.forEach((id) => {

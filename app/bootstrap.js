@@ -516,6 +516,7 @@ renderDurationAnalysis();
 renderAggregationWorkbench();
 renderFormulaWorkbench();
 populateSortColumnSelect();
+populateEditColumnSelect();
 renderSortPresets();
 updateWideLongToggle();
 
