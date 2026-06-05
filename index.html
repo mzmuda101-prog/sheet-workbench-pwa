@@ -731,11 +731,12 @@
             </summary>
             <div class="panel-body">
               <div class="shortcut-hint">
-              <div class="shortcut-row"><kbd data-shortcut-text="arrows">Strzałki</kbd> <span data-shortcut-text="arrowFocus">przemieszczanie się fokusem wiersza po kliknięciu</span></div>
-              <div class="shortcut-row"><kbd>Esc</kbd> <span data-shortcut-text="or">LUB</span> <kbd>Q</kbd> <span data-shortcut-text="clearRowFocus">Odznacz fokus wiersza</span></div>
-              <div class="shortcut-row"><kbd>Shift</kbd> <span data-shortcut-text="afterCellClick">(po wczesniejszym kliknieciu na komorke) =</span><span data-shortcut-text="showCellSelection"> pojawienie się zaznaczenia komórki</span></div>
-              <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd data-shortcut-text="arrows">Strzałki</kbd> <span>=</span> <span data-shortcut-text="moveCellSelection">przemieszczanie zaznaczeniem komórki</span></div>
-              <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd>Esc</kbd> <span data-shortcut-text="or">LUB</span> <kbd>Q</kbd> <span data-shortcut-text="clearCellSelection">Odznacz komórkę</span></div>
+              <div class="shortcut-row"><kbd data-shortcut-text="clickKey">Klik</kbd> <span data-shortcut-text="clickCell">zaznacz jedną komórkę (aktywną); kolejny klik resetuje zaznaczenie</span></div>
+              <div class="shortcut-row"><kbd data-shortcut-text="arrows">Strzałki</kbd> <span data-shortcut-text="arrowFocus">przesuwasz aktywną komórkę (resetuje zaznaczenie)</span></div>
+              <div class="shortcut-row"><kbd>Esc</kbd> <span data-shortcut-text="clearRowFocus">Zwiń zaznaczenie do komórki, a potem odznacz fokus</span></div>
+              <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd data-shortcut-text="clickKey">Klik</kbd> <span data-shortcut-text="showCellSelection">= zaznacz prostokąt od aktywnej komórki do klikniętej</span></div>
+              <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd data-shortcut-text="arrows">Strzałki</kbd> <span>=</span> <span data-shortcut-text="moveCellSelection">rozszerz zaznaczenie od aktywnej komórki</span></div>
+              <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd>Esc</kbd> <span data-shortcut-text="clearCellSelection">Odznacz wszystko (zaznaczenie i fokus)</span></div>
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>F</kbd> <span data-shortcut-text="quickSearch">Szybkie szukanie</span></div>
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Enter</kbd> <span data-shortcut-text="filter">Filtruj</span></div>
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>E</kbd> <span data-shortcut-text="exportCsv">Eksport CSV</span></div>
@@ -843,6 +844,10 @@
               <div class="table-scrollbar-inner" id="tableScrollbarInner"></div>
             </div>
             <div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div>
+            <button class="clear-sel-fab" id="clearSelectionFab" type="button" aria-label="Odznacz zaznaczenie" data-hint data-hint-pl="Odznacz zaznaczenie i fokus (zamiennik Esc — przydatny na tablecie)" data-hint-en="Clear selection and focus (Esc alternative — handy on tablets)" data-hint-delay="0.8" data-hint-touch="on">
+              <span class="fab-arrow" aria-hidden="true">✕</span>
+              <span class="fab-label">Odznacz</span>
+            </button>
             <button class="scroll-top-fab" id="scrollTopFab" type="button" aria-label="Przewiń tabelę do góry" title="Przewiń tabelę do góry">
               <span class="fab-arrow" aria-hidden="true">↑</span>
               <span class="fab-label">Do góry</span>

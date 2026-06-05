@@ -541,7 +541,8 @@ body.splashing {
 
 /* (3) FAB „do góry" — handle przy dolnej krawędzi tabeli; jak handle sidebara
    rozwija się z kółka w pigułkę z etykietą na hover/focus. */
-.scroll-top-fab {
+.scroll-top-fab,
+.clear-sel-fab {
   position: absolute;
   right: 16px;
   bottom: 16px;
@@ -576,13 +577,16 @@ body.splashing {
     border-color var(--t),
     box-shadow var(--t);
 }
-.scroll-top-fab.is-visible {
+.scroll-top-fab.is-visible,
+.clear-sel-fab.is-visible {
   opacity: 0.9;
   transform: translateY(0) scale(1);
   pointer-events: auto;
 }
 .scroll-top-fab:hover,
-.scroll-top-fab:focus-visible {
+.scroll-top-fab:focus-visible,
+.clear-sel-fab:hover,
+.clear-sel-fab:focus-visible {
   width: 128px;
   padding: 0 16px 0 38px;
   opacity: 1;
@@ -592,7 +596,8 @@ body.splashing {
     0 18px 36px rgba(18, 30, 23, 0.22),
     inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
-.scroll-top-fab .fab-arrow {
+.scroll-top-fab .fab-arrow,
+.clear-sel-fab .fab-arrow {
   position: absolute;
   /* Wyśrodkowana w kółku (collapsed); przy rozwinięciu zjeżdża w lewo na etykietę */
   left: 50%;
@@ -604,10 +609,13 @@ body.splashing {
   transition: left var(--t-slow);
 }
 .scroll-top-fab:hover .fab-arrow,
-.scroll-top-fab:focus-visible .fab-arrow {
+.scroll-top-fab:focus-visible .fab-arrow,
+.clear-sel-fab:hover .fab-arrow,
+.clear-sel-fab:focus-visible .fab-arrow {
   left: 20px;
 }
-.scroll-top-fab .fab-label {
+.scroll-top-fab .fab-label,
+.clear-sel-fab .fab-label {
   max-width: 0;
   opacity: 0;
   overflow: hidden;
@@ -617,15 +625,22 @@ body.splashing {
   transition: max-width var(--t-slow), opacity var(--t);
 }
 .scroll-top-fab:hover .fab-label,
-.scroll-top-fab:focus-visible .fab-label {
+.scroll-top-fab:focus-visible .fab-label,
+.clear-sel-fab:hover .fab-label,
+.clear-sel-fab:focus-visible .fab-label {
   max-width: 90px;
   opacity: 1;
 }
-[data-theme="dark"] .scroll-top-fab {
+[data-theme="dark"] .scroll-top-fab,
+[data-theme="dark"] .clear-sel-fab {
   border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--panel) 80%, transparent) 0%, color-mix(in srgb, var(--panel) 90%, transparent) 100%);
 }
+
+/* Przycisk „Odznacz" (dotykowy zamiennik Esc, gdy aktywne zaznaczenie/fokus).
+   Stoi nad przyciskiem „Do góry", by oba mogły być widoczne naraz. */
+.clear-sel-fab { bottom: 72px; }
 
 /* „Plumknięcie" — lekki pop pojawienia (zapożyczony feel z handle Schowaj/Wysuń).
    Skalujemy NIEZALEŻNĄ właściwością `scale:`, żeby nie nadpisać `transform`
@@ -2394,7 +2409,10 @@ details.panel[open] > summary {
 table {
   font-size: calc(12px * var(--table-zoom));
   width: 100%;
-  border-collapse: collapse;
+  /* separate + spacing 0 wygląda jak collapse (komórki mają tylko border-bottom),
+     ale pozwala na border-radius komórek (zaokrąglone narożniki zaznaczenia). */
+  border-collapse: separate;
+  border-spacing: 0;
   background: var(--panel);
   table-layout: fixed;
 }
@@ -2605,26 +2623,62 @@ border-bottom-right-radius: 8px;
     inset 0 -1px 0 color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
+/* Aktywna komórka (ruchomy koniec zaznaczenia) — wyraźna pełna obwódka jak w arkuszach */
 tbody td.cell-selected.cell-selected {
-  background: color-mix(in srgb, var(--accent-light) 72%, white) !important;
+  background: color-mix(in srgb, var(--accent-light) 78%, white) !important;
   box-shadow:
-    inset 0 0 0 2px color-mix(in srgb, var(--accent-h) 58%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--accent) 16%, transparent);
-  border-radius: 4px;
+    inset 0 0 0 2px var(--accent-h),
+    0 0 0 1px color-mix(in srgb, var(--accent-h) 40%, transparent);
+  border-radius: 5px;
 }
 [data-theme="dark"] tbody td.cell-selected.cell-selected { /* Te powtórzenie to podbicie specyficzności, by komórka była nad wierszem - taki trick ;) */
-  background: color-mix(in srgb, var(--accent-light) 82%, var(--panel)) !important;
+  background: color-mix(in srgb, var(--accent) 42%, var(--panel)) !important;
   box-shadow:
-    inset 0 0 0 2px color-mix(in srgb, var(--accent) 52%, transparent),
-    inset 0 -1px 0 color-mix(in srgb, var(--accent) 22%, transparent);
+    inset 0 0 0 2px var(--accent),
+    0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
-/* Prostokąt zaznaczenia (kotwica → koniec) — wypełnienie zakresu pod komórką aktywną */
+/* Prostokąt zaznaczenia (kotwica → koniec): wyraźne wypełnienie + obwódka całego
+   zakresu. Obwódkę składamy z 4 zmiennych (po jednej na krawędź), żeby komórki
+   narożne pokazały dwie krawędzie naraz — box-shadow z jednej reguły by się nadpisywał. */
 tbody td.cell-in-range {
-  background: color-mix(in srgb, var(--accent-light) 46%, white) !important;
+  background: color-mix(in srgb, var(--accent-light) 62%, white) !important;
+  --rng-t: 0 0 0 0 transparent;
+  --rng-b: 0 0 0 0 transparent;
+  --rng-l: 0 0 0 0 transparent;
+  --rng-r: 0 0 0 0 transparent;
+  box-shadow: var(--rng-t), var(--rng-b), var(--rng-l), var(--rng-r);
 }
 [data-theme="dark"] tbody td.cell-in-range {
-  background: color-mix(in srgb, var(--accent-light) 58%, var(--panel)) !important;
+  background: color-mix(in srgb, var(--accent) 32%, var(--panel)) !important;
+}
+tbody td.range-edge-top { --rng-t: inset 0 2px 0 0 var(--accent-h); }
+tbody td.range-edge-bottom { --rng-b: inset 0 -2px 0 0 var(--accent-h); }
+tbody td.range-edge-left { --rng-l: inset 2px 0 0 0 var(--accent-h); }
+tbody td.range-edge-right { --rng-r: inset -2px 0 0 0 var(--accent-h); }
+[data-theme="dark"] tbody td.range-edge-top { --rng-t: inset 0 2px 0 0 var(--accent); }
+[data-theme="dark"] tbody td.range-edge-bottom { --rng-b: inset 0 -2px 0 0 var(--accent); }
+[data-theme="dark"] tbody td.range-edge-left { --rng-l: inset 2px 0 0 0 var(--accent); }
+[data-theme="dark"] tbody td.range-edge-right { --rng-r: inset -2px 0 0 0 var(--accent); }
+
+/* Zaokrąglone narożniki prostokąta zaznaczenia (komórki z dwiema krawędziami).
+   box-shadow inset podąża za border-radius, więc obwódka też się zaokrągla. */
+tbody td.range-edge-top.range-edge-left { border-top-left-radius: 6px; }
+tbody td.range-edge-top.range-edge-right { border-top-right-radius: 6px; }
+tbody td.range-edge-bottom.range-edge-left { border-bottom-left-radius: 6px; }
+tbody td.range-edge-bottom.range-edge-right { border-bottom-right-radius: 6px; }
+
+/* Gdy jest aktywny zakres, stłum pas wiersza fokusu POZA prostokątem zaznaczenia,
+   żeby poziome podświetlenie wiersza nie kolidowało z obwódką zakresu (jak w Arkuszach). */
+tbody.has-cell-range tr.row-focused td:not(.cell-in-range) {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* …a komórki W zakresie (na wierszu kotwicy = górna krawędź zaznaczenia) muszą
+   pokazać obwódkę zakresu, której inaczej `row-focused td` by nie oddało
+   (wyższa specyficzność tamtej reguły zjadała górną krawędź --rng-t). */
+tbody.has-cell-range tr.row-focused td.cell-in-range {
+  box-shadow: var(--rng-t), var(--rng-b), var(--rng-l), var(--rng-r) !important;
 }
 
 /* Pasek statystyk komórek (Excel-style) — pojawia się tylko przy zaznaczonym zakresie */

@@ -158,6 +158,10 @@ function setFocusedCell(rowKey, colIndex0, options = {}) {
     return;
   }
   focusedCellState = { rowKey, colIndex0 };
+  // Nowa aktywna komórka (kotwica) = świeży start: wyczyść poprzedni zakres,
+  // chyba że jawnie go rozszerzamy (Shift → options.keepSelection). Dzięki temu
+  // zwykły klik / strzałka daje pojedynczą komórkę, a nie zakres od starego końca.
+  if (!options.keepSelection) selectedCellState = null;
   syncFocusedCellInDom(options);
   syncRangeHighlightInDom();
   updateCellStats();
@@ -298,21 +302,68 @@ function formatStatNumber(n) {
   return rounded.toLocaleString(locale, { maximumFractionDigits: 6 });
 }
 
-function syncRangeHighlightInDom() {
-  tbodyEl.querySelectorAll("td.cell-in-range").forEach((c) => c.classList.remove("cell-in-range"));
+const RANGE_EDGE_CLASSES = [
+  "cell-in-range",
+  "range-edge-top",
+  "range-edge-bottom",
+  "range-edge-left",
+  "range-edge-right",
+];
+
+// Czyści natywne (OS-owe) zaznaczenie tekstu — używane przy zaznaczaniu zakresu
+// komórek, żeby gest Shift nie pozostawiał podświetlonej treści komórek.
+function clearTextSelection() {
+  const sel = typeof window.getSelection === "function" ? window.getSelection() : null;
+  if (sel && typeof sel.removeAllRanges === "function") sel.removeAllRanges();
+}
+
+// Czy istnieje realny zakres zaznaczenia (więcej niż jedna komórka), a nie sama kotwica.
+function hasActiveCellRange() {
   const rect = getSelectionRectangle();
-  if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) return;
-  rect.rowKeys.forEach((rowKey) => {
-    const tr = tbodyEl.querySelector(`tr[data-row-key="${CSS.escape(rowKey)}"]`);
-    if (!tr) return;
+  return !!rect && !(rect.rowCount === 1 && rect.colCount === 1);
+}
+
+// Podświetla prostokąt zaznaczenia: wypełnienie + obwódkę całego zakresu
+// (klasy krawędziowe na komórkach brzegowych — jak w Arkuszach Google).
+function syncRangeHighlightInDom() {
+  tbodyEl
+    .querySelectorAll("td.cell-in-range")
+    .forEach((c) => c.classList.remove(...RANGE_EDGE_CLASSES));
+  const rect = getSelectionRectangle();
+  if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) {
+    // brak zakresu → pełne podświetlenie wiersza fokusu wraca do normy
+    tbodyEl.classList.remove("has-cell-range");
+    return;
+  }
+  // jest zakres → stłum pas wiersza fokusu, by nie kolidował z prostokątem zaznaczenia
+  tbodyEl.classList.add("has-cell-range");
+  for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
+    const row = rect.model.rows[r];
+    if (!row) continue;
+    const tr = tbodyEl.querySelector(`tr[data-row-key="${CSS.escape(getRowSelectionKey(row))}"]`);
+    if (!tr) continue;
     for (let c = rect.colMin; c <= rect.colMax; c++) {
       const td = tr.querySelector(`td[data-col-index="${c}"]`);
-      if (td) td.classList.add("cell-in-range");
+      if (!td) continue; // np. komórka pokryta przez scalenie — obwódka może mieć tam lukę
+      td.classList.add("cell-in-range");
+      if (r === rect.rowStart) td.classList.add("range-edge-top");
+      if (r === rect.rowEnd) td.classList.add("range-edge-bottom");
+      if (c === rect.colMin) td.classList.add("range-edge-left");
+      if (c === rect.colMax) td.classList.add("range-edge-right");
     }
-  });
+  }
+}
+
+// Przycisk „Odznacz" (dotykowy zamiennik Esc) — widoczny, gdy jest aktywny
+// fokus lub zaznaczenie. Czyści wszystko jednym tapnięciem.
+function updateClearSelectionFab() {
+  if (!clearSelectionFabEl) return;
+  const active = !!(focusedCellState || selectedCellState);
+  clearSelectionFabEl.classList.toggle("is-visible", active);
 }
 
 function updateCellStats() {
+  updateClearSelectionFab();
   if (!cellStatsBarEl) return;
   const rect = getSelectionRectangle();
   // Jedna komórka = cisza (jak w Excelu — pasek pojawia się przy zakresie).

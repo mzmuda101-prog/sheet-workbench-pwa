@@ -1190,6 +1190,14 @@ if (scrollTopFabEl && tableWrapEl) {
   });
 }
 
+// Dotykowy zamiennik Esc — odznacza zaznaczenie i fokus jednym tapnięciem.
+if (clearSelectionFabEl) {
+  clearSelectionFabEl.addEventListener("click", () => {
+    setSelectedCell("", -1);
+    setFocusedCell("", -1);
+  });
+}
+
 // Lekkie „plumknięcie" przełączników trybu przy kliknięciu (ten sam feel co handle).
 [wideLongToggleEl, excelLayoutToggleEl, readingToggle].forEach((btn) => {
   if (btn) btn.addEventListener("click", () => replayPop(btn, "btn-pop"));
@@ -1512,6 +1520,13 @@ resetWidthsBtn.addEventListener("click", () => {
   toast(t("widthsRestored"), "info");
 });
 
+// Shift+klik buduje zakres komórek — wtedy zablokuj natywne (OS-owe) zaznaczanie
+// tekstu, by nie „łapało" treści komórek. Zwykły drag bez Shift zaznacza tekst
+// normalnie (np. żeby skopiować zawartość komórki).
+tbodyEl.addEventListener("mousedown", (e) => {
+  if (e.shiftKey) e.preventDefault();
+});
+
 tbodyEl.addEventListener("click", (e) => {
   const td = e.target.closest("td");
   if (!td || td.classList.contains("row-head")) return;
@@ -1523,6 +1538,7 @@ tbodyEl.addEventListener("click", (e) => {
   // Pozwala zbudować zakres myszą/dotykiem (tablet), bez klawiatury.
   if (e.shiftKey && focusedCellState) {
     setSelectedCell(rowKey, colIndex0, { scroll: false });
+    clearTextSelection(); // sprzątnij ewentualną resztkę zaznaczenia tekstu
     return;
   }
   setFocusedCell(rowKey, colIndex0, { scroll: false });

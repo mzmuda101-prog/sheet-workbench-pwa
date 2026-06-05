@@ -403,6 +403,7 @@ document.addEventListener("keydown", (e) => {
     }
     if (handled) {
       e.preventDefault();
+      if (e.shiftKey) clearTextSelection(); // Shift+strzałki nie zostawia zaznaczonego tekstu
       return;
     }
   }
@@ -471,16 +472,26 @@ document.addEventListener("keydown", (e) => {
       toast(t("loadSheetToSearch"), "info");
     }
   }
-  // Escape or Q clears the current table focus/selection.
-  if (e.shiftKey && (e.key === "Escape" || e.key.toLowerCase() === "q") && selectedCellState) {
-    e.preventDefault();
-    setSelectedCell("", -1);
-    return;
-  }
-  if (!e.shiftKey && (e.key === "Escape" || e.key.toLowerCase() === "q") && focusedCellState) {
-    e.preventDefault();
-    setFocusedCell("", -1);
-    return;
+  // Odznaczanie jak w arkuszach (tylko Escape — żadnych liter, by nie kolidowały
+  // z wpisywaniem do komórki). Shift+Esc = pełne odznaczenie; Esc = progresywnie:
+  // najpierw zwiń zakres do aktywnej komórki, dopiero potem zdejmij fokus wiersza.
+  if (e.key === "Escape" && (selectedCellState || focusedCellState)) {
+    if (e.shiftKey) {
+      e.preventDefault();
+      setSelectedCell("", -1);
+      setFocusedCell("", -1);
+      return;
+    }
+    if (hasActiveCellRange()) {
+      e.preventDefault();
+      setSelectedCell("", -1); // zwiń zakres, zostaw aktywną komórkę (fokus)
+      return;
+    }
+    if (focusedCellState) {
+      e.preventDefault();
+      setFocusedCell("", -1);
+      return;
+    }
   }
 
   if (e.key === "Escape" && !columnPickerEl.classList.contains("hidden")) {

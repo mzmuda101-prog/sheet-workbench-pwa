@@ -12,6 +12,7 @@ const tableScrollbarEl = document.getElementById("tableScrollbar");
 const tableScrollbarInnerEl = document.getElementById("tableScrollbarInner");
 const cellStatsBarEl = document.getElementById("cellStatsBar");
 const scrollTopFabEl = document.getElementById("scrollTopFab");
+const clearSelectionFabEl = document.getElementById("clearSelectionFab");
 const emptyStateEl = document.getElementById("emptyState");
 const emptyTitleEl = document.getElementById("emptyTitle");
 const emptySubEl = document.getElementById("emptySub");
