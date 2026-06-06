@@ -750,9 +750,31 @@ function buildSampleWorkbookArrayBuffer() {
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+
+  // Drobny pokaz nowych możliwości stylów (czytanych z pliku przez aplikację):
+  //  • wiersz nagłówka = zielony pasek z BIAŁYM POGRUBIONYM tekstem
+  //    (naraz: wypełnienie wiersza + pogrubienie + biały tekst na tle),
+  //  • kolumna „Status" = KOLORY CZCIONEK zależne od wartości.
+  const headerAoaRow = 3; // [tytuł, KPI, pusty, headerRow, ...dane]
+  for (let c = 0; c < headerRow.length; c++) {
+    const ref = XLSX.utils.encode_cell({ r: headerAoaRow, c });
+    if (ws[ref]) ws[ref].s = {
+      font: { bold: true, color: { rgb: "FFFFFFFF" } },
+      fill: { patternType: "solid", fgColor: { rgb: "FF2F6F5C" } },
+      alignment: { horizontal: "center" },
+    };
+  }
+  const STATUS_COLOR = { "Zamknięte": "FF1E7B45", "W trakcie": "FFB7791F", "PRZETERMINOWANY": "FFC00000" };
+  rows.forEach((row, i) => {
+    const color = STATUS_COLOR[row[2]];
+    if (!color) return;
+    const ref = XLSX.utils.encode_cell({ r: headerAoaRow + 1 + i, c: 2 }); // kolumna C = Status
+    if (ws[ref]) ws[ref].s = { font: { bold: true, color: { rgb: color } } };
+  });
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Obieg terenów");
-  return XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  return XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: true });
 }
 
 async function loadSampleFile() {
