@@ -542,6 +542,10 @@
                   <option value="2">200%</option>
                 </select>
               </label>
+              <label class="field" data-hint data-hint-pl="Jednolita wysokość wszystkich wierszy w px. Puste = automatyczna. Pojedynczy wiersz możesz też zmienić przeciągając jego dolną krawędź." data-hint-en="Uniform row height in px. Empty = automatic. You can also drag a single row's bottom edge." data-hint-delay="1.1">
+                Wysokość wierszy (px)
+                <input id="rowHeightAll" type="number" min="0" step="1" placeholder="auto" />
+              </label>
               <label class="field checkbox">
                 <input id="freezeHeaders" type="checkbox" />
                 Zablokuj wiersze nagłówków
@@ -567,6 +571,10 @@
               <label class="field checkbox" data-hint data-hint-pl="Pokazuje kolory czcionek i teł ustawione formatowaniem warunkowym (np. czerwony tekst dla przeterminowanych)." data-hint-en="Shows font/fill colors set by conditional formatting (e.g. red text for overdue)." data-hint-delay="1.1" data-hint-touch="on">
                 <input id="showConditionalFormatting" type="checkbox" checked />
                 Pokaż formatowanie warunkowe
+              </label>
+              <label class="field checkbox" data-hint data-hint-pl="Na jasnozielono wyróżnia wiersze wykryte jako podnagłówki/etykiety sekcji (sam tekst)." data-hint-en="Highlights rows detected as subheaders/section labels in light green." data-hint-delay="1.1" data-hint-touch="on">
+                <input id="showSubheaders" type="checkbox" checked />
+                Wyróżniaj podnagłówki
               </label>
               <label class="field checkbox" data-hint data-hint-pl="Zawija długi tekst na wiele linii zamiast ucinać (dotyczy wszystkich komórek)." data-hint-en="Wraps long text onto multiple lines instead of clipping (all cells)." data-hint-delay="1.1" data-hint-touch="on">
                 <input id="wrapCells" type="checkbox" />
@@ -846,8 +854,8 @@
                 <button class="btn btn-sm ghost toggle-pill hidden" id="wideLongToggle" type="button" aria-pressed="false" title="Przełącz widok blokowy na długi" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
                   Wide-to-Long
                 </button>
-                <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" title="Przełącz widok !cols/!rows" data-hint data-hint-pl="Pokaż układ z Excela" data-hint-en="Show Excel layout" data-hint-delay="1.1">
-                  Widok Excel
+                <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" title="Przełącz wymiary z pliku" data-hint data-hint-pl="Użyj szerokości kolumn i wysokości wierszy zapisanych w pliku Excel (zamiast auto-dopasowania)" data-hint-en="Use column widths and row heights saved in the Excel file (instead of auto-fit)" data-hint-delay="1.1">
+                  Wymiary z Excela
                 </button>
                 <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
                 <button class="btn btn-sm ghost toggle-pill" id="readingToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Tryb pracy z szybkim szukaniem" data-hint-en="Quick search working mode" data-hint-delay="1.1">Tryb szybkie szukanie</button>

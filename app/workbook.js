@@ -40,6 +40,18 @@ function saveMaxRowsPreference() {
   localStorage.setItem(MAX_ROWS_KEY, String(value));
 }
 
+function loadRowHeightPreference() {
+  const saved = parseInt(localStorage.getItem(ROW_HEIGHT_KEY) || "0", 10);
+  manualRowHeightAll = Number.isFinite(saved) && saved > 0 ? saved : 0;
+  if (rowHeightAllEl && manualRowHeightAll > 0) rowHeightAllEl.value = String(manualRowHeightAll);
+}
+
+function applyRowHeightAllPreference() {
+  const v = parseInt((rowHeightAllEl && rowHeightAllEl.value) || "0", 10);
+  manualRowHeightAll = Number.isFinite(v) && v > 0 ? v : 0;
+  localStorage.setItem(ROW_HEIGHT_KEY, String(manualRowHeightAll));
+}
+
 function loadExcelLayoutPreference() {
   if (!excelLayoutToggleEl) return;
   setExcelLayoutEnabled(localStorage.getItem(EXCEL_LAYOUT_KEY) === "1");
@@ -63,6 +75,7 @@ function syncCellStyleFlags() {
   cellStyleShowFonts = !showCellFontsEl || showCellFontsEl.checked;
   cellStyleShowBorders = !showCellBordersEl || showCellBordersEl.checked;
   cellStyleShowConditionalFormatting = !showConditionalFormattingEl || showConditionalFormattingEl.checked;
+  cellStyleShowSubheaders = !showSubheadersEl || showSubheadersEl.checked;
 }
 
 // Globalny przełącznik zawijania tekstu (klasa na <table>). Trwa przez re-rendery,
@@ -79,6 +92,7 @@ function saveCellStylePreferences() {
     fonts: cellStyleShowFonts,
     borders: cellStyleShowBorders,
     conditionalFormatting: cellStyleShowConditionalFormatting,
+    subheaders: cellStyleShowSubheaders,
     wrap: !!(wrapCellsEl && wrapCellsEl.checked),
   }));
 }
@@ -92,6 +106,7 @@ function loadCellStylePreferences() {
   set(showCellFontsEl, prefs.fonts);
   set(showCellBordersEl, prefs.borders);
   set(showConditionalFormattingEl, prefs.conditionalFormatting);
+  set(showSubheadersEl, prefs.subheaders);
   if (wrapCellsEl) wrapCellsEl.checked = prefs.wrap === true; // zawijanie domyślnie WYŁĄCZONE
   syncCellStyleFlags();
   applyWrapCells();

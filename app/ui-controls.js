@@ -429,29 +429,34 @@ columnListEl.addEventListener("change", () => {
 
 
 function attachResizeHandlers() {
-  let active = null;
-  let startX = 0;
-  let startW = 0;
+  let active = null; // { kind:"col"|"row", index, start, startSize }
   let rafId = null;
 
   const start = (e) => {
-    const handle = e.target.closest(".col-resizer");
+    const colHandle = e.target.closest(".col-resizer");
+    const rowHandle = !colHandle && e.target.closest(".row-resizer");
+    const handle = colHandle || rowHandle;
     if (!handle) return;
     e.preventDefault();
-    const colIndex = parseInt(handle.dataset.colIndex, 10);
-    const th = handle.parentElement;
-    active = { colIndex, th };
-    startX = e.clientX || (e.touches && e.touches[0].clientX) || 0;
-    startW = th.getBoundingClientRect().width;
+    if (colHandle) {
+      const th = handle.parentElement;
+      active = { kind: "col", index: parseInt(handle.dataset.colIndex, 10), start: e.clientX || (e.touches && e.touches[0].clientX) || 0, startSize: th.getBoundingClientRect().width };
+    } else {
+      const tr = handle.closest("tr");
+      active = { kind: "row", index: parseInt(handle.dataset.rowIndex, 10), start: e.clientY || (e.touches && e.touches[0].clientY) || 0, startSize: tr ? tr.getBoundingClientRect().height : 28 };
+    }
     document.body.classList.add("resizing");
   };
 
   const move = (e) => {
     if (!active) return;
-    const x = e.clientX || (e.touches && e.touches[0].clientX) || 0;
-    const delta = x - startX;
-    const next = Math.max(80, Math.min(520, Math.round(startW + delta)));
-    manualColumnWidths[active.colIndex] = next;
+    if (active.kind === "col") {
+      const x = e.clientX || (e.touches && e.touches[0].clientX) || 0;
+      manualColumnWidths[active.index] = Math.max(80, Math.min(520, Math.round(active.startSize + (x - active.start))));
+    } else {
+      const y = e.clientY || (e.touches && e.touches[0].clientY) || 0;
+      manualRowHeights[active.index] = Math.max(16, Math.min(400, Math.round(active.startSize + (y - active.start))));
+    }
     if (rafId) return;
     rafId = requestAnimationFrame(() => {
       rafId = null;
@@ -1097,6 +1102,7 @@ loadBtn.addEventListener("click", () => {
       multiSortState = [];
       sortState = { col: "", dir: "asc" };
       manualColumnWidths = {};
+      manualRowHeights = {};
       columnSelections.filter1.clear();
       columnSelections.filter2.clear();
       columnSelections.date.clear();
@@ -1561,6 +1567,7 @@ saveBtn.addEventListener("click", () => {
 saveAsBtn.addEventListener("click", saveWorkbookAs);
 resetWidthsBtn.addEventListener("click", () => {
   manualColumnWidths = {};
+  manualRowHeights = {};
   renderActiveTable();
   toast(t("widthsRestored"), "info");
 });
@@ -1772,6 +1779,7 @@ initTheme();
 loadMaxRowsPreference();
 loadExcelLayoutPreference();
 loadCellStylePreferences();
+loadRowHeightPreference();
 attachResizeHandlers();
 applyZoom();
 updateNetworkBadge();

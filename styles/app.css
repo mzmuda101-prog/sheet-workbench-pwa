@@ -2523,6 +2523,23 @@ thead .guide-row th {
   padding: calc(7px * var(--table-zoom)) calc(6px * var(--table-zoom));
   border-right: 1px solid var(--border);
   cursor: default;
+  position: relative;
+}
+/* Uchwyt zmiany wysokości wiersza (dolna krawędź komórki z numerem wiersza) */
+.row-head .row-resizer {
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 100%;
+  height: 8px;
+  cursor: row-resize;
+  z-index: 2;
+}
+/* Wiersze z wymuszoną wysokością — przytnij zawartość zamiast rozpychać */
+tbody tr.row-fixed-height td {
+  overflow: hidden;
+  padding-top: calc(1px * var(--table-zoom));
+  padding-bottom: calc(1px * var(--table-zoom));
 }
 
 tbody .row-head {

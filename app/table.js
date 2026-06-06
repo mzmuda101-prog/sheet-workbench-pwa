@@ -921,7 +921,10 @@ function extractCellStyle(cell, wb, xfStyle = null) {
   const fillColor = colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor, true);
   const fontColor = colorFromStyleNode(font?.color || font?.Color, true);
   const hasCustomFill = !isDefaultLikeFill(fill, fillColor);
-  const hasCustomFontColor = !isDefaultLikeFontColor(fontColor);
+  // Czerń/biel zwykle pomijamy (żeby dark mode mógł sterować kolorem), ALE gdy komórka
+  // ma własne wypełnienie, jawny kolor tekstu (np. biały na ciemnym tle) jest istotny
+  // dla kontrastu — wtedy go honorujemy (jak w Excelu).
+  const hasCustomFontColor = !!fontColor && (!isDefaultLikeFontColor(fontColor) || hasCustomFill);
   const hasCustomAlign = isCustomAlignment(alignment);
   const hasBorder = hasCustomBorder(border);
 
@@ -964,7 +967,11 @@ function applyCellStyle(td, style) {
   if (!style) return;
   if (cellStyleShowFills && style.hasCustomFill && style.fillColor) {
     td.classList.add("cell-has-fill");
-    td.style.background = hexToRgba(style.fillColor, 0.28) || td.style.background;
+    // Gdy komórka ma jawny kolor tekstu (i pokazujemy kolory), renderuj tło pełnym
+    // kryciem — to wierna para fg+bg z Excela (np. biały tekst na pełnym kolorze).
+    // Pozostałe wypełnienia zostają subtelne (0.28), żeby nie przytłaczać widoku.
+    const strongFill = cellStyleShowFontColors && style.hasCustomFontColor;
+    td.style.background = hexToRgba(style.fillColor, strongFill ? 1 : 0.28) || td.style.background;
   }
   if (cellStyleShowFontColors && style.hasCustomFontColor && style.fontColor) td.style.color = style.fontColor;
   if (cellStyleShowFonts && style.fontFamily) td.style.fontFamily = style.fontFamily;
@@ -1248,7 +1255,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     const tr = document.createElement("tr");
     tr.dataset.rowKey = getRowSelectionKey(row);
     if (focusedCellState && focusedCellState.rowKey === tr.dataset.rowKey) tr.classList.add("row-focused");
-    if (row.isSubheader) tr.classList.add("row-subheader");
+    if (cellStyleShowSubheaders && row.isSubheader) tr.classList.add("row-subheader");
     if (quickSearchHighlightMode && matchedRowIndexes.size > 0) {
       if (matchedRowIndexes.has(row.rowIndex0)) {
         tr.classList.add("row-matched");
@@ -1259,14 +1266,22 @@ function renderTable(modelOrHeaders, maybeRows) {
     if (typeof row.rowIndex0 === "number") {
       tr.dataset.rowIndex = String(row.rowIndex0);
     }
-    if (useExcelLayout) {
-      const rowMeta = currentSheetRowHeights[row.rowIndex0];
-      const h = toPixelHeight(rowMeta);
-      if (h) tr.style.height = `${h}px`;
+    // Wysokość wiersza: ręczne przeciąganie > jednolita z pola > z pliku (Wymiary z Excela).
+    let rowH = manualRowHeights[row.rowIndex0] || (manualRowHeightAll > 0 ? manualRowHeightAll : 0);
+    if (!rowH && useExcelLayout) rowH = toPixelHeight(currentSheetRowHeights[row.rowIndex0]) || 0;
+    if (rowH) {
+      tr.style.height = `${rowH}px`;
+      tr.classList.add("row-fixed-height");
     }
     const rowHead = document.createElement("td");
     rowHead.className = "row-head";
     rowHead.textContent = model.rowHeadFormatter ? model.rowHeadFormatter(row, rowPos) : String(row.rowIndex0 + 1);
+    if (typeof row.rowIndex0 === "number") {
+      const rowResizer = document.createElement("div");
+      rowResizer.className = "row-resizer";
+      rowResizer.dataset.rowIndex = String(row.rowIndex0);
+      rowHead.appendChild(rowResizer);
+    }
     tr.appendChild(rowHead);
     const matchedCols = highlightMatchedCells ? matchedCellsByRow.get(row.rowIndex0) : null;
     row.values.forEach((v, i) => {
@@ -1297,7 +1312,7 @@ function renderTable(modelOrHeaders, maybeRows) {
         const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
         if (cf) {
           if (cf.fontColor) td.style.color = cf.fontColor;
-          if (cf.fillColor) { td.classList.add("cell-has-fill"); td.style.background = hexToRgba(cf.fillColor, 0.28) || td.style.background; }
+          if (cf.fillColor) { td.classList.add("cell-has-fill"); td.style.background = hexToRgba(cf.fillColor, cf.fontColor ? 1 : 0.28) || td.style.background; }
         }
       }
       tr.appendChild(td);

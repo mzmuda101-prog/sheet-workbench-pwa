@@ -37,6 +37,8 @@ const showCellFontsEl = document.getElementById("showCellFonts");
 const showCellBordersEl = document.getElementById("showCellBorders");
 const wrapCellsEl = document.getElementById("wrapCells");
 const showConditionalFormattingEl = document.getElementById("showConditionalFormatting");
+const showSubheadersEl = document.getElementById("showSubheaders");
+const rowHeightAllEl = document.getElementById("rowHeightAll");
 const excelLayoutToggleEl = document.getElementById("excelLayoutToggle");
 const loadBtn = document.getElementById("loadBtn");
 const loadSampleBtn = document.getElementById("loadSampleBtn");
@@ -172,6 +174,7 @@ let cellStyleShowBorders = true;
 // Formatowanie warunkowe (CF): reguły + dxf parsowane z surowego .xlsx przy wczytaniu,
 // ewaluowane leniwie per arkusz (cache). Pokazują kolory/tła zmienione przez CF w Excelu.
 let cellStyleShowConditionalFormatting = true;
+let cellStyleShowSubheaders = true; // jasnozielone podświetlenie wykrytych podnagłówków
 let currentDxfs = [];        // [{fontColor, fillColor}] z xl/styles.xml <dxfs>
 let currentCFRules = null;   // Map<sheetName, Array<block>> z <conditionalFormatting>
 let cfEvalCache = new Map(); // Map<sheetName, Map<cellRef, {fontColor?, fillColor?}>>
@@ -231,6 +234,8 @@ let lastPickerTriggerEl = null;
 let sortState = { col: "", dir: "asc" };
 let multiSortState = [];
 let manualColumnWidths = {};
+let manualRowHeights = {};   // rowIndex0 -> px (ręczne przeciąganie pojedynczych wierszy)
+let manualRowHeightAll = 0;  // px > 0 = jednolita wysokość wszystkich wierszy (pole w „Widok")
 let hasUnsavedChanges = false;
 let focusedCellState = null;
 let selectedCellState = null;
@@ -270,6 +275,7 @@ const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
 const EXCEL_LAYOUT_KEY = "excel-workbench-excel-layout";
 const CELL_STYLE_PREFS_KEY = "excel-workbench-cell-style-prefs";
+const ROW_HEIGHT_KEY = "excel-workbench-row-height-all";
 const SORT_PRESETS_KEY = "excel-workbench-sort-presets";
 const TOOLBAR_COLLAPSED_KEY = "excel-workbench-toolbar-collapsed";
 const INTRO_PLAYED_KEY = "introPlayed";
@@ -385,18 +391,23 @@ function updateTableTouchAxisLock(event) {
   const absX = Math.abs(dx);
   const absY = Math.abs(dy);
 
-  if (Math.max(absX, absY) > 10) {
-    if (absY > absX * 1.1) {
-      tableTouchAxisLock.mode = "vertical";
-      // Jednorazowy snap — usuwa ew. dryf przed detekcją kierunku
-      tableWrapEl.scrollLeft = tableTouchAxisLock.startScrollLeft;
-      // Blokada natywna: przeglądarka sama pilnuje osi, momentum działa normalnie
-      tableWrapEl.style.overflowX = "hidden";
-    } else if (absX > absY * 1.1) {
-      tableTouchAxisLock.mode = "horizontal";
-      tableWrapEl.scrollTop = tableTouchAxisLock.startScrollTop;
-      tableWrapEl.style.overflowY = "hidden";
-    }
+  // Zatwierdź oś wcześnie (już przy 8px), zanim rozpędzi się momentum.
+  if (Math.max(absX, absY) < 8) return;
+
+  // SILNE nastawienie na pion: poziom tylko gdy gest jest wyraźnie poziomy
+  // (absX > 1.6×absY). Dzięki temu drobne boczne drgania palca podczas
+  // przewijania w dół nie przełączają na poziom i nie psują momentum.
+  // Wszystko inne (pion, skos, niejednoznaczne) → pion. Snap kasuje dryf
+  // sprzed zatwierdzenia osi; overflow:hidden oddaje sterowanie natywnemu
+  // momentum przeglądarki na jednej osi.
+  if (absX > absY * 1.6) {
+    tableTouchAxisLock.mode = "horizontal";
+    tableWrapEl.scrollTop = tableTouchAxisLock.startScrollTop;
+    tableWrapEl.style.overflowY = "hidden";
+  } else {
+    tableTouchAxisLock.mode = "vertical";
+    tableWrapEl.scrollLeft = tableTouchAxisLock.startScrollLeft;
+    tableWrapEl.style.overflowX = "hidden";
   }
 }
 

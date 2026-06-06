@@ -51,8 +51,8 @@ const I18N = {
     changeDirection: "Zmień kierunek",
     remove: "Usuń",
     defaultSort: "Domyślne sortowanie",
-    excelView: "Widok Excel",
-    excelViewOn: "Widok Excel: ON",
+    excelView: "Wymiary z Excela",
+    excelViewOn: "Wymiary z Excela: ON",
     classicView: "Widok klasyczny",
     loadingFile: "Wczytywanie pliku...",
     loadingSheet: "Budowanie tabeli...",
@@ -455,8 +455,8 @@ const I18N = {
     changeDirection: "Change direction",
     remove: "Remove",
     defaultSort: "Default sort",
-    excelView: "Excel view",
-    excelViewOn: "Excel view: ON",
+    excelView: "Excel dimensions",
+    excelViewOn: "Excel dimensions: ON",
     classicView: "Classic view",
     loadingFile: "Loading file...",
     loadingSheet: "Building table...",
@@ -917,6 +917,7 @@ const STATIC_TRANSLATIONS = {
     showCellFonts: "Pokaż czcionki z pliku",
     showCellBorders: "Pokaż obramowania",
     showConditionalFormatting: "Pokaż formatowanie warunkowe",
+    showSubheaders: "Wyróżniaj podnagłówki",
     wrapCells: "Zawijaj tekst w komórkach",
     dateFilter: "Filtr dat",
     lastDays: "Ostatnie dni",
@@ -939,6 +940,7 @@ const STATIC_TRANSLATIONS = {
     deletePreset: "Usuń preset",
     view: "Widok",
     zoom: "Powiększenie",
+    rowHeightLabel: "Wysokość wierszy (px)",
     workbenchAnalysis: "Analiza workbench",
     file: "Plik",
     sheetSection: "Arkusz",
@@ -1103,6 +1105,7 @@ const STATIC_TRANSLATIONS = {
     showCellFonts: "Show file fonts",
     showCellBorders: "Show borders",
     showConditionalFormatting: "Show conditional formatting",
+    showSubheaders: "Highlight subheaders",
     wrapCells: "Wrap cell text",
     dateFilter: "Date filter",
     lastDays: "Last days",
@@ -1125,6 +1128,7 @@ const STATIC_TRANSLATIONS = {
     deletePreset: "Delete preset",
     view: "View",
     zoom: "Zoom",
+    rowHeightLabel: "Row height (px)",
     workbenchAnalysis: "Workbench analysis",
     file: "File",
     sheetSection: "Sheet",
@@ -1568,6 +1572,7 @@ function applyStaticTranslations() {
   setCheckboxText("showCellFonts", copy.showCellFonts);
   setCheckboxText("showCellBorders", copy.showCellBorders);
   setCheckboxText("showConditionalFormatting", copy.showConditionalFormatting);
+  setCheckboxText("showSubheaders", copy.showSubheaders);
   setCheckboxText("wrapCells", copy.wrapCells);
   setText("#filter2BlockTitle", copy.filterBlock2);
   setButtonLabel("#addFilter2Btn", copy.addSecondFilter);
@@ -1619,6 +1624,7 @@ function applyStaticTranslations() {
   setText("#deleteSortPresetBtn", copy.deletePreset);
   setText("#panel-view .panel-title", copy.view);
   setFieldLabel("zoomLevel", copy.zoom);
+  setFieldLabel("rowHeightAll", copy.rowHeightLabel);
   setText("#panel-workbench-analysis .panel-title", copy.workbenchAnalysis);
   setText('#subtitle-workbook', copy.file);
   setText('#subtitle-sheet', copy.sheetSection);
