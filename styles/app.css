@@ -2822,9 +2822,23 @@ tbody td.cell-filter-match {
     inset 0 0 0 1.5px color-mix(in srgb, var(--warning) 52%, transparent),
     inset 0 0 6px color-mix(in srgb, var(--warning) 20%, transparent);
 }
-/* Gdy komórka jest jednocześnie zaznaczona kursorem, zaznaczenie ma pierwszeństwo. */
+/* Bursztynowy „chip" pasującej komórki MA PIERWSZEŃSTWO nad zielenią zaznaczenia
+   wiersza (klik) i komórki — inaczej obwódka robiła się zielona zamiast pomarańczowej.
+   Wyższa specyficzność (+ !important) bije `tr.row-focused td` i `cell-selected`. */
+tbody tr.row-focused td.cell-filter-match,
 tbody td.cell-filter-match.cell-selected {
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--warning) 38%, transparent);
+  background: color-mix(in srgb, var(--warning) 16%, transparent) !important;
+  box-shadow:
+    inset 0 0 0 1.6px color-mix(in srgb, var(--warning) 42%, transparent),
+    inset 0 0 6px color-mix(in srgb, var(--warning) 16%, transparent) !important;
+  border-radius: 6px;
+}
+[data-theme="dark"] tbody tr.row-focused td.cell-filter-match,
+[data-theme="dark"] tbody td.cell-filter-match.cell-selected {
+  background: color-mix(in srgb, var(--warning) 26%, transparent) !important;
+  box-shadow:
+    inset 0 0 0 1.6px color-mix(in srgb, var(--warning) 58%, transparent),
+    inset 0 0 6px color-mix(in srgb, var(--warning) 22%, transparent) !important;
 }
 
 .resizing {

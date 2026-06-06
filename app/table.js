@@ -1119,6 +1119,10 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
       // (np. uszkodzony/pusty model long) — pomijamy kolumny poza zakresem nagłówków.
       if (i >= samples.length) return;
       const text = getDisplayValue(rows[r], i);
+      // Puste komórki POMIJAMY w próbce — inaczej w kolumnach z dużą liczbą pustych
+      // (np. od2/do2 w późniejszych cyklach) 90. percentyl spada do ~0, kolumna zwija
+      // się do minimum i nieliczne realne daty zostają ucięte.
+      if (!text || !text.trim()) return;
       const cellStyle = rows[r].cellStyles && rows[r].cellStyles[i];
       samples[i].push(measure(text, fontsShown && cellStyle && cellStyle.bold, (cellStyle && cellStyle.fontScale) || 1));
     });
