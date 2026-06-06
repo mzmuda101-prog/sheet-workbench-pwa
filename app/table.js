@@ -108,6 +108,30 @@ function getRowSelectionKey(row) {
   return `wide:${row.rowIndex0 ?? ""}`;
 }
 
+function buildFocusedRowStatusSuffix(model) {
+  if (!focusedCellState || !model?.rows?.length) return "";
+  const idx = model.rows.findIndex((row) => getRowSelectionKey(row) === focusedCellState.rowKey);
+  if (idx < 0) return "";
+  const limit = Math.max(1, parseInt(maxRowsEl.value || "200", 10));
+  if (idx >= limit) return "";
+  return t("statusFocusedRow", { pos: idx + 1 });
+}
+
+function updateTableStatus(model) {
+  if (!model?.headers?.length) return;
+  const rows = Array.isArray(model.rows) ? model.rows : [];
+  if (!rows.length) return;
+  const limit = Math.max(1, parseInt(maxRowsEl.value || "200", 10));
+  const modeLabel = model.mode === "long" ? t("statusLongMode") : "";
+  const focusedSuffix = buildFocusedRowStatusSuffix(model);
+  setStatus(t("statusTableRows", {
+    total: rows.length,
+    shown: Math.min(rows.length, limit),
+    mode: modeLabel,
+    focused: focusedSuffix,
+  }));
+}
+
 function findCellElement(cellState) {
   if (!cellState) return null;
   return tbodyEl.querySelector(
@@ -155,6 +179,7 @@ function setFocusedCell(rowKey, colIndex0, options = {}) {
     syncFocusedCellInDom({ clearMissing: false });
     syncRangeHighlightInDom();
     updateCellStats();
+    updateTableStatus(currentDisplayModel);
     return;
   }
   focusedCellState = { rowKey, colIndex0 };
@@ -165,6 +190,7 @@ function setFocusedCell(rowKey, colIndex0, options = {}) {
   syncFocusedCellInDom(options);
   syncRangeHighlightInDom();
   updateCellStats();
+  updateTableStatus(currentDisplayModel);
 }
 
 function setSelectedCell(rowKey, colIndex0, options = {}) {
@@ -1167,7 +1193,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     return;
   }
   if (!rows.length) {
-    setStatus("Wierszy: 0");
+    setStatus(t("statusTableRowsEmpty"));
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
     setEmptyState(t("tableNoResults"), t("tableNoResultsHint"));
     return;
@@ -1346,8 +1372,7 @@ function renderTable(modelOrHeaders, maybeRows) {
   });
   tbodyEl.appendChild(tbodyFragment);
 
-  const modeLabel = model.mode === "long" ? " • tryb long" : "";
-  setStatus(`Wierszy: ${rows.length} (pokazano: ${Math.min(rows.length, limit)})${modeLabel}`);
+  updateTableStatus(model);
   syncFocusedCellInDom({ clearMissing: true });
   syncSelectedCellInDom({ clearMissing: true });
   syncRangeHighlightInDom();

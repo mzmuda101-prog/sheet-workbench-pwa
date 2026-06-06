@@ -82,6 +82,7 @@ if (durationAnalysisListEl) {
     const entity = (btn.dataset.durationEntity || "").trim();
     if (!entity) return;
     searchQueryEl.value = entity;
+    filtersCommitted = true;
     applyFilters();
     sortRows();
     renderActiveTable();
@@ -208,6 +209,7 @@ if (aggregationWorkbenchListEl) {
     if (filterModeEl) {
       filterModeEl.value = aggregationWorkbenchState.matchMode === "exact" ? "equals" : "contains";
     }
+    filtersCommitted = true;
     applyFilters();
     sortRows();
     renderActiveTable();
@@ -319,7 +321,7 @@ if (rowHeightAllEl) {
   });
 }
 // „Podświetl pasujące komórki" — wspólny stan dla filtra tekstowego i dat (oba checkboxy
-// trzymane w zgodzie); zmiana od razu nakłada/zdejmuje podświetlenie bez klikania „Filtruj".
+// trzymane w zgodzie); podświetla od razu, ale nie ukrywa wierszy dopóki nie kliknięto „Filtruj".
 [highlightMatchCellsEl, highlightMatchCellsDateEl].forEach((el) => {
   if (!el) return;
   el.addEventListener("change", () => {

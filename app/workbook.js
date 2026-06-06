@@ -1014,20 +1014,21 @@ function applyFilters() {
     if (cols.size) matchedCellsByRow.set(row.rowIndex0, cols);
   };
 
-  if (quickSearchHighlightMode) {
-    // Tryb "zaznacz": wszystkie wiersze widoczne, zapamiętaj które pasują
+  const shouldFilterRows = filtersCommitted && !quickSearchHighlightMode;
+  if (shouldFilterRows) {
+    // Tryb „filtruj": tylko pasujące wiersze (po kliknięciu Filtruj lub równoważnej akcji)
+    matchedRowIndexes = new Set();
+    viewRows = baseRows.filter(rowPasses);
+    viewRows.forEach(collectCells);
+  } else {
+    // Podgląd / zaznacz: wszystkie wiersze widoczne; opcjonalnie podświetl trafienia
     viewRows = baseRows.slice();
     matchedRowIndexes = new Set();
     baseRows.forEach((row) => {
       if (!rowPasses(row)) return;
-      matchedRowIndexes.add(row.rowIndex0);
+      if (quickSearchHighlightMode) matchedRowIndexes.add(row.rowIndex0);
       collectCells(row);
     });
-  } else {
-    // Tryb "filtruj": tylko pasujące wiersze
-    matchedRowIndexes = new Set();
-    viewRows = baseRows.filter(rowPasses);
-    viewRows.forEach(collectCells);
   }
 }
 

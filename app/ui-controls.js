@@ -202,6 +202,7 @@ function resetFilterInputs() {
   columnSelections.filter2.clear();
   columnSelections.date.clear();
   quickSearchHighlightMode = false;
+  filtersCommitted = false;
   matchedRowIndexes = new Set();
   quickSearchOperatorsEnabled = false;
   if (quickSearchActionEl) quickSearchActionEl.value = "filter";
@@ -1139,6 +1140,7 @@ loadBtn.addEventListener("click", () => {
       currentFormulaEntries = collectFormulaEntries(sheet, data, headerRow);
       if (!canUseLongView()) tableViewMode = "wide";
       viewRows = baseRows.slice();
+      filtersCommitted = false;
       multiSortState = [];
       sortState = { col: "", dir: "asc" };
       manualColumnWidths = {};
@@ -1181,6 +1183,7 @@ loadBtn.addEventListener("click", () => {
 
 applyFilterBtn.addEventListener("click", () => {
   if (!currentHeaders.length) return;
+  filtersCommitted = true;
   applyFilters();
   sortRows();
   renderActiveTable();
@@ -1209,6 +1212,7 @@ function applyQuickSearch() {
   // Odczytaj tryb akcji (filtruj / zaznacz)
   const actionEl = (popupActive && quickSearchPopupActionEl) ? quickSearchPopupActionEl : quickSearchActionEl;
   quickSearchHighlightMode = actionEl ? actionEl.value === "highlight" : false;
+  if (!quickSearchHighlightMode) filtersCommitted = true;
 
   // Odczytaj i synchronizuj checkbox operatorów
   const operatorsEl = (popupActive && quickSearchPopupOperatorsEl) ? quickSearchPopupOperatorsEl : quickSearchOperatorsEl;
@@ -1429,6 +1433,7 @@ quickRangeButtons.forEach((btn) => {
     dateModeEl.value = "last_n_days";
     lastDaysEl.value = String(days);
     updateDateChipsActive();
+    filtersCommitted = true;
     applyFilters();
     sortRows();
     renderActiveTable();
