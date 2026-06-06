@@ -1087,11 +1087,29 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-  const tableFont = getComputedStyle(tableEl).font;
-  ctx.font = tableFont;
+  // Mierzymy osobno wariantem normalnym i POGRUBIONYM — pogrubiony tekst jest szerszy,
+  // a wcześniej mierzyliśmy wszystko jako normalny → kolumny (np. dat) bywały za wąskie
+  // i ucinały ~połowę wartości. Czcionka brana z realnego stylu tabeli.
+  const cs = getComputedStyle(tableEl);
+  // WAŻNE: mierzymy rozmiarem realnie używanym przez <td> (CSS: 12.5px × zoom),
+  // a NIE font-size samego <table> (bywa inny, np. 12px) — inaczej kolumny wychodzą
+  // za wąskie i ucinają tekst, gdy formatowanie tekstu z pliku jest wyłączone.
+  const zoom = (typeof zoomLevelEl !== "undefined" && parseFloat(zoomLevelEl.value)) || 1;
+  const fSize = `${12.5 * zoom}px`;
+  const fFamily = cs.fontFamily || "sans-serif";
+  const normalFont = `${fSize} ${fFamily}`;
+  const boldFont = `700 ${fSize} ${fFamily}`;
+  const fontsShown = cellStyleShowFonts; // pogrubienie pokazywane tylko gdy włączone
+  const measure = (text, bold, scale) => {
+    ctx.font = bold ? boldFont : normalFont;
+    let w = ctx.measureText(text).width;
+    if (scale > 1) w *= scale;
+    return w;
+  };
 
   headers.forEach((h, i) => {
-    widths[i] = Math.max(widths[i], ctx.measureText(h).width);
+    const hs = currentHeaderStyles && currentHeaderStyles[i];
+    widths[i] = Math.max(widths[i], measure(h, fontsShown && hs && hs.bold, (hs && hs.fontScale) || 1));
   });
   const limit = Math.min(rows.length, 300);
   const samples = headers.map(() => []);
@@ -1101,15 +1119,11 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
       // (np. uszkodzony/pusty model long) — pomijamy kolumny poza zakresem nagłówków.
       if (i >= samples.length) return;
       const text = getDisplayValue(rows[r], i);
-      let w = ctx.measureText(text).width;
-      // Komórki z większą czcionką (jak w Excelu) potrzebują szerszej kolumny,
-      // by tekst się nie uciął — skalujemy zmierzoną szerokość proporcjonalnie.
       const cellStyle = rows[r].cellStyles && rows[r].cellStyles[i];
-      if (cellStyle && cellStyle.fontScale > 1) w *= cellStyle.fontScale;
-      samples[i].push(w);
+      samples[i].push(measure(text, fontsShown && cellStyle && cellStyle.bold, (cellStyle && cellStyle.fontScale) || 1));
     });
   }
-  const padding = 24;
+  const padding = 26;
   // Inteligentnie: dopasuj do większości (p90) i przytnij skrajnie długie teksty, by
   // kolumny nie robiły się ogromne. Wyłączone: zmieść CAŁĄ zawartość (najdłuższa komórka),
   // z wyższym limitem szerokości.
@@ -1121,7 +1135,7 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
     const colSamples = samples[i].sort((a, b) => a - b);
     const idx = Math.floor(colSamples.length * pct);
     const pVal = colSamples.length ? colSamples[Math.min(idx, colSamples.length - 1)] : base;
-    const raw = Math.max(base, pVal) + padding;
+    const raw = Math.max(base, pVal) * 1.02 + padding; // +2% zapasu na różnice renderowania
     return Math.max(min, Math.min(maxW, Math.ceil(raw)));
   });
 }

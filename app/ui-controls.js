@@ -430,60 +430,71 @@ columnListEl.addEventListener("change", () => {
 
 
 function attachResizeHandlers() {
-  let active = null; // { kind:"col"|"row", index, start, startSize }
+  // Pointer Events + setPointerCapture: bez GLOBALNYCH listenerów touchmove (te z passive:false
+  // psuły płynne przewijanie na dotyku). W trakcie przeciągania aktualizujemy tylko szerokość
+  // <col> / wysokość <tr> NA ŻYWO (bez przebudowy tabeli) — dzięki czemu uchwyt nie znika z DOM,
+  // przechwycenie wskaźnika trwa i pointerup zawsze zwalnia resize (koniec „przyklejania się").
+  let active = null; // { kind, index, start, startSize, handle, pointerId }
   let rafId = null;
 
-  const pointOf = (e) => (e.touches && e.touches[0]) ? e.touches[0] : e;
+  const colGroupCol = (i) => {
+    const cg = tableEl.querySelector("colgroup");
+    return cg ? cg.children[i + 1] : null; // +1: pierwszy <col> to kolumna numerów wierszy
+  };
 
-  const start = (e) => {
+  const liveApply = () => {
+    if (!active) return;
+    if (active.kind === "col") {
+      const col = colGroupCol(active.index);
+      if (col) col.style.width = `${manualColumnWidths[active.index]}px`;
+    } else {
+      const tr = tbodyEl.querySelector(`tr[data-row-index="${active.index}"]`);
+      if (tr) { tr.style.height = `${manualRowHeights[active.index]}px`; tr.classList.add("row-fixed-height"); }
+    }
+  };
+
+  const onDown = (e) => {
     const colHandle = e.target.closest(".col-resizer");
     const rowHandle = !colHandle && e.target.closest(".row-resizer");
     const handle = colHandle || rowHandle;
     if (!handle) return;
-    const pt = pointOf(e);
     if (colHandle) {
       const th = handle.parentElement;
-      active = { kind: "col", index: parseInt(handle.dataset.colIndex, 10), start: pt.clientX, startSize: th.getBoundingClientRect().width };
+      active = { kind: "col", index: parseInt(handle.dataset.colIndex, 10), start: e.clientX, startSize: th.getBoundingClientRect().width, handle, pointerId: e.pointerId };
     } else {
       const tr = handle.closest("tr");
-      active = { kind: "row", index: parseInt(handle.dataset.rowIndex, 10), start: pt.clientY, startSize: tr ? tr.getBoundingClientRect().height : 28 };
+      active = { kind: "row", index: parseInt(handle.dataset.rowIndex, 10), start: e.clientY, startSize: tr ? tr.getBoundingClientRect().height : 28, handle, pointerId: e.pointerId };
     }
     document.body.classList.add("resizing");
-    if (!e.touches) e.preventDefault(); // mysz: nie zaznaczaj tekstu (na dotyku robi to touch-action:none)
+    try { handle.setPointerCapture(e.pointerId); } catch {}
+    e.preventDefault();
   };
 
-  const move = (e) => {
-    if (!active) return;
-    // Dotyk: zatrzymaj natywne przewijanie tabeli na czas przeciągania uchwytu.
-    if (e.cancelable && e.touches) e.preventDefault();
-    const pt = pointOf(e);
+  const onMove = (e) => {
+    if (!active || e.pointerId !== active.pointerId) return;
     if (active.kind === "col") {
-      manualColumnWidths[active.index] = Math.max(60, Math.min(900, Math.round(active.startSize + (pt.clientX - active.start))));
+      manualColumnWidths[active.index] = Math.max(60, Math.min(900, Math.round(active.startSize + (e.clientX - active.start))));
     } else {
-      manualRowHeights[active.index] = Math.max(16, Math.min(600, Math.round(active.startSize + (pt.clientY - active.start))));
+      manualRowHeights[active.index] = Math.max(16, Math.min(600, Math.round(active.startSize + (e.clientY - active.start))));
     }
     if (rafId) return;
-    rafId = requestAnimationFrame(() => {
-      rafId = null;
-      if (active) renderActiveTable();
-    });
+    rafId = requestAnimationFrame(() => { rafId = null; liveApply(); });
   };
 
-  const stop = () => {
-    if (!active) return;
+  const onUp = (e) => {
+    if (!active || (e.pointerId != null && e.pointerId !== active.pointerId)) return;
+    const finished = active;
     active = null;
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     document.body.classList.remove("resizing");
+    try { finished.handle.releasePointerCapture(finished.pointerId); } catch {}
+    renderActiveTable(); // finalizacja: colgroup, pasek przewijania, itd.
   };
 
-  tableEl.addEventListener("mousedown", start);
-  tableEl.addEventListener("touchstart", start, { passive: true });
-  window.addEventListener("mousemove", move);
-  // non-passive: pozwala preventDefault() i blokuje przewijanie tylko gdy trwa resize
-  window.addEventListener("touchmove", move, { passive: false });
-  window.addEventListener("mouseup", stop);
-  window.addEventListener("touchend", stop);
-  window.addEventListener("touchcancel", stop);
+  tableEl.addEventListener("pointerdown", onDown);
+  tableEl.addEventListener("pointermove", onMove);
+  tableEl.addEventListener("pointerup", onUp);
+  tableEl.addEventListener("pointercancel", onUp);
 }
 
 function initTheme() {
