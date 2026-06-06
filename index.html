@@ -329,6 +329,10 @@
                   Odwróć
                 </label>
               </div>
+              <label class="field checkbox" data-hint data-hint-pl="Po filtrowaniu subtelnie podświetla komórki dat, dzięki którym dany wiersz przeszedł filtr." data-hint-en="After filtering, subtly highlights the date cells that made each row pass the filter." data-hint-delay="1.1" data-hint-touch="on">
+                <input id="highlightMatchCellsDate" type="checkbox" />
+                Podświetl pasujące komórki
+              </label>
 
               <div class="quick-row">
                 <button class="chip" data-range="7" type="button">7 dni</button>
@@ -560,9 +564,9 @@
                 <input id="showCellFills" type="checkbox" checked />
                 Pokaż wypełnienia komórek
               </label>
-              <label class="field checkbox" data-hint data-hint-pl="Stosuje rodzinę i rozmiar czcionki z pliku (jak w Excelu)." data-hint-en="Applies font family and size from the file (like in Excel)." data-hint-delay="1.1" data-hint-touch="on">
+              <label class="field checkbox" data-hint data-hint-pl="Stosuje formatowanie tekstu z pliku: rodzinę i rozmiar czcionki, pogrubienie, kursywę, podkreślenie." data-hint-en="Applies text formatting from the file: font family and size, bold, italic, underline." data-hint-delay="1.1" data-hint-touch="on">
                 <input id="showCellFonts" type="checkbox" checked />
-                Pokaż czcionki z pliku
+                Pokaż formatowanie tekstu
               </label>
               <label class="field checkbox" data-hint data-hint-pl="Rysuje obramowania komórek z pliku." data-hint-en="Draws cell borders from the file." data-hint-delay="1.1" data-hint-touch="on">
                 <input id="showCellBorders" type="checkbox" checked />
@@ -579,6 +583,10 @@
               <label class="field checkbox" data-hint data-hint-pl="Zawija długi tekst na wiele linii zamiast ucinać (dotyczy wszystkich komórek)." data-hint-en="Wraps long text onto multiple lines instead of clipping (all cells)." data-hint-delay="1.1" data-hint-touch="on">
                 <input id="wrapCells" type="checkbox" />
                 Zawijaj tekst w komórkach
+              </label>
+              <label class="field checkbox" data-hint data-hint-pl="Dopasowuje szerokość kolumn do WIĘKSZOŚCI komórek (skrajnie długie teksty zostają przycięte, kolumny nie robią się ogromne). Wyłączone = kolumny mieszczą całą zawartość." data-hint-en="Fits column width to MOST cells (extremely long texts get clipped so columns don't get huge). Off = columns fit all content." data-hint-delay="1.1" data-hint-touch="on">
+                <input id="smartColWidths" type="checkbox" checked />
+                Inteligentne dopasowanie szerokości
               </label>
             </div>
           </details>

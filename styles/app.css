@@ -2494,11 +2494,13 @@ thead .guide-row th {
 
 .guide-cell .col-resizer {
   position: absolute;
-  right: 0;
+  right: -8px;
   top: 0;
-  width: 8px;
+  width: 16px;
   height: 100%;
   cursor: col-resize;
+  z-index: 3;
+  touch-action: none; /* przejmij gest — bez tego dotyk przewija tabelę zamiast resize */
 }
 
 .guide-cell .col-resizer::after {
@@ -2529,11 +2531,12 @@ thead .guide-row th {
 .row-head .row-resizer {
   position: absolute;
   left: 0;
-  bottom: -3px;
+  bottom: -8px;
   width: 100%;
-  height: 8px;
+  height: 16px;
   cursor: row-resize;
-  z-index: 2;
+  z-index: 3;
+  touch-action: none; /* przejmij gest — bez tego dotyk przewija tabelę zamiast resize */
 }
 /* Wiersze z wymuszoną wysokością — przytnij zawartość zamiast rozpychać */
 tbody tr.row-fixed-height td {

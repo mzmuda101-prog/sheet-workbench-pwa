@@ -298,7 +298,7 @@ if (freezeHeadersEl) {
   });
   applyFreezeHeaders();
 }
-[showFontColorsEl, showCellFillsEl, showCellFontsEl, showCellBordersEl, showConditionalFormattingEl, showSubheadersEl].forEach((el) => {
+[showFontColorsEl, showCellFillsEl, showCellFontsEl, showCellBordersEl, showConditionalFormattingEl, showSubheadersEl, smartColWidthsEl].forEach((el) => {
   if (!el) return;
   el.addEventListener("change", () => {
     syncCellStyleFlags();
@@ -318,6 +318,21 @@ if (rowHeightAllEl) {
     renderActiveTable();
   });
 }
+// „Podświetl pasujące komórki" — wspólny stan dla filtra tekstowego i dat (oba checkboxy
+// trzymane w zgodzie); zmiana od razu nakłada/zdejmuje podświetlenie bez klikania „Filtruj".
+[highlightMatchCellsEl, highlightMatchCellsDateEl].forEach((el) => {
+  if (!el) return;
+  el.addEventListener("change", () => {
+    const on = !!el.checked;
+    if (highlightMatchCellsEl) highlightMatchCellsEl.checked = on;
+    if (highlightMatchCellsDateEl) highlightMatchCellsDateEl.checked = on;
+    if (!currentHeaders.length) return;
+    applyFilters();
+    sortRows();
+    renderActiveTable();
+    updateFilterBadge();
+  });
+});
 window.addEventListener("resize", () => {
   syncTableViewportHeight();
   syncFrozenHeaderMetrics();

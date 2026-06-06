@@ -914,10 +914,11 @@ const STATIC_TRANSLATIONS = {
     cellStyleOptionsTitle: "Style komórek z pliku",
     showFontColors: "Pokaż kolory czcionek",
     showCellFills: "Pokaż wypełnienia komórek",
-    showCellFonts: "Pokaż czcionki z pliku",
+    showCellFonts: "Pokaż formatowanie tekstu",
     showCellBorders: "Pokaż obramowania",
     showConditionalFormatting: "Pokaż formatowanie warunkowe",
     showSubheaders: "Wyróżniaj podnagłówki",
+    smartColWidths: "Inteligentne dopasowanie szerokości",
     wrapCells: "Zawijaj tekst w komórkach",
     dateFilter: "Filtr dat",
     lastDays: "Ostatnie dni",
@@ -1102,10 +1103,11 @@ const STATIC_TRANSLATIONS = {
     cellStyleOptionsTitle: "Cell styles from file",
     showFontColors: "Show font colors",
     showCellFills: "Show cell fills",
-    showCellFonts: "Show file fonts",
+    showCellFonts: "Show text formatting",
     showCellBorders: "Show borders",
     showConditionalFormatting: "Show conditional formatting",
     showSubheaders: "Highlight subheaders",
+    smartColWidths: "Smart column widths",
     wrapCells: "Wrap cell text",
     dateFilter: "Date filter",
     lastDays: "Last days",
@@ -1565,6 +1567,7 @@ function applyStaticTranslations() {
   setOperatorsToggleText("filterOperators", copy.searchOperatorsToggle, copy.quickSearchOperatorsTitle);
   setCheckboxText("onlyNonEmpty", copy.onlyRowsWithData);
   setCheckboxText("highlightMatchCells", copy.highlightMatchCells);
+  setCheckboxText("highlightMatchCellsDate", copy.highlightMatchCells);
   setCheckboxText("freezeHeaders", copy.freezeHeadersLabel);
   setText("#cellStyleOptionsTitle", copy.cellStyleOptionsTitle);
   setCheckboxText("showFontColors", copy.showFontColors);
@@ -1573,6 +1576,7 @@ function applyStaticTranslations() {
   setCheckboxText("showCellBorders", copy.showCellBorders);
   setCheckboxText("showConditionalFormatting", copy.showConditionalFormatting);
   setCheckboxText("showSubheaders", copy.showSubheaders);
+  setCheckboxText("smartColWidths", copy.smartColWidths);
   setCheckboxText("wrapCells", copy.wrapCells);
   setText("#filter2BlockTitle", copy.filterBlock2);
   setButtonLabel("#addFilter2Btn", copy.addSecondFilter);

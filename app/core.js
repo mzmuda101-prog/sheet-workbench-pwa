@@ -39,6 +39,7 @@ const wrapCellsEl = document.getElementById("wrapCells");
 const showConditionalFormattingEl = document.getElementById("showConditionalFormatting");
 const showSubheadersEl = document.getElementById("showSubheaders");
 const rowHeightAllEl = document.getElementById("rowHeightAll");
+const smartColWidthsEl = document.getElementById("smartColWidths");
 const excelLayoutToggleEl = document.getElementById("excelLayoutToggle");
 const loadBtn = document.getElementById("loadBtn");
 const loadSampleBtn = document.getElementById("loadSampleBtn");
@@ -60,6 +61,7 @@ const filterNegate2El = document.getElementById("filterNegate2");
 const filterOperators2El = document.getElementById("filterOperators2");
 const onlyNonEmptyEl = document.getElementById("onlyNonEmpty");
 const highlightMatchCellsEl = document.getElementById("highlightMatchCells");
+const highlightMatchCellsDateEl = document.getElementById("highlightMatchCellsDate");
 const applyFilterBtn = document.getElementById("applyFilterBtn");
 const filterBadgeEl = document.getElementById("filterBadge");
 const sortColumnSelectEl = document.getElementById("sortColumnSelect");
@@ -175,6 +177,7 @@ let cellStyleShowBorders = true;
 // ewaluowane leniwie per arkusz (cache). Pokazują kolory/tła zmienione przez CF w Excelu.
 let cellStyleShowConditionalFormatting = true;
 let cellStyleShowSubheaders = true; // jasnozielone podświetlenie wykrytych podnagłówków
+let cellStyleSmartWidths = true; // true = dopasuj do większości (p90, przycina skrajnie długie); false = zmieść wszystko
 let currentDxfs = [];        // [{fontColor, fillColor}] z xl/styles.xml <dxfs>
 let currentCFRules = null;   // Map<sheetName, Array<block>> z <conditionalFormatting>
 let cfEvalCache = new Map(); // Map<sheetName, Map<cellRef, {fontColor?, fillColor?}>>
@@ -240,7 +243,6 @@ let hasUnsavedChanges = false;
 let focusedCellState = null;
 let selectedCellState = null;
 let syncingHorizontalScroll = false;
-let tableTouchAxisLock = null;
 let tooltipHideTimer = null;
 let durationAnalysisState = {
   statusFilter: "all",
@@ -365,56 +367,3 @@ function applyFreezeHeaders() {
   syncFrozenHeaderMetrics();
 }
 
-function startTableTouchAxisLock(event) {
-  if (!tableWrapEl || !event.touches || event.touches.length !== 1) {
-    tableTouchAxisLock = null;
-    return;
-  }
-  const touch = event.touches[0];
-  tableTouchAxisLock = {
-    mode: "",
-    startX: touch.clientX,
-    startY: touch.clientY,
-    startScrollLeft: tableWrapEl.scrollLeft,
-    startScrollTop: tableWrapEl.scrollTop,
-  };
-}
-
-function updateTableTouchAxisLock(event) {
-  if (!tableWrapEl || !tableTouchAxisLock || !event.touches || event.touches.length !== 1) return;
-  // Oś już zablokowana — overflow pilnuje dalej, nie ma co robić per-klatkę
-  if (tableTouchAxisLock.mode) return;
-
-  const touch = event.touches[0];
-  const dx = touch.clientX - tableTouchAxisLock.startX;
-  const dy = touch.clientY - tableTouchAxisLock.startY;
-  const absX = Math.abs(dx);
-  const absY = Math.abs(dy);
-
-  // Zatwierdź oś wcześnie (już przy 8px), zanim rozpędzi się momentum.
-  if (Math.max(absX, absY) < 8) return;
-
-  // SILNE nastawienie na pion: poziom tylko gdy gest jest wyraźnie poziomy
-  // (absX > 1.6×absY). Dzięki temu drobne boczne drgania palca podczas
-  // przewijania w dół nie przełączają na poziom i nie psują momentum.
-  // Wszystko inne (pion, skos, niejednoznaczne) → pion. Snap kasuje dryf
-  // sprzed zatwierdzenia osi; overflow:hidden oddaje sterowanie natywnemu
-  // momentum przeglądarki na jednej osi.
-  if (absX > absY * 1.6) {
-    tableTouchAxisLock.mode = "horizontal";
-    tableWrapEl.scrollTop = tableTouchAxisLock.startScrollTop;
-    tableWrapEl.style.overflowY = "hidden";
-  } else {
-    tableTouchAxisLock.mode = "vertical";
-    tableWrapEl.scrollLeft = tableTouchAxisLock.startScrollLeft;
-    tableWrapEl.style.overflowX = "hidden";
-  }
-}
-
-function endTableTouchAxisLock() {
-  if (tableWrapEl && tableTouchAxisLock?.mode) {
-    tableWrapEl.style.overflowX = "";
-    tableWrapEl.style.overflowY = "";
-  }
-  tableTouchAxisLock = null;
-}

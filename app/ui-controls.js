@@ -189,6 +189,7 @@ function resetFilterInputs() {
   if (filterOperators2El) filterOperators2El.checked = false;
   onlyNonEmptyEl.checked = false;
   if (highlightMatchCellsEl) highlightMatchCellsEl.checked = false;
+  if (highlightMatchCellsDateEl) highlightMatchCellsDateEl.checked = false;
   highlightMatchedCells = false;
   matchedCellsByRow = new Map();
   dateModeEl.value = "between";
@@ -432,30 +433,34 @@ function attachResizeHandlers() {
   let active = null; // { kind:"col"|"row", index, start, startSize }
   let rafId = null;
 
+  const pointOf = (e) => (e.touches && e.touches[0]) ? e.touches[0] : e;
+
   const start = (e) => {
     const colHandle = e.target.closest(".col-resizer");
     const rowHandle = !colHandle && e.target.closest(".row-resizer");
     const handle = colHandle || rowHandle;
     if (!handle) return;
-    e.preventDefault();
+    const pt = pointOf(e);
     if (colHandle) {
       const th = handle.parentElement;
-      active = { kind: "col", index: parseInt(handle.dataset.colIndex, 10), start: e.clientX || (e.touches && e.touches[0].clientX) || 0, startSize: th.getBoundingClientRect().width };
+      active = { kind: "col", index: parseInt(handle.dataset.colIndex, 10), start: pt.clientX, startSize: th.getBoundingClientRect().width };
     } else {
       const tr = handle.closest("tr");
-      active = { kind: "row", index: parseInt(handle.dataset.rowIndex, 10), start: e.clientY || (e.touches && e.touches[0].clientY) || 0, startSize: tr ? tr.getBoundingClientRect().height : 28 };
+      active = { kind: "row", index: parseInt(handle.dataset.rowIndex, 10), start: pt.clientY, startSize: tr ? tr.getBoundingClientRect().height : 28 };
     }
     document.body.classList.add("resizing");
+    if (!e.touches) e.preventDefault(); // mysz: nie zaznaczaj tekstu (na dotyku robi to touch-action:none)
   };
 
   const move = (e) => {
     if (!active) return;
+    // Dotyk: zatrzymaj natywne przewijanie tabeli na czas przeciągania uchwytu.
+    if (e.cancelable && e.touches) e.preventDefault();
+    const pt = pointOf(e);
     if (active.kind === "col") {
-      const x = e.clientX || (e.touches && e.touches[0].clientX) || 0;
-      manualColumnWidths[active.index] = Math.max(80, Math.min(520, Math.round(active.startSize + (x - active.start))));
+      manualColumnWidths[active.index] = Math.max(60, Math.min(900, Math.round(active.startSize + (pt.clientX - active.start))));
     } else {
-      const y = e.clientY || (e.touches && e.touches[0].clientY) || 0;
-      manualRowHeights[active.index] = Math.max(16, Math.min(400, Math.round(active.startSize + (y - active.start))));
+      manualRowHeights[active.index] = Math.max(16, Math.min(600, Math.round(active.startSize + (pt.clientY - active.start))));
     }
     if (rafId) return;
     rafId = requestAnimationFrame(() => {
@@ -474,9 +479,11 @@ function attachResizeHandlers() {
   tableEl.addEventListener("mousedown", start);
   tableEl.addEventListener("touchstart", start, { passive: true });
   window.addEventListener("mousemove", move);
-  window.addEventListener("touchmove", move, { passive: true });
+  // non-passive: pozwala preventDefault() i blokuje przewijanie tylko gdy trwa resize
+  window.addEventListener("touchmove", move, { passive: false });
   window.addEventListener("mouseup", stop);
   window.addEventListener("touchend", stop);
+  window.addEventListener("touchcancel", stop);
 }
 
 function initTheme() {
@@ -1223,10 +1230,9 @@ function applyQuickSearch() {
 }
 
 if (tableWrapEl && tableScrollbarEl) {
-  tableWrapEl.addEventListener("touchstart", startTableTouchAxisLock, { passive: true });
-  tableWrapEl.addEventListener("touchmove", updateTableTouchAxisLock, { passive: true });
-  tableWrapEl.addEventListener("touchend", endTableTouchAxisLock, { passive: true });
-  tableWrapEl.addEventListener("touchcancel", endTableTouchAxisLock, { passive: true });
+  // Touch axis-lock USUNIĘTY — psuł natywne przewijanie/momentum na tabletach i telefonach
+  // (pionowe gesty bywały ignorowane, tabela „dryfowała" po puszczeniu, przeszkadzał resize).
+  // Zostawiamy w pełni natywne przewijanie 2D z momentum przeglądarki.
 
   tableWrapEl.addEventListener("scroll", () => {
     hideCellTooltip();

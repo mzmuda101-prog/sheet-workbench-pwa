@@ -978,9 +978,11 @@ function applyCellStyle(td, style) {
   if (cellStyleShowFonts && style.fontScale && Math.abs(style.fontScale - 1) > 0.01) {
     td.style.setProperty("--cell-font-scale", String(Math.round(style.fontScale * 1000) / 1000));
   }
-  if (style.bold) td.style.fontWeight = "700";
-  if (style.italic) td.style.fontStyle = "italic";
-  if (style.underline) td.style.textDecoration = "underline";
+  // Pogrubienie/kursywa/podkreślenie też pod „Pokaż formatowanie tekstu" (cellStyleShowFonts),
+  // żeby dało się je wyłączyć (użytkownik nie zawsze chce dziedziczyć pogrubienia z pliku).
+  if (cellStyleShowFonts && style.bold) td.style.fontWeight = "700";
+  if (cellStyleShowFonts && style.italic) td.style.fontStyle = "italic";
+  if (cellStyleShowFonts && style.underline) td.style.textDecoration = "underline";
   if (style.horizontal) td.style.textAlign = style.horizontal;
   if (style.vertical) td.style.verticalAlign = style.vertical;
   // Zawijanie tekstu NIE jest brane z pliku per komórka (dawało nieoczekiwane
@@ -1108,14 +1110,19 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
     });
   }
   const padding = 24;
+  // Inteligentnie: dopasuj do większości (p90) i przytnij skrajnie długie teksty, by
+  // kolumny nie robiły się ogromne. Wyłączone: zmieść CAŁĄ zawartość (najdłuższa komórka),
+  // z wyższym limitem szerokości.
+  const pct = cellStyleSmartWidths ? 0.9 : 1.0;
+  const maxW = cellStyleSmartWidths ? max : 900;
   return widths.map((base, i) => {
-    const colSamples = samples[i].sort((a, b) => a - b);
-    const idx = Math.floor(colSamples.length * 0.9);
-    const p90 = colSamples.length ? colSamples[Math.min(idx, colSamples.length - 1)] : base;
-    const raw = Math.max(base, p90) + padding;
     const manual = manualColumnWidths[i];
-    if (manual) return Math.max(min, Math.min(max, manual));
-    return Math.max(min, Math.min(max, Math.ceil(raw)));
+    if (manual) return Math.max(min, Math.min(900, manual));
+    const colSamples = samples[i].sort((a, b) => a - b);
+    const idx = Math.floor(colSamples.length * pct);
+    const pVal = colSamples.length ? colSamples[Math.min(idx, colSamples.length - 1)] : base;
+    const raw = Math.max(base, pVal) + padding;
+    return Math.max(min, Math.min(maxW, Math.ceil(raw)));
   });
 }
 

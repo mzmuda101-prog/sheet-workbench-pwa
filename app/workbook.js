@@ -76,6 +76,7 @@ function syncCellStyleFlags() {
   cellStyleShowBorders = !showCellBordersEl || showCellBordersEl.checked;
   cellStyleShowConditionalFormatting = !showConditionalFormattingEl || showConditionalFormattingEl.checked;
   cellStyleShowSubheaders = !showSubheadersEl || showSubheadersEl.checked;
+  cellStyleSmartWidths = !smartColWidthsEl || smartColWidthsEl.checked;
 }
 
 // Globalny przełącznik zawijania tekstu (klasa na <table>). Trwa przez re-rendery,
@@ -93,6 +94,7 @@ function saveCellStylePreferences() {
     borders: cellStyleShowBorders,
     conditionalFormatting: cellStyleShowConditionalFormatting,
     subheaders: cellStyleShowSubheaders,
+    smartWidths: cellStyleSmartWidths,
     wrap: !!(wrapCellsEl && wrapCellsEl.checked),
   }));
 }
@@ -107,6 +109,7 @@ function loadCellStylePreferences() {
   set(showCellBordersEl, prefs.borders);
   set(showConditionalFormattingEl, prefs.conditionalFormatting);
   set(showSubheadersEl, prefs.subheaders);
+  set(smartColWidthsEl, prefs.smartWidths);
   if (wrapCellsEl) wrapCellsEl.checked = prefs.wrap === true; // zawijanie domyślnie WYŁĄCZONE
   syncCellStyleFlags();
   applyWrapCells();
@@ -995,7 +998,8 @@ function applyFilters() {
     negated: dateNegateEl.checked,
   };
   const onlyNonEmpty = onlyNonEmptyEl.checked;
-  highlightMatchedCells = !!(highlightMatchCellsEl && highlightMatchCellsEl.checked);
+  // Podświetlanie sterowane checkboxem z filtra tekstowego LUB z filtra dat (zsynchronizowane).
+  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked));
 
   const rowPasses = (row) => {
     if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;
