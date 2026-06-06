@@ -62,6 +62,14 @@ function syncCellStyleFlags() {
   cellStyleShowFills = !showCellFillsEl || showCellFillsEl.checked;
   cellStyleShowFonts = !showCellFontsEl || showCellFontsEl.checked;
   cellStyleShowBorders = !showCellBordersEl || showCellBordersEl.checked;
+  cellStyleShowConditionalFormatting = !showConditionalFormattingEl || showConditionalFormattingEl.checked;
+}
+
+// Globalny przełącznik zawijania tekstu (klasa na <table>). Trwa przez re-rendery,
+// bo renderTable podmienia tylko thead/tbody, nie sam #dataTable.
+function applyWrapCells() {
+  if (!tableEl) return;
+  tableEl.classList.toggle("wrap-cells", !!(wrapCellsEl && wrapCellsEl.checked));
 }
 
 function saveCellStylePreferences() {
@@ -70,6 +78,8 @@ function saveCellStylePreferences() {
     fills: cellStyleShowFills,
     fonts: cellStyleShowFonts,
     borders: cellStyleShowBorders,
+    conditionalFormatting: cellStyleShowConditionalFormatting,
+    wrap: !!(wrapCellsEl && wrapCellsEl.checked),
   }));
 }
 
@@ -81,7 +91,10 @@ function loadCellStylePreferences() {
   set(showCellFillsEl, prefs.fills);
   set(showCellFontsEl, prefs.fonts);
   set(showCellBordersEl, prefs.borders);
+  set(showConditionalFormattingEl, prefs.conditionalFormatting);
+  if (wrapCellsEl) wrapCellsEl.checked = prefs.wrap === true; // zawijanie domyślnie WYŁĄCZONE
   syncCellStyleFlags();
+  applyWrapCells();
 }
 
 function setExcelLayoutEnabled(enabled) {

@@ -916,6 +916,8 @@ const STATIC_TRANSLATIONS = {
     showCellFills: "Pokaż wypełnienia komórek",
     showCellFonts: "Pokaż czcionki z pliku",
     showCellBorders: "Pokaż obramowania",
+    showConditionalFormatting: "Pokaż formatowanie warunkowe",
+    wrapCells: "Zawijaj tekst w komórkach",
     dateFilter: "Filtr dat",
     lastDays: "Ostatnie dni",
     from: "Od",
@@ -1100,6 +1102,8 @@ const STATIC_TRANSLATIONS = {
     showCellFills: "Show cell fills",
     showCellFonts: "Show file fonts",
     showCellBorders: "Show borders",
+    showConditionalFormatting: "Show conditional formatting",
+    wrapCells: "Wrap cell text",
     dateFilter: "Date filter",
     lastDays: "Last days",
     from: "From",
@@ -1563,6 +1567,8 @@ function applyStaticTranslations() {
   setCheckboxText("showCellFills", copy.showCellFills);
   setCheckboxText("showCellFonts", copy.showCellFonts);
   setCheckboxText("showCellBorders", copy.showCellBorders);
+  setCheckboxText("showConditionalFormatting", copy.showConditionalFormatting);
+  setCheckboxText("wrapCells", copy.wrapCells);
   setText("#filter2BlockTitle", copy.filterBlock2);
   setButtonLabel("#addFilter2Btn", copy.addSecondFilter);
   setButtonLabel("#removeFilter2Btn", copy.removeFilter);

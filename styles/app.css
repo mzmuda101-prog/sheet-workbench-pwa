@@ -2546,10 +2546,17 @@ tbody td {
   text-overflow: ellipsis;
 }
 
-/* [EN] Cells with fill color from Excel – subtle highlight */
+/* [EN] Optional text wrapping toggle (Widok → „Zawijaj tekst") */
+#dataTable.wrap-cells tbody td {
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* [EN] Cells with fill color from Excel – the background itself is the indicator.
+   (Wcześniejszy zielony border-left dawał „losowe zielone kreski" przy wielu
+   wypełnieniach, więc go usunięto — tło wystarczy.) */
 tbody td.cell-has-fill {
-  border-left: 3px solid var(--accent);
-  padding-left: calc(9px * var(--table-zoom));
+  padding-left: calc(12px * var(--table-zoom));
 }
 
 tbody td.cell-merged {

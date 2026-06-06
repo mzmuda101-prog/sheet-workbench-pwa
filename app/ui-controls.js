@@ -637,6 +637,8 @@ async function handleFile(file, fileHandle = null) {
     }
     // Odzyskaj mapę indeksów stylów z surowego pliku (font/kolor/rozmiar jak w Excelu).
     currentStyleIndexMap = await buildStyleIndexMap(originalFileBytes, workbook);
+    // Wczytaj reguły formatowania warunkowego + dxf (ewaluowane leniwie przy renderze).
+    await buildConditionalFormatting(originalFileBytes, workbook);
     sheetSelect.replaceChildren();
     workbook.SheetNames.forEach((s) => {
       const opt = document.createElement("option");

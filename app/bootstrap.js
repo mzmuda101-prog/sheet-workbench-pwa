@@ -298,7 +298,7 @@ if (freezeHeadersEl) {
   });
   applyFreezeHeaders();
 }
-[showFontColorsEl, showCellFillsEl, showCellFontsEl, showCellBordersEl].forEach((el) => {
+[showFontColorsEl, showCellFillsEl, showCellFontsEl, showCellBordersEl, showConditionalFormattingEl].forEach((el) => {
   if (!el) return;
   el.addEventListener("change", () => {
     syncCellStyleFlags();
@@ -306,6 +306,12 @@ if (freezeHeadersEl) {
     renderActiveTable();
   });
 });
+if (wrapCellsEl) {
+  wrapCellsEl.addEventListener("change", () => {
+    applyWrapCells();
+    saveCellStylePreferences();
+  });
+}
 window.addEventListener("resize", () => {
   syncTableViewportHeight();
   syncFrozenHeaderMetrics();

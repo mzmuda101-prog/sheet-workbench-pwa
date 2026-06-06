@@ -35,6 +35,8 @@ const showFontColorsEl = document.getElementById("showFontColors");
 const showCellFillsEl = document.getElementById("showCellFills");
 const showCellFontsEl = document.getElementById("showCellFonts");
 const showCellBordersEl = document.getElementById("showCellBorders");
+const wrapCellsEl = document.getElementById("wrapCells");
+const showConditionalFormattingEl = document.getElementById("showConditionalFormatting");
 const excelLayoutToggleEl = document.getElementById("excelLayoutToggle");
 const loadBtn = document.getElementById("loadBtn");
 const loadSampleBtn = document.getElementById("loadSampleBtn");
@@ -167,6 +169,12 @@ let cellStyleShowFontColors = true;
 let cellStyleShowFills = true;
 let cellStyleShowFonts = true; // rodzina + rozmiar
 let cellStyleShowBorders = true;
+// Formatowanie warunkowe (CF): reguły + dxf parsowane z surowego .xlsx przy wczytaniu,
+// ewaluowane leniwie per arkusz (cache). Pokazują kolory/tła zmienione przez CF w Excelu.
+let cellStyleShowConditionalFormatting = true;
+let currentDxfs = [];        // [{fontColor, fillColor}] z xl/styles.xml <dxfs>
+let currentCFRules = null;   // Map<sheetName, Array<block>> z <conditionalFormatting>
+let cfEvalCache = new Map(); // Map<sheetName, Map<cellRef, {fontColor?, fillColor?}>>
 let quickSearchOperatorsEnabled = false; // true = &&/|| traktowane jako operatory
 let currentFileName = "";
 // Oryginalne bajty wczytanego pliku (Uint8Array). Służą do zapisu metodą ZIP-patch:

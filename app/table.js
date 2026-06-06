@@ -976,7 +976,9 @@ function applyCellStyle(td, style) {
   if (style.underline) td.style.textDecoration = "underline";
   if (style.horizontal) td.style.textAlign = style.horizontal;
   if (style.vertical) td.style.verticalAlign = style.vertical;
-  if (style.wrapText) td.style.whiteSpace = "normal";
+  // Zawijanie tekstu NIE jest brane z pliku per komórka (dawało nieoczekiwane
+  // łamanie wierszy). Steruje nim globalny przełącznik „Zawijaj tekst" w Widoku
+  // (klasa #dataTable.wrap-cells), domyślnie wyłączony.
 
   if (cellStyleShowBorders && style.hasBorder && style.border && typeof style.border === "object") {
     const t = applyEdgeBorder(td, style.border.top || style.border.Top);
@@ -1235,6 +1237,12 @@ function renderTable(modelOrHeaders, maybeRows) {
   const rowsShown = rows.slice(0, limit);
   const mergeLayout = model.mode === "wide" ? computeMergeLayout(rowsShown, headers.length) : null;
 
+  // Formatowanie warunkowe: mapa kolor/tło per ref (tylko widok „wide" — w „long"
+  // komórki są przeukładane, więc odwołania CF nie mają sensu).
+  const cfMapForRender = (cellStyleShowConditionalFormatting && model.mode === "wide")
+    ? getSheetCFMap(currentSheetName)
+    : null;
+
   const tbodyFragment = document.createDocumentFragment();
   rowsShown.forEach((row, rowPos) => {
     const tr = document.createElement("tr");
@@ -1285,6 +1293,13 @@ function renderTable(modelOrHeaders, maybeRows) {
       }
 
       if (row.cellStyles && row.cellStyles[i]) applyCellStyle(td, row.cellStyles[i]);
+      if (cfMapForRender) {
+        const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
+        if (cf) {
+          if (cf.fontColor) td.style.color = cf.fontColor;
+          if (cf.fillColor) { td.classList.add("cell-has-fill"); td.style.background = hexToRgba(cf.fillColor, 0.28) || td.style.background; }
+        }
+      }
       tr.appendChild(td);
     });
     tbodyFragment.appendChild(tr);

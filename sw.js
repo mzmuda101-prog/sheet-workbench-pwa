@@ -15,6 +15,7 @@ const APP_ASSETS = [
   "./app/workbook.js?v=20260606-02",
   "./app/xlsx-patch.js?v=20260606-02",
   "./app/table.js?v=20260606-02",
+  "./app/conditional-formatting.js?v=20260606-02",
   "./app/formulas.js?v=20260606-02",
   "./app/edit-tools.js?v=20260606-02",
   "./app/ui-controls.js?v=20260606-02",

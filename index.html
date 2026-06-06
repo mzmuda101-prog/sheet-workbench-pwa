@@ -564,6 +564,14 @@
                 <input id="showCellBorders" type="checkbox" checked />
                 Pokaż obramowania
               </label>
+              <label class="field checkbox" data-hint data-hint-pl="Pokazuje kolory czcionek i teł ustawione formatowaniem warunkowym (np. czerwony tekst dla przeterminowanych)." data-hint-en="Shows font/fill colors set by conditional formatting (e.g. red text for overdue)." data-hint-delay="1.1" data-hint-touch="on">
+                <input id="showConditionalFormatting" type="checkbox" checked />
+                Pokaż formatowanie warunkowe
+              </label>
+              <label class="field checkbox" data-hint data-hint-pl="Zawija długi tekst na wiele linii zamiast ucinać (dotyczy wszystkich komórek)." data-hint-en="Wraps long text onto multiple lines instead of clipping (all cells)." data-hint-delay="1.1" data-hint-touch="on">
+                <input id="wrapCells" type="checkbox" />
+                Zawijaj tekst w komórkach
+              </label>
             </div>
           </details>
           </section>
@@ -961,6 +969,7 @@
     <script src="app/workbook.js?v=20260606-02"></script>
     <script src="app/xlsx-patch.js?v=20260606-02"></script>
     <script src="app/table.js?v=20260606-02"></script>
+    <script src="app/conditional-formatting.js?v=20260606-02"></script>
     <script src="app/formulas.js?v=20260606-02"></script>
     <script src="app/edit-tools.js?v=20260606-02"></script>
     <script src="app/ui-controls.js?v=20260606-02"></script>
