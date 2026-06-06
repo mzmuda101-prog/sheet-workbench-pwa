@@ -2816,30 +2816,48 @@ tbody td.cell-filter-match {
   border-radius: 6px;
   transition: box-shadow 0.12s ease, background 0.12s ease;
 }
+
+/* Tryb ciemny */
 [data-theme="dark"] tbody td.cell-filter-match {
   background: color-mix(in srgb, var(--warning) 24%, transparent);
   box-shadow:
     inset 0 0 0 1.5px color-mix(in srgb, var(--warning) 52%, transparent),
     inset 0 0 6px color-mix(in srgb, var(--warning) 20%, transparent);
 }
-/* Bursztynowy „chip" pasującej komórki MA PIERWSZEŃSTWO nad zielenią zaznaczenia
-   wiersza (klik) i komórki — inaczej obwódka robiła się zielona zamiast pomarańczowej.
-   Wyższa specyficzność (+ !important) bije `tr.row-focused td` i `cell-selected`. */
-tbody tr.row-focused td.cell-filter-match,
-tbody td.cell-filter-match.cell-selected {
-  background: color-mix(in srgb, var(--warning) 16%, transparent) !important;
+
+/* Wyróżnienie JEDNEJ komórki zaznaczonej - ma pierwszeństwo nad cell-filter-match i row-focused */
+tbody td.cell-selected:not(.cell-filter-match) {
+  background: var(--accent-light) !important;
   box-shadow:
-    inset 0 0 0 1.6px color-mix(in srgb, var(--warning) 42%, transparent),
-    inset 0 0 6px color-mix(in srgb, var(--warning) 16%, transparent) !important;
+    inset 0 0 0 1.7px color-mix(in srgb, var(--accent) 62%, transparent),
+    inset 0 0 5.5px color-mix(in srgb, var(--accent) 10%, transparent) !important;
+  border-radius: 6px;
+  transition: box-shadow 0.12s ease, background 0.12s ease;
+}
+[data-theme="dark"] tbody td.cell-selected:not(.cell-filter-match) {
+  background: color-mix(in srgb, var(--accent) 23%, transparent) !important;
+  box-shadow:
+    inset 0 0 0 1.7px color-mix(in srgb, var(--accent) 62%, transparent),
+    inset 0 0 5.5px color-mix(in srgb, var(--accent) 13%, transparent) !important;
+}
+
+/* Łączenie się zaznaczenia wiersza po kliknięciu z podświetleniem pasujących komórek */
+/* Tutaj stosujemy bardzo subtelne łączenie, by efekt nie był agresywny jak przy cell-selected, a raczej jak hover */
+tbody tr.row-focused td.cell-filter-match:not(.cell-selected) {
+  background: color-mix(in srgb, var(--accent-light) 40%, transparent) !important;
+  box-shadow:
+    inset 0 0 0 1.6px color-mix(in srgb, var(--warning) 38%, transparent),
+    inset 0 0 6px color-mix(in srgb, var(--warning) 15%, transparent) !important;
   border-radius: 6px;
 }
-[data-theme="dark"] tbody tr.row-focused td.cell-filter-match,
-[data-theme="dark"] tbody td.cell-filter-match.cell-selected {
-  background: color-mix(in srgb, var(--warning) 26%, transparent) !important;
+[data-theme="dark"] tbody tr.row-focused td.cell-filter-match:not(.cell-selected) {
+  background: color-mix(in srgb, var(--accent-light) 65%, transparent) !important;
   box-shadow:
-    inset 0 0 0 1.6px color-mix(in srgb, var(--warning) 58%, transparent),
+    inset 0 0 0 1.6px color-mix(in srgb, var(--warning) 56%, transparent),
     inset 0 0 6px color-mix(in srgb, var(--warning) 22%, transparent) !important;
 }
+
+/* Gdy cell-filter-match i cell-selected naraz, cell-selected ma pierwszeństwo (patrz wyżej), więc tu już nie trzeba !important */
 
 .resizing {
   cursor: col-resize;
