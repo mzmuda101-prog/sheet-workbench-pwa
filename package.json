@@ -6,7 +6,8 @@
   "scripts": {
     "serve": "python3 -m http.server 7821",
     "check:i18n": "node scripts/check-i18n.js",
-    "test": "node scripts/check-i18n.js && node scripts/smoke-playwright.js",
+    "test": "node scripts/check-i18n.js && node scripts/smoke-playwright.js && node scripts/save-stress-playwright.js",
+    "test:save": "node scripts/save-stress-playwright.js",
     "test:stress": "node scripts/test-runner.mjs",
     "test:stress:file": "node scripts/test-runner.mjs",
     "gen:stress": "node scripts/gen-stress-test.js",

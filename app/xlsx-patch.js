@@ -164,9 +164,9 @@ function patchSheetXml(xml, cells) {
 }
 
 // Wymusza pełne przeliczenie formuł przy otwarciu (Excel pokaże aktualne wyniki
-// po zmianie wartości wejściowych). NIE usuwamy calcChain.xml — edytujemy tylko
-// wartości, więc lista formuł pozostaje poprawna; usunięcie calcChain bez usunięcia
-// jego wpisów w [Content_Types].xml i workbook.xml.rels psuło plik ("naprawić?").
+// po zmianie wartości wejściowych). Uwaga: calcChain usuwamy osobno w dropCalcChain
+// (wraz z wpisami w [Content_Types].xml i workbook.xml.rels), bo po edycji komórek
+// z formułami bywał niespójny i Excel zgłaszał uszkodzenie.
 async function forceRecalcOnLoad(zip) {
   const f = zip.file("xl/workbook.xml");
   if (!f) return;
@@ -181,6 +181,31 @@ async function forceRecalcOnLoad(zip) {
   }
   // Brak <calcPr> → nie wstawiamy (kolejność elementów w workbook.xml jest ścisła);
   // Excel w trybie automatycznym i tak przeliczy zależne formuły przy otwarciu.
+}
+
+// Usuwa calcChain.xml WRAZ z jego wpisami w [Content_Types].xml i workbook.xml.rels.
+// Po edycji wartości komórek calcChain bywa NIESPÓJNY (np. edytowaliśmy komórkę z formułą
+// na statyczną wartość → calcChain wciąż ją wskazuje jako formułę → Excel: „plik uszkodzony,
+// naprawić"). Bezpiecznie jest go w całości usunąć — Excel odbuduje go sam przy otwarciu.
+// KLUCZOWE: trzeba usunąć też Override w Content_Types i Relationship w rels, inaczej
+// brakujący part psuje plik.
+async function dropCalcChain(zip) {
+  if (!zip.file("xl/calcChain.xml")) return;
+  zip.remove("xl/calcChain.xml");
+
+  const ctFile = zip.file("[Content_Types].xml");
+  if (ctFile) {
+    let ct = await ctFile.async("string");
+    ct = ct.replace(/<Override\b[^>]*calcChain\.xml[^>]*\/>\s*/gi, "");
+    zip.file("[Content_Types].xml", ct);
+  }
+
+  const relsFile = zip.file("xl/_rels/workbook.xml.rels");
+  if (relsFile) {
+    let rels = await relsFile.async("string");
+    rels = rels.replace(/<Relationship\b[^>]*calcChain\.xml[^>]*\/>\s*/gi, "");
+    zip.file("xl/_rels/workbook.xml.rels", rels);
+  }
 }
 
 // Główna funkcja: oryginalne bajty + edycje -> nowe bajty XLSX (zachowany plik).
@@ -200,7 +225,10 @@ async function buildPatchedXlsx(originalBytes, edits) {
     touched = true;
   }
 
-  if (touched) await forceRecalcOnLoad(zip);
+  if (touched) {
+    await forceRecalcOnLoad(zip);
+    await dropCalcChain(zip); // spójność: po edycji wartości calcChain bywa osierocony
+  }
 
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
 }

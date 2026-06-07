@@ -2656,6 +2656,10 @@ tbody tr.row-focused td {
 tbody tr.row-focused td.cell-light-text,
 tbody td.cell-in-range.cell-light-text,
 tbody td.cell-selected.cell-light-text { color: var(--ink) !important; }
+/* DARK theme: tło zaznaczenia jest ciemne → czarny/czarniawy tekst zamieniamy na jasny var(--ink). */
+[data-theme="dark"] tbody tr.row-focused td.cell-dark-text,
+[data-theme="dark"] tbody td.cell-in-range.cell-dark-text,
+[data-theme="dark"] tbody td.cell-selected.cell-dark-text { color: var(--ink) !important; }
 
 tbody tr.row-focused td:first-child {
   box-shadow:

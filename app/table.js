@@ -696,6 +696,19 @@ function isLightColor(hex) {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 165;
 }
 
+// Ciemny i prawie neutralny (czarny/czarniawy/ciemnoszary) — NIE łapie nasyconych
+// ciemnych jak czerwień (#C00000), żeby nie tracić ich znaczenia. Używane, by w DARK
+// theme zamienić taki tekst pod zaznaczeniem wiersza na czytelny (tło zaznaczenia jest ciemne).
+function isDarkNeutralColor(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex || "");
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const chroma = Math.max(r, g, b) - Math.min(r, g, b);
+  return lum < 90 && chroma < 40;
+}
+
 function colorFromStyleNode(node, resolveTheme = false) {
   if (!node || typeof node !== "object") return null;
   const direct = normalizeHexColor(node.rgb ?? node.RGB);
@@ -1019,9 +1032,10 @@ function applyCellStyle(td, style) {
     const fillShown = cellStyleShowFills && style.hasCustomFill;
     if (!style.fontColorIsDefaultLike || fillShown) {
       td.style.color = style.fontColor;
-      // Jasny/biały tekst oznaczamy klasą — pod zaznaczeniem wiersza (które zakrywa tło)
-      // CSS zamieni go na czytelny (var(--ink)), żeby nie zniknął na jasnym tle zaznaczenia.
+      // Oznaczamy jasny i ciemny-neutralny tekst — pod zaznaczeniem wiersza (które zakrywa tło)
+      // CSS zamieni go na czytelny var(--ink): jasny→ciemny w motywie jasnym, ciemny→jasny w ciemnym.
       if (isLightColor(style.fontColor)) td.classList.add("cell-light-text");
+      else if (isDarkNeutralColor(style.fontColor)) td.classList.add("cell-dark-text");
     }
   }
   if (cellStyleShowFonts && style.fontFamily) td.style.fontFamily = style.fontFamily;
@@ -1394,7 +1408,7 @@ function renderTable(modelOrHeaders, maybeRows) {
       if (cfMapForRender) {
         const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
         if (cf) {
-          if (cf.fontColor) { td.style.color = cf.fontColor; if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); }
+          if (cf.fontColor) { td.style.color = cf.fontColor; if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); else if (isDarkNeutralColor(cf.fontColor)) td.classList.add("cell-dark-text"); }
           if (cf.fillColor) { td.classList.add("cell-has-fill"); const cbg = hexToRgba(cf.fillColor, cf.fontColor ? 1 : 0.28); if (cbg) td.style.background = cbg; }
         }
       }
