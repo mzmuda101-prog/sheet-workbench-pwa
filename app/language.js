@@ -158,6 +158,15 @@ const I18N = {
     positiveHeaderRow: "Podaj dodatni numer wiersza nagłówka.",
     invalidHeaderRow: "Wiersz {row} nie wygląda na poprawny nagłówek dla tego arkusza.",
     filteredFor: "Przefiltrowano widok dla: {value}",
+    monthlyNoData: "Wczytaj arkusz, aby zobaczyć rozkład miesięczny.",
+    monthlyNoDate: "Brak kolumny z datą w aktualnym widoku — ten panel grupuje dane po miesiącach.",
+    monthlyDateColumn: "Kolumna z datą",
+    monthlyMetric: "Miara",
+    monthlyMetricCount: "Liczba wierszy",
+    monthlyMetricSum: "Suma",
+    monthlyMetricAvg: "Średnia",
+    monthlyMeasureColumn: "Kolumna liczbowa",
+    monthlyTotalRows: "Wierszy z datą: {count}",
     freezeHeadersOn: "Zablokowano wiersze nagłówków",
     freezeHeadersOff: "Odblokowano wiersze nagłówków",
     headerDetected: "Wykryto wiersz nagłówka",
@@ -566,6 +575,15 @@ const I18N = {
     positiveHeaderRow: "Enter a positive header row number.",
     invalidHeaderRow: "Row {row} does not look like a valid header for this sheet.",
     filteredFor: "Filtered view for: {value}",
+    monthlyNoData: "Load a sheet to see the monthly breakdown.",
+    monthlyNoDate: "No date column in the current view — this panel groups data by month.",
+    monthlyDateColumn: "Date column",
+    monthlyMetric: "Metric",
+    monthlyMetricCount: "Row count",
+    monthlyMetricSum: "Sum",
+    monthlyMetricAvg: "Average",
+    monthlyMeasureColumn: "Numeric column",
+    monthlyTotalRows: "Rows with a date: {count}",
     freezeHeadersOn: "Header rows locked",
     freezeHeadersOff: "Header rows unlocked",
     headerDetected: "Header row detected",
@@ -970,6 +988,8 @@ const STATIC_TRANSLATIONS = {
     durationAnalysis: "Analiza czasu / osob",
     durationHint: "Lokalna analiza dla wykrytych blokow: laczenie tych samych osob lub innych wartosci w jednej kolumnie i liczenie srednich czasow na podstawie dat lub dlugosci.",
     aggregations: "Agregacje",
+    monthlySummaryTitle: "Podsumowanie miesięczne",
+    monthlySummaryHint: "Rozkład wierszy na 12 ostatnich miesięcy wg kolumny z datą. Wybierz datę i miarę (liczba / suma / średnia). Liczone na aktualnym widoku.",
     aggregationsHint: "Lekki kreator typu grupuj / mierz / agreguj. Dziala na aktualnym widoku albo calym arkuszu, z opcja pracy na Wide-to-Long tam, gdzie ma to sens.",
     formulaHint: "Pogrupowany przegląd formuł z aktualnego arkusza: wyszukiwanie, szybkie flagi, skrócone podglądy i skok do komórki.",
     searchFormula: "Szukaj formuły",
@@ -1162,6 +1182,8 @@ const STATIC_TRANSLATIONS = {
     durationAnalysis: "Time / person analysis",
     durationHint: "Local analysis for detected blocks: linking the same people or other values in one column and calculating average times from dates or durations.",
     aggregations: "Aggregations",
+    monthlySummaryTitle: "Monthly summary",
+    monthlySummaryHint: "Rows distributed over the last 12 months by a date column. Pick the date and a metric (count / sum / average). Computed on the current view.",
     aggregationsHint: "A lightweight group / measure / aggregate builder. It works on the current view or the full sheet, with an option to use Wide-to-Long where it makes sense.",
     formulaHint: "A grouped review of formulas from the current sheet: search, quick flags, shortened previews, and a jump to the cell.",
     searchFormula: "Search formulas",
@@ -1666,6 +1688,8 @@ function applyStaticTranslations() {
   if (inspectorHints[3]) inspectorHints[3].textContent = copy.durationHint;
   setText("#panel-aggregation-workbench .panel-title", copy.aggregations);
   setText("#panel-aggregation-workbench .panel-hint", copy.aggregationsHint);
+  setText("#panel-monthly-summary .panel-title", copy.monthlySummaryTitle);
+  setText("#panel-monthly-summary .panel-hint", copy.monthlySummaryHint);
   setText("#panel-formula-workbench .panel-hint", copy.formulaHint);
   setFieldLabel("formulaSearch", copy.searchFormula);
   setAttr("#formulaSearch", "placeholder", copy.formulaPlaceholder);

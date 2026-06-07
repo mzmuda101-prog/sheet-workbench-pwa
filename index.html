@@ -712,6 +712,25 @@
             </div>
           </details>
 
+          <details class="panel" id="panel-monthly-summary">
+            <summary data-hint-pl="Rozkład danych na 12 ostatnich miesięcy wg wybranej kolumny z datą — np. ile pozycji/terenów na miesiąc, suma lub średnia wybranej liczby. Działa na aktualnym widoku (po filtrach)." data-hint-en="Distribution over the last 12 months by a chosen date column — count, sum or average. Works on the current (filtered) view." data-hint-duration="5" data-hint-touch="on" data-hint-fade="1" data-hint-class="smaller">
+              <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+              </svg>
+              <span class="panel-title">Podsumowanie miesięczne</span>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </summary>
+            <div class="panel-body stack">
+              <div class="panel-hint">Rozkład wierszy na 12 ostatnich miesięcy wg kolumny z datą. Wybierz datę i miarę (liczba / suma / średnia). Liczone na aktualnym widoku.</div>
+              <div class="monthly-summary" id="monthlySummary"></div>
+            </div>
+          </details>
+
           <details class="panel" id="panel-formula-workbench">
             <summary>
               <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

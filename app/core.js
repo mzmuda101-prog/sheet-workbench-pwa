@@ -145,6 +145,7 @@ const repeatBlockDetectorEl = document.getElementById("repeatBlockDetector");
 const durationAnalysisSummaryEl = document.getElementById("durationAnalysisSummary");
 const durationAnalysisListEl = document.getElementById("durationAnalysisList");
 const aggregationWorkbenchSummaryEl = document.getElementById("aggregationWorkbenchSummary");
+const monthlySummaryEl = document.getElementById("monthlySummary");
 const aggregationWorkbenchListEl = document.getElementById("aggregationWorkbenchList");
 const formulaSearchEl = document.getElementById("formulaSearch");
 const formulaFilterEl = document.getElementById("formulaFilter");

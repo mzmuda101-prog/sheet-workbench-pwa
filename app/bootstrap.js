@@ -99,6 +99,22 @@ if (durationAnalysisListEl) {
     toast(t("filteredFor", { value: entity }), "info");
   });
 }
+if (monthlySummaryEl) {
+  monthlySummaryEl.addEventListener("change", (e) => {
+    const control = e.target.closest("[data-monthly-control]");
+    if (!control) return;
+    e.stopPropagation();
+    const sb = document.querySelector(".sidebar");
+    const savedScroll = sb ? sb.scrollTop : 0;
+    const kind = control.dataset.monthlyControl;
+    if (kind === "datecol") monthlySummaryState.dateCol = parseInt(control.value, 10);
+    else if (kind === "metric") monthlySummaryState.metric = control.value || "count";
+    else if (kind === "measure") monthlySummaryState.measureCol = parseInt(control.value, 10);
+    renderMonthlySummary();
+    if (sb) sb.scrollTop = savedScroll;
+  });
+}
+
 if (aggregationWorkbenchSummaryEl) {
   aggregationWorkbenchSummaryEl.addEventListener("change", (e) => {
     e.stopPropagation();

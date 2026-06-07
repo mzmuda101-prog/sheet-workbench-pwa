@@ -1718,6 +1718,7 @@ function buildAggregationWorkbenchResult() {
 }
 
 function renderAggregationWorkbench() {
+  renderMonthlySummary(); // panel „Podsumowanie miesięczne" odświeża się tym samym cyklem
   if (!aggregationWorkbenchSummaryEl || !aggregationWorkbenchListEl) return;
   aggregationWorkbenchSummaryEl.replaceChildren();
   aggregationWorkbenchListEl.replaceChildren();
@@ -3303,4 +3304,168 @@ function renderInsights() {
     t("sheetInsightsEmpty")
   );
   renderInsightFlags(data.flags || []);
+}
+
+/* ===================== Podsumowanie miesięczne =====================
+   Generyczny rozkład danych na 12 ostatnich miesięcy wg dowolnej kolumny z datą.
+   Działa na aktualnym widoku (po filtrach), więc np. po przefiltrowaniu po osobie
+   pokazuje jej miesięczną częstotliwość. Miary: liczba wierszy / suma / średnia
+   wybranej kolumny liczbowej. Pomyślane elastycznie — dla różnych arkuszy/przypadków. */
+let monthlySummaryState = { dateCol: null, metric: "count", measureCol: null };
+
+const MONTH_ABBR = {
+  pl: ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"],
+  en: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+};
+function monthKeyLabel(key) {
+  const m = /^(\d{4})-(\d{2})$/.exec(key);
+  if (!m) return key;
+  const lang = (typeof currentLang !== "undefined" && MONTH_ABBR[currentLang]) ? currentLang : "pl";
+  return `${MONTH_ABBR[lang][parseInt(m[2], 10) - 1]} ${m[1]}`;
+}
+function lastNMonthKeys(endKey, n) {
+  const m = /^(\d{4})-(\d{2})$/.exec(endKey);
+  if (!m) return [];
+  let y = parseInt(m[1], 10), mo = parseInt(m[2], 10) - 1;
+  const keys = [];
+  for (let i = 0; i < n; i++) {
+    keys.unshift(`${y}-${String(mo + 1).padStart(2, "0")}`);
+    mo--; if (mo < 0) { mo = 11; y--; }
+  }
+  return keys;
+}
+function formatMonthlyValue(val, metric) {
+  if (metric === "count") return String(Math.round(val));
+  const rounded = Math.round(val * 100) / 100;
+  return (typeof formatStatNumber === "function") ? formatStatNumber(rounded) : String(rounded);
+}
+
+function renderMonthlySummary() {
+  if (!monthlySummaryEl) return;
+  monthlySummaryEl.replaceChildren();
+  const model = (typeof currentDisplayModel !== "undefined" && currentDisplayModel) ? currentDisplayModel : getDisplayModel();
+  if (!model || !Array.isArray(model.rows) || !model.rows.length) {
+    monthlySummaryEl.appendChild(createEmptyInsight(t("monthlyNoData")));
+    return;
+  }
+  const profiles = collectAggregationProfiles(model);
+  const dateCols = profiles.filter((p) => p.nonEmptyCount >= 2 && p.dateCount / p.nonEmptyCount >= 0.6);
+  if (!dateCols.length) {
+    monthlySummaryEl.appendChild(createEmptyInsight(t("monthlyNoDate")));
+    return;
+  }
+  // wybór kolumny daty (zapamiętany albo najlepsza)
+  let dateColIdx = monthlySummaryState.dateCol;
+  if (dateColIdx == null || !dateCols.some((p) => p.idx === dateColIdx)) {
+    dateColIdx = dateCols.slice().sort((a, b) => b.dateCount - a.dateCount)[0].idx;
+  }
+  // kolumny liczbowe do miary (suma/średnia)
+  const numCols = profiles.filter((p) => p.nonEmptyCount >= 2 && (p.numericCount + p.durationCount) / p.nonEmptyCount >= 0.6 && p.idx !== dateColIdx);
+  let metric = monthlySummaryState.metric || "count";
+  if (metric !== "count" && !numCols.length) metric = "count";
+  let measureIdx = monthlySummaryState.measureCol;
+  if (metric !== "count" && (measureIdx == null || !numCols.some((p) => p.idx === measureIdx))) {
+    measureIdx = numCols[0].idx;
+  }
+
+  // kubełkowanie po roku-miesiącu
+  const buckets = new Map();
+  let maxKey = null;
+  model.rows.forEach((row) => {
+    if (row && row.isSubheader) return;
+    const raw = row.values ? row.values[dateColIdx] : null;
+    const d = parseDateFlexible(raw ?? getDisplayValue(row, dateColIdx));
+    if (!(d instanceof Date) || isNaN(d)) return;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    let b = buckets.get(key);
+    if (!b) { b = { count: 0, sum: 0, n: 0 }; buckets.set(key, b); }
+    b.count += 1;
+    if (metric !== "count") {
+      const num = parseCellNumber(row.values ? row.values[measureIdx] : null, getDisplayValue(row, measureIdx));
+      if (num != null) { b.sum += num; b.n += 1; }
+    }
+    if (maxKey == null || key > maxKey) maxKey = key;
+  });
+  if (!maxKey) { monthlySummaryEl.appendChild(createEmptyInsight(t("monthlyNoDate"))); return; }
+
+  const months = lastNMonthKeys(maxKey, 12);
+  const rowsData = months.map((key) => {
+    const b = buckets.get(key);
+    let val = 0;
+    if (b) val = metric === "count" ? b.count : metric === "sum" ? b.sum : (b.n ? b.sum / b.n : 0);
+    return { key, val, count: b ? b.count : 0 };
+  });
+  const maxVal = Math.max(1, ...rowsData.map((r) => Math.abs(r.val)));
+  const totalCount = rowsData.reduce((s, r) => s + r.count, 0);
+
+  // ── kontrolki ──
+  const controls = document.createElement("div");
+  controls.className = "monthly-controls";
+  const mkSelect = (ctrl, value, opts) => {
+    const label = document.createElement("label");
+    label.className = "field";
+    label.textContent = opts.label;
+    const sel = document.createElement("select");
+    sel.dataset.monthlyControl = ctrl;
+    opts.options.forEach((o) => {
+      const op = document.createElement("option");
+      op.value = String(o.value);
+      op.textContent = o.text;
+      if (String(o.value) === String(value)) op.selected = true;
+      sel.appendChild(op);
+    });
+    label.appendChild(sel);
+    return label;
+  };
+  controls.appendChild(mkSelect("datecol", dateColIdx, {
+    label: t("monthlyDateColumn"),
+    options: dateCols.map((p) => ({ value: p.idx, text: p.header })),
+  }));
+  controls.appendChild(mkSelect("metric", metric, {
+    label: t("monthlyMetric"),
+    options: [
+      { value: "count", text: t("monthlyMetricCount") },
+      { value: "sum", text: t("monthlyMetricSum") },
+      { value: "avg", text: t("monthlyMetricAvg") },
+    ],
+  }));
+  if (metric !== "count" && numCols.length) {
+    controls.appendChild(mkSelect("measure", measureIdx, {
+      label: t("monthlyMeasureColumn"),
+      options: numCols.map((p) => ({ value: p.idx, text: p.header })),
+    }));
+  }
+  monthlySummaryEl.appendChild(controls);
+
+  // ── nagłówek/podsumowanie ──
+  const note = document.createElement("div");
+  note.className = "monthly-note";
+  note.textContent = t("monthlyTotalRows", { count: totalCount });
+  monthlySummaryEl.appendChild(note);
+
+  // ── paski miesięczne ──
+  const list = document.createElement("div");
+  list.className = "monthly-list";
+  rowsData.forEach((r) => {
+    const item = document.createElement("div");
+    item.className = "monthly-row";
+    const lab = document.createElement("div");
+    lab.className = "monthly-label";
+    lab.textContent = monthKeyLabel(r.key);
+    const track = document.createElement("div");
+    track.className = "monthly-track";
+    const bar = document.createElement("div");
+    bar.className = "monthly-bar";
+    bar.style.width = `${Math.max(r.val > 0 ? 3 : 0, Math.round((Math.abs(r.val) / maxVal) * 100))}%`;
+    track.appendChild(bar);
+    const val = document.createElement("div");
+    val.className = "monthly-value";
+    val.textContent = formatMonthlyValue(r.val, metric);
+    if (metric !== "count" && r.count) val.title = t("monthlyTotalRows", { count: r.count });
+    item.appendChild(lab);
+    item.appendChild(track);
+    item.appendChild(val);
+    list.appendChild(item);
+  });
+  monthlySummaryEl.appendChild(list);
 }

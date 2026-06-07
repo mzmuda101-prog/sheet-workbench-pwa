@@ -3482,3 +3482,18 @@ kbd {
     border-radius: var(--r);
   }
 }
+
+/* ===================== Podsumowanie miesięczne ===================== */
+.monthly-controls { display: grid; gap: 8px; margin-bottom: 10px; }
+.monthly-note { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.monthly-list { display: grid; gap: 5px; }
+.monthly-row { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 8px; }
+.monthly-label { font-size: 11.5px; color: var(--ink-2); white-space: nowrap; }
+.monthly-track { height: 14px; background: var(--border-subtle); border-radius: var(--r-full); overflow: hidden; }
+.monthly-bar {
+  height: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 85%, transparent), var(--accent));
+  border-radius: var(--r-full);
+  transition: width 0.2s ease;
+}
+.monthly-value { font-size: 11.5px; font-weight: 600; color: var(--ink); min-width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
