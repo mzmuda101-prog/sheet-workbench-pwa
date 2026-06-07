@@ -3311,7 +3311,9 @@ function renderInsights() {
    Działa na aktualnym widoku (po filtrach), więc np. po przefiltrowaniu po osobie
    pokazuje jej miesięczną częstotliwość. Miary: liczba wierszy / suma / średnia
    wybranej kolumny liczbowej. Pomyślane elastycznie — dla różnych arkuszy/przypadków. */
-let monthlySummaryState = { dateCol: null, metric: "count", measureCol: null };
+// dateCols: tablica indeksów kolumn dat (multi — np. od+od2+od3 = łączny obrót),
+// metric: count|sum|avg, measureCol: kolumna liczbowa, months: długość okna, anchor: 'data'|'today'.
+let monthlySummaryState = { dateCols: null, metric: "count", measureCol: null, months: 12, anchor: "data" };
 
 const MONTH_ABBR = {
   pl: ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"],
@@ -3340,6 +3342,12 @@ function formatMonthlyValue(val, metric) {
   return (typeof formatStatNumber === "function") ? formatStatNumber(rounded) : String(rounded);
 }
 
+function monthlyHeaderBase(header) {
+  const rep = (typeof parseRepeatedHeader === "function") ? parseRepeatedHeader(header) : null;
+  const base = (rep && rep.base) || (typeof cleanSectionLabel === "function" ? cleanSectionLabel(header) : header) || header;
+  return normalizeAnalysisKey(base);
+}
+
 function renderMonthlySummary() {
   if (!monthlySummaryEl) return;
   monthlySummaryEl.replaceChildren();
@@ -3354,41 +3362,57 @@ function renderMonthlySummary() {
     monthlySummaryEl.appendChild(createEmptyInsight(t("monthlyNoDate")));
     return;
   }
-  // wybór kolumny daty (zapamiętany albo najlepsza)
-  let dateColIdx = monthlySummaryState.dateCol;
-  if (dateColIdx == null || !dateCols.some((p) => p.idx === dateColIdx)) {
-    dateColIdx = dateCols.slice().sort((a, b) => b.dateCount - a.dateCount)[0].idx;
+  const validIdx = new Set(dateCols.map((p) => p.idx));
+  const bestCol = dateCols.slice().sort((a, b) => b.dateCount - a.dateCount)[0];
+
+  // Wybór kolumn dat (multi). Domyślnie SMART: wszystkie kolumny tego samego pola
+  // (np. od/od2/od3) → łączny „obrót". Stan zapamiętany, jeśli wciąż poprawny.
+  let selectedCols = Array.isArray(monthlySummaryState.dateCols)
+    ? monthlySummaryState.dateCols.filter((i) => validIdx.has(i))
+    : [];
+  if (!selectedCols.length) {
+    const base = monthlyHeaderBase(bestCol.header);
+    selectedCols = dateCols.filter((p) => monthlyHeaderBase(p.header) === base).map((p) => p.idx);
+    if (!selectedCols.length) selectedCols = [bestCol.idx];
   }
-  // kolumny liczbowe do miary (suma/średnia)
-  const numCols = profiles.filter((p) => p.nonEmptyCount >= 2 && (p.numericCount + p.durationCount) / p.nonEmptyCount >= 0.6 && p.idx !== dateColIdx);
+  const selectedSet = new Set(selectedCols);
+  monthlySummaryState.dateCols = selectedCols.slice(); // zapamiętaj efektywny wybór (do chipów)
+
+  // Kolumny liczbowe do miary (suma/średnia)
+  const numCols = profiles.filter((p) => p.nonEmptyCount >= 2 && (p.numericCount + p.durationCount) / p.nonEmptyCount >= 0.6 && !selectedSet.has(p.idx));
   let metric = monthlySummaryState.metric || "count";
   if (metric !== "count" && !numCols.length) metric = "count";
   let measureIdx = monthlySummaryState.measureCol;
   if (metric !== "count" && (measureIdx == null || !numCols.some((p) => p.idx === measureIdx))) {
     measureIdx = numCols[0].idx;
   }
+  const monthsCount = [3, 6, 12, 24, 36].includes(monthlySummaryState.months) ? monthlySummaryState.months : 12;
+  const anchor = monthlySummaryState.anchor === "today" ? "today" : "data";
 
-  // kubełkowanie po roku-miesiącu
+  // Kubełkowanie po roku-miesiącu — każda wybrana kolumna daty liczona osobno
+  // (wiersz z od=sty i od2=mar wpada do obu miesięcy → „ile razy był obrót").
   const buckets = new Map();
   let maxKey = null;
   model.rows.forEach((row) => {
     if (row && row.isSubheader) return;
-    const raw = row.values ? row.values[dateColIdx] : null;
-    const d = parseDateFlexible(raw ?? getDisplayValue(row, dateColIdx));
-    if (!(d instanceof Date) || isNaN(d)) return;
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    let b = buckets.get(key);
-    if (!b) { b = { count: 0, sum: 0, n: 0 }; buckets.set(key, b); }
-    b.count += 1;
-    if (metric !== "count") {
-      const num = parseCellNumber(row.values ? row.values[measureIdx] : null, getDisplayValue(row, measureIdx));
-      if (num != null) { b.sum += num; b.n += 1; }
-    }
-    if (maxKey == null || key > maxKey) maxKey = key;
+    let measureNum = null;
+    if (metric !== "count") measureNum = parseCellNumber(row.values ? row.values[measureIdx] : null, getDisplayValue(row, measureIdx));
+    selectedCols.forEach((ci) => {
+      const d = parseDateFlexible((row.values ? row.values[ci] : null) ?? getDisplayValue(row, ci));
+      if (!(d instanceof Date) || isNaN(d)) return;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      let b = buckets.get(key);
+      if (!b) { b = { count: 0, sum: 0, n: 0 }; buckets.set(key, b); }
+      b.count += 1;
+      if (metric !== "count" && measureNum != null) { b.sum += measureNum; b.n += 1; }
+      if (maxKey == null || key > maxKey) maxKey = key;
+    });
   });
   if (!maxKey) { monthlySummaryEl.appendChild(createEmptyInsight(t("monthlyNoDate"))); return; }
 
-  const months = lastNMonthKeys(maxKey, 12);
+  const todayKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
+  const endKey = anchor === "today" ? todayKey : maxKey;
+  const months = lastNMonthKeys(endKey, monthsCount);
   const rowsData = months.map((key) => {
     const b = buckets.get(key);
     let val = 0;
@@ -3399,45 +3423,61 @@ function renderMonthlySummary() {
   const totalCount = rowsData.reduce((s, r) => s + r.count, 0);
 
   // ── kontrolki ──
-  const controls = document.createElement("div");
-  controls.className = "monthly-controls";
-  const mkSelect = (ctrl, value, opts) => {
-    const label = document.createElement("label");
-    label.className = "field";
-    label.textContent = opts.label;
+  const mkSelect = (ctrl, value, label, options) => {
+    const lab = document.createElement("label");
+    lab.className = "field";
+    lab.textContent = label;
     const sel = document.createElement("select");
     sel.dataset.monthlyControl = ctrl;
-    opts.options.forEach((o) => {
+    options.forEach((o) => {
       const op = document.createElement("option");
       op.value = String(o.value);
       op.textContent = o.text;
       if (String(o.value) === String(value)) op.selected = true;
       sel.appendChild(op);
     });
-    label.appendChild(sel);
-    return label;
+    lab.appendChild(sel);
+    return lab;
   };
-  controls.appendChild(mkSelect("datecol", dateColIdx, {
-    label: t("monthlyDateColumn"),
-    options: dateCols.map((p) => ({ value: p.idx, text: p.header })),
-  }));
-  controls.appendChild(mkSelect("metric", metric, {
-    label: t("monthlyMetric"),
-    options: [
-      { value: "count", text: t("monthlyMetricCount") },
-      { value: "sum", text: t("monthlyMetricSum") },
-      { value: "avg", text: t("monthlyMetricAvg") },
-    ],
-  }));
+
+  const controls = document.createElement("div");
+  controls.className = "monthly-controls";
+
+  // Kolumny dat — chipy (multi). Tap = włącz/wyłącz.
+  const colsWrap = document.createElement("div");
+  colsWrap.className = "field";
+  colsWrap.textContent = t("monthlyDateColumns");
+  const chips = document.createElement("div");
+  chips.className = "monthly-chips";
+  dateCols.forEach((p) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "monthly-chip" + (selectedSet.has(p.idx) ? " active" : "");
+    chip.dataset.monthlyDatecol = String(p.idx);
+    chip.setAttribute("aria-pressed", selectedSet.has(p.idx) ? "true" : "false");
+    chip.textContent = p.header;
+    chips.appendChild(chip);
+  });
+  colsWrap.appendChild(chips);
+  controls.appendChild(colsWrap);
+
+  controls.appendChild(mkSelect("metric", metric, t("monthlyMetric"), [
+    { value: "count", text: t("monthlyMetricCount") },
+    { value: "sum", text: t("monthlyMetricSum") },
+    { value: "avg", text: t("monthlyMetricAvg") },
+  ]));
   if (metric !== "count" && numCols.length) {
-    controls.appendChild(mkSelect("measure", measureIdx, {
-      label: t("monthlyMeasureColumn"),
-      options: numCols.map((p) => ({ value: p.idx, text: p.header })),
-    }));
+    controls.appendChild(mkSelect("measure", measureIdx, t("monthlyMeasureColumn"),
+      numCols.map((p) => ({ value: p.idx, text: p.header }))));
   }
+  controls.appendChild(mkSelect("months", monthsCount, t("monthlyWindow"),
+    [3, 6, 12, 24, 36].map((n) => ({ value: n, text: t("monthlyMonthsOption", { n }) }))));
+  controls.appendChild(mkSelect("anchor", anchor, t("monthlyAnchor"), [
+    { value: "data", text: t("monthlyAnchorData") },
+    { value: "today", text: t("monthlyAnchorToday") },
+  ]));
   monthlySummaryEl.appendChild(controls);
 
-  // ── nagłówek/podsumowanie ──
   const note = document.createElement("div");
   note.className = "monthly-note";
   note.textContent = t("monthlyTotalRows", { count: totalCount });

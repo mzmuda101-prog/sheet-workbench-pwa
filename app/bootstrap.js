@@ -100,18 +100,36 @@ if (durationAnalysisListEl) {
   });
 }
 if (monthlySummaryEl) {
+  const withScroll = (fn) => {
+    const sb = document.querySelector(".sidebar");
+    const savedScroll = sb ? sb.scrollTop : 0;
+    fn();
+    renderMonthlySummary();
+    if (sb) sb.scrollTop = savedScroll;
+  };
   monthlySummaryEl.addEventListener("change", (e) => {
     const control = e.target.closest("[data-monthly-control]");
     if (!control) return;
     e.stopPropagation();
-    const sb = document.querySelector(".sidebar");
-    const savedScroll = sb ? sb.scrollTop : 0;
     const kind = control.dataset.monthlyControl;
-    if (kind === "datecol") monthlySummaryState.dateCol = parseInt(control.value, 10);
-    else if (kind === "metric") monthlySummaryState.metric = control.value || "count";
-    else if (kind === "measure") monthlySummaryState.measureCol = parseInt(control.value, 10);
-    renderMonthlySummary();
-    if (sb) sb.scrollTop = savedScroll;
+    withScroll(() => {
+      if (kind === "metric") monthlySummaryState.metric = control.value || "count";
+      else if (kind === "measure") monthlySummaryState.measureCol = parseInt(control.value, 10);
+      else if (kind === "months") monthlySummaryState.months = parseInt(control.value, 10);
+      else if (kind === "anchor") monthlySummaryState.anchor = control.value === "today" ? "today" : "data";
+    });
+  });
+  // chipy kolumn dat — multi-wybór (zostaw co najmniej jedną)
+  monthlySummaryEl.addEventListener("click", (e) => {
+    const chip = e.target.closest("[data-monthly-datecol]");
+    if (!chip) return;
+    e.stopPropagation();
+    const idx = parseInt(chip.dataset.monthlyDatecol, 10);
+    const cur = Array.isArray(monthlySummaryState.dateCols) ? monthlySummaryState.dateCols.slice() : [];
+    const pos = cur.indexOf(idx);
+    if (pos >= 0) { if (cur.length > 1) cur.splice(pos, 1); }
+    else cur.push(idx);
+    withScroll(() => { monthlySummaryState.dateCols = cur; });
   });
 }
 
