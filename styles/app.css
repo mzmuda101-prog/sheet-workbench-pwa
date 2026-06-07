@@ -2460,6 +2460,33 @@ thead th {
   z-index: 8;
 }
 
+/* Blokada pierwszej kolumny: przyklejona kolumna numerów (1.) + pierwsza kolumna danych (2.).
+   Offset 2. kolumny = szerokość kolumny numerów (--row-head-w, ustawiane w renderTable). */
+.table-wrap.freeze-first-col tbody td:first-child,
+.table-wrap.freeze-first-col tbody td:nth-child(2) {
+  position: sticky;
+  z-index: 4;
+  /* „Frosted glass": półprzezroczyste tło + lekki blur — przewijana treść pod spodem
+     ładnie się rozmywa, a tekst kolumny pozostaje czytelny. Własny fill komórki
+     (inline !important) i tak wygrywa. */
+  background: color-mix(in srgb, var(--surface) 62%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+.table-wrap.freeze-first-col tbody td:first-child { left: 0; }
+.table-wrap.freeze-first-col tbody td:nth-child(2) {
+  left: var(--row-head-w, 44px);
+  box-shadow: 6px 0 8px -6px rgba(20, 30, 20, 0.16); /* delikatny cień odcinający zamrożoną kolumnę */
+}
+.table-wrap.freeze-first-col thead th:first-child,
+.table-wrap.freeze-first-col thead th:nth-child(2) {
+  position: sticky;
+  z-index: 9; /* nad zwykłym sticky thead, bo to też zamrożona kolumna (róg) */
+  background: var(--surface);
+}
+.table-wrap.freeze-first-col thead th:first-child { left: 0; }
+.table-wrap.freeze-first-col thead th:nth-child(2) { left: var(--row-head-w, 44px); }
+
 thead tr.header-row th {
   background: var(--surface);
   overflow: hidden;
@@ -2619,6 +2646,13 @@ tbody tr.row-focused td {
     inset 0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent),
     inset 0 -1px 0 color-mix(in srgb, var(--accent) 18%, transparent);
 }
+
+/* Pod zaznaczeniem wiersza tło fill jest zakryte zielenią zaznaczenia — wtedy jasny/biały
+   tekst komórki zamieniamy na czytelny var(--ink) (ciemny w jasnym motywie, jasny w ciemnym),
+   żeby zaznaczony wiersz pozostał widoczny ORAZ tekst nie znikał. */
+tbody tr.row-focused td.cell-light-text,
+tbody td.cell-in-range.cell-light-text,
+tbody td.cell-selected.cell-light-text { color: var(--ink) !important; }
 
 tbody tr.row-focused td:first-child {
   box-shadow:

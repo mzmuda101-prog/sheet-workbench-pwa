@@ -550,9 +550,17 @@
                 Wysokość wierszy (px)
                 <input id="rowHeightAll" type="number" min="0" step="1" placeholder="auto" />
               </label>
+              <label class="field" data-hint data-hint-pl="Jednolita szerokość wszystkich kolumn w px. Puste = automatyczna. Pojedynczą kolumnę możesz też zmienić przeciągając jej prawą krawędź." data-hint-en="Uniform column width in px. Empty = automatic. You can also drag a single column's right edge." data-hint-delay="1.1">
+                Szerokość kolumn (px)
+                <input id="colWidthAll" type="number" min="0" step="1" placeholder="auto" />
+              </label>
               <label class="field checkbox">
                 <input id="freezeHeaders" type="checkbox" />
                 Zablokuj wiersze nagłówków
+              </label>
+              <label class="field checkbox" data-hint data-hint-pl="Przykleja kolumnę numerów i pierwszą kolumnę danych przy przewijaniu w bok." data-hint-en="Pins the row-number column and the first data column when scrolling sideways." data-hint-delay="1.1" data-hint-touch="on">
+                <input id="freezeFirstCol" type="checkbox" />
+                Zablokuj pierwszą kolumnę
               </label>
               <div class="divider"></div>
               <div class="field-subtitle" id="cellStyleOptionsTitle">Style komórek z pliku</div>

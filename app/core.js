@@ -39,6 +39,8 @@ const wrapCellsEl = document.getElementById("wrapCells");
 const showConditionalFormattingEl = document.getElementById("showConditionalFormatting");
 const showSubheadersEl = document.getElementById("showSubheaders");
 const rowHeightAllEl = document.getElementById("rowHeightAll");
+const colWidthAllEl = document.getElementById("colWidthAll");
+const freezeFirstColEl = document.getElementById("freezeFirstCol");
 const smartColWidthsEl = document.getElementById("smartColWidths");
 const excelLayoutToggleEl = document.getElementById("excelLayoutToggle");
 const loadBtn = document.getElementById("loadBtn");
@@ -240,6 +242,7 @@ let multiSortState = [];
 let manualColumnWidths = {};
 let manualRowHeights = {};   // rowIndex0 -> px (ręczne przeciąganie pojedynczych wierszy)
 let manualRowHeightAll = 0;  // px > 0 = jednolita wysokość wszystkich wierszy (pole w „Widok")
+let manualColWidthAll = 0;   // px > 0 = jednolita szerokość wszystkich kolumn (pole w „Widok")
 let hasUnsavedChanges = false;
 let focusedCellState = null;
 let selectedCellState = null;
@@ -279,6 +282,7 @@ const MAX_ROWS_KEY = "excel-workbench-max-rows";
 const EXCEL_LAYOUT_KEY = "excel-workbench-excel-layout";
 const CELL_STYLE_PREFS_KEY = "excel-workbench-cell-style-prefs";
 const ROW_HEIGHT_KEY = "excel-workbench-row-height-all";
+const COL_WIDTH_KEY = "excel-workbench-col-width-all";
 const SORT_PRESETS_KEY = "excel-workbench-sort-presets";
 const TOOLBAR_COLLAPSED_KEY = "excel-workbench-toolbar-collapsed";
 const INTRO_PLAYED_KEY = "introPlayed";
@@ -366,5 +370,10 @@ function applyFreezeHeaders() {
   tableWrapEl.classList.toggle("freeze-headers", enabled);
   tableWrapEl.classList.toggle("headers-unlocked", !enabled);
   syncFrozenHeaderMetrics();
+}
+
+function applyFreezeFirstColumn() {
+  if (!tableWrapEl) return;
+  tableWrapEl.classList.toggle("freeze-first-col", !!(freezeFirstColEl && freezeFirstColEl.checked));
 }
 

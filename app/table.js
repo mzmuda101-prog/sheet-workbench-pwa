@@ -686,6 +686,16 @@ function applyColorTint(hex, tint) {
 // Rozwiązuje kolor węzła stylu. Przy podanym `resolveTheme` obsługuje też
 // color indexed="N" oraz color theme="N" (+ tint) — Excel tak zwykle zapisuje
 // kolory czcionek. Bez flagi: tylko rgb/auto (jak dotąd — dla teł/obramowań).
+// Czy kolor (hex) jest jasny — do decyzji, czy pod zaznaczeniem wiersza zamienić tekst
+// na czytelny (var(--ink)). Próg na percepcyjnej luminancji.
+function isLightColor(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex || "");
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 165;
+}
+
 function colorFromStyleNode(node, resolveTheme = false) {
   if (!node || typeof node !== "object") return null;
   const direct = normalizeHexColor(node.rgb ?? node.RGB);
@@ -997,9 +1007,15 @@ function applyCellStyle(td, style) {
     // kryciem — to wierna para fg+bg z Excela (np. biały tekst na pełnym kolorze).
     // Pozostałe wypełnienia zostają subtelne (0.28), żeby nie przytłaczać widoku.
     const strongFill = cellStyleShowFontColors && style.hasCustomFontColor;
-    td.style.background = hexToRgba(style.fillColor, strongFill ? 1 : 0.28) || td.style.background;
+    const bg = hexToRgba(style.fillColor, strongFill ? 1 : 0.28);
+    if (bg) td.style.background = bg;
   }
-  if (cellStyleShowFontColors && style.hasCustomFontColor && style.fontColor) td.style.color = style.fontColor;
+  if (cellStyleShowFontColors && style.hasCustomFontColor && style.fontColor) {
+    td.style.color = style.fontColor;
+    // Jasny/biały tekst oznaczamy klasą — pod zaznaczeniem wiersza (które zakrywa tło)
+    // CSS zamieni go na czytelny (var(--ink)), żeby nie zniknął na jasnym tle zaznaczenia.
+    if (isLightColor(style.fontColor)) td.classList.add("cell-light-text");
+  }
   if (cellStyleShowFonts && style.fontFamily) td.style.fontFamily = style.fontFamily;
   if (cellStyleShowFonts && style.fontScale && Math.abs(style.fontScale - 1) > 0.01) {
     td.style.setProperty("--cell-font-scale", String(Math.round(style.fontScale * 1000) / 1000));
@@ -1100,6 +1116,12 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
   const widths = headers.map(() => 0);
   const min = 80;
   const max = 520;
+
+  // Globalna szerokość kolumn (pole „Szerokość kolumn (px)") ma pierwszeństwo nad
+  // auto-dopasowaniem i Wymiarami z Excela; ręczne przeciągnięcie pojedynczej kolumny dalej wygrywa.
+  if (manualColWidthAll > 0) {
+    return widths.map((_, i) => Math.max(40, Math.min(900, manualColumnWidths[i] || manualColWidthAll)));
+  }
 
   if (useExcelLayout && Array.isArray(currentSheetColWidths) && currentSheetColWidths.length) {
     return widths.map((_, i) => {
@@ -1207,6 +1229,8 @@ function renderTable(modelOrHeaders, maybeRows) {
   const widths = computeColumnWidths(headers, rows, useExcelLayout);
   const rowHeaderDigits = String(rows.length + currentHeaderRow).length;
   const rowHeaderWidth = Math.max(42, rowHeaderDigits * 8 + 18);
+  // Offset dla sticky 1. kolumny danych (blokada kolumny) = szerokość kolumny numerów.
+  if (tableWrapEl) tableWrapEl.style.setProperty("--row-head-w", `${rowHeaderWidth}px`);
 
   const colgroup = document.createElement("colgroup");
   const rowHeadCol = document.createElement("col");
@@ -1362,8 +1386,8 @@ function renderTable(modelOrHeaders, maybeRows) {
       if (cfMapForRender) {
         const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
         if (cf) {
-          if (cf.fontColor) td.style.color = cf.fontColor;
-          if (cf.fillColor) { td.classList.add("cell-has-fill"); td.style.background = hexToRgba(cf.fillColor, cf.fontColor ? 1 : 0.28) || td.style.background; }
+          if (cf.fontColor) { td.style.color = cf.fontColor; if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); }
+          if (cf.fillColor) { td.classList.add("cell-has-fill"); const cbg = hexToRgba(cf.fillColor, cf.fontColor ? 1 : 0.28); if (cbg) td.style.background = cbg; }
         }
       }
       tr.appendChild(td);

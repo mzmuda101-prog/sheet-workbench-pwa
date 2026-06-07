@@ -1824,6 +1824,7 @@ loadMaxRowsPreference();
 loadExcelLayoutPreference();
 loadCellStylePreferences();
 loadRowHeightPreference();
+loadColWidthPreference();
 attachResizeHandlers();
 applyZoom();
 updateNetworkBadge();

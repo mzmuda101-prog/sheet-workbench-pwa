@@ -52,6 +52,18 @@ function applyRowHeightAllPreference() {
   localStorage.setItem(ROW_HEIGHT_KEY, String(manualRowHeightAll));
 }
 
+function loadColWidthPreference() {
+  const saved = parseInt(localStorage.getItem(COL_WIDTH_KEY) || "0", 10);
+  manualColWidthAll = Number.isFinite(saved) && saved > 0 ? saved : 0;
+  if (colWidthAllEl && manualColWidthAll > 0) colWidthAllEl.value = String(manualColWidthAll);
+}
+
+function applyColWidthAllPreference() {
+  const v = parseInt((colWidthAllEl && colWidthAllEl.value) || "0", 10);
+  manualColWidthAll = Number.isFinite(v) && v > 0 ? v : 0;
+  localStorage.setItem(COL_WIDTH_KEY, String(manualColWidthAll));
+}
+
 function loadExcelLayoutPreference() {
   if (!excelLayoutToggleEl) return;
   setExcelLayoutEnabled(localStorage.getItem(EXCEL_LAYOUT_KEY) === "1");
@@ -96,6 +108,7 @@ function saveCellStylePreferences() {
     subheaders: cellStyleShowSubheaders,
     smartWidths: cellStyleSmartWidths,
     wrap: !!(wrapCellsEl && wrapCellsEl.checked),
+    freezeFirstCol: !!(freezeFirstColEl && freezeFirstColEl.checked),
   }));
 }
 
@@ -111,8 +124,10 @@ function loadCellStylePreferences() {
   set(showSubheadersEl, prefs.subheaders);
   set(smartColWidthsEl, prefs.smartWidths);
   if (wrapCellsEl) wrapCellsEl.checked = prefs.wrap === true; // zawijanie domyślnie WYŁĄCZONE
+  if (freezeFirstColEl) freezeFirstColEl.checked = prefs.freezeFirstCol === true; // blokada kolumny domyślnie WYŁ.
   syncCellStyleFlags();
   applyWrapCells();
+  applyFreezeFirstColumn();
 }
 
 function setExcelLayoutEnabled(enabled) {

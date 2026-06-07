@@ -950,6 +950,8 @@ const STATIC_TRANSLATIONS = {
     view: "Widok",
     zoom: "Powiększenie",
     rowHeightLabel: "Wysokość wierszy (px)",
+    colWidthLabel: "Szerokość kolumn (px)",
+    freezeFirstColLabel: "Zablokuj pierwszą kolumnę",
     workbenchAnalysis: "Analiza workbench",
     file: "Plik",
     sheetSection: "Arkusz",
@@ -1139,6 +1141,8 @@ const STATIC_TRANSLATIONS = {
     view: "View",
     zoom: "Zoom",
     rowHeightLabel: "Row height (px)",
+    colWidthLabel: "Column width (px)",
+    freezeFirstColLabel: "Freeze first column",
     workbenchAnalysis: "Workbench analysis",
     file: "File",
     sheetSection: "Sheet",
@@ -1637,6 +1641,8 @@ function applyStaticTranslations() {
   setText("#panel-view .panel-title", copy.view);
   setFieldLabel("zoomLevel", copy.zoom);
   setFieldLabel("rowHeightAll", copy.rowHeightLabel);
+  setFieldLabel("colWidthAll", copy.colWidthLabel);
+  setCheckboxText("freezeFirstCol", copy.freezeFirstColLabel);
   setText("#panel-workbench-analysis .panel-title", copy.workbenchAnalysis);
   setText('#subtitle-workbook', copy.file);
   setText('#subtitle-sheet', copy.sheetSection);

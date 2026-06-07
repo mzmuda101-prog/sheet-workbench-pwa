@@ -320,6 +320,18 @@ if (rowHeightAllEl) {
     renderActiveTable();
   });
 }
+if (colWidthAllEl) {
+  colWidthAllEl.addEventListener("input", () => {
+    applyColWidthAllPreference();
+    renderActiveTable();
+  });
+}
+if (freezeFirstColEl) {
+  freezeFirstColEl.addEventListener("change", () => {
+    applyFreezeFirstColumn();
+    saveCellStylePreferences();
+  });
+}
 // „Podświetl pasujące komórki" — wspólny stan dla filtra tekstowego i dat (oba checkboxy
 // trzymane w zgodzie); podświetla od razu, ale nie ukrywa wierszy dopóki nie kliknięto „Filtruj".
 [highlightMatchCellsEl, highlightMatchCellsDateEl].forEach((el) => {
