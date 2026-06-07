@@ -113,10 +113,11 @@ if (monthlySummaryEl) {
     e.stopPropagation();
     const kind = control.dataset.monthlyControl;
     withScroll(() => {
-      if (kind === "metric") monthlySummaryState.metric = control.value || "count";
+      if (kind === "metric") monthlySummaryState.metric = control.value || "occurrences";
       else if (kind === "measure") monthlySummaryState.measureCol = parseInt(control.value, 10);
       else if (kind === "months") monthlySummaryState.months = parseInt(control.value, 10);
       else if (kind === "anchor") monthlySummaryState.anchor = control.value === "today" ? "today" : "data";
+      else if (kind === "split") monthlySummaryState.split = control.checked;
     });
   });
   // chipy kolumn dat — multi-wybór (zostaw co najmniej jedną)
