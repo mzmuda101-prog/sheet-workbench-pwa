@@ -2812,10 +2812,19 @@ tbody td.cell-selected {
 tbody tr { transition: background var(--t-fast); }
 tbody tr:hover td { background: rgba(47,111,92,.04); }
 [data-theme="dark"] tbody tr:hover td { background: rgba(77,184,143,.05); }
-tbody tr.row-subheader td { background: var(--accent-light); font-weight: 500; color: var(--ink-2); }
-tbody tr.row-subheader:hover td { background: rgba(47,111,92,.12); }
-[data-theme="dark"] tbody tr.row-subheader td { background: var(--accent-light); }
-[data-theme="dark"] tbody tr.row-subheader:hover td { background: rgba(77,184,143,.15); }
+/* Podnagłówki = neutralny „pasek sekcji" z górnym separatorem i pogrubieniem.
+   Celowo NIE zielony (to kolor zaznaczenia wiersza) ani bursztynowy (podświetlenie filtra),
+   żeby nie mylił się ze stanami zaznaczenia. Spójny z paletą (tinty --ink na --surface). */
+tbody tr.row-subheader td {
+  background: color-mix(in srgb, var(--ink) 6%, var(--surface));
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 1px 0 var(--border-subtle);
+}
+tbody tr.row-subheader:hover td { background: color-mix(in srgb, var(--ink) 10%, var(--surface)); }
+[data-theme="dark"] tbody tr.row-subheader td { background: color-mix(in srgb, var(--ink) 12%, var(--surface)); }
+[data-theme="dark"] tbody tr.row-subheader:hover td { background: color-mix(in srgb, var(--ink) 16%, var(--surface)); }
 tbody tr:last-child td { border-bottom: none; }
 
 /* Tryb "zaznacz" w szybkim szukaniu */

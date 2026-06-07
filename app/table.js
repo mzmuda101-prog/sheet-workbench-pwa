@@ -960,7 +960,8 @@ function extractCellStyle(cell, wb, xfStyle = null) {
   // Czerń/biel zwykle pomijamy (żeby dark mode mógł sterować kolorem), ALE gdy komórka
   // ma własne wypełnienie, jawny kolor tekstu (np. biały na ciemnym tle) jest istotny
   // dla kontrastu — wtedy go honorujemy (jak w Excelu).
-  const hasCustomFontColor = !!fontColor && (!isDefaultLikeFontColor(fontColor) || hasCustomFill);
+  const fontColorIsDefaultLike = isDefaultLikeFontColor(fontColor);
+  const hasCustomFontColor = !!fontColor && (!fontColorIsDefaultLike || hasCustomFill);
   const hasCustomAlign = isCustomAlignment(alignment);
   const hasBorder = hasCustomBorder(border);
 
@@ -976,6 +977,7 @@ function extractCellStyle(cell, wb, xfStyle = null) {
     hasCustomFill,
     fontColor,
     hasCustomFontColor,
+    fontColorIsDefaultLike,
     fontFamily,
     fontScale,
     bold: !!(font && (font.bold || font.b || font.Bold)),
@@ -1011,10 +1013,16 @@ function applyCellStyle(td, style) {
     if (bg) td.style.background = bg;
   }
   if (cellStyleShowFontColors && style.hasCustomFontColor && style.fontColor) {
-    td.style.color = style.fontColor;
-    // Jasny/biały tekst oznaczamy klasą — pod zaznaczeniem wiersza (które zakrywa tło)
-    // CSS zamieni go na czytelny (var(--ink)), żeby nie zniknął na jasnym tle zaznaczenia.
-    if (isLightColor(style.fontColor)) td.classList.add("cell-light-text");
+    // Czerń/biel trzymamy tylko PO TO, by pasowały do własnego tła komórki. Jeśli tło
+    // nie jest renderowane (wyłączone „Pokaż wypełnienia" albo brak fill), nie nakładamy
+    // takiego koloru — inaczej np. biały tekst zniknąłby na jasnym tle (regresja).
+    const fillShown = cellStyleShowFills && style.hasCustomFill;
+    if (!style.fontColorIsDefaultLike || fillShown) {
+      td.style.color = style.fontColor;
+      // Jasny/biały tekst oznaczamy klasą — pod zaznaczeniem wiersza (które zakrywa tło)
+      // CSS zamieni go na czytelny (var(--ink)), żeby nie zniknął na jasnym tle zaznaczenia.
+      if (isLightColor(style.fontColor)) td.classList.add("cell-light-text");
+    }
   }
   if (cellStyleShowFonts && style.fontFamily) td.style.fontFamily = style.fontFamily;
   if (cellStyleShowFonts && style.fontScale && Math.abs(style.fontScale - 1) > 0.01) {
