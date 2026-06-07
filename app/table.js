@@ -696,6 +696,15 @@ function isLightColor(hex) {
   return (0.2126 * r + 0.7152 * g + 0.0722 * b) > 165;
 }
 
+// Wstawia nową liczbę w PROSTY format z pamięci (np. „47 d" → „50 d", „12 dni", „5 zł").
+// Zwraca null dla formatów złożonych (np. daty „2026-06-07") — wtedy nie nadpisujemy.
+function reuseNumberFormat(cachedW, num) {
+  if (cachedW == null || cachedW === "") return String(num);
+  const m = /^(\D{0,3})(-?\d+(?:[.,]\d+)?)(\s*\D{0,5})$/.exec(String(cachedW));
+  if (!m) return null;
+  return m[1] + num + m[3];
+}
+
 // Ciemny i prawie neutralny (czarny/czarniawy/ciemnoszary) — NIE łapie nasyconych
 // ciemnych jak czerwień (#C00000), żeby nie tracić ich znaczenia. Używane, by w DARK
 // theme zamienić taki tekst pod zaznaczeniem wiersza na czytelny (tło zaznaczenia jest ciemne).
@@ -1467,6 +1476,21 @@ function buildRows(sheet, headerRow, wb) {
       if (cell && cell.f) {
         formulaCount += 1;
         if (cell.v == null && cell.w == null) formulaMissingResultCount += 1;
+      }
+      // Odśwież formuły zależne od dziś (TODAY/NOW) — np. „Długość dni" liczone do
+      // bieżącej daty — żeby nie trzeba było wcześniej otwierać pliku w Excelu.
+      // Tylko PODGLĄD (nie zapisujemy); nieobsługiwane/między-arkuszowe → zostaje wartość z pliku.
+      if (cell && cell.f && recalcDateFormulas && displayModeEl.value !== "formulas"
+          && /\b(?:TODAY|NOW)\s*\(/i.test(cell.f) && typeof cfRecomputeCellFormula === "function") {
+        const rv = cfRecomputeCellFormula(sheet, cell.f, r);
+        if (rv !== null) {
+          if (typeof rv === "string") { v = rv; shown = rv; }
+          else if (typeof rv === "boolean") { v = rv; shown = rv ? "TRUE" : "FALSE"; }
+          else if (typeof rv === "number") {
+            const fmt = reuseNumberFormat(cell.w, rv);
+            if (fmt !== null) { v = rv; shown = fmt; }
+          }
+        }
       }
       if (cell && Array.isArray(cell.c) && cell.c.length) commentCount += 1;
       if (cell && cell.l && (cell.l.Target || cell.l.target)) hyperlinkCount += 1;

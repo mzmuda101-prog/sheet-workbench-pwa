@@ -926,6 +926,7 @@ const STATIC_TRANSLATIONS = {
     showCellBorders: "Pokaż obramowania",
     showConditionalFormatting: "Pokaż formatowanie warunkowe",
     showSubheaders: "Wyróżniaj podnagłówki",
+    recalcDates: "Przeliczaj formuły z datą (na dziś)",
     smartColWidths: "Inteligentne dopasowanie szerokości",
     wrapCells: "Zawijaj tekst w komórkach",
     dateFilter: "Filtr dat",
@@ -1117,6 +1118,7 @@ const STATIC_TRANSLATIONS = {
     showCellBorders: "Show borders",
     showConditionalFormatting: "Show conditional formatting",
     showSubheaders: "Highlight subheaders",
+    recalcDates: "Recalculate date formulas (today)",
     smartColWidths: "Smart column widths",
     wrapCells: "Wrap cell text",
     dateFilter: "Date filter",
@@ -1588,6 +1590,7 @@ function applyStaticTranslations() {
   setCheckboxText("showCellBorders", copy.showCellBorders);
   setCheckboxText("showConditionalFormatting", copy.showConditionalFormatting);
   setCheckboxText("showSubheaders", copy.showSubheaders);
+  setCheckboxText("recalcDates", copy.recalcDates);
   setCheckboxText("smartColWidths", copy.smartColWidths);
   setCheckboxText("wrapCells", copy.wrapCells);
   setText("#filter2BlockTitle", copy.filterBlock2);

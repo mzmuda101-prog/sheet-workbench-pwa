@@ -258,7 +258,25 @@ function cfFunc(name, args) {
     case "WEEKDAY": { const wd = cfSerialToDate(n(0)).getUTCDay(); return wd === 0 ? 7 : wd; }
     case "DATE": return cfDateToSerial(new Date(Date.UTC(n(0), n(1) - 1, n(2))));
     case "EDATE": { const d = cfSerialToDate(n(0)); return cfDateToSerial(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n(1), d.getUTCDate()))); }
-    case "DATEDIF": return Math.abs(n(1) - n(0));
+    case "DATEDIF": {
+      const a = n(0), b = n(1);
+      if (isNaN(a) || isNaN(b) || b < a) return CF_ERR;
+      const d1 = cfSerialToDate(a), d2 = cfSerialToDate(b);
+      const y1 = d1.getUTCFullYear(), m1 = d1.getUTCMonth(), day1 = d1.getUTCDate();
+      const y2 = d2.getUTCFullYear(), m2 = d2.getUTCMonth(), day2 = d2.getUTCDate();
+      const unit = String(s(2)).toLowerCase();
+      if (unit === "d") return Math.round(b - a);
+      if (unit === "m") { let mo = (y2 - y1) * 12 + (m2 - m1); if (day2 < day1) mo--; return mo; }
+      if (unit === "y") { let yr = y2 - y1; if (m2 < m1 || (m2 === m1 && day2 < day1)) yr--; return yr; }
+      if (unit === "ym") { let mo = (y2 - y1) * 12 + (m2 - m1); if (day2 < day1) mo--; return ((mo % 12) + 12) % 12; }
+      if (unit === "md") { let dd = day2 - day1; if (dd < 0) dd += new Date(Date.UTC(y2, m2, 0)).getUTCDate(); return dd; }
+      if (unit === "yd") {
+        let start = Date.UTC(y2, m1, day1);
+        if (start > Date.UTC(y2, m2, day2)) start = Date.UTC(y2 - 1, m1, day1);
+        return Math.round((Date.UTC(y2, m2, day2) - start) / 86400000);
+      }
+      return CF_ERR;
+    }
     case "ROUNDUP": { const f = Math.pow(10, n(1) || 0); const x = n(0) * f; return (x < 0 ? Math.floor(x) : Math.ceil(x)) / f; }
   }
   return CF_ERR;
@@ -357,9 +375,11 @@ async function buildConditionalFormatting(bytes, wb) {
   currentDxfs = [];
   currentCFRules = null;
   cfEvalCache = new Map();
+  currentTables = {};
   if (typeof JSZip === "undefined" || !bytes || !wb) return;
   try {
     const zip = await JSZip.loadAsync(bytes);
+    currentTables = await parseTables(zip);
     const stylesXml = await zip.file("xl/styles.xml")?.async("string");
     if (stylesXml) currentDxfs = parseDxfs(stylesXml);
     const wbXml = await zip.file("xl/workbook.xml")?.async("string");
@@ -556,4 +576,68 @@ function evalSheetCF(sheetName) {
     }
   }
   return map;
+}
+
+// Parsuje xl/tables/*.xml → currentTables: nazwa/displayName(lower) -> { columns: {kol(lower): absColIndex} }.
+async function parseTables(zip) {
+  const tables = {};
+  const files = Object.keys(zip.files).filter((f) => /xl\/tables\/table\d+\.xml$/i.test(f));
+  for (const f of files) {
+    let xml;
+    try { xml = await zip.file(f).async("string"); } catch { continue; }
+    const refM = xml.match(/\bref="([A-Z]+\d+:[A-Z]+\d+|[A-Z]+\d+)"/);
+    if (!refM) continue;
+    let startCol;
+    try { startCol = XLSX.utils.decode_range(refM[1]).s.c; } catch { continue; }
+    const cols = {};
+    let cm, idx = 0;
+    const colRe = /<tableColumn\b[^>]*\bname="([^"]+)"/g;
+    while ((cm = colRe.exec(xml))) { cols[decodeXmlEntities(cm[1]).toLowerCase()] = startCol + idx; idx++; }
+    const meta = { columns: cols };
+    const nameM = xml.match(/<table\b[^>]*\bname="([^"]+)"/);
+    const dispM = xml.match(/\bdisplayName="([^"]+)"/);
+    if (nameM) tables[decodeXmlEntities(nameM[1]).toLowerCase()] = meta;
+    if (dispM) tables[decodeXmlEntities(dispM[1]).toLowerCase()] = meta;
+  }
+  return tables;
+}
+
+// Zamienia odwołania strukturalne dla BIEŻĄCEGO wiersza na zwykłe A1, np.
+// `Tabela[[#This Row],[od]]` / `Tabela[@od]` / `Tabela[@[od]]` → "C5".
+// Odwołania do całej kolumny (bez #This Row/@) zostają nietknięte (nieobsługiwane w przeliczeniu wiersza).
+function resolveStructuredRefs(formula, thisRow) {
+  if (!formula || formula.indexOf("[") < 0) return formula;
+  return String(formula).replace(
+    /([A-Za-z_À-ɏ][\w.À-ɏ]*)\[((?:[^\[\]]|\[[^\]]*\])*)\]/g,
+    (whole, tname, inner) => {
+      const t = currentTables[tname.toLowerCase()];
+      if (!t) return whole;
+      const innerS = inner.trim();
+      if (!/#This Row/i.test(innerS) && innerS.indexOf("@") < 0) return whole; // tylko bieżący wiersz
+      let col = null;
+      const lastBracket = innerS.match(/\[([^\[\]]+)\]\s*$/);
+      if (lastBracket && lastBracket[1].trim()[0] !== "#") col = lastBracket[1].trim();
+      if (!col) { const at = innerS.match(/@\s*\[?\s*([^\[\]@]+?)\s*\]?$/); if (at) col = at[1].trim(); }
+      if (!col) return whole;
+      const colIdx = t.columns[col.toLowerCase()];
+      if (colIdx == null) return whole;
+      return XLSX.utils.encode_cell({ r: thisRow, c: colIdx });
+    }
+  );
+}
+
+// Przelicza formułę komórki (cell.f) używając silnika CF — do ODŚWIEŻANIA wartości
+// zależnych od TODAY()/NOW() (np. „Długość dni" do dzisiaj) bez wchodzenia do Excela.
+// thisRow = absolutny wiersz komórki (dla odwołań strukturalnych [#This Row]/@).
+// Zwraca number|string|boolean albo null, gdy formuła jest nieobsługiwana/błędna → zostaje wartość z pliku.
+function cfRecomputeCellFormula(sheet, formulaText, thisRow) {
+  if (!sheet || !formulaText) return null;
+  const resolved = resolveStructuredRefs(formulaText, thisRow || 0);
+  let ast;
+  try { ast = cfParse(cfTokenize(resolved)); } catch { return null; }
+  let v;
+  try { v = cfEval(ast, { sheet, dr: 0, dc: 0 }); } catch { return null; }
+  if (cfIsErr(v) || v === undefined) return null;
+  if (typeof v === "number" && !isFinite(v)) return null;
+  return v;
 }

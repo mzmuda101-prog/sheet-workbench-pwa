@@ -138,6 +138,12 @@ async function run() {
     ok("A2: komórka usunięta", !sx.includes('<c r="A2"'));
     ok("tabela zachowana", !!zp.file("xl/tables/table1.xml"));
     ok("styles zachowane", !!zp.file("xl/styles.xml"));
+    // liczba arkuszy nie zmieniona (zapis nie dodaje/usuwa arkuszy)
+    const sheetParts = (zip) => Object.keys(zip.files).filter((n) => /xl\/worksheets\/sheet\d+\.xml$/i.test(n)).length;
+    const zOrig = await JSZip.loadAsync(origBytes);
+    ok("liczba arkuszy zachowana", sheetParts(zp) === sheetParts(zOrig));
+    const wbXml = await zp.file("xl/workbook.xml").async("string");
+    ok("workbook.xml: liczba <sheet> bez zmian", (wbXml.match(/<sheet\b/g) || []).length === 1);
 
     return { checks, malformed, errorsInPage: [] };
   });

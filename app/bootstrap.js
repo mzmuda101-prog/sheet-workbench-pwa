@@ -332,6 +332,13 @@ if (freezeFirstColEl) {
     saveCellStylePreferences();
   });
 }
+if (recalcDatesEl) {
+  recalcDatesEl.addEventListener("change", () => {
+    syncCellStyleFlags();
+    saveCellStylePreferences();
+    rebuildCurrentSheetData(); // przeliczanie dzieje się w buildRows → trzeba odbudować dane
+  });
+}
 // „Podświetl pasujące komórki" — wspólny stan dla filtra tekstowego i dat (oba checkboxy
 // trzymane w zgodzie); podświetla od razu, ale nie ukrywa wierszy dopóki nie kliknięto „Filtruj".
 [highlightMatchCellsEl, highlightMatchCellsDateEl].forEach((el) => {

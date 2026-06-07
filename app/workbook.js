@@ -89,6 +89,20 @@ function syncCellStyleFlags() {
   cellStyleShowConditionalFormatting = !showConditionalFormattingEl || showConditionalFormattingEl.checked;
   cellStyleShowSubheaders = !showSubheadersEl || showSubheadersEl.checked;
   cellStyleSmartWidths = !smartColWidthsEl || smartColWidthsEl.checked;
+  recalcDateFormulas = !recalcDatesEl || recalcDatesEl.checked;
+}
+
+// Przebudowa danych bieżącego arkusza (np. po zmianie „Przeliczaj formuły z datą")
+// BEZ kasowania filtrów/szerokości — odtwarza baseRows i ponownie filtruje/sortuje.
+function rebuildCurrentSheetData() {
+  if (!workbook || !currentSheetName) return;
+  const sheet = workbook.Sheets[currentSheetName];
+  if (!sheet) return;
+  const data = buildRows(sheet, currentHeaderRow, workbook);
+  baseRows = markSubheaderRows(data.rows);
+  applyFilters();
+  sortRows();
+  renderActiveTable();
 }
 
 // Globalny przełącznik zawijania tekstu (klasa na <table>). Trwa przez re-rendery,
@@ -107,6 +121,7 @@ function saveCellStylePreferences() {
     conditionalFormatting: cellStyleShowConditionalFormatting,
     subheaders: cellStyleShowSubheaders,
     smartWidths: cellStyleSmartWidths,
+    recalcDates: recalcDateFormulas,
     wrap: !!(wrapCellsEl && wrapCellsEl.checked),
     freezeFirstCol: !!(freezeFirstColEl && freezeFirstColEl.checked),
   }));
@@ -123,6 +138,7 @@ function loadCellStylePreferences() {
   set(showConditionalFormattingEl, prefs.conditionalFormatting);
   set(showSubheadersEl, prefs.subheaders);
   set(smartColWidthsEl, prefs.smartWidths);
+  set(recalcDatesEl, prefs.recalcDates);
   if (wrapCellsEl) wrapCellsEl.checked = prefs.wrap === true; // zawijanie domyślnie WYŁĄCZONE
   if (freezeFirstColEl) freezeFirstColEl.checked = prefs.freezeFirstCol === true; // blokada kolumny domyślnie WYŁ.
   syncCellStyleFlags();

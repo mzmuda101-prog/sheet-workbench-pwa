@@ -38,6 +38,7 @@ const showCellBordersEl = document.getElementById("showCellBorders");
 const wrapCellsEl = document.getElementById("wrapCells");
 const showConditionalFormattingEl = document.getElementById("showConditionalFormatting");
 const showSubheadersEl = document.getElementById("showSubheaders");
+const recalcDatesEl = document.getElementById("recalcDates");
 const rowHeightAllEl = document.getElementById("rowHeightAll");
 const colWidthAllEl = document.getElementById("colWidthAll");
 const freezeFirstColEl = document.getElementById("freezeFirstCol");
@@ -180,10 +181,15 @@ let cellStyleShowBorders = true;
 // ewaluowane leniwie per arkusz (cache). Pokazują kolory/tła zmienione przez CF w Excelu.
 let cellStyleShowConditionalFormatting = true;
 let cellStyleShowSubheaders = true; // jasnozielone podświetlenie wykrytych podnagłówków
+let recalcDateFormulas = true; // przeliczaj podgląd formuł zależnych od TODAY()/NOW()
 let cellStyleSmartWidths = true; // true = dopasuj do większości (p90, przycina skrajnie długie); false = zmieść wszystko
 let currentDxfs = [];        // [{fontColor, fillColor}] z xl/styles.xml <dxfs>
 let currentCFRules = null;   // Map<sheetName, Array<block>> z <conditionalFormatting>
 let cfEvalCache = new Map(); // Map<sheetName, Map<cellRef, {fontColor?, fillColor?}>>
+// Tabele Excela: nazwa(lower) -> { columns: { nazwaKol(lower): absColIndex } }. Z xl/tables/*.xml.
+// Do rozwijania odwołań strukturalnych w formułach (np. Tabela[[#This Row],[od]]) przy
+// odświeżaniu formuł zależnych od TODAY().
+let currentTables = {};
 let quickSearchOperatorsEnabled = false; // true = &&/|| traktowane jako operatory
 let currentFileName = "";
 // Oryginalne bajty wczytanego pliku (Uint8Array). Służą do zapisu metodą ZIP-patch:
@@ -275,7 +281,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260607-02";
+const APP_BUILD_VERSION = "20260607-03";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
