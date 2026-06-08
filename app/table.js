@@ -1158,8 +1158,10 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
     return widths.map((_, i) => {
       const manual = manualColumnWidths[i];
       if (manual) return Math.max(min, Math.min(max, manual));
+      // Wierność wymiarom z pliku: NIE podnosimy do min=80 (toPixelWidth ma już podłogę 40px),
+      // żeby wąskie kolumny Excela (np. „Nr.") realnie były wąskie — inaczej nie widać różnicy.
       const fromSheet = toPixelWidth(currentSheetColWidths[i]);
-      if (fromSheet) return Math.max(min, Math.min(max, fromSheet));
+      if (fromSheet) return Math.min(max, fromSheet);
       return 140;
     });
   }
@@ -1506,12 +1508,22 @@ function buildRows(sheet, headerRow, wb) {
     if (!any) continue;
     rows.push({ values, display, rawValues: values, rowIndex0: r, cellStyles });
   }
+  // Wymiary z Excela: szerokości kolumn (z !cols, wyrównane do wyświetlanego zakresu od range.s.c)
+  // i wysokości wierszy (z !rows, mapa po 0-based indeksie wiersza = rowIndex0). Konsumuje je
+  // computeColumnWidths / render przy włączonym przełączniku „Wymiary z Excela".
+  const colWidths = headers.map((_, i) => colMeta[range.s.c + i] || null);
+  const rowHeights = {};
+  for (let i = 0; i < rowMeta.length; i++) {
+    if (rowMeta[i]) rowHeights[i] = rowMeta[i];
+  }
   return {
     headers,
     headerStyles,
     rows,
     startCol: range.s.c,
     merges,
+    colWidths,
+    rowHeights,
     stats: {
       duplicateHeaderCount,
       formulaCount,
