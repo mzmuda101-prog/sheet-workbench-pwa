@@ -3312,8 +3312,9 @@ function renderInsights() {
    pokazuje jej miesięczną częstotliwość. Miary: liczba wierszy / suma / średnia
    wybranej kolumny liczbowej. Pomyślane elastycznie — dla różnych arkuszy/przypadków. */
 // dateCols: tablica indeksów kolumn dat (multi — np. od+od2+od3 = łączny obrót),
-// metric: count|sum|avg, measureCol: kolumna liczbowa, months: długość okna, anchor: 'data'|'today'.
-let monthlySummaryState = { dateCols: null, metric: "count", measureCol: null, months: 12, anchor: "data" };
+// metric: occurrences|rows|sum|avg|min|max, measureCol: kolumna liczbowa/datowa,
+// months: długość okna, anchor: 'data'|'today', split: rozbicie na kolumny.
+let monthlySummaryState = { dateCols: null, metric: "occurrences", measureCol: null, months: 12, anchor: "data", split: true };
 
 const MONTH_ABBR = {
   pl: ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"],
@@ -3338,8 +3339,29 @@ function lastNMonthKeys(endKey, n) {
   }
   return keys;
 }
-function formatMonthlyValue(val, metric) {
-  if (metric === "count") return String(Math.round(val));
+function formatMonthlyDate(ms) {
+  const d = new Date(ms);
+  if (isNaN(d)) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+// Dni → „Xm Yd" (miesiąc = 30 dni, symetrycznie do parseDurationDaysFlexible).
+function formatMonthlyDuration(days) {
+  if (!isFinite(days)) return "0";
+  const total = Math.max(0, Math.round(days));
+  const m = Math.floor(total / 30);
+  const d = total - m * 30;
+  if (m && d) return `${m}m ${d}d`;
+  if (m) return `${m}m`;
+  return `${d}d`;
+}
+// Generyczne formatowanie wartości miary wg TYPU kolumny miary:
+//  - 'date'     → śr./min/maks jako data (YYYY-MM-DD),
+//  - 'duration' → suma/śr./min/maks jako „Xm Yd" (jak kolumna „Długość"),
+//  - 'number'   → liczba; liczniki (occurrences/rows) → liczba całkowita.
+function formatMonthlyValue(val, metric, measureType) {
+  if (metric === "occurrences" || metric === "rows") return String(Math.round(val));
+  if (measureType === "date" && (metric === "avg" || metric === "min" || metric === "max")) return formatMonthlyDate(val);
+  if (measureType === "duration") return formatMonthlyDuration(val);
   const rounded = Math.round(val * 100) / 100;
   return (typeof formatStatNumber === "function") ? formatStatNumber(rounded) : String(rounded);
 }
@@ -3380,71 +3402,116 @@ function renderMonthlySummary() {
   const selectedSet = new Set(selectedCols);
   monthlySummaryState.dateCols = selectedCols.slice(); // zapamiętaj efektywny wybór (do chipów)
 
-  // Kolumny liczbowe do miary (suma/średnia)
-  const numCols = profiles.filter((p) => p.nonEmptyCount >= 2 && (p.numericCount + p.durationCount) / p.nonEmptyCount >= 0.6 && !selectedSet.has(p.idx));
-  const numMetric = (m) => m === "sum" || m === "avg";
+  // Kandydaci na miarę: kolumny LICZBOWE oraz DATOWE (poza wybranymi do grupowania).
+  // Data jako miara → np. „średnia/najwcześniejsza/najpóźniejsza data zakończenia" per miesiąc.
+  const allDateIdx = new Set(dateCols.map((p) => p.idx));
+  const measureCols = profiles.filter((p) => !selectedSet.has(p.idx) && p.nonEmptyCount >= 2 && (
+    (p.numericCount + p.durationCount) / p.nonEmptyCount >= 0.6 || allDateIdx.has(p.idx)
+  ));
+  const aggMetric = (m) => m === "sum" || m === "avg" || m === "min" || m === "max";
+  const levelMetric = (m) => m === "avg" || m === "min" || m === "max";
+  const countMetric = (m) => m === "occurrences" || m === "rows";
+
+  // Kolumna miary (preferuj liczbową, by „suma" działała domyślnie).
+  let measureIdx = null;
+  if (measureCols.length) {
+    measureIdx = monthlySummaryState.measureCol;
+    if (measureIdx == null || !measureCols.some((p) => p.idx === measureIdx)) {
+      const firstNumeric = measureCols.find((p) => !allDateIdx.has(p.idx));
+      measureIdx = (firstNumeric || measureCols[0]).idx;
+    }
+  }
+  // Typ kolumny miary: 'date' (→ wynik jako data), 'duration' (kolumna typu „Długość" Xm Yd
+  // → wynik jako Xm Yd), albo 'number'. Decyduje o parsowaniu wartości i formatowaniu wyniku.
+  const measureProfile = measureIdx != null ? profiles.find((p) => p.idx === measureIdx) : null;
+  const measureType = measureIdx == null ? null
+    : allDateIdx.has(measureIdx) ? "date"
+      : (measureProfile && measureProfile.durationCount / measureProfile.nonEmptyCount >= 0.5
+        && measureProfile.durationCount >= measureProfile.numericCount) ? "duration"
+        : "number";
+
+  // Dozwolone miary: zawsze liczniki; przy mierze — śr./min/maks; suma tylko dla liczb/duracji (nie dat).
+  const allowedMetrics = ["occurrences", "rows"];
+  if (measureCols.length) {
+    if (measureType !== "date") allowedMetrics.push("sum");
+    allowedMetrics.push("avg", "min", "max");
+  }
   let metric = monthlySummaryState.metric || "occurrences";
   if (metric === "count") metric = "occurrences"; // migracja starej nazwy
-  if (!["occurrences", "rows", "sum", "avg"].includes(metric)) metric = "occurrences";
-  if (numMetric(metric) && !numCols.length) metric = "occurrences";
-  let measureIdx = monthlySummaryState.measureCol;
-  if (numMetric(metric) && (measureIdx == null || !numCols.some((p) => p.idx === measureIdx))) {
-    measureIdx = numCols[0].idx;
-  }
+  if (!allowedMetrics.includes(metric)) metric = "occurrences";
+
   const monthsCount = [3, 6, 12, 24, 36].includes(monthlySummaryState.months) ? monthlySummaryState.months : 12;
   const anchor = monthlySummaryState.anchor === "today" ? "today" : "data";
-  // Rozbicie słupka na segmenty per kolumna — tylko sensowne dla miar per-wystąpienie
-  // (wystąpienia/suma) i przy ≥2 kolumnach. Dla „wierszy unikalnych"/średniej wyłączone.
-  const canSplit = selectedCols.length > 1 && (metric === "occurrences" || metric === "sum");
+  const canSplit = selectedCols.length > 1;
   const split = canSplit && monthlySummaryState.split !== false;
+  const rangeScale = measureType === "date" && levelMetric(metric); // daty: skaluj słupki do zakresu, nie od zera
 
-  // Kubełkowanie po roku-miesiącu. Każda wybrana kolumna daty liczona osobno
-  // (wiersz z od=sty i od2=mar → dwa wystąpienia). „Wierszy unikalnych" liczy wiersz
-  // raz na miesiąc (nawet z kilkoma cyklami w tym miesiącu). byCol/byColSum = wkład kolumn.
+  // Wartość miary dla wiersza (raz). Data → ms; duracja → dni; liczba → liczba.
+  const measureValueOf = (row) => {
+    if (measureIdx == null) return null;
+    const raw = (row.values ? row.values[measureIdx] : null) ?? getDisplayValue(row, measureIdx);
+    if (measureType === "date") { const d = parseDateFlexible(raw); return (d instanceof Date && !isNaN(d)) ? d.getTime() : null; }
+    if (measureType === "duration") return parseDurationDaysFlexible(raw);
+    return parseCellNumber(row.values ? row.values[measureIdx] : null, getDisplayValue(row, measureIdx));
+  };
+  const newAgg = () => ({ occ: 0, rows: new Set(), sum: 0, n: 0, min: Infinity, max: -Infinity });
+  const addToAgg = (a, rowId, mv) => {
+    a.occ += 1; a.rows.add(rowId);
+    if (aggMetric(metric) && mv != null) { a.sum += mv; a.n += 1; if (mv < a.min) a.min = mv; if (mv > a.max) a.max = mv; }
+  };
+  const aggValue = (a) => {
+    if (!a) return 0;
+    if (metric === "rows") return a.rows.size;
+    if (metric === "sum") return a.sum;
+    if (metric === "avg") return a.n ? a.sum / a.n : 0;
+    if (metric === "min") return a.n ? a.min : 0;
+    if (metric === "max") return a.n ? a.max : 0;
+    return a.occ;
+  };
+  const aggHas = (a) => (a ? (countMetric(metric) ? a.occ > 0 : a.n > 0) : false);
+
+  // Kubełkowanie po roku-miesiącu; każda wybrana kolumna daty liczona osobno + per-kolumna.
   const buckets = new Map();
   let maxKey = null;
   model.rows.forEach((row, ri) => {
     if (row && row.isSubheader) return;
     const rowId = (typeof row.rowIndex0 === "number") ? row.rowIndex0 : ri;
-    let measureNum = null;
-    if (numMetric(metric)) measureNum = parseCellNumber(row.values ? row.values[measureIdx] : null, getDisplayValue(row, measureIdx));
+    const mv = measureValueOf(row);
     selectedCols.forEach((ci) => {
       const d = parseDateFlexible((row.values ? row.values[ci] : null) ?? getDisplayValue(row, ci));
       if (!(d instanceof Date) || isNaN(d)) return;
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       let b = buckets.get(key);
-      if (!b) { b = { occ: 0, sum: 0, n: 0, rows: new Set(), byCol: {}, byColSum: {} }; buckets.set(key, b); }
-      b.occ += 1;
-      b.rows.add(rowId);
-      b.byCol[ci] = (b.byCol[ci] || 0) + 1;
-      if (numMetric(metric) && measureNum != null) {
-        b.sum += measureNum; b.n += 1;
-        b.byColSum[ci] = (b.byColSum[ci] || 0) + measureNum;
-      }
+      if (!b) { b = newAgg(); b.byCol = {}; buckets.set(key, b); }
+      addToAgg(b, rowId, mv);
+      let bc = b.byCol[ci];
+      if (!bc) { bc = newAgg(); b.byCol[ci] = bc; }
+      addToAgg(bc, rowId, mv);
       if (maxKey == null || key > maxKey) maxKey = key;
     });
   });
   if (!maxKey) { monthlySummaryEl.appendChild(createEmptyInsight(t("monthlyNoDate"))); return; }
-
-  const valueOf = (b) => {
-    if (!b) return 0;
-    if (metric === "rows") return b.rows.size;
-    if (metric === "sum") return b.sum;
-    if (metric === "avg") return b.n ? b.sum / b.n : 0;
-    return b.occ;
-  };
-  const segMapOf = (b) => (metric === "sum" ? (b ? b.byColSum : {}) : (b ? b.byCol : {}));
 
   const todayKey = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; })();
   const endKey = anchor === "today" ? todayKey : maxKey;
   const months = lastNMonthKeys(endKey, monthsCount);
   const rowsData = months.map((key) => {
     const b = buckets.get(key);
-    return { key, val: valueOf(b), count: b ? b.occ : 0, seg: segMapOf(b) };
+    return { key, agg: b, val: aggValue(b), has: aggHas(b), occ: b ? b.occ : 0, byCol: b ? b.byCol : {} };
   });
-  const maxVal = Math.max(1, ...rowsData.map((r) => Math.abs(r.val)));
-  const totalCount = rowsData.reduce((s, r) => s + r.count, 0);
+  const totalCount = rowsData.reduce((s, r) => s + r.occ, 0);
   const segColorFor = (pos) => MONTHLY_SEG_COLORS[pos % MONTHLY_SEG_COLORS.length];
+
+  // Skalowanie długości słupka. Zero-based dla liczników/sum/liczb; range-based dla dat
+  // (śr./min/maks daty to „poziom", nie ilość — słupek od najwcześniejszej do najpóźniejszej).
+  const presentVals = rowsData.filter((r) => r.has).map((r) => r.val);
+  const minVal = presentVals.length ? Math.min(...presentVals) : 0;
+  const maxVal = Math.max(1, ...presentVals.map((v) => Math.abs(v)));
+  const scaleOverall = (val, has) => {
+    if (!has) return 0;
+    if (rangeScale) return maxVal > minVal ? Math.round(10 + ((val - minVal) / (maxVal - minVal)) * 90) : 60;
+    return Math.max(val > 0 ? 3 : 0, Math.round((Math.abs(val) / maxVal) * 100));
+  };
 
   // ── kontrolki ──
   const mkSelect = (ctrl, value, label, options) => {
@@ -3485,15 +3552,23 @@ function renderMonthlySummary() {
   colsWrap.appendChild(chips);
   controls.appendChild(colsWrap);
 
-  controls.appendChild(mkSelect("metric", metric, t("monthlyMetric"), [
-    { value: "occurrences", text: t("monthlyMetricOccurrences") },
-    { value: "rows", text: t("monthlyMetricRows") },
-    { value: "sum", text: t("monthlyMetricSum") },
-    { value: "avg", text: t("monthlyMetricAvg") },
-  ]));
-  if (numMetric(metric) && numCols.length) {
+  const metricLabels = {
+    occurrences: t("monthlyMetricOccurrences"),
+    rows: t("monthlyMetricRows"),
+    sum: t("monthlyMetricSum"),
+    avg: t("monthlyMetricAvg"),
+    min: t("monthlyMetricMin"),
+    max: t("monthlyMetricMax"),
+  };
+  controls.appendChild(mkSelect("metric", metric, t("monthlyMetric"),
+    allowedMetrics.map((m) => ({ value: m, text: metricLabels[m] }))));
+  if (aggMetric(metric) && measureCols.length) {
     controls.appendChild(mkSelect("measure", measureIdx, t("monthlyMeasureColumn"),
-      numCols.map((p) => ({ value: p.idx, text: p.header }))));
+      measureCols.map((p) => {
+        const isDate = allDateIdx.has(p.idx);
+        const isDur = !isDate && p.durationCount / p.nonEmptyCount >= 0.5 && p.durationCount >= p.numericCount;
+        return { value: p.idx, text: p.header + (isDate ? " 📅" : isDur ? " ⏱" : "") };
+      })));
   }
   controls.appendChild(mkSelect("months", monthsCount, t("monthlyWindow"),
     [3, 6, 12, 24, 36].map((n) => ({ value: n, text: t("monthlyMonthsOption", { n }) }))));
@@ -3525,19 +3600,24 @@ function renderMonthlySummary() {
     legend.className = "monthly-legend";
     selectedCols.forEach((ci, pos) => {
       const profile = dateCols.find((p) => p.idx === ci);
-      const item = document.createElement("span");
-      item.className = "monthly-legend-item";
+      const li = document.createElement("span");
+      li.className = "monthly-legend-item";
       const sw = document.createElement("span");
       sw.className = "monthly-swatch";
       sw.style.background = segColorFor(pos);
-      item.appendChild(sw);
-      item.appendChild(document.createTextNode(profile ? profile.header : String(ci)));
-      legend.appendChild(item);
+      li.appendChild(sw);
+      li.appendChild(document.createTextNode(profile ? profile.header : String(ci)));
+      legend.appendChild(li);
     });
     monthlySummaryEl.appendChild(legend);
   }
 
   // ── paski miesięczne ──
+  // Zawsze JEDEN słupek; przy rozbiciu kolorowe segmenty per kolumna na tym samym słupku.
+  // Dla miar addytywnych (wystąpienia/suma) szerokość segmentu = dokładny udział wartości.
+  // Dla nie-addytywnych (wiersze/śr./min/maks) segmenty pokazują udział kolumn (kompozycja),
+  // a DOKŁADNE wartości per kolumna są w tooltipie (cursor-hint) na wyniku przy słupku.
+  const additive = metric === "occurrences" || metric === "sum";
   const list = document.createElement("div");
   list.className = "monthly-list";
   rowsData.forEach((r) => {
@@ -3550,26 +3630,46 @@ function renderMonthlySummary() {
     track.className = "monthly-track";
     const bar = document.createElement("div");
     bar.className = "monthly-bar";
-    bar.style.width = `${Math.max(r.val > 0 ? 3 : 0, Math.round((Math.abs(r.val) / maxVal) * 100))}%`;
-    if (split && r.val > 0) {
+    bar.style.width = `${scaleOverall(r.val, r.has)}%`;
+
+    // dane per kolumna dla tego miesiąca
+    const colData = selectedCols.map((ci, pos) => {
+      const bc = r.byCol[ci];
+      const ph = dateCols.find((p) => p.idx === ci);
+      return { ci, pos, has: aggHas(bc), v: aggValue(bc), header: ph ? ph.header : String(ci) };
+    });
+
+    if (split && r.has) {
       bar.classList.add("split");
-      selectedCols.forEach((ci, pos) => {
-        const cv = (r.seg && r.seg[ci]) || 0;
-        if (cv <= 0) return;
+      const base = colData.reduce((s, c) => s + (c.has ? Math.max(0, c.v) : 0), 0) || 1;
+      colData.forEach((c) => {
+        if (!c.has || c.v <= 0) return;
         const seg = document.createElement("div");
         seg.className = "monthly-seg";
-        seg.style.width = `${(cv / r.val) * 100}%`;
-        seg.style.background = segColorFor(pos);
-        const ph = dateCols.find((p) => p.idx === ci);
-        seg.title = `${ph ? ph.header : ci}: ${formatMonthlyValue(cv, metric)}`;
+        seg.style.width = `${(Math.max(0, c.v) / base) * 100}%`;
+        seg.style.background = segColorFor(c.pos);
         bar.appendChild(seg);
       });
     }
     track.appendChild(bar);
+
     const val = document.createElement("div");
     val.className = "monthly-value";
-    val.textContent = formatMonthlyValue(r.val, metric);
-    if (metric !== "occurrences" && r.count) val.title = t("monthlyTotalRows", { count: r.count });
+    val.textContent = r.has ? formatMonthlyValue(r.val, metric, measureType) : "0";
+    // Tooltip (cursor-hint): dokładny wynik per kolumna — także dla miar nie-addytywnych.
+    if (selectedCols.length > 1 && r.has) {
+      const parts = colData.filter((c) => c.has).map((c) => `${c.header}: ${formatMonthlyValue(c.v, metric, measureType)}`);
+      if (parts.length) {
+        const hint = parts.join("  ·  ");
+        val.classList.add("monthly-value-hint");
+        val.setAttribute("data-hint", "");
+        val.setAttribute("data-hint-pl", hint);
+        val.setAttribute("data-hint-en", hint);
+        val.setAttribute("data-hint-touch", "on");
+        val.setAttribute("data-hint-delay", "0.4");
+      }
+    }
+
     item.appendChild(lab);
     item.appendChild(track);
     item.appendChild(val);
