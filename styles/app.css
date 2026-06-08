@@ -3543,3 +3543,10 @@ kbd {
 .monthly-swatch { width: 10px; height: 10px; border-radius: 3px; display: inline-block; flex: none; }
 /* Wynik z dostępnym tooltipem (rozbicie per kolumna) — subtelna podpowiedź afordancji */
 .monthly-value-hint { cursor: help; text-decoration: underline dotted color-mix(in srgb, var(--ink) 35%, transparent); text-underline-offset: 3px; }
+/* iPad/Safari: długie przytrzymanie na wyniku/słupkach ma pokazać TYLKO tooltip (cursor-hint),
+   bez zaznaczania tekstu i systemowej lupy/menu „callout". */
+.monthly-summary {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}

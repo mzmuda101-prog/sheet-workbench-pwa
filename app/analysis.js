@@ -3666,6 +3666,8 @@ function renderMonthlySummary() {
         val.setAttribute("data-hint-pl", hint);
         val.setAttribute("data-hint-en", hint);
         val.setAttribute("data-hint-touch", "on");
+        val.setAttribute("data-hint-tap", "");   // dotyk: tap = zerknięcie, przytrzymanie = trzymaj
+        val.setAttribute("data-hint-fade", "");  // płynne zniknięcie po „zerknięciu"
         val.setAttribute("data-hint-delay", "0.4");
       }
     }

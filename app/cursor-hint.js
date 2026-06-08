@@ -59,6 +59,20 @@
 //     data-hint-touch="0.8"      ← dotyk włączony, delay 800ms
 //     data-hint-touch="1.2"      ← dotyk włączony, delay 1200ms
 //
+// data-hint-tap  (opt-in, działa razem z data-hint-touch)
+//   Zmienia model DOTYKU na „tap vs przytrzymanie" — dla elementów, które NIE mają
+//   własnej akcji na tapnięcie (np. liczba/wynik, nie przycisk):
+//     • TAP (krótkie tapnięcie, <500ms)  → hint pojawia się na chwilę i SAM znika
+//       (czas: data-hint-duration jeśli ustawione, inaczej ~2.6s; ładnie z data-hint-fade).
+//     • PRZYTRZYMANIE (≥~280ms trzymania) → hint pokazany TAK DŁUGO jak trzymasz palec,
+//       znika dopiero po puszczeniu. Ruch palcem (scroll) anuluje.
+//   Bez tego atrybutu dotyk działa po staremu („przytrzymaj, by pokazać; puść = schowaj"),
+//   więc przyciski z akcją się nie zmieniają — to dlatego jest opt-in.
+//   WAŻNE (iOS/Safari): na kontenerze daj `-webkit-user-select:none; user-select:none;
+//   -webkit-touch-callout:none;` — inaczej długie przytrzymanie zaznacza tekst / pokazuje
+//   lupę systemową RÓWNOLEGLE z hintem. (Patrz .monthly-summary w app.css.)
+//   Przykład: <span data-hint data-hint-pl="..." data-hint-touch="on" data-hint-tap data-hint-fade>
+//
 // data-hint-class="nazwa-klasy"
 //   Dodatkowa klasa CSS doklejana do dymka gdy jest widoczny.
 //   Przydatne do stylowania konkretnych hintów inaczej niż reszta,
@@ -145,6 +159,21 @@ window.MateuszCursorHint = (() => {
     let activeHintEl = null;
     // Typ wskaźnika który aktywował hint ("mouse" | "touch" | "pen")
     let activePointerType = "";
+
+    // Dotyk w trybie opt-in `data-hint-tap`: TAP = zerknięcie (pokaż na chwilę, sam znika),
+    // PRZYTRZYMANIE = pokazuj póki trzymasz (znika po puszczeniu). Bez data-hint-tap dotyk
+    // działa po staremu (przytrzymaj-by-pokazać) — przyciski z akcją się nie zmieniają.
+    let touchHoldTimer = null;     // timer wykrycia przytrzymania
+    let touchDownTime = 0;         // moment przyciśnięcia palca
+    let touchHeldShown = false;    // czy hint pokazany w trybie przytrzymania
+    let touchMoved = false;        // czy palec ruszył (scroll → anuluj)
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const TOUCH_HOLD_MS = 280;     // po tylu ms trzymania pokazujemy „na trzymanie"
+    const TOUCH_TAP_MAX = 500;     // krótsze przyciśnięcie = tap (zerknięcie)
+    const TOUCH_MOVE_CANCEL = 12;  // ruch > tylu px przed pokazaniem = scroll, anuluj
+    const TOUCH_PEEK_MS = 2600;    // domyślny czas „zerknięcia" (override: data-hint-duration)
+    const nowMs = () => (window.performance && performance.now ? performance.now() : Date.now());
 
     // Sprawdza czy element jawnie zezwala na hint dotykowy przez data-hint-touch.
     // Akceptuje: brak wartości / "on" / "true" / "1" / "yes" / liczba dziesiętna (delay w sek.)
@@ -323,18 +352,21 @@ window.MateuszCursorHint = (() => {
       });
     }
 
-    // Pokazuje hint natychmiast — ustawia tekst, klasę CSS i uruchamia animację pozycji
-    function showCursorHint(el, x, y) {
+    // Pokazuje hint natychmiast — ustawia tekst, klasę CSS i uruchamia animację pozycji.
+    // opts.autoHide=false → nie chowaj po czasie (tryb „przytrzymanie"); opts.durationMs →
+    // własny czas auto-hide (tryb „tap = zerknięcie"). Bez opts → zachowanie domyślne.
+    function showCursorHint(el, x, y, opts) {
       if (isDisabled(el, activePointerType)) return;
       setHintText(getHintText(el));
       // Resetujemy className żeby wyczyścić poprzednią data-hint-class,
       // potem dokładamy is-visible i ewentualną klasę z atrybutu
       cursorHint.className = `cursor-hint is-visible ${el.dataset.hintClass || ""}`.trim();
       moveCursorHint(x, y);
-      // Auto-hide: jeśli element ma data-hint-duration, ukryj po zadanym czasie
+      // Auto-hide: jeśli element ma data-hint-duration (lub opts.durationMs), ukryj po czasie
       if (autoHideTimer) { window.clearTimeout(autoHideTimer); autoHideTimer = null; }
-      const durationMs = getHintDurationMs(el);
-      if (durationMs > 0) {
+      const autoHide = !opts || opts.autoHide !== false;
+      const durationMs = (opts && Number.isFinite(opts.durationMs)) ? opts.durationMs : getHintDurationMs(el);
+      if (autoHide && durationMs > 0) {
         autoHideTimer = window.setTimeout(() => {
           autoHideTimer = null;
           hideCursorHint();
@@ -445,6 +477,19 @@ window.MateuszCursorHint = (() => {
           const pointerType = event.pointerType || activePointerType || "mouse";
           if (isDisabled(el, pointerType)) return;
 
+          // Dotyk tap/hold: większy ruch zanim pokażemy = scroll → anuluj
+          if (pointerType === "touch" && el.dataset.hintTap !== undefined
+              && activeHintEl === el && !touchHeldShown && !touchMoved) {
+            const mx = event.clientX - touchStartX;
+            const my = event.clientY - touchStartY;
+            if (Math.sqrt(mx * mx + my * my) >= TOUCH_MOVE_CANCEL) {
+              touchMoved = true;
+              if (touchHoldTimer) { window.clearTimeout(touchHoldTimer); touchHoldTimer = null; }
+              hideCursorHint();
+              return;
+            }
+          }
+
           if (cursorHint && cursorHint.classList.contains("is-visible")) {
             // Hint już widoczny — tylko przesuń za kursorem
             moveCursorHint(event.clientX, event.clientY);
@@ -465,7 +510,25 @@ window.MateuszCursorHint = (() => {
         el.addEventListener("pointerdown", (event) => {
           if (event.pointerType !== "touch" || isDisabled(el, "touch")) return;
           event.stopPropagation();
-          scheduleCursorHint(el, event);
+          if (el.dataset.hintTap === undefined) { scheduleCursorHint(el, event); return; }
+          // Tryb tap/hold: ustaw stan i odpal timer przytrzymania
+          clearCursorHintTimer();
+          if (touchHoldTimer) { window.clearTimeout(touchHoldTimer); touchHoldTimer = null; }
+          activeHintEl = el;
+          activePointerType = "touch";
+          touchDownTime = nowMs();
+          touchHeldShown = false;
+          touchMoved = false;
+          touchStartX = event.clientX;
+          touchStartY = event.clientY;
+          const px = event.clientX;
+          const py = event.clientY;
+          touchHoldTimer = window.setTimeout(() => {
+            touchHoldTimer = null;
+            if (activeHintEl !== el || touchMoved) return;
+            showCursorHint(el, px, py, { autoHide: false }); // trzymanie → pokazuj póki trzymasz
+            touchHeldShown = true;
+          }, TOUCH_HOLD_MS);
         });
 
         // Blokuj systemowe context menu (iOS "Kopiuj/Szukaj", Android long-press)
@@ -474,14 +537,32 @@ window.MateuszCursorHint = (() => {
           if (activeHintEl === el) event.preventDefault();
         });
 
-        // Mysz opuszcza element lub palec się unosi — schowaj hint
-        el.addEventListener("pointerleave", () => {
+        // Mysz opuszcza element — schowaj. Dotyk obsługują pointerup/cancel/auto-hide,
+        // więc tu go pomijamy (inaczej pointerleave po tapie ubiłby „zerknięcie").
+        el.addEventListener("pointerleave", (event) => {
+          if (event && event.pointerType === "touch") return;
           hideCursorHint();
         });
 
-        // Kliknięcie / podniesienie palca / anulowanie — też chowaj
-        el.addEventListener("pointerup", hideCursorHint);
-        el.addEventListener("pointercancel", hideCursorHint);
+        // Podniesienie palca: w trybie tap/hold rozróżnij tap (zerknięcie) od trzymania.
+        el.addEventListener("pointerup", (event) => {
+          if (event && event.pointerType === "touch" && el.dataset.hintTap !== undefined) {
+            if (touchHoldTimer) { window.clearTimeout(touchHoldTimer); touchHoldTimer = null; }
+            if (touchMoved) { hideCursorHint(); return; }
+            if (nowMs() - touchDownTime < TOUCH_TAP_MAX) {
+              const dur = getHintDurationMs(el);
+              showCursorHint(el, event.clientX, event.clientY, { autoHide: true, durationMs: dur > 0 ? dur : TOUCH_PEEK_MS });
+            } else {
+              hideCursorHint(); // długie trzymanie → puszczenie chowa
+            }
+            return;
+          }
+          hideCursorHint();
+        });
+        el.addEventListener("pointercancel", () => {
+          if (touchHoldTimer) { window.clearTimeout(touchHoldTimer); touchHoldTimer = null; }
+          hideCursorHint();
+        });
 
         if (clickCallback) {
           el.addEventListener("click", () => clickCallback(el));
