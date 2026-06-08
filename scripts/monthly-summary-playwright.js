@@ -55,36 +55,36 @@ async function run() {
     const ok = (name, cond, got) => checks.push({ name, ok: !!cond, got });
 
     // A) wystąpienia, kolumna od → sty=2, lut=1
-    render({ dateCols: [0], metric: "occurrences", measureCol: null });
+    render({ dateCols: [0], metric: "occurrences", measureCols: null });
     let v = valuesByMonth();
     ok("occurrences sty=2", v["sty 2026"] === "2", v["sty 2026"]);
     ok("occurrences lut=1", v["lut 2026"] === "1", v["lut 2026"]);
 
     // B) wiersze unikalne, od → sty=2, lut=1
-    render({ dateCols: [0], metric: "rows", measureCol: null });
+    render({ dateCols: [0], metric: "rows", measureCols: null });
     v = valuesByMonth();
     ok("rows sty=2", v["sty 2026"] === "2", v["sty 2026"]);
 
     // C) suma duracji (Długość), od → sty=2m 14d (35+39=74d), lut=20d
-    render({ dateCols: [0], metric: "sum", measureCol: 2 });
+    render({ dateCols: [0], metric: "sum", measureCols: [2] });
     v = valuesByMonth();
     ok("sum duration sty=2m 14d", v["sty 2026"] === "2m 14d", v["sty 2026"]);
     ok("sum duration lut=20d", v["lut 2026"] === "20d", v["lut 2026"]);
 
     // D) średnia daty (do), od → lut=2026-02-25 (1 wiersz), sty pasuje do wzoru daty
-    render({ dateCols: [0], metric: "avg", measureCol: 1 });
+    render({ dateCols: [0], metric: "avg", measureCols: [1] });
     v = valuesByMonth();
     ok("avg date lut=2026-02-25", v["lut 2026"] === "2026-02-25", v["lut 2026"]);
     ok("avg date sty = data (YYYY-MM-DD)", /^\d{4}-\d{2}-\d{2}$/.test(v["sty 2026"] || ""), v["sty 2026"]);
 
     // E) średnia liczby (Kwota), od → sty=150, lut=50
-    render({ dateCols: [0], metric: "avg", measureCol: 3 });
+    render({ dateCols: [0], metric: "avg", measureCols: [3] });
     v = valuesByMonth();
     ok("avg number sty=150", v["sty 2026"] === "150", v["sty 2026"]);
     ok("avg number lut=50", v["lut 2026"] === "50", v["lut 2026"]);
 
     // F) multi-kolumna od+do, wystąpienia → lut=3 (od row2 + do row0,row2), mar=1 (do row1)
-    render({ dateCols: [0, 1], metric: "occurrences", measureCol: null });
+    render({ dateCols: [0, 1], metric: "occurrences", measureCols: null });
     v = valuesByMonth();
     ok("multi occ lut=3", v["lut 2026"] === "3", v["lut 2026"]);
     ok("multi occ mar=1", v["mar 2026"] === "1", v["mar 2026"]);
@@ -94,9 +94,30 @@ async function run() {
     ok("multi: tooltip per kolumna na wyniku", !!hintEl, hintEl ? hintEl.getAttribute("data-hint-pl") : null);
 
     // G) suma niedozwolona dla miary datowej (do) → spada do occurrences (brak crashu)
-    render({ dateCols: [0], metric: "sum", measureCol: 1 });
+    render({ dateCols: [0], metric: "sum", measureCols: [1] });
     const metricOpts = [...el.querySelectorAll('select[data-monthly-control="metric"] option')].map((o) => o.value);
     ok("data jako miara: brak opcji 'sum'", !metricOpts.includes("sum"), metricOpts.join(","));
+
+    // H) PAROWANIE wielu cykli: dwa cykle (od↔Długość, od2↔Długość2), średnia duracji per miesiąc.
+    //    Każda duracja trafia do miesiąca SWOJEGO startu — test wykrywa złe parowanie.
+    const mk2 = (od, dur, od2, dur2, i) => ({
+      values: [od, dur, od2, dur2],
+      display: [`${od.getFullYear()}-${String(od.getMonth() + 1).padStart(2, "0")}-01`, dur,
+        `${od2.getFullYear()}-${String(od2.getMonth() + 1).padStart(2, "0")}-01`, dur2],
+      rowIndex0: i,
+    });
+    currentDisplayModel = {
+      headers: ["od", "Długość", "od2", "Długość2"],
+      rows: [
+        mk2(D(2026, 1, 10), "1m 0d", D(2026, 2, 10), "2m 0d", 0), // sty: 30d ; lut: 60d
+        mk2(D(2026, 1, 20), "2m 0d", D(2026, 3, 5), "0m 10d", 1), // sty: 60d ; mar: 10d
+      ],
+    };
+    render({ dateCols: [0, 2], metric: "avg", measureCols: [1, 3] });
+    v = valuesByMonth();
+    ok("pairing avg sty=1m 15d ((30+60)/2)", v["sty 2026"] === "1m 15d", v["sty 2026"]);
+    ok("pairing avg lut=2m (Długość2=60d, nie 30)", v["lut 2026"] === "2m", v["lut 2026"]);
+    ok("pairing avg mar=10d (Długość2)", v["mar 2026"] === "10d", v["mar 2026"]);
 
     return { checks };
   });

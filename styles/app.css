@@ -751,7 +751,8 @@ body.splashing {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     align-items: end;
   }
-  .sidebar:has(#panel-monthly-summary[open]) .monthly-controls > .field:first-child {
+  .sidebar:has(#panel-monthly-summary[open]) .monthly-cols-field,
+  .sidebar:has(#panel-monthly-summary[open]) .monthly-measure-field {
     grid-column: 1 / -1;
   }
 
@@ -3502,6 +3503,17 @@ kbd {
 
 /* ===================== Podsumowanie miesięczne ===================== */
 .monthly-controls { display: grid; gap: 8px; margin-bottom: 10px; }
+/* Readback: zdanie opisujące co pokazuje wykres (np. „Średnia z „Długość" na miesiąc — wg daty: od") */
+.monthly-query {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 var(--r) var(--r) 0;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
 .monthly-note { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .monthly-list { display: grid; gap: 5px; }
 .monthly-row { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 8px; }

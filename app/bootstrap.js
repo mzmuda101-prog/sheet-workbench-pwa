@@ -114,23 +114,25 @@ if (monthlySummaryEl) {
     const kind = control.dataset.monthlyControl;
     withScroll(() => {
       if (kind === "metric") monthlySummaryState.metric = control.value || "occurrences";
-      else if (kind === "measure") monthlySummaryState.measureCol = parseInt(control.value, 10);
       else if (kind === "months") monthlySummaryState.months = parseInt(control.value, 10);
       else if (kind === "anchor") monthlySummaryState.anchor = control.value === "today" ? "today" : "data";
       else if (kind === "split") monthlySummaryState.split = control.checked;
     });
   });
-  // chipy kolumn dat — multi-wybór (zostaw co najmniej jedną)
+  // chipy multi-wyboru: kolumny dat (min. 1) oraz kolumny miary (min. 1, jeśli już są wybrane)
   monthlySummaryEl.addEventListener("click", (e) => {
-    const chip = e.target.closest("[data-monthly-datecol]");
+    const dateChip = e.target.closest("[data-monthly-datecol]");
+    const measChip = e.target.closest("[data-monthly-measurecol]");
+    const chip = dateChip || measChip;
     if (!chip) return;
     e.stopPropagation();
-    const idx = parseInt(chip.dataset.monthlyDatecol, 10);
-    const cur = Array.isArray(monthlySummaryState.dateCols) ? monthlySummaryState.dateCols.slice() : [];
+    const stateKey = dateChip ? "dateCols" : "measureCols";
+    const idx = parseInt(chip.dataset[dateChip ? "monthlyDatecol" : "monthlyMeasurecol"], 10);
+    const cur = Array.isArray(monthlySummaryState[stateKey]) ? monthlySummaryState[stateKey].slice() : [];
     const pos = cur.indexOf(idx);
-    if (pos >= 0) { if (cur.length > 1) cur.splice(pos, 1); }
+    if (pos >= 0) { if (cur.length > 1) cur.splice(pos, 1); } // zostaw co najmniej jedną
     else cur.push(idx);
-    withScroll(() => { monthlySummaryState.dateCols = cur; });
+    withScroll(() => { monthlySummaryState[stateKey] = cur; });
   });
 }
 
