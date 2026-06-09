@@ -3314,7 +3314,7 @@ function renderInsights() {
 // dateCols: indeksy kolumn dat do grupowania po miesiącu (multi),
 // measureCols: indeksy kolumn miary (multi — parowane pozycyjnie z dateCols per cykl),
 // metric: occurrences|rows|sum|avg|min|max, months: okno, anchor: 'data'|'today', split: rozbicie.
-let monthlySummaryState = { dateCols: null, metric: "occurrences", measureCols: null, months: 12, anchor: "data", split: true };
+let monthlySummaryState = { dateCols: null, metric: "occurrences", measureCols: null, months: 12, anchor: "data", split: true, gap: true };
 
 const MONTH_ABBR = {
   pl: ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"],
@@ -3403,9 +3403,10 @@ function renderMonthlySummary() {
   const selectedSet = new Set(selectedCols);
   monthlySummaryState.dateCols = selectedCols.slice(); // zapamiętaj efektywny wybór (do chipów)
 
-  // Kandydaci na miarę: kolumny LICZBOWE/DURACJA oraz DATOWE (poza wybranymi do grupowania).
+  // Kandydaci na miarę: kolumny LICZBOWE/DURACJA oraz DATOWE. Daty można wskazać także te,
+  // po których grupujemy — bo z 2+ kolumn z datą liczymy ODSTĘP (np. od→do = czas trzymania).
   const allDateIdx = new Set(dateCols.map((p) => p.idx));
-  const measureCandidates = profiles.filter((p) => !selectedSet.has(p.idx) && p.nonEmptyCount >= 2 && (
+  const measureCandidates = profiles.filter((p) => p.nonEmptyCount >= 2 && (
     (p.numericCount + p.durationCount) / p.nonEmptyCount >= 0.6 || allDateIdx.has(p.idx)
   ));
   const aggMetric = (m) => m === "sum" || m === "avg" || m === "min" || m === "max";
@@ -3442,14 +3443,18 @@ function renderMonthlySummary() {
   }
   selectedMeasures.sort((a, b) => a - b);
   monthlySummaryState.measureCols = selectedMeasures.slice(); // zapamiętaj (do chipów)
-  // Typ miary wg pierwszej wybranej (zakładamy jednorodne cykle, np. same Długość*):
-  // 'date' → wynik jako data; 'duration' → „Xm Yd"; 'number' → liczba.
+  // Typ miary wg pierwszej wybranej: 'date' → wynik jako data; 'duration' → „Xm Yd"; 'number' → liczba.
   const measureType = selectedMeasures.length ? typeOfMeasure(selectedMeasures[0]) : null;
+  // ODSTĘP dat: gdy wybrane 2+ kolumny z DATĄ, MOŻNA policzyć span między nimi (czas między datami).
+  // Sterowane checkboxem (domyślnie włączony); wyłączony → daty traktujemy jak zwykłą miarę (avg/min/maks dat).
+  const canGap = measureType === "date" && selectedMeasures.length >= 2;
+  const measureIsGap = canGap && monthlySummaryState.gap !== false;
+  const effectiveType = measureIsGap ? "duration" : measureType; // typ do formatowania/skalowania wyniku
 
-  // Dozwolone miary: zawsze liczniki; przy mierze — śr./min/maks; suma tylko dla liczb/duracji (nie dat).
+  // Dozwolone miary: zawsze liczniki; przy mierze — śr./min/maks; suma dla liczb/duracji/odstępu (nie dla pojedynczej daty).
   const allowedMetrics = ["occurrences", "rows"];
   if (measureCandidates.length) {
-    if (measureType !== "date") allowedMetrics.push("sum");
+    if (effectiveType !== "date") allowedMetrics.push("sum");
     allowedMetrics.push("avg", "min", "max");
   }
   let metric = monthlySummaryState.metric || "occurrences";
@@ -3460,7 +3465,7 @@ function renderMonthlySummary() {
   const anchor = monthlySummaryState.anchor === "today" ? "today" : "data";
   const canSplit = selectedCols.length > 1;
   const split = canSplit && monthlySummaryState.split !== false;
-  const rangeScale = measureType === "date" && levelMetric(metric); // daty: skaluj słupki do zakresu, nie od zera
+  const rangeScale = effectiveType === "date" && levelMetric(metric); // daty: skaluj słupki do zakresu, nie od zera
 
   // Wartość miary z DANEJ kolumny (typ wg measureType). Data → ms; duracja → dni; liczba → liczba.
   const measureValueOfCol = (row, colIdx) => {
@@ -3469,6 +3474,17 @@ function renderMonthlySummary() {
     if (measureType === "date") { const d = parseDateFlexible(raw); return (d instanceof Date && !isNaN(d)) ? d.getTime() : null; }
     if (measureType === "duration") return parseDurationDaysFlexible(raw);
     return parseCellNumber(row.values ? row.values[colIdx] : null, getDisplayValue(row, colIdx));
+  };
+  // Odstęp dat: span (max − min) wybranych kolumn z datą w wierszu, w dniach (→ duracja „Xm Yd").
+  const DAY_MS = 86400000;
+  const gapValueOf = (row) => {
+    const ms = [];
+    selectedMeasures.forEach((ci) => {
+      const d = parseDateFlexible((row.values ? row.values[ci] : null) ?? getDisplayValue(row, ci));
+      if (d instanceof Date && !isNaN(d)) ms.push(d.getTime());
+    });
+    if (ms.length < 2) return null;
+    return (Math.max(...ms) - Math.min(...ms)) / DAY_MS;
   };
   // Parowanie pozycyjne: cykl k (k-ta wybrana data) ↔ k-ta wybrana miara. Jedna miara → dla
   // wszystkich cykli; za mało miar → ostatnia powtórzona; brak miary/licznik → null.
@@ -3499,10 +3515,11 @@ function renderMonthlySummary() {
   model.rows.forEach((row, ri) => {
     if (row && row.isSubheader) return;
     const rowId = (typeof row.rowIndex0 === "number") ? row.rowIndex0 : ri;
+    const gap = measureIsGap ? gapValueOf(row) : null; // odstęp liczony raz na wiersz
     selectedCols.forEach((ci, k) => {
       const d = parseDateFlexible((row.values ? row.values[ci] : null) ?? getDisplayValue(row, ci));
       if (!(d instanceof Date) || isNaN(d)) return;
-      const mv = measureValueOfCol(row, measureForPosition(k)); // miara sparowana z tym cyklem
+      const mv = measureIsGap ? gap : measureValueOfCol(row, measureForPosition(k)); // odstęp lub miara cyklu
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       let b = buckets.get(key);
       if (!b) { b = newAgg(); b.byCol = {}; buckets.set(key, b); }
@@ -3579,10 +3596,11 @@ function renderMonthlySummary() {
     });
     return wrap;
   };
-  const fieldWrap = (labelText, cls, child) => {
+  const fieldWrap = (labelText, cls, child, hint) => {
     const w = document.createElement("div");
     w.className = "field" + (cls ? " " + cls : "");
     w.textContent = labelText;
+    if (hint) { w.setAttribute("data-hint", hint); w.setAttribute("data-hint-touch", "on"); w.setAttribute("data-hint-tap", ""); }
     w.appendChild(child);
     return w;
   };
@@ -3600,7 +3618,19 @@ function renderMonthlySummary() {
     allowedMetrics.map((m) => ({ value: m, text: metricLabels[m] }))));
   if (aggMetric(metric) && measureCandidates.length) {
     controls.appendChild(fieldWrap(t("monthlyMeasureOf"), "monthly-measure-field",
-      mkChips("monthlyMeasurecol", measureCandidates, new Set(selectedMeasures), true)));
+      mkChips("monthlyMeasurecol", measureCandidates, new Set(selectedMeasures), true), t("monthlyMeasureHint")));
+    // Wykryto 2+ kolumny z datą → checkbox włączający liczenie ODSTĘPU między nimi.
+    if (canGap) {
+      const gapLabel = document.createElement("label");
+      gapLabel.className = "field checkbox monthly-gap-field";
+      const gcb = document.createElement("input");
+      gcb.type = "checkbox";
+      gcb.dataset.monthlyControl = "gap";
+      gcb.checked = measureIsGap;
+      gapLabel.appendChild(gcb);
+      gapLabel.appendChild(document.createTextNode(" " + t("monthlyGapToggle")));
+      controls.appendChild(gapLabel);
+    }
   }
   controls.appendChild(fieldWrap(t("monthlyDateGroup"), "monthly-cols-field",
     mkChips("monthlyDatecol", dateCols, selectedSet, false)));
@@ -3635,7 +3665,7 @@ function renderMonthlySummary() {
   let whatPhrase = readWhat;
   if (aggMetric(metric) && selectedMeasures.length) {
     const names = selectedMeasures.map((i) => { const p = measureCandidates.find((x) => x.idx === i); return p ? p.header : String(i); }).join(", ");
-    whatPhrase += " " + t("monthlyReadOf", { col: names });
+    whatPhrase += " " + t(measureIsGap ? "monthlyReadGap" : "monthlyReadOf", { col: names });
   }
   const dateNames = selectedCols.map((ci) => { const p = dateCols.find((x) => x.idx === ci); return p ? p.header : String(ci); }).join(", ");
   const query = document.createElement("div");
@@ -3709,10 +3739,10 @@ function renderMonthlySummary() {
 
     const val = document.createElement("div");
     val.className = "monthly-value";
-    val.textContent = r.has ? formatMonthlyValue(r.val, metric, measureType) : "0";
+    val.textContent = r.has ? formatMonthlyValue(r.val, metric, effectiveType) : "0";
     // Tooltip (cursor-hint): dokładny wynik per kolumna — także dla miar nie-addytywnych.
     if (selectedCols.length > 1 && r.has) {
-      const parts = colData.filter((c) => c.has).map((c) => `${c.header}: ${formatMonthlyValue(c.v, metric, measureType)}`);
+      const parts = colData.filter((c) => c.has).map((c) => `${c.header}: ${formatMonthlyValue(c.v, metric, effectiveType)}`);
       if (parts.length) {
         const hint = parts.join("  ·  ");
         val.classList.add("monthly-value-hint");

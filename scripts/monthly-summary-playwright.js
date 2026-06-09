@@ -119,6 +119,26 @@ async function run() {
     ok("pairing avg lut=2m (Długość2=60d, nie 30)", v["lut 2026"] === "2m", v["lut 2026"]);
     ok("pairing avg mar=10d (Długość2)", v["mar 2026"] === "10d", v["mar 2026"]);
 
+    // I) ODSTĘP dat: miara = 2 kolumny z datą (od, do) → span per wiersz, średnia per miesiąc.
+    //    Wraca do pierwszego modelu (od/do/Długość/Kwota). Grupuj po od.
+    currentDisplayModel = model;
+    render({ dateCols: [0], metric: "avg", measureCols: [0, 1] }); // od + do = odstęp
+    v = valuesByMonth();
+    // sty: gap(row0)=36d (10sty→15lut), gap(row1)=40d (20sty→1mar) → śr=38d="1m 8d"
+    ok("gap avg sty=1m 8d ((36+40)/2)", v["sty 2026"] === "1m 8d", v["sty 2026"]);
+    ok("gap avg lut=20d (5lut→25lut)", v["lut 2026"] === "20d", v["lut 2026"]);
+    const gapMetricOpts = [...el.querySelectorAll('select[data-monthly-control="metric"] option')].map((o) => o.value);
+    ok("gap: 'suma' dozwolona (duracja, nie data)", gapMetricOpts.includes("sum"), gapMetricOpts.join(","));
+    ok("gap: readback mówi o odstępie", (el.querySelector(".monthly-query")?.textContent || "").includes("odstęp"), el.querySelector(".monthly-query")?.textContent);
+    ok("gap: checkbox się pojawia", !!el.querySelector('input[data-monthly-control="gap"]'));
+    ok("gap: checkbox domyślnie zaznaczony", !!el.querySelector('input[data-monthly-control="gap"]')?.checked);
+
+    // I2) Wyłączenie odstępu (gap=false) → daty traktowane jak zwykła miara (wynik=data, brak „odstęp")
+    render({ dateCols: [0], metric: "avg", measureCols: [0, 1], gap: false });
+    v = valuesByMonth();
+    ok("gap off: brak 'odstęp' w readbacku", !(el.querySelector(".monthly-query")?.textContent || "").includes("odstęp"), el.querySelector(".monthly-query")?.textContent);
+    ok("gap off: wynik to data (YYYY-MM-DD)", /^\d{4}-\d{2}-\d{2}$/.test(v["lut 2026"] || ""), v["lut 2026"]);
+
     return { checks };
   });
 

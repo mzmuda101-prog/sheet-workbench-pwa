@@ -117,6 +117,7 @@ if (monthlySummaryEl) {
       else if (kind === "months") monthlySummaryState.months = parseInt(control.value, 10);
       else if (kind === "anchor") monthlySummaryState.anchor = control.value === "today" ? "today" : "data";
       else if (kind === "split") monthlySummaryState.split = control.checked;
+      else if (kind === "gap") monthlySummaryState.gap = control.checked;
     });
   });
   // chipy multi-wyboru: kolumny dat (min. 1) oraz kolumny miary (min. 1, jeśli już są wybrane)
