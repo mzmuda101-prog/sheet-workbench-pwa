@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=20260429-01" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
-    <link rel="stylesheet" href="styles/app.css?v=20260608-04" />
+    <link rel="stylesheet" href="styles/app.css?v=20260610-03" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -824,22 +824,22 @@
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>/</kbd> <span data-shortcut-text="theme">Motyw</span></div>
               <div class="shortcut-row"><kbd>Esc</kbd> <span data-shortcut-text="closeModalPanel">Zamknij modal / panel</span></div>
             </div>
-            <div class="shortcut-hint" style="margin-top:12px;">
-              <div data-shortcut-text="searchOperatorsTitle" style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:6px;">Operatory wyszukiwania</div>
-              <div class="shortcut-row"><kbd>||</kbd> <span><strong data-shortcut-text="orStrong">LUB</strong> <span data-shortcut-text="searchOperatorOrRest">— wiersz zawiera przynajmniej jeden z wyrazów</span><br><em data-shortcut-text="searchOperatorOrExample" style="color:var(--ink-3);font-size:11px;">np. „Kowalski || Nowak"</em></span></div>
-              <div class="shortcut-row"><kbd>&&</kbd> <span><strong data-shortcut-text="andStrong">I</strong> <span data-shortcut-text="searchOperatorAndRest">— wiersz zawiera wszystkie wyrazy jednocześnie</span><br><em data-shortcut-text="searchOperatorAndExample" style="color:var(--ink-3);font-size:11px;">np. „Kowalski && Faktura" · ma pierwszeństwo nad ||</em></span></div>
+            <div class="shortcut-hint">
+              <div class="shortcut-section-title" data-shortcut-text="searchOperatorsTitle">Operatory wyszukiwania</div>
+              <div class="shortcut-row"><kbd>||</kbd> <span><strong data-shortcut-text="orStrong">LUB</strong> <span data-shortcut-text="searchOperatorOrRest">— wiersz zawiera przynajmniej jeden z wyrazów</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorOrExample">np. „Kowalski || Nowak"</em></span></div>
+              <div class="shortcut-row"><kbd>&&</kbd> <span><strong data-shortcut-text="andStrong">I</strong> <span data-shortcut-text="searchOperatorAndRest">— wiersz zawiera wszystkie wyrazy jednocześnie</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorAndExample">np. „Kowalski && Faktura" · ma pierwszeństwo nad ||</em></span></div>
               <div class="shortcut-row"><kbd>!</kbd> <span data-shortcut-text="searchOperatorNot">wykluczenie pojedynczego warunku</span></div>
-              <div class="shortcut-row"><kbd>{&nbsp;}</kbd> <em data-shortcut-text="searchOperatorBracket" style="color:var(--ink-3);font-size:11px;">nawiasy {} wymuszają kolejność, np. „{Kowalski || Nowak} && Faktura"</em></div>
+              <div class="shortcut-row"><kbd>{&nbsp;}</kbd> <em class="shortcut-example" data-shortcut-text="searchOperatorBracket">nawiasy {} wymuszają kolejność, np. „{Kowalski || Nowak} && Faktura"</em></div>
               <div class="shortcut-row"><kbd>info:</kbd><span data-shortcut-text="searchOperatorCombined">możesz łączyć operatory, np. „Kowalski && !Anulowana || Nowak"</span></div>
             </div>
-            <div class="shortcut-hint" style="margin-top:12px;">
-              <div data-shortcut-text="aggGroupLegendTitle" style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-3);margin-bottom:6px;">Scalanie grup (agregacje)</div>
+            <div class="shortcut-hint">
+              <div class="shortcut-section-title" data-shortcut-text="aggGroupLegendTitle">Scalanie grup (agregacje)</div>
               <div class="shortcut-row"><kbd>=</kbd> <span data-shortcut-text="aggGroupLegendCore">rdzeń — to zostaje i jest zliczane jako grupa</span></div>
               <div class="shortcut-row"><kbd>*</kbd> <span data-shortcut-text="aggGroupLegendStar">jeden krótki „token" śmiecia (do separatora)</span></div>
               <div class="shortcut-row"><kbd>**</kbd> <span data-shortcut-text="aggGroupLegendStar2">dłuższy śmieć (kilka tokenów)</span></div>
               <div class="shortcut-row"><kbd>#</kbd> <span data-shortcut-text="aggGroupLegendHash">tylko cyfry</span> · <kbd>@</kbd> <span data-shortcut-text="aggGroupLegendAt">tylko litery</span> · <kbd>?</kbd> <span data-shortcut-text="aggGroupLegendQ">jeden znak</span></div>
               <div class="shortcut-row"><kbd>Gr</kbd> <span data-shortcut-text="aggGroupLegendLiteral">tekst dosłowny (ignoruje wielkość liter)</span></div>
-              <div class="shortcut-row"><kbd>Gr*=</kbd> <em data-shortcut-text="aggGroupLegendExample" style="color:var(--ink-3);font-size:11px;">scala „Gr 1 J. Kowalski" + „J. Kowalski" → jedna grupa. Tryb „Rozmyte" robi to automatycznie.</em></div>
+              <div class="shortcut-row"><kbd>Gr*=</kbd> <em class="shortcut-example" data-shortcut-text="aggGroupLegendExample">scala „Gr 1 J. Kowalski" + „J. Kowalski" → jedna grupa. Tryb „Rozmyte" robi to automatycznie.</em></div>
             </div>
             </div>
           </details>

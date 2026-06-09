@@ -545,7 +545,7 @@ function initIntroSplash() {
     vid.addEventListener("ended", () => {
       clearTimeout(fallback);
       hideSplash();
-    });
+    }, { once: true });
   } else {
     setTimeout(hideSplash, 6000);
   }
