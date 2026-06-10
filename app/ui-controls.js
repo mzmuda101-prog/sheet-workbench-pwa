@@ -1694,6 +1694,9 @@ function openCellEditor(td, options = {}) {
   input.setAttribute("aria-label", t("editCellAria"));
   const initialChar = options.initialChar;
   input.value = initialChar != null ? initialChar : cellEditString(row, colIndex0);
+  // Wartość wyjściowa — do wykrycia, czy user faktycznie coś zmienił.
+  // Start pisaniem (initialChar) traktujemy od razu jako zmianę.
+  const baseValue = initialChar != null ? null : input.value;
   td.classList.add("cell-editing");
   td.appendChild(input);
   activeCellEditor = { td, input };
@@ -1708,6 +1711,18 @@ function openCellEditor(td, options = {}) {
   };
   const commit = (move) => {
     if (finished) return;
+    // Brak zmian (np. samo przejechanie Shift+strzałką przez komórkę) = nie
+    // przepisuj komórki: zachowaj jej formatowanie i nie ustawiaj "dirty".
+    // Po prostu zamknij i ewentualnie przejdź dalej.
+    if (baseValue != null && input.value === baseValue) {
+      close();
+      if (move) {
+        setFocusedCell(rowKey, colIndex0, { scroll: false });
+        moveFocusedCell(move.row || 0, move.col || 0);
+      }
+      updateCellStats();
+      return;
+    }
     const parsed = parseInputValue(input.value);
     if (parsed && parsed.type === "formula") {
       toast(t("formulaEditBlocked"), "warning");
