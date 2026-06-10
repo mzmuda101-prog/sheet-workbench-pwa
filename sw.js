@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260608-04";
+const CACHE_VERSION = "20260610-05";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
 
@@ -6,7 +6,9 @@ const APP_ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
-  "./styles/app.css?v=20260608-04",
+  "./styles/app.css?v=20260610-05",
+  "./assets/fonts/space-grotesk-latin.woff2",
+  "./assets/fonts/space-grotesk-latin-ext.woff2",
   "./lib/xlsx-js-style.bundle.min.js",
   "./lib/jszip.min.js",
   "./app/core.js?v=20260608-04",
@@ -20,12 +22,12 @@ const APP_ASSETS = [
   "./app/edit-tools.js?v=20260608-04",
   "./app/ui-controls.js?v=20260608-04",
   "./app/bootstrap.js?v=20260608-04",
-  "./assets/images/favicon.png?v=20260429-01",
+  "./assets/images/favicon.png?v=20260610-05",
   "./assets/images/apple-touch-icon.png?v=20260429-01",
   "./assets/images/icon-512.png",
-  "./assets/images/logo-mateusz-transparent.png",
-  "./assets/images/logo-mateusz-orange.png",
-  "./assets/images/logo-refresh.png",
+  "./assets/images/logo-mateusz-transparent.webp",
+  "./assets/images/logo-mateusz-orange.webp",
+  "./assets/images/logo-refresh.webp",
   "./assets/media/mateusz-intro.mp4",
 ];
 

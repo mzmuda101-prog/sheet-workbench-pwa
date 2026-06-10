@@ -1,4 +1,20 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap");
+/* Space Grotesk — self-hosted (variable, wagi 300–700; latin + latin-ext dla PL) */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('../assets/fonts/space-grotesk-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url('../assets/fonts/space-grotesk-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 
 /* ===================================================
    DESIGN TOKENS
@@ -11,6 +27,7 @@
   --ink-2: #3a3f38;
   --ink-3: #47A883;
   --muted: #7a8075;
+  --muted-strong: #5e6459;
   --placeholder: #b8bdb3;
 
   --accent: #2f6f5c;
@@ -68,6 +85,7 @@
   --ink-2: #b8c9b3;
   --ink-3: #47A883;
   --muted: #7a9078;
+  --muted-strong: #9aa896;
   --placeholder: #3a4e3a;
 
   --accent: #4db88f;
@@ -167,6 +185,8 @@ body.splashing {
   width: calc(100vw - 32px);
   max-width: 900px;
   max-height: 96vh;
+  aspect-ratio: 16 / 9;
+  height: auto;
   border-radius: 20px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.32);
 }
@@ -1971,7 +1991,7 @@ details.panel[open] > summary {
 
 .drop-or {
   font-size: 11.5px;
-  color: var(--placeholder);
+  color: var(--muted-strong);
   margin: 1px 0;
 }
 
@@ -2385,7 +2405,7 @@ details.panel[open] > summary {
 .status-badge {
   font-size: 11.5px;
   font-weight: 500;
-  color: var(--muted);
+  color: var(--muted-strong);
   padding: 4px 10px;
   background: var(--surface);
   border: 1px solid var(--border);
