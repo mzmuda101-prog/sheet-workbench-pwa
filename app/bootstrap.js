@@ -541,11 +541,11 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     resetFiltersBtn.click();
   }
-  if (meta && e.shiftKey && e.key.toLowerCase() === "w") {
+  if (meta && e.altKey && e.key.toLowerCase() === "w") {
     e.preventDefault();
     resetWidthsBtn.click();
   }
-  if (meta && e.key.toLowerCase() === "k") {
+  if (meta && e.altKey && e.key.toLowerCase() === "k") {
     e.preventDefault();
     lastPickerTriggerEl = filter1PickBtn;
     openColumnPicker("filter1");

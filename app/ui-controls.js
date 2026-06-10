@@ -1734,11 +1734,31 @@ function openCellEditor(td, options = {}) {
   input.addEventListener("keydown", (e) => {
     e.stopPropagation();
     if (e.key === "Enter") {
+      // Enter = zatwierdź i w dół; Shift+Enter = zatwierdź i w górę (jak w Excelu).
       e.preventDefault();
-      commit({ row: 1 });
+      commit({ row: e.shiftKey ? -1 : 1 });
     } else if (e.key === "Tab") {
       e.preventDefault();
       commit({ col: e.shiftKey ? -1 : 1 });
+    } else if (
+      e.shiftKey &&
+      (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight")
+    ) {
+      // Shift+strzałki = zatwierdź i przenieś EDYCJĘ do sąsiedniej komórki.
+      // Same strzałki (bez Shift) zostają domyślnym ruchem kursora w tekście.
+      e.preventDefault();
+      const move =
+        e.key === "ArrowUp" ? { row: -1 } :
+        e.key === "ArrowDown" ? { row: 1 } :
+        e.key === "ArrowLeft" ? { col: -1 } : { col: 1 };
+      commit(move);
+      // Zostań w trybie edycji: otwórz edytor na komórce, do której przeszliśmy.
+      // Dzięki temu kolejne Shift+strzałki dalej przesuwają edycję (zamiast wpadać
+      // w zaznaczanie zakresu w siatce) i zawsze widać, która komórka jest aktywna.
+      if (!activeCellEditor && focusedCellState) {
+        const nextTd = findCellElement(focusedCellState);
+        if (nextTd) openCellEditor(nextTd);
+      }
     } else if (e.key === "Escape") {
       e.preventDefault();
       close();
