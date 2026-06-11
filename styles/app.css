@@ -2711,7 +2711,7 @@ input.cell-editor {
   margin: 0;
   padding: calc(7px * var(--table-zoom)) calc(11px * var(--table-zoom));
   border: 2px solid var(--accent);
-  border-radius: 2px;
+  border-radius: 6px;
   background: var(--surface, #fff);
   color: var(--ink);
   font: inherit;
