@@ -30,6 +30,13 @@ function escapeXmlText(s) {
     .replace(/>/g, "&gt;");
 }
 
+// Usuwa znaki niedozwolone w XML 1.0 (tab/LF/CR zostają). Bez tego string z
+// kontrolnym znakiem (np. wklejka z PDF, albo zdekodowane z pliku _x0007_)
+// wpisany do <t> daje niepoprawny XML i Excel odmawia otwarcia pliku.
+function sanitizeXmlText(s) {
+  return String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "");
+}
+
 // Mapa: nazwa arkusza -> ścieżka w ZIP (xl/worksheets/sheetN.xml).
 async function resolveSheetPaths(zip) {
   const wbFile = zip.file("xl/workbook.xml");
@@ -107,7 +114,7 @@ function applyValueToCell(doc, cEl, payload) {
     const is = doc.createElementNS(SPREADSHEETML_NS, "is");
     const tEl = doc.createElementNS(SPREADSHEETML_NS, "t");
     tEl.setAttribute("xml:space", "preserve");
-    tEl.appendChild(doc.createTextNode(String(payload.v)));
+    tEl.appendChild(doc.createTextNode(sanitizeXmlText(payload.v)));
     is.appendChild(tEl);
     cEl.appendChild(is);
     return;

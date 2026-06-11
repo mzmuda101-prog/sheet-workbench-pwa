@@ -2697,8 +2697,9 @@ tbody td.cell-has-fill:not([style*="background"]) {
 [data-theme="dark"] tbody td.cell-has-fill:not([style*="background"]) {
   background: rgba(77,184,143,.12);
 }
-
+/*#########################################################################################################################*/
 /* [EN] Inline cell editor – input overlays the cell while editing */
+/*#########################################################################################################################*/
 tbody td.cell-editing {
   position: relative;
   overflow: visible;
