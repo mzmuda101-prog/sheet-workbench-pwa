@@ -59,9 +59,10 @@ const I18N = {
     loadingGeneric: "Wczytywanie...",
     statusFileLoaded: "Plik wczytany",
     fileLoaded: "Plik wczytany",
+    guideChooseSheet: "Wybierz arkusz i kliknij „Wczytaj arkusz”",
     sheetLoaded: "Arkusz wczytany",
     filtersApplied: "Zastosowano filtry",
-    filtersReset: "Reset filtrow",
+    filtersReset: "Reset filtrów",
     firstLoadSheet: "Najpierw wczytaj arkusz",
     loadSheetToPickColumns: "Wczytaj arkusz, żeby wybrac kolumny",
     quickSearchColumnsTitleShort: "Kolumny szybkiego szukania",
@@ -81,7 +82,7 @@ const I18N = {
     sortPresetDeleted: "Usunieto preset sortowania",
     defaultSortRestored: "Przywrocono domyslne sortowanie",
     webSaveInfo: "Wersja webowa nie nadpisuje pliku. Uzyj Zapisz jako...",
-    widthsRestored: "Przywrocono automatyczne szerokosci",
+    widthsRestored: "Przywrócono automatyczne szerokości",
     cacheRefresh: "Czyszcze cache i odswiezam aplikacje...",
     refreshingApp: "Odswiezam aplikacje...",
     updateAvailable: "Jest dostepna nowsza wersja aplikacji.",
@@ -200,13 +201,14 @@ const I18N = {
     networkSafety: "Pliki Excel są wczytywane i przetwarzane lokalnie na Twoim urządzeniu.",
     networkOnlineTitle: "Połączenie aktywne. {note}",
     networkOfflineTitle: "Brak połączenia sieciowego. {note}",
-    sidebarCloseAria: "Zamknij panel filtrow",
-    sidebarOpenAria: "Otworz panel filtrow",
+    sidebarCloseAria: "Zamknij panel filtrów",
+    sidebarOpenAria: "Otwórz panel filtrów",
     sidebarHideTitle: "Schowaj filtry",
-    sidebarShowTitle: "Pokaz filtry",
+    sidebarShowTitle: "Pokaż filtry",
     sidebarHandleLabel: "Wysuń",
-    emptyTitle: "Wysuń sidebar-a i wczytaj plik Excel",
-    emptySub: "możesz tam przeciągnąć plik lub wybrać go bezpośrednio z dysku",
+    emptyTitle: "Wczytaj plik Excel, aby zacząć",
+    emptySub: "wybierz plik poniżej albo przeciągnij go do strefy w panelu bocznym",
+    openFileBtn: "Wybierz plik z dysku",
     sampleBtn: "Wypróbuj na przykładowym pliku",
     measureOccurrences: "Liczba rekordów / wystąpień",
     aggregationGroupBy: "Grupuj po",
@@ -497,6 +499,7 @@ const I18N = {
     loadingGeneric: "Loading...",
     statusFileLoaded: "File loaded",
     fileLoaded: "File loaded",
+    guideChooseSheet: "Pick a sheet and click “Load sheet”",
     sheetLoaded: "Sheet loaded",
     filtersApplied: "Filters applied",
     filtersReset: "Filters reset",
@@ -643,8 +646,9 @@ const I18N = {
     sidebarHideTitle: "Hide filters",
     sidebarShowTitle: "Show filters",
     sidebarHandleLabel: "Open",
-    emptyTitle: "Slide out the sidebar and load an Excel file",
-    emptySub: "you can drag a file there or pick it directly from disk",
+    emptyTitle: "Load an Excel file to get started",
+    emptySub: "choose a file below or drag it into the drop zone in the sidebar",
+    openFileBtn: "Choose a file from disk",
     sampleBtn: "Try a sample file",
     measureOccurrences: "Record / occurrence count",
     aggregationGroupBy: "Group by",
@@ -996,8 +1000,8 @@ const STATIC_TRANSLATIONS = {
     dateColumns: "Kolumny dat",
     actions: "Akcje",
     filter: "Filtruj",
-    resetFilters: "Reset filtrow",
-    resetWidths: "Reset szerokosci",
+    resetFilters: "Reset filtrów",
+    resetWidths: "Reset szerokości",
     save: "Zapisz",
     saveAs: "Zapisz jako...",
     saveInPlace: "Zapisz (w miejscu lub jako)",
@@ -1020,20 +1024,20 @@ const STATIC_TRANSLATIONS = {
     flags: "Flagi",
     kpiSummary: "KPI / Podsumowanie",
     kpiHint: "Pomocnicze wyciąganie najważniejszych liczb i wskaźników z górnej części arkusza.",
-    sheetLayout: "Uklad arkusza",
-    sheetLayoutHint: "Jedno miejsce na orientacje w arkuszu: sekcje, kolumny, powtarzalne bloki i szybkie sygnaly o ukladzie danych.",
+    sheetLayout: "Układ arkusza",
+    sheetLayoutHint: "Jedno miejsce na orientację w arkuszu: sekcje, kolumny, powtarzalne bloki i szybkie sygnały o układzie danych.",
     mapAndColumns: "Mapa arkusza i kolumn",
-    mapHint: "Tu masz jednoczesnie szybkie skoki po sekcjach oraz profil kolumn, zeby latwiej rozumiec uklad arkusza bez przeskakiwania miedzy dwoma podobnymi blokami.",
+    mapHint: "Tu masz jednocześnie szybkie skoki po sekcjach oraz profil kolumn, żeby łatwiej rozumieć układ arkusza bez przeskakiwania między dwoma podobnymi blokami.",
     sectionsJumps: "Sekcje i skoki",
-    columnsSignals: "Kolumny i sygnaly",
+    columnsSignals: "Kolumny i sygnały",
     blockDetector: "Wykrywacz bloków",
     blockHint: "Pomocniczy widok dla szerokich arkuszy z cyklami, turami albo powtarzalnymi sekcjami kolumn.",
-    durationAnalysis: "Analiza czasu / osob",
-    durationHint: "Lokalna analiza dla wykrytych blokow: laczenie tych samych osob lub innych wartosci w jednej kolumnie i liczenie srednich czasow na podstawie dat lub dlugosci.",
+    durationAnalysis: "Analiza czasu / osób",
+    durationHint: "Lokalna analiza dla wykrytych bloków: łączenie tych samych osób lub innych wartości w jednej kolumnie i liczenie średnich czasów na podstawie dat lub długości.",
     aggregations: "Agregacje",
     monthlySummaryTitle: "Podsumowanie miesięczne",
     monthlySummaryHint: "Rozkład wierszy na 12 ostatnich miesięcy wg kolumny z datą. Wybierz datę i miarę (liczba / suma / średnia). Liczone na aktualnym widoku.",
-    aggregationsHint: "Lekki kreator typu grupuj / mierz / agreguj. Dziala na aktualnym widoku albo calym arkuszu, z opcja pracy na Wide-to-Long tam, gdzie ma to sens.",
+    aggregationsHint: "Lekki kreator typu grupuj / mierz / agreguj. Działa na aktualnym widoku albo całym arkuszu, z opcją pracy na Wide-to-Long tam, gdzie ma to sens.",
     formulaHint: "Pogrupowany przegląd formuł z aktualnego arkusza: wyszukiwanie, szybkie flagi, skrócone podglądy i skok do komórki.",
     searchFormula: "Szukaj formuły",
     formulaPlaceholder: "np. XLOOKUP, SUMIFS, A1, kwota",
@@ -1107,7 +1111,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchColumnsTitle: "Wybierz kolumny dla szybkiego szukania",
     resetSort: "Domyślne sortowanie",
     exportCsv: "Eksport CSV",
-    sidebarScrimAria: "Zamknij panel filtrow",
+    sidebarScrimAria: "Zamknij panel filtrów",
     chooseColumns: "Wybierz kolumny",
     close: "Zamknij",
     searchColumns: "Szukaj kolumn",
@@ -1620,15 +1624,13 @@ function applyStaticTranslations() {
   setAttr("#introVideo", "aria-label", copy.introAria);
   setText(".hero-sub", copy.heroSub);
   setAttr("#panelToggle", "aria-label", copy.panelToggleAria);
-  setAttr("#link1", "title", copy.link1Title);
+  /* Podpowiedzi przez data-hint (silnik cursor-hint), nie natywne title */
+  setAttr("#link1", "data-hint", copy.link1Title);
   setAttr("#link1", "aria-label", copy.link1Title);
-  setAttr("#link2", "title", copy.link2Title);
+  setAttr("#link2", "data-hint", copy.link2Title);
   setAttr("#link2", "aria-label", copy.link2Title);
-  setAttr("#brandRefresh", "title", t("brandRefreshTitle"));
   setAttr("#brandRefresh", "aria-label", t("brandRefreshAria"));
   setText("#appUpdateBtn", t("updateNow"));
-  setAttr("#appUpdateBtn", "title", t("updateReady"));
-  setAttr("#themeToggle", "title", t("themeToggleTitle"));
   setAttr("#themeToggle", "aria-label", t("themeToggleAria"));
 
   setText("#group-data-title", copy.groupData);
@@ -1649,6 +1651,7 @@ function applyStaticTranslations() {
   setFieldLabel("maxRows", copy.rowsLimit);
   setButtonLabel("#loadBtn", copy.loadSheet);
   setButtonLabel("#loadSampleBtn", t("sampleBtn"));
+  setButtonLabel("#emptyOpenBtn", t("openFileBtn"));
   setText("#panel-text-filters .panel-title", copy.textFilters);
   setText("#filter1BlockTitle", copy.filterBlock1);
   setFieldLabel("searchQuery", copy.search);
@@ -1775,7 +1778,7 @@ function applyStaticTranslations() {
   setAttr("#quickSearchPopupMode", "aria-label", copy.quickSearchPopupModeAria);
   setAttr("#quickSearchAction", "aria-label", copy.quickSearchAria);
   setAttr("#quickSearchPopupAction", "aria-label", copy.quickSearchPopupModeAria);
-  setAttr("#quickSearchColumnsBtn", "title", copy.quickSearchColumnsTitle);
+  setAttr("#quickSearchColumnsBtn", "data-hint", copy.quickSearchColumnsTitle);
   setAttr("#closePicker", "aria-label", copy.close);
 
   setText("#columnPickerTitle", copy.chooseColumns);
@@ -1792,7 +1795,6 @@ function applyStaticTranslations() {
   setText("#loadingText", t("loadingGeneric"));
   setText("#scrollTopFab .fab-label", copy.scrollTop);
   setAttr("#scrollTopFab", "aria-label", copy.scrollTopAria);
-  setAttr("#scrollTopFab", "title", copy.scrollTopAria);
 
   if (langButtons.length) {
     langButtons.forEach((button) => {

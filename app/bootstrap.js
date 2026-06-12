@@ -463,6 +463,16 @@ dropZone.addEventListener("keydown", (e) => {
   }
 });
 
+// Przycisk „Wybierz plik z dysku" w empty state — ten sam flow co drop-zone,
+// żeby plik dało się wczytać bez wysuwania sidebara.
+const emptyOpenBtn = document.getElementById("emptyOpenBtn");
+if (emptyOpenBtn) {
+  emptyOpenBtn.addEventListener("click", () => {
+    if (canOpenFSA) openWorkbookViaFsa();
+    else fileInput.click();
+  });
+}
+
 sheetSelect.addEventListener("change", () => {
   if (!workbook) return;
   setStatus("Wybrano arkusz");
@@ -657,7 +667,7 @@ if ("serviceWorker" in navigator) {
     if (!appUpdateBtn) return;
     appUpdateBtn.classList.remove("hidden");
     appUpdateBtn.textContent = t("updateNow");
-    appUpdateBtn.setAttribute("title", t("updateReady"));
+    // podpowiedź daje statyczny data-hint-pl/en w HTML (cursor-hint), nie natywny title
     toast(t("updateAvailable"), "info");
   };
 

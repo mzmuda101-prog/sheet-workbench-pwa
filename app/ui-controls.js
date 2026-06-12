@@ -612,8 +612,9 @@ function updateNetworkBadge() {
   networkBadgeEl.textContent = isOnline ? t("online") : t("offline");
   networkBadgeEl.classList.toggle("offline", !isOnline);
   const safetyNote = t("networkSafety");
+  // cursor-hint zamiast natywnego title; odświeżane przy zmianie języka i online/offline
   networkBadgeEl.setAttribute(
-    "title",
+    "data-hint",
     isOnline ? t("networkOnlineTitle", { note: safetyNote }) : t("networkOfflineTitle", { note: safetyNote })
   );
 }
@@ -1042,8 +1043,36 @@ async function saveWorkbookAs() {
 }
 
 // Otwarcie pliku przez File System Access API — daje uchwyt do zapisu w miejscu.
+// Po wczytaniu pliku przy ZAMKNIĘTYM sidebarze (np. przyciskiem w pustym stanie)
+// prowadzi użytkownika do następnego kroku: otwiera sidebar z panelem „Plik i arkusz",
+// pulsuje na wyborze arkusza i przycisku „Wczytaj arkusz" oraz pokazuje toast.
+// Sterowanie wyglądem pulsu: klasa .guide-attention w CSS.
+let guideAttentionTimer = null;
+function guideToSheetConfig() {
+  if (!workbook) return; // plik się nie wczytał — nie ma do czego prowadzić
+  setSidebarOpen(true);
+  const filePanel = document.getElementById("panel-file-sheet");
+  if (filePanel) filePanel.open = true;
+  const targets = [sheetSelect, loadBtn].filter(Boolean);
+  if (guideAttentionTimer) window.clearTimeout(guideAttentionTimer);
+  requestAnimationFrame(() => {
+    if (filePanel) filePanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    targets.forEach((el) => {
+      el.classList.remove("guide-attention");
+      void el.offsetWidth; // restart animacji przy ponownym wczytaniu pliku
+      el.classList.add("guide-attention");
+    });
+  });
+  guideAttentionTimer = window.setTimeout(() => {
+    targets.forEach((el) => el.classList.remove("guide-attention"));
+    guideAttentionTimer = null;
+  }, 4600);
+  toast(t("guideChooseSheet"), "info");
+}
+
 async function openWorkbookViaFsa() {
   if (!canOpenFSA) return;
+  const sidebarWasClosed = !isSidebarOpen();
   try {
     const [handle] = await window.showOpenFilePicker({
       types: FSA_FILE_TYPES,
@@ -1052,6 +1081,7 @@ async function openWorkbookViaFsa() {
     if (!handle) return;
     const file = await handle.getFile();
     await handleFile(file, handle);
+    if (sidebarWasClosed) guideToSheetConfig();
   } catch (err) {
     if (err && err.name === "AbortError") return;
     // Picker FSA mimo wszystko zawiódł (np. nierozpoznany webview/iframe) —
@@ -1061,9 +1091,11 @@ async function openWorkbookViaFsa() {
   }
 }
 
-fileInput.addEventListener("change", (e) => {
+fileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
-  handleFile(file);
+  const sidebarWasClosed = !isSidebarOpen();
+  await handleFile(file);
+  if (sidebarWasClosed) guideToSheetConfig();
 });
 
 if (loadSampleBtn) {
@@ -1100,6 +1132,9 @@ if (removeFilter2Btn) {
 
 loadBtn.addEventListener("click", () => {
   if (!isXlsxAvailable(true)) return;
+  // Użytkownik dotarł do przycisku — zgaś prowadzący puls (guideToSheetConfig)
+  if (guideAttentionTimer) { window.clearTimeout(guideAttentionTimer); guideAttentionTimer = null; }
+  [sheetSelect, loadBtn].forEach((el) => el && el.classList.remove("guide-attention"));
   if (!workbook) {
     toast(t("chooseFileFirst"), "warning");
     log("Najpierw wybierz plik.", "warn");
@@ -1304,7 +1339,7 @@ function updateToolbarToggleLabel() {
   const collapsed = !!tablePanelEl && tablePanelEl.classList.contains("toolbar-collapsed");
   const label = collapsed ? t("toolbarExpand") : t("toolbarCollapse");
   toolbarToggleEl.setAttribute("aria-label", label);
-  toolbarToggleEl.setAttribute("title", label);
+  toolbarToggleEl.setAttribute("data-hint", label); // cursor-hint zamiast natywnego title
   toolbarToggleEl.setAttribute("aria-expanded", String(!collapsed));
 }
 
@@ -1913,7 +1948,9 @@ function syncSidebarHandle() {
     panelHandle.textContent = "";
     panelHandle.setAttribute("aria-expanded", isSidebarOpen() ? "true" : "false");
     panelHandle.setAttribute("aria-label", isSidebarOpen() ? t("sidebarCloseAria") : t("sidebarOpenAria"));
-    panelHandle.setAttribute("title", isSidebarOpen() ? t("sidebarHideTitle") : t("sidebarShowTitle"));
+    // cursor-hint zamiast natywnego title — tekst zależny od stanu (schowaj/pokaż)
+    panelHandle.setAttribute("data-hint-pl", isSidebarOpen() ? "Schowaj sidebar" : "Wysuń sidebar");
+    panelHandle.setAttribute("data-hint-en", isSidebarOpen() ? "Hide the sidebar" : "Open the sidebar");
     panelHandle.style.setProperty("--handle-open-label", `"${t("sidebarHandleLabel")}"`);
 
     if (isSidebarOpen() && sidebarEl) {

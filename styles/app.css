@@ -25,10 +25,12 @@
   --panel: rgba(255, 255, 255, 0.62);
   --ink: #1a1d19;
   --ink-2: #3a3f38;
-  --ink-3: #47A883;
+  --ink-3: #2e7559; /* zielone etykiety (tytuły grup itp.) — ciemniej niż w dark mode, dla kontrastu na jasnym tle */
   --muted: #7a8075;
   --muted-strong: #5e6459;
   --placeholder: #b8bdb3;
+
+  --table-num: var(--muted-strong); /* numery wierszy i liter kolumn w tabeli */
 
   --accent: #2f6f5c;
   --accent-h: #245849;
@@ -49,8 +51,20 @@
   --border-subtle: rgba(200, 196, 182, 0.35);
   --border-focus: #2f6f5c;
 
-  --glass: blur(16px) saturate(1.4);
+  /* Receptura „liquid glass" — JEDNO źródło dla paneli, hero, modali i toastów.
+     Zmieniasz tutaj → zmienia się wszędzie. */
+  --glass: blur(26px) saturate(1.95) brightness(1.02);
   --glass-border: rgba(255, 255, 255, 0.55);
+  --glass-sheen: linear-gradient(180deg, color-mix(in srgb, white 16%, transparent) 0%, transparent 40%);
+  --glass-bg: color-mix(in srgb, var(--panel) 74%, transparent);
+  /* Wersja mniej przezroczysta — elementy pływające nad treścią (toast, loading) */
+  --glass-bg-strong: color-mix(in srgb, var(--panel) 88%, transparent);
+  --glass-shadow:
+    0 1px 1px rgba(18, 30, 23, 0.04),
+    0 12px 32px -16px rgba(18, 30, 23, 0.30),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 -12px 26px -20px rgba(18, 30, 23, 0.14);
 
   --field: rgba(255, 255, 255, 0.5);
 
@@ -88,6 +102,8 @@
   --muted-strong: #9aa896;
   --placeholder: #3a4e3a;
 
+  --table-num: var(--muted-strong);
+
   --accent: #4db88f;
   --accent-h: #5ec89a;
   --accent-light: rgba(25, 48, 40, 0.85);
@@ -97,8 +113,17 @@
   --border: rgba(60, 80, 65, 0.55);
   --border-subtle: rgba(45, 62, 50, 0.45);
 
-  --glass: blur(20px) saturate(1.6);
+  --glass: blur(28px) saturate(1.75) brightness(1.04);
   --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%);
+  --glass-bg: color-mix(in srgb, var(--panel) 78%, transparent);
+  --glass-bg-strong: color-mix(in srgb, var(--panel) 90%, transparent);
+  --glass-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.25),
+    0 16px 36px -16px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 -12px 26px -20px rgba(0, 0, 0, 0.32);
 
   --field: rgba(255, 255, 255, 0.06);
 
@@ -139,13 +164,15 @@ body {
   transition: background var(--t-slow), color var(--t);
 }
 
-/* [data-theme="dark"] body {
+/* Dark mode: subtelna ambientowa poświata — bez niej glass „nie ma czego rozmywać"
+   i panele tracą głębię. */
+[data-theme="dark"] body {
   background:
     radial-gradient(ellipse 70% 50% at 10% -5%,  rgba(83, 201, 156, 0.1) 0%, transparent 55%),
     radial-gradient(ellipse 55% 40% at 88% 8%,   rgba(55, 132, 96, 0.18) 0%, transparent 50%),
     radial-gradient(ellipse 60% 70% at 50% 110%,  rgba(20,50,35,.25) 0%, transparent 55%),
     var(--bg);
-} */
+}
 
 body.splashing {
   overflow: hidden !important;
@@ -207,11 +234,11 @@ body.splashing {
   justify-content: space-between;
   padding: 14px 20px;
   border-radius: var(--r-xl);
-  background: var(--panel);
+  background: var(--glass-sheen), var(--glass-bg);
   -webkit-backdrop-filter: var(--glass);
   backdrop-filter: var(--glass);
   border: 1px solid var(--glass-border);
-  box-shadow: var(--shadow) inset 0 1px 0 rgba(255,255,255,0.5);;
+  box-shadow: var(--glass-shadow);
   margin-bottom: 16px;
   gap: 12px;
   flex-wrap: wrap;
@@ -510,6 +537,18 @@ body.splashing {
   55%      { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); }
 }
 
+/* (1b) Prowadzenie do następnego kroku — po wczytaniu pliku przy zamkniętym
+   sidebarze JS otwiera panel „Plik i arkusz" i nakłada tę klasę na wybór
+   arkusza oraz przycisk „Wczytaj arkusz". Puls w tym samym języku co
+   updatePulse; klasę zdejmuje JS (timeout lub kliknięcie przycisku). */
+.guide-attention {
+  animation: guideAttention 1.4s ease-in-out 3;
+}
+@keyframes guideAttention {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 46%, transparent); }
+  55%      { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+
 /* (2) Przełączniki trybu w toolbarze — w stanie aktywnym wypełniają się kolorem
    akcentu z „wjeżdżającą" kropką stanu. Zaokrąglenie rogów pozostaje STAŁE
    (bez morfowania prostokąt→kapsuła) — morph kształtu zarezerwowany dla FAB. */
@@ -716,6 +755,14 @@ body.splashing {
   .toolbar-toggle-chevron,
   .table-actions,
   .quick-search { transition: none; }
+  .guide-attention { animation: none; }
+  /* Animacje dekoracyjne overlay'ów — spinner zostaje (informuje o trwającym wczytywaniu) */
+  .modal,
+  .modal-content,
+  .toast,
+  .quick-search-popup,
+  .cell-stats-bar,
+  .status-badge.unsaved::before { animation: none; }
 }
 
 /* ===================================================
@@ -1034,7 +1081,7 @@ body.splashing {
 }
 
 .sidebar-handle::after {
-  content: var(--handle-open-label, "Wysun");
+  content: var(--handle-open-label, "Wysuń");
   position: absolute;
   top: calc(50% + 8px);
   left: 50%;
@@ -1066,36 +1113,16 @@ body.splashing {
 .panel {
   /* Apple „liquid glass": półprzezroczyste tło + górny „sheen", mocny blur/saturate
      z lekkim podbiciem jasności, warstwowy miękki cień, jasna krawędź specularna
-     u góry, delikatny pełnokrawędziowy pierścień światła i subtelna głębia u dołu. */
-  background:
-    linear-gradient(180deg, color-mix(in srgb, white 16%, transparent) 0%, transparent 40%),
-    color-mix(in srgb, var(--panel) 74%, transparent);
-  -webkit-backdrop-filter: blur(26px) saturate(1.95) brightness(1.02);
-  backdrop-filter: blur(26px) saturate(1.95) brightness(1.02);
+     u góry, delikatny pełnokrawędziowy pierścień światła i subtelna głębia u dołu.
+     Cała receptura siedzi w tokenach --glass* (sekcja DESIGN TOKENS). */
+  background: var(--glass-sheen), var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
   padding: 14px;
-  box-shadow:
-    0 1px 1px rgba(18, 30, 23, 0.04),
-    0 12px 32px -16px rgba(18, 30, 23, 0.30),
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    inset 0 -12px 26px -20px rgba(18, 30, 23, 0.14);
+  box-shadow: var(--glass-shadow);
   min-width: 0;
-}
-
-[data-theme="dark"] .panel {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%),
-    color-mix(in srgb, var(--panel) 78%, transparent);
-  -webkit-backdrop-filter: blur(28px) saturate(1.75) brightness(1.04);
-  backdrop-filter: blur(28px) saturate(1.75) brightness(1.04);
-  box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.25),
-    0 16px 36px -16px rgba(0, 0, 0, 0.6),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 -12px 26px -20px rgba(0, 0, 0, 0.32);
 }
 
 .panel.compact { padding: 12px 14px; }
@@ -2452,9 +2479,8 @@ details.panel[open] > summary {
 }
 
 .empty-icon {
-  font-size: 42px;
-  line-height: 1;
-  opacity: .65;
+  line-height: 0;
+  color: var(--placeholder);
   margin-bottom: 4px;
 }
 
@@ -2471,7 +2497,11 @@ details.panel[open] > summary {
   line-height: 1.6;
 }
 
-.empty-sample-btn {
+.empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
   margin-top: 14px;
 }
 
@@ -2588,7 +2618,7 @@ thead .guide-row th {
   text-align: center;
   font-size: calc(11.5px * var(--table-zoom));
   font-weight: 600;
-  color: var(--accent-border);
+  color: var(--table-num);
   cursor: default;
   height: calc(var(--guide-row-height) * var(--table-zoom));
   padding: calc(6px * var(--table-zoom)) calc(10px * var(--table-zoom));
@@ -2628,7 +2658,7 @@ thead .guide-row th {
 .row-head {
   text-align: center;
   font-weight: 600;
-  color: var(--accent-border);
+  color: var(--table-num);
   white-space: nowrap;
   padding: calc(7px * var(--table-zoom)) calc(6px * var(--table-zoom));
   border-right: 1px solid var(--border);
@@ -3155,10 +3185,14 @@ kbd {
 .modal-content {
   width: min(520px, 100%);
   max-height: 82vh;
-  background: var(--panel);
+  /* Liquid glass jak .panel — modal stoi na przyciemnionym scrimie, więc lekka
+     przezroczystość + blur dają głębię bez utraty czytelności. */
+  background: var(--glass-sheen), var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
   border-radius: var(--r-lg);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-xl), var(--glass-shadow);
   display: flex;
   flex-direction: column;
   animation: scaleIn 200ms cubic-bezier(.34,1.56,.64,1);
@@ -3289,7 +3323,7 @@ kbd {
   z-index: 200;
 }
 
-/* Quick search popup (Ctrl/Cmd+Shift+S) */
+/* Quick search popup (Ctrl/Cmd+Shift+F) */
 .quick-search-popup {
   position: fixed;
   inset: 0;
@@ -3303,10 +3337,12 @@ kbd {
 }
 .quick-search-popup.hidden { display: none; }
 .quick-search-popup-box {
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--glass-sheen), var(--glass-bg);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-xl);
+  box-shadow: var(--shadow-xl), var(--glass-shadow);
   padding: 16px;
   min-width: 320px;
   max-width: 90vw;
@@ -3383,8 +3419,10 @@ kbd {
   flex-direction: column;
   align-items: center;
   gap: 14px;
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--glass-sheen), var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--glass-border);
   border-radius: var(--r-xl);
   padding: 30px 40px;
   box-shadow: var(--shadow-xl);
@@ -3426,8 +3464,11 @@ kbd {
   pointer-events: auto;
   padding: 10px 14px;
   border-radius: var(--r);
-  background: var(--panel);
-  border: 1px solid var(--border);
+  /* Glass „strong" — toast leży wprost na treści, więc mniej przezroczystości */
+  background: var(--glass-sheen), var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--glass-border);
   box-shadow: var(--shadow-lg);
   display: flex;
   align-items: center;
@@ -3674,4 +3715,36 @@ kbd {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* ===================================================
+   GLASS — FALLBACKI I DOSTĘPNOŚĆ
+   Jedna lista elementów ze szkłem; gdy przeglądarka nie
+   umie blura albo użytkownik wyłączył przezroczystość
+   systemowo, dajemy pełne, czytelne tło.
+   =================================================== */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .panel,
+  .hero,
+  .modal-content,
+  .toast,
+  .loading-box,
+  .quick-search-popup-box {
+    background: var(--surface);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .panel,
+  .hero,
+  .modal-content,
+  .toast,
+  .loading-box,
+  .quick-search-popup-box,
+  .cursor-hint-scaler,
+  .cell-tooltip {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }

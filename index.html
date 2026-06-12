@@ -36,7 +36,7 @@
           </div>
         </div>
         <div class="hero-right" id="heroRight">
-          <button class="panel-toggle" id="panelToggle" type="button" aria-label="Zwin/rozwin panel" data-hint data-hint-pl="Pokaż lub ukryj panel narzędzi" data-hint-en="Show or hide the tools panel" data-hint-delay="1.1">
+          <button class="panel-toggle" id="panelToggle" type="button" aria-label="Zwiń/rozwiń panel" data-hint data-hint-pl="Pokaż lub ukryj panel narzędzi" data-hint-en="Show or hide the tools panel" data-hint-delay="1.1">
             Panel
           </button>
           <div class="lang-switch" role="group" aria-label="Przełącznik języka" id="langSwitch">
@@ -46,22 +46,22 @@
           </div>
           <div class="hero-badges">
             <span class="hero-badge pwa-badge" data-hint-pl=" Progressive Web App (PWA) to nowoczesna strona internetowa, która działa i wygląda jak klasyczna aplikacja mobilna lub desktopowa. " data-hint-en="Progressive Web App(PWA) is a modern website that works and looks like a classic mobile or desktop application." data-hint-delay="1" data-hint-touch>PWA</span>
-            <span class="hero-badge network-badge" id="networkBadge" aria-live="polite" data-hint-pl="Połączenie aktywne/nieaktywne. Pliki Excel są wczytywane i przetwarzane lokalnie na Twoim urządzeniu." data-hint-en="online/offline connection. Excel files are loaded and processed locally on your device." data-hint-delay="1.1">Online</span>
+            <span class="hero-badge network-badge" id="networkBadge" aria-live="polite" data-hint data-hint-delay="1.1" data-hint-touch>Online</span>
           </div>
           
-          <a href="https://strona-6.vercel.app" target="_blank" rel="noopener"><button class="logo-badge" id="link1" title="Przejdź do strony Mateusz App | formularz i eksport Excel" aria-label="Przejdź do strony Mateusz App | formularz i eksport Excel">
+          <a href="https://strona-6.vercel.app" target="_blank" rel="noopener"><button class="logo-badge" id="link1" aria-label="Przejdź do strony Mateusz App | formularz i eksport Excel" data-hint="Przejdź do strony Mateusz App | formularz i eksport Excel" data-hint-delay="1.1">
             <img src="assets/images/logo-mateusz-transparent.webp" alt="Logo Mateusz" />
           </button></a>
-          <a href="https://portal-ogloszeniowy.vercel.app" target="_blank" rel="noopener"><button class="logo-badge" id="link2" title="Przejdź do strony Mateusz App | Portal Ogloszeniowy" aria-label="Przejdź do strony Mateusz App | Portal Ogloszeniowy">
+          <a href="https://portal-ogloszeniowy.vercel.app" target="_blank" rel="noopener"><button class="logo-badge" id="link2" aria-label="Przejdź do strony Mateusz App | Portal Ogłoszeniowy" data-hint="Przejdź do strony Mateusz App | Portal Ogłoszeniowy" data-hint-delay="1.1">
             <img src="assets/images/logo-mateusz-orange.webp" alt="Logo Mateusz" />
           </button></a>
-          <button class="logo-badge" id="brandRefresh" title="Odśwież aplikację" aria-label="Odśwież aplikację" data-hint data-hint-pl="Odśwież aplikację i cache" data-hint-en="Refresh the app and cache" data-hint-delay="1.1">
+          <button class="logo-badge" id="brandRefresh" aria-label="Odśwież aplikację" data-hint data-hint-pl="Odśwież aplikację i cache" data-hint-en="Refresh the app and cache" data-hint-delay="1.1">
             <img src="assets/images/logo-refresh.webp" alt="Logo Mateusz" />
           </button>
           <button class="app-update-btn hidden" id="appUpdateBtn" type="button" aria-live="polite" data-hint data-hint-pl="Wgraj nową wersję aplikacji" data-hint-en="Install the new app version" data-hint-delay="1.1">
             Aktualizuj
           </button>
-          <button class="theme-toggle" id="themeToggle" title="Zmień motyw (jasny / ciemny)" aria-label="Zmień motyw" data-hint data-hint-pl="Zmień motyw jasny / ciemny" data-hint-en="Switch light / dark theme" data-hint-delay="1.1"></button>
+          <button class="theme-toggle" id="themeToggle" aria-label="Zmień motyw" data-hint data-hint-pl="Zmień motyw jasny / ciemny" data-hint-en="Switch light / dark theme" data-hint-delay="1.1"></button>
         </div>
       </header>
 
@@ -299,11 +299,11 @@
               <div class="row">
                 <label class="field">
                   Od
-                  <input id="dateFrom" type="text" placeholder="dd-mm-rrrr / yyyy-mm-dd" title="np. 14-03-2025 lub 2025-03-14" />
+                  <input id="dateFrom" type="text" placeholder="dd-mm-rrrr / yyyy-mm-dd" data-hint data-hint-pl="np. 14-03-2025 lub 2025-03-14" data-hint-en="e.g. 14-03-2025 or 2025-03-14" data-hint-delay="1.1" data-hint-touch="on" />
                 </label>
                 <label class="field">
                   Do
-                  <input id="dateTo" type="text" placeholder="dd-mm-rrrr / yyyy-mm-dd" title="np. 14-03-2025 lub 2025-03-14" />
+                  <input id="dateTo" type="text" placeholder="dd-mm-rrrr / yyyy-mm-dd" data-hint data-hint-pl="np. 14-03-2025 lub 2025-03-14" data-hint-en="e.g. 14-03-2025 or 2025-03-14" data-hint-delay="1.1" data-hint-touch="on" />
                 </label>
               </div>
 
@@ -372,7 +372,7 @@
                   <polyline points="1 4 1 10 7 10"></polyline>
                   <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
                 </svg>
-                Reset filtrow
+                Reset filtrów
               </button>
               <button class="btn ghost full" id="resetWidthsBtn" type="button">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -380,7 +380,7 @@
                   <line x1="3" y1="6" x2="21" y2="6"></line>
                   <line x1="3" y1="18" x2="21" y2="18"></line>
                 </svg>
-                Reset szerokosci
+                Reset szerokości
               </button>
               <button class="btn ghost full" id="saveBtn" type="button" disabled aria-disabled="true" data-hint data-hint-pl="Nadpisuje oryginalny plik w miejscu (Ctrl/⌘+S). Na czas testów rób kopię pliku albo używaj „Zapisz jako…”." data-hint-en="Overwrites the original file in place (Ctrl/⌘+S). While testing, keep a backup or use “Save as…”." data-hint-delay="1.1" data-hint-touch="on">Zapisz</button>
               <button class="btn ghost full" id="saveAsBtn" type="button">
@@ -658,24 +658,24 @@
                 <path d="M7 12h10" />
                 <path d="M7 16h6" />
               </svg>
-              <span class="panel-title">Uklad arkusza</span>
+              <span class="panel-title">Układ arkusza</span>
               <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </summary>
             <div class="panel-body">
-              <div class="panel-hint">Jedno miejsce na orientacje w arkuszu: sekcje, kolumny, powtarzalne bloki i szybkie sygnaly o ukladzie danych.</div>
+              <div class="panel-hint">Jedno miejsce na orientację w arkuszu: sekcje, kolumny, powtarzalne bloki i szybkie sygnały o układzie danych.</div>
               <div class="sheet-inspector-summary" id="sheetInspectorSummary"></div>
 
               <div class="insight-subtitle" id="subtitle-map">Mapa arkusza i kolumn</div>
-              <div class="panel-hint">Tu masz jednoczesnie szybkie skoki po sekcjach oraz profil kolumn, zeby latwiej rozumiec uklad arkusza bez przeskakiwania miedzy dwoma podobnymi blokami.</div>
+              <div class="panel-hint">Tu masz jednocześnie szybkie skoki po sekcjach oraz profil kolumn, żeby łatwiej rozumieć układ arkusza bez przeskakiwania między dwoma podobnymi blokami.</div>
               <div class="inspector-map-grid">
                 <div class="inspector-map-section">
                   <div class="insight-mini-title" id="mini-title-sections">Sekcje i skoki</div>
                   <div class="section-nav-list" id="sectionNavigator"></div>
                 </div>
                 <div class="inspector-map-section">
-                  <div class="insight-mini-title" id="mini-title-columns">Kolumny i sygnaly</div>
+                  <div class="insight-mini-title" id="mini-title-columns">Kolumny i sygnały</div>
                   <div class="column-profiler-list" id="columnProfiler"></div>
                 </div>
               </div>
@@ -684,8 +684,8 @@
               <div class="panel-hint">Pomocniczy widok dla szerokich arkuszy z cyklami, turami albo powtarzalnymi sekcjami kolumn.</div>
               <div class="repeat-blocks-list" id="repeatBlockDetector"></div>
 
-              <div class="insight-subtitle" id="subtitle-duration">Analiza czasu / osob</div>
-              <div class="panel-hint">Lokalna analiza dla wykrytych blokow: laczenie tych samych osob lub innych wartosci w jednej kolumnie i liczenie srednich czasow na podstawie dat lub dlugosci.</div>
+              <div class="insight-subtitle" id="subtitle-duration">Analiza czasu / osób</div>
+              <div class="panel-hint">Lokalna analiza dla wykrytych bloków: łączenie tych samych osób lub innych wartości w jednej kolumnie i liczenie średnich czasów na podstawie dat lub długości.</div>
               <div class="duration-analysis-summary" id="durationAnalysisSummary"></div>
               <div class="duration-analysis-list" id="durationAnalysisList"></div>
             </div>
@@ -708,7 +708,7 @@
               </svg>
             </summary>
             <div class="panel-body stack">
-              <div class="panel-hint">Lekki kreator typu grupuj / mierz / agreguj. Dziala na aktualnym widoku albo calym arkuszu, z opcja pracy na Wide-to-Long tam, gdzie ma to sens.</div>
+              <div class="panel-hint">Lekki kreator typu grupuj / mierz / agreguj. Działa na aktualnym widoku albo całym arkuszu, z opcją pracy na Wide-to-Long tam, gdzie ma to sens.</div>
               <div class="aggregation-workbench-summary" id="aggregationWorkbenchSummary"></div>
               <div class="aggregation-workbench-list" id="aggregationWorkbenchList"></div>
             </div>
@@ -860,14 +860,14 @@
 
         <!-- ====== MAIN ====== -->
         <main class="main">
-          <button class="sidebar-handle" id="panelHandle" type="button" aria-label="Zwin/rozwin panel" data-hint data-hint-pl="Wysuń albo schowaj sidebar" data-hint-en="Open or hide the sidebar" data-hint-delay="1.1" data-hint-touch="on">
+          <button class="sidebar-handle" id="panelHandle" type="button" aria-label="Zwiń/rozwiń panel" data-hint data-hint-pl="Wysuń albo schowaj sidebar" data-hint-en="Open or hide the sidebar" data-hint-delay="1.1" data-hint-touch="on">
             ‹
           </button>
           <section class="panel table-panel">
             <div class="table-toolbar">
               <div class="status-badge" id="status" data-hint-pl="Limit dotyczy tylko wyświetlania — filtry, szukanie i agregacje /| zawsze działają na wszystkich wierszach pliku."
               data-hint-en="The limit applies only to display — filters, search and aggregations /| always run on all rows of the file." data-hint-touch="on">Brak danych</div>
-              <button class="btn btn-sm ghost icon-only toolbar-toggle" id="toolbarToggle" type="button" aria-expanded="true" aria-controls="tableActions quickSearchWrap" title="Zwiń pasek narzędzi" aria-label="Zwiń pasek narzędzi">
+              <button class="btn btn-sm ghost icon-only toolbar-toggle" id="toolbarToggle" type="button" aria-expanded="true" aria-controls="tableActions quickSearchWrap" aria-label="Zwiń pasek narzędzi" data-hint="Zwiń pasek narzędzi" data-hint-delay="1.1" data-hint-touch="on">
                 <svg class="toolbar-toggle-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="18 15 12 9 6 15" />
                 </svg>
@@ -880,9 +880,9 @@
                 <input id="quickSearch" type="text" placeholder="Szybkie szukanie..." />
                 <select id="quickSearchMode" aria-label="Tryb szybkiego szukania">
                   <option value="contains">Zawiera</option>
-                  <option value="exact">Dokladnie</option>
+                  <option value="exact">Dokładnie</option>
                 </select>
-                <select id="quickSearchAction" aria-label="Akcja szybkiego szukania" title="Filtruj – ukrywa niezaznaczone wiersze; Zaznacz – pokazuje wszystkie, wyróżnia pasujące">
+                <select id="quickSearchAction" aria-label="Akcja szybkiego szukania" data-hint data-hint-pl="Filtruj – ukrywa niezaznaczone wiersze; Zaznacz – pokazuje wszystkie, wyróżnia pasujące" data-hint-en="Filter – hides non-matching rows; Highlight – shows all, highlights matches" data-hint-delay="1.1" data-hint-touch="on">
                   <option value="filter">Filtruj</option>
                   <option value="highlight">Zaznacz</option>
                 </select>
@@ -890,7 +890,7 @@
                   <input type="checkbox" id="quickSearchOperators" />
                   <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
                 </label>
-                <button class="btn btn-sm ghost" id="quickSearchColumnsBtn" type="button" title="Wybierz kolumny dla szybkiego szukania">
+                <button class="btn btn-sm ghost" id="quickSearchColumnsBtn" type="button" data-hint="Wybierz kolumny dla szybkiego szukania" data-hint-delay="1.1" data-hint-touch="on">
                   Kolumny
                 </button>
                 <button class="btn btn-sm ghost" id="quickSearchBtn" type="button">
@@ -902,10 +902,10 @@
                 </button>
               </div>
               <div class="table-actions" id="tableActions">
-                <button class="btn btn-sm ghost toggle-pill hidden" id="wideLongToggle" type="button" aria-pressed="false" title="Przełącz widok blokowy na długi" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
+                <button class="btn btn-sm ghost toggle-pill hidden" id="wideLongToggle" type="button" aria-pressed="false" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
                   Wide-to-Long
                 </button>
-                <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" title="Przełącz wymiary z pliku" data-hint data-hint-pl="Użyj szerokości kolumn i wysokości wierszy zapisanych w pliku Excel (zamiast auto-dopasowania)" data-hint-en="Use column widths and row heights saved in the Excel file (instead of auto-fit)" data-hint-delay="1.1">
+                <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Użyj szerokości kolumn i wysokości wierszy zapisanych w pliku Excel (zamiast auto-dopasowania)" data-hint-en="Use column widths and row heights saved in the Excel file (instead of auto-fit)" data-hint-delay="1.1">
                   Wymiary z Excela
                 </button>
                 <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
@@ -915,12 +915,25 @@
             </div>
 
             <div class="empty-state" id="emptyState">
-              <div class="empty-icon">XLSX/M</div>
-              <div class="empty-title" id="emptyTitle">Wysuń sidebar-a i wczytaj plik Excel</div>
-              <div class="empty-sub" id="emptySub">możesz tam przeciągnąć plik lub wybrać go bezpośrednio z dysku</div>
-              <button class="btn ghost empty-sample-btn" id="loadSampleBtn" type="button" data-hint data-hint-pl="Wczyta lokalnie wygenerowany przykładowy arkusz — bez wysyłania czegokolwiek" data-hint-en="Loads a locally generated sample sheet — nothing is uploaded" data-hint-delay="1.1" data-hint-touch="on">
-                Wypróbuj na przykładowym pliku
-              </button>
+              <div class="empty-icon" aria-hidden="true">
+                <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <path d="M8 12h8" />
+                  <path d="M8 16h8" />
+                  <path d="M12 12v7" />
+                </svg>
+              </div>
+              <div class="empty-title" id="emptyTitle">Wczytaj plik Excel, aby zacząć</div>
+              <div class="empty-sub" id="emptySub">wybierz plik poniżej albo przeciągnij go do strefy w panelu bocznym</div>
+              <div class="empty-actions">
+                <button class="btn" id="emptyOpenBtn" type="button" data-hint data-hint-pl="Otwórz plik XLSX z dysku — wszystko przetwarzane lokalnie" data-hint-en="Open an XLSX file from disk — everything is processed locally" data-hint-delay="1.1" data-hint-touch="on">
+                  Wybierz plik z dysku
+                </button>
+                <button class="btn ghost" id="loadSampleBtn" type="button" data-hint data-hint-pl="Wczyta lokalnie wygenerowany przykładowy arkusz — bez wysyłania czegokolwiek" data-hint-en="Loads a locally generated sample sheet — nothing is uploaded" data-hint-delay="1.1" data-hint-touch="on">
+                  Wypróbuj na przykładowym pliku
+                </button>
+              </div>
             </div>
 
             <div class="table-wrap hidden" id="tableWrap">
@@ -937,14 +950,14 @@
               <span class="fab-arrow" aria-hidden="true">✕</span>
               <span class="fab-label">Odznacz</span>
             </button>
-            <button class="scroll-top-fab" id="scrollTopFab" type="button" aria-label="Przewiń tabelę do góry" title="Przewiń tabelę do góry">
+            <button class="scroll-top-fab" id="scrollTopFab" type="button" aria-label="Przewiń tabelę do góry">
               <span class="fab-arrow" aria-hidden="true">↑</span>
               <span class="fab-label">Do góry</span>
             </button>
           </section>
         </main>
       </div>
-      <button class="sidebar-scrim hidden" id="sidebarScrim" type="button" aria-label="Zamknij panel filtrow"></button>
+      <button class="sidebar-scrim hidden" id="sidebarScrim" type="button" aria-label="Zamknij panel filtrów"></button>
     </div>
 
     <!-- Column picker modal -->
@@ -983,7 +996,7 @@
           <input id="quickSearchPopupInput" type="text" placeholder="np. faktura..." />
           <select id="quickSearchPopupMode" aria-label="Tryb szybkiego szukania w oknie">
             <option value="contains">Zawiera</option>
-            <option value="exact">Dokladnie</option>
+            <option value="exact">Dokładnie</option>
           </select>
           <select id="quickSearchPopupAction" aria-label="Akcja szybkiego szukania w oknie">
             <option value="filter">Filtruj</option>
