@@ -1623,7 +1623,7 @@ function applyStaticTranslations() {
 
   setAttr("#introVideo", "aria-label", copy.introAria);
   setText(".hero-sub", copy.heroSub);
-  setAttr("#panelToggle", "aria-label", copy.panelToggleAria);
+  // #panelToggle bez aria-label — nazwa dostępna to widoczny tekst (panelOpen/panelClosed)
   /* Podpowiedzi przez data-hint (silnik cursor-hint), nie natywne title */
   setAttr("#link1", "data-hint", copy.link1Title);
   setAttr("#link1", "aria-label", copy.link1Title);

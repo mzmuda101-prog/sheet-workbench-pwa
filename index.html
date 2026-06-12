@@ -36,7 +36,9 @@
           </div>
         </div>
         <div class="hero-right" id="heroRight">
-          <button class="panel-toggle" id="panelToggle" type="button" aria-label="Zwiń/rozwiń panel" data-hint data-hint-pl="Pokaż lub ukryj panel narzędzi" data-hint-en="Show or hide the tools panel" data-hint-delay="1.1">
+          <!-- Bez aria-label: nazwą dostępną jest widoczny tekst (Filtry / Zamknij filtry) —
+               osobny aria-label nie zawierał widocznego tekstu (label-content-name-mismatch) -->
+          <button class="panel-toggle" id="panelToggle" type="button" data-hint data-hint-pl="Pokaż lub ukryj panel narzędzi" data-hint-en="Show or hide the tools panel" data-hint-delay="1.1">
             Panel
           </button>
           <div class="lang-switch" role="group" aria-label="Przełącznik języka" id="langSwitch">

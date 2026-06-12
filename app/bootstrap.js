@@ -619,7 +619,11 @@ updateQuickSearchColumnButtons();
 updateSortControls();
 setDirtyState(false);
 syncQuickSearchInputs();
-setSidebarOpen(true);
+// Sidebar otwarty na starcie tylko na większych ekranach. Na telefonie zasłaniałby
+// cały widok, a jego późniejsze domknięcie + przeskok uchwytu na dolny pasek
+// generowały duży layout shift (CLS) przy ładowaniu. Plik można wczytać
+// przyciskiem w pustym stanie — sidebar nie jest potrzebny od pierwszej klatki.
+setSidebarOpen(window.matchMedia("(min-width: 769px)").matches);
 syncSidebarHandle();
 renderInsights();
 renderKpiExtractor();
