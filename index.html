@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260612-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260613-01" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -416,12 +416,20 @@
                 Kolumna
                 <select id="editColumnSelect"></select>
               </label>
+              <label class="field checkbox hidden" id="editFilteredOnlyField" data-hint data-hint-pl="Działaj tylko na wierszach widocznych po aktualnym filtrze (a nie na całym arkuszu). Najpierw przefiltruj, potem zmień to, co znalazłeś." data-hint-en="Act only on rows visible under the current filter (not the whole sheet). Filter first, then change what you found." data-hint-delay="1.1">
+                <input id="editFilteredOnly" type="checkbox" />
+                <span>Tylko przefiltrowane wiersze</span>
+              </label>
               <label class="field">
                 Operacja
                 <select id="editOp">
                   <option value="pattern">Zdejmij śmieć wzorcem</option>
                   <option value="replace">Znajdź i zamień</option>
                   <option value="case">Zmiana wielkości</option>
+                  <option value="trim">Przytnij / spacje</option>
+                  <option value="affix">Prefiks / sufiks</option>
+                  <option value="pad">Wyrównaj długość</option>
+                  <option value="convert">Konwersja typu</option>
                 </select>
               </label>
               <div id="editPatternFields" class="stack">
@@ -461,6 +469,54 @@
                     <option value="title">Jak Nazwa Własna</option>
                   </select>
                 </label>
+              </div>
+              <div id="editTrimFields" class="stack hidden">
+                <label class="field" data-hint data-hint-pl="„Przytnij końce” usuwa spacje z początku i końca. „Zwiń spacje” dodatkowo zamienia wielokrotne spacje wewnątrz na jedną. „Twarde spacje” zamienia niewidoczne spacje (NBSP) na zwykłe." data-hint-en="“Trim ends” removes leading/trailing spaces. “Collapse spaces” also turns repeated inner spaces into one. “Hard spaces” converts invisible spaces (NBSP) to normal." data-hint-delay="1.1">
+                  Tryb
+                  <select id="editTrimMode">
+                    <option value="ends">Przytnij końce</option>
+                    <option value="collapse">Zwiń wielokrotne spacje</option>
+                    <option value="hard">Zamień twarde spacje</option>
+                  </select>
+                </label>
+              </div>
+              <div id="editAffixFields" class="stack hidden">
+                <label class="field">
+                  Prefiks (z przodu)
+                  <input id="editPrefix" type="text" />
+                </label>
+                <label class="field">
+                  Sufiks (z tyłu)
+                  <input id="editSuffix" type="text" />
+                </label>
+              </div>
+              <div id="editPadFields" class="stack hidden">
+                <label class="field">
+                  Długość
+                  <input id="editPadLen" type="number" min="1" step="1" value="6" />
+                </label>
+                <label class="field">
+                  Znak wypełnienia
+                  <input id="editPadChar" type="text" maxlength="1" value="0" />
+                </label>
+                <label class="field" data-hint data-hint-pl="„Z przodu” dopełnia z lewej (np. 123 → 000123 dla kodów). „Z tyłu” dopełnia z prawej." data-hint-en="“Start” pads on the left (e.g. 123 → 000123 for codes). “End” pads on the right." data-hint-delay="1.1">
+                  Strona
+                  <select id="editPadSide">
+                    <option value="start">Z przodu (z lewej)</option>
+                    <option value="end">Z tyłu (z prawej)</option>
+                  </select>
+                </label>
+              </div>
+              <div id="editConvertFields" class="stack hidden">
+                <label class="field" data-hint data-hint-pl="Zmienia typ komórki. „Liczba” — z tekstu jak „123”, „12,5” czy „1 234,56” (przecinek lub kropka, spacje zdejmowane). „Data” — z tego, co widać. „Tekst” — zamraża wyświetlaną wartość jako tekst. Wartości z symbolami/jednostkami (zł, %) są pomijane." data-hint-en="Changes the cell type. “Number” — from text like “123”, “12.5” or “1 234.56” (comma or dot, spaces stripped). “Date” — from what you see. “Text” — freezes the displayed value as text. Values with symbols/units (zł, %) are skipped." data-hint-delay="1.1">
+                  Na typ
+                  <select id="editConvertTo">
+                    <option value="number">Liczba</option>
+                    <option value="date">Data</option>
+                    <option value="text">Tekst</option>
+                  </select>
+                </label>
+                <p class="field-note">Wartości, których nie da się jednoznacznie przekształcić (np. „1 234,56 zł”), są pomijane.</p>
               </div>
               <button class="btn full" id="applyEditToolBtn" type="button" data-hint data-hint-pl="Zastosuj operację. „Znajdź i zamień” obejmuje tekst, daty i liczby (liczbę wpisz jako wartość surową); „wzorzec” i „wielkość liter” — tylko tekst. Potem zapisz zmiany przyciskiem Zapisz / Zapisz jako." data-hint-en="Apply the operation. “Find & replace” covers text, dates and numbers (type a number as its raw value); “pattern” and “letter case” — text only. Then save with Save / Save as." data-hint-delay="1.1" data-hint-touch="on">Zastosuj</button>
             </div>
@@ -1037,17 +1093,17 @@
     <script src="lib/xlsx-js-style.bundle.min.js"></script>
     <!-- Local JSZip: round-trip XLSX (zachowanie tabel/wykresów/stylów przy zapisie) -->
     <script src="lib/jszip.min.js"></script>
-    <script src="app/core.js?v=20260612-01"></script>
-    <script src="app/language.js?v=20260612-01"></script>
-    <script src="app/cursor-hint.js?v=20260612-01"></script>
-    <script src="app/analysis.js?v=20260612-01"></script>
-    <script src="app/workbook.js?v=20260612-01"></script>
-    <script src="app/xlsx-patch.js?v=20260612-01"></script>
-    <script src="app/table.js?v=20260612-01"></script>
-    <script src="app/conditional-formatting.js?v=20260612-01"></script>
-    <script src="app/formulas.js?v=20260612-01"></script>
-    <script src="app/edit-tools.js?v=20260612-01"></script>
-    <script src="app/ui-controls.js?v=20260612-01"></script>
-    <script src="app/bootstrap.js?v=20260612-01"></script>
+    <script src="app/core.js?v=20260613-01"></script>
+    <script src="app/language.js?v=20260613-01"></script>
+    <script src="app/cursor-hint.js?v=20260613-01"></script>
+    <script src="app/analysis.js?v=20260613-01"></script>
+    <script src="app/workbook.js?v=20260613-01"></script>
+    <script src="app/xlsx-patch.js?v=20260613-01"></script>
+    <script src="app/table.js?v=20260613-01"></script>
+    <script src="app/conditional-formatting.js?v=20260613-01"></script>
+    <script src="app/formulas.js?v=20260613-01"></script>
+    <script src="app/edit-tools.js?v=20260613-01"></script>
+    <script src="app/ui-controls.js?v=20260613-01"></script>
+    <script src="app/bootstrap.js?v=20260613-01"></script>
   </body>
 </html>

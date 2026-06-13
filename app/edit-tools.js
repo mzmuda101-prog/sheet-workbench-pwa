@@ -1,13 +1,21 @@
 // =====================================================================
-// Narzędzia edycji — masowe czyszczenie wartości w kolumnie lub zaznaczeniu.
-// Operacje: (1) zdejmij śmieć wzorcem — reużywa silnik compileGroupPattern /
-// fuzzyGroupTransform z analysis.js (selektory * ** # @ ? oraz = jako rdzeń);
-// (2) znajdź i zamień (dosłownie / regex); (3) zmiana wielkości liter.
+// Narzędzia edycji — masowe czyszczenie/przekształcanie wartości w kolumnie
+// lub zaznaczeniu. Operacje:
+//   (1) zdejmij śmieć wzorcem — reużywa compileGroupPattern / fuzzyGroupTransform
+//       z analysis.js (selektory * ** # @ ? oraz = jako rdzeń);
+//   (2) znajdź i zamień (dosłownie / regex);
+//   (3) zmiana wielkości liter;
+//   (4) przytnij / spacje (końce / zwiń wielokrotne / twarde spacje→zwykłe);
+//   (5) prefiks / sufiks (doklejenie tekstu z przodu/z tyłu);
+//   (6) wyrównaj długość (padStart/padEnd, np. zera wiodące w kodach);
+//   (7) konwersja typu (tekst↔liczba↔data).
 // Zapis idzie przez updateSheetCell -> pendingEdits -> ZIP-patch (zachowuje plik).
 // Działa tylko w trybie "wide". "Znajdź i zamień" działa na tekście, datach
 // (po WYŚWIETLANEJ wartości — user wpisuje to, co widzi) i liczbach (po WARTOŚCI
 // SUROWEJ — String(raw), nie po formacie locale); po podmianie odtwarza typ.
-// "Wzorzec" i "wielkość liter" ruszają wyłącznie komórki tekstowe.
+// "Wzorzec", "wielkość liter", "przytnij", "prefiks/sufiks" i "wyrównaj" ruszają
+// wyłącznie komórki tekstowe. Zakres "Kolumna" + przełącznik "tylko przefiltrowane
+// wiersze" zawęża działanie do viewRows (widoczny po filtrze podzbiór).
 // =====================================================================
 
 const editScopeEl = document.getElementById("editScope");
@@ -24,6 +32,19 @@ const editReplaceEl = document.getElementById("editReplace");
 const editRegexEl = document.getElementById("editRegex");
 const editCaseFieldsEl = document.getElementById("editCaseFields");
 const editCaseModeEl = document.getElementById("editCaseMode");
+const editTrimFieldsEl = document.getElementById("editTrimFields");
+const editTrimModeEl = document.getElementById("editTrimMode");
+const editAffixFieldsEl = document.getElementById("editAffixFields");
+const editPrefixEl = document.getElementById("editPrefix");
+const editSuffixEl = document.getElementById("editSuffix");
+const editPadFieldsEl = document.getElementById("editPadFields");
+const editPadLenEl = document.getElementById("editPadLen");
+const editPadCharEl = document.getElementById("editPadChar");
+const editPadSideEl = document.getElementById("editPadSide");
+const editConvertFieldsEl = document.getElementById("editConvertFields");
+const editConvertToEl = document.getElementById("editConvertTo");
+const editFilteredOnlyFieldEl = document.getElementById("editFilteredOnlyField");
+const editFilteredOnlyEl = document.getElementById("editFilteredOnly");
 const applyEditToolBtnEl = document.getElementById("applyEditToolBtn");
 
 // Lista kolumn (value = indeks w currentHeaders).
@@ -54,10 +75,18 @@ function syncEditToolFields() {
   editPatternFieldsEl.classList.toggle("hidden", op !== "pattern");
   editReplaceFieldsEl.classList.toggle("hidden", op !== "replace");
   editCaseFieldsEl.classList.toggle("hidden", op !== "case");
+  if (editTrimFieldsEl) editTrimFieldsEl.classList.toggle("hidden", op !== "trim");
+  if (editAffixFieldsEl) editAffixFieldsEl.classList.toggle("hidden", op !== "affix");
+  if (editPadFieldsEl) editPadFieldsEl.classList.toggle("hidden", op !== "pad");
+  if (editConvertFieldsEl) editConvertFieldsEl.classList.toggle("hidden", op !== "convert");
   if (op === "pattern") {
     editPatternInputFieldEl.classList.toggle("hidden", editPatternModeEl.value !== "pattern");
   }
-  editColumnFieldEl.classList.toggle("hidden", editScopeEl.value !== "column");
+  const isColumn = editScopeEl.value === "column";
+  editColumnFieldEl.classList.toggle("hidden", !isColumn);
+  // „Tylko przefiltrowane wiersze" ma sens jedynie dla zakresu kolumny
+  // (zaznaczenie i tak jest już jawnym podzbiorem komórek).
+  if (editFilteredOnlyFieldEl) editFilteredOnlyFieldEl.classList.toggle("hidden", !isColumn);
 }
 
 // Buduje funkcję transformującą tekst wg wybranej operacji.
@@ -91,6 +120,26 @@ function buildEditTransform() {
       fn: (s) => s.replace(/\p{L}[\p{L}\p{M}]*/gu, (w) => w[0].toLocaleUpperCase(locale) + w.slice(1).toLocaleLowerCase(locale)),
     };
   }
+  if (op === "trim") {
+    const m = editTrimModeEl.value;
+    if (m === "collapse") return { ok: true, fn: (s) => s.replace(/\s+/gu, " ").trim() };
+    // „twarde spacje": NBSP / wąska NBSP / figure space → zwykła spacja, potem przytnij końce
+    if (m === "hard") return { ok: true, fn: (s) => s.replace(/[\u00A0\u2007\u202F]/g, " ").trim() };
+    return { ok: true, fn: (s) => s.trim() }; // „ends"
+  }
+  if (op === "affix") {
+    const pre = editPrefixEl.value;
+    const suf = editSuffixEl.value;
+    if (!pre && !suf) return { ok: false, err: "editErrNoAffix" };
+    return { ok: true, fn: (s) => pre + s + suf };
+  }
+  if (op === "pad") {
+    const len = parseInt(editPadLenEl.value, 10);
+    if (!Number.isFinite(len) || len < 1) return { ok: false, err: "editErrBadPadLen" };
+    const ch = (editPadCharEl.value || " ").slice(0, 1) || " ";
+    const side = editPadSideEl.value;
+    return { ok: true, fn: (s) => (side === "end" ? s.padEnd(len, ch) : s.padStart(len, ch)) };
+  }
   return { ok: false, err: "editToolNoChange" };
 }
 
@@ -107,10 +156,13 @@ function collectEditTargets() {
     }
     return { targets };
   }
-  // kolumna — wszystkie wiersze danych arkusza (baseRows)
+  // kolumna — wszystkie wiersze danych arkusza (baseRows), albo — gdy zaznaczono
+  // „tylko przefiltrowane" — wiersze widoczne po aktualnym filtrze (viewRows, te same
+  // obiekty wierszy, tylko przefiltrowany podzbiór).
   const colIdx = parseInt(editColumnSelectEl.value, 10);
   if (!Number.isFinite(colIdx)) return { err: "editErrNoColumn" };
-  baseRows.forEach((row) => {
+  const rowsSource = editFilteredOnlyEl && editFilteredOnlyEl.checked ? viewRows : baseRows;
+  rowsSource.forEach((row) => {
     if (!row || row.isLongViewRow || row.isSubheader) return;
     targets.push({ row, col: colIdx });
   });
@@ -124,12 +176,46 @@ function applyEditTool() {
     return;
   }
   const op = editOpEl.value;
-  const tr = buildEditTransform();
-  if (!tr.ok) { toast(t(tr.err), "warning"); return; }
   const tg = collectEditTargets();
   if (tg.err) { toast(t(tg.err), "warning"); return; }
 
   let changed = 0;
+
+  // Konwersja typu — osobna ścieżka, bo zmienia TYP komórki (nie transformuje stringa).
+  if (op === "convert") {
+    const to = editConvertToEl.value;
+    tg.targets.forEach(({ row, col }) => {
+      const raw = Array.isArray(row.values) ? row.values[col] : undefined;
+      const shown = getDisplayValue(row, col);
+      if (shown === "" || shown == null) return; // pustych nie ruszamy
+      let newVal, newType;
+      if (to === "number") {
+        if (typeof raw === "number") return; // już liczba
+        const n = parseLooseNumber(shown);
+        if (n === null) return; // nie da się jednoznacznie — pomiń
+        newVal = n; newType = "number";
+      } else if (to === "date") {
+        if (raw instanceof Date) return; // już data
+        const d = parseDateFlexible(shown);
+        if (!(d instanceof Date) || Number.isNaN(d.getTime())) return;
+        newVal = d; newType = "date";
+      } else { // text
+        if (typeof raw === "string") return; // już tekst
+        newVal = shown; newType = "string";
+      }
+      updateSheetCell(row.rowIndex0, col, { value: newVal, type: newType });
+      row.values[col] = newVal;
+      if (Array.isArray(row.rawValues)) row.rawValues[col] = newVal;
+      if (Array.isArray(row.display)) row.display[col] = newVal == null ? "" : toDisplay(newVal);
+      changed++;
+    });
+    finishEditTool(changed);
+    return;
+  }
+
+  const tr = buildEditTransform();
+  if (!tr.ok) { toast(t(tr.err), "warning"); return; }
+
   tg.targets.forEach(({ row, col }) => {
     const raw = Array.isArray(row.values) ? row.values[col] : undefined;
     const isDateCell = raw instanceof Date;
@@ -179,6 +265,11 @@ function applyEditTool() {
     changed++;
   });
 
+  finishEditTool(changed);
+}
+
+// Wspólne domknięcie po operacji: odśwież widok + komunikat z liczbą zmian.
+function finishEditTool(changed) {
   if (changed > 0) {
     setDirtyState(true);
     renderActiveTable();
@@ -187,6 +278,15 @@ function applyEditTool() {
   } else {
     toast(t("editToolNoChange"), "info");
   }
+}
+
+// Tolerancyjny parser liczby dla „Konwersji typu" (tekst→liczba): zdejmuje spacje
+// i twarde spacje, normalizuje przecinek dziesiętny na kropkę. Odrzuca wszystko,
+// co nie jest czystą liczbą (separatory tysięcy, symbole waluty/%, jednostki).
+function parseLooseNumber(s) {
+  const t = String(s).replace(/\s/g, "").replace(",", ".");
+  if (!/^-?\d+(\.\d+)?$/.test(t)) return null;
+  return Number(t);
 }
 
 if (applyEditToolBtnEl && editOpEl && editScopeEl) {

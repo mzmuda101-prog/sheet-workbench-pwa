@@ -132,14 +132,36 @@ const I18N = {
     editOpPattern: "Zdejmij śmieć wzorcem",
     editOpReplace: "Znajdź i zamień",
     editOpCase: "Zmiana wielkości",
+    editOpTrim: "Przytnij / spacje",
+    editOpAffix: "Prefiks / sufiks",
+    editOpPad: "Wyrównaj długość",
+    editOpConvert: "Konwersja typu",
     editPModePattern: "Wzorzec",
     editPModeFuzzy: "Rozmyte",
     editCaseUpper: "WIELKIE",
     editCaseLower: "małe",
     editCaseTitle: "Jak Nazwa Własna",
+    editTrimModeLabel: "Tryb",
+    editTrimEnds: "Przytnij końce",
+    editTrimCollapse: "Zwiń wielokrotne spacje",
+    editTrimHard: "Zamień twarde spacje",
+    editPrefixLabel: "Prefiks (z przodu)",
+    editSuffixLabel: "Sufiks (z tyłu)",
+    editPadLenLabel: "Długość",
+    editPadCharLabel: "Znak wypełnienia",
+    editPadSideLabel: "Strona",
+    editPadStart: "Z przodu (z lewej)",
+    editPadEnd: "Z tyłu (z prawej)",
+    editConvertToLabel: "Na typ",
+    editConvertNumber: "Liczba",
+    editConvertDate: "Data",
+    editConvertText: "Tekst",
+    editFilteredOnlyLabel: "Tylko przefiltrowane wiersze",
     editErrNoPattern: "Podaj wzorzec (np. Gr*= albo =#)",
     editErrNoFind: "Podaj tekst do znalezienia",
     editErrBadRegex: "Niepoprawne wyrażenie regularne",
+    editErrNoAffix: "Podaj prefiks lub sufiks",
+    editErrBadPadLen: "Podaj poprawną długość (liczbę ≥ 1)",
     editErrNoColumn: "Wybierz kolumnę",
     editErrNoSelection: "Najpierw zaznacz zakres komórek",
     editToolApplied: "Zmieniono {count} komórek",
@@ -573,14 +595,36 @@ const I18N = {
     editOpPattern: "Strip noise by pattern",
     editOpReplace: "Find & replace",
     editOpCase: "Change case",
+    editOpTrim: "Trim / spaces",
+    editOpAffix: "Prefix / suffix",
+    editOpPad: "Pad to length",
+    editOpConvert: "Convert type",
     editPModePattern: "Pattern",
     editPModeFuzzy: "Fuzzy",
     editCaseUpper: "UPPERCASE",
     editCaseLower: "lowercase",
     editCaseTitle: "Title Case",
+    editTrimModeLabel: "Mode",
+    editTrimEnds: "Trim ends",
+    editTrimCollapse: "Collapse repeated spaces",
+    editTrimHard: "Normalize hard spaces",
+    editPrefixLabel: "Prefix (front)",
+    editSuffixLabel: "Suffix (back)",
+    editPadLenLabel: "Length",
+    editPadCharLabel: "Fill char",
+    editPadSideLabel: "Side",
+    editPadStart: "Start (left)",
+    editPadEnd: "End (right)",
+    editConvertToLabel: "To type",
+    editConvertNumber: "Number",
+    editConvertDate: "Date",
+    editConvertText: "Text",
+    editFilteredOnlyLabel: "Filtered rows only",
     editErrNoPattern: "Enter a pattern (e.g. Gr*= or =#)",
     editErrNoFind: "Enter text to find",
     editErrBadRegex: "Invalid regular expression",
+    editErrNoAffix: "Enter a prefix or suffix",
+    editErrBadPadLen: "Enter a valid length (number ≥ 1)",
     editErrNoColumn: "Choose a column",
     editErrNoSelection: "Select a cell range first",
     editToolApplied: "Changed {count} cells",
@@ -1718,6 +1762,14 @@ function applyStaticTranslations() {
   setText("#editReplaceNote", copy.editReplaceNote);
   setCheckboxText("editRegex", copy.editRegexLabel);
   setFieldLabel("editCaseMode", copy.editCaseLabel);
+  setCheckboxText("editFilteredOnly", copy.editFilteredOnlyLabel);
+  setFieldLabel("editTrimMode", copy.editTrimModeLabel);
+  setFieldLabel("editPrefix", copy.editPrefixLabel);
+  setFieldLabel("editSuffix", copy.editSuffixLabel);
+  setFieldLabel("editPadLen", copy.editPadLenLabel);
+  setFieldLabel("editPadChar", copy.editPadCharLabel);
+  setFieldLabel("editPadSide", copy.editPadSideLabel);
+  setFieldLabel("editConvertTo", copy.editConvertToLabel);
   setText("#applyEditToolBtn", copy.editApply);
   setText("#panel-sort-workbench .panel-title", copy.sortingPresets);
   setFieldLabel("sortColumnSelect", copy.sortColumn);
@@ -1817,9 +1869,15 @@ function applySelectTranslations() {
       formulas: "formulas",
     },
     editScope: { column: "editScopeColumn", selection: "editScopeSelection" },
-    editOp: { pattern: "editOpPattern", replace: "editOpReplace", case: "editOpCase" },
+    editOp: {
+      pattern: "editOpPattern", replace: "editOpReplace", case: "editOpCase",
+      trim: "editOpTrim", affix: "editOpAffix", pad: "editOpPad", convert: "editOpConvert",
+    },
     editPatternMode: { pattern: "editPModePattern", fuzzy: "editPModeFuzzy" },
     editCaseMode: { upper: "editCaseUpper", lower: "editCaseLower", title: "editCaseTitle" },
+    editTrimMode: { ends: "editTrimEnds", collapse: "editTrimCollapse", hard: "editTrimHard" },
+    editPadSide: { start: "editPadStart", end: "editPadEnd" },
+    editConvertTo: { number: "editConvertNumber", date: "editConvertDate", text: "editConvertText" },
     filterMode: {
       contains: "contains",
       starts_with: "startsWith",
@@ -1925,7 +1983,8 @@ function applySelectTranslations() {
     "quickSearchMode", "quickSearchPopupMode",
     "quickSearchAction", "quickSearchPopupAction",
     "sortDirectionSelect", "formulaFilter",
-    "editScope", "editOp", "editPatternMode", "editCaseMode"
+    "editScope", "editOp", "editPatternMode", "editCaseMode",
+    "editTrimMode", "editPadSide", "editConvertTo"
   ];
 
   ids.forEach((id) => {
