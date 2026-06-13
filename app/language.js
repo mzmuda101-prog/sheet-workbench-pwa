@@ -123,6 +123,7 @@ const I18N = {
     editPatternLabel: "Wzorzec",
     editFindLabel: "Znajdź",
     editReplaceLabel: "Zamień na",
+    editReplaceNote: "Wskazówka: datę wpisz tak, jak ją widzisz w tabeli; liczbę — jako wartość surową (kropka dziesiętna, bez spacji i symboli jak „zł” czy „%”).",
     editRegexLabel: "Wyrażenie regularne",
     editCaseLabel: "Wielkość liter",
     editApply: "Zastosuj",
@@ -563,6 +564,7 @@ const I18N = {
     editPatternLabel: "Pattern",
     editFindLabel: "Find",
     editReplaceLabel: "Replace with",
+    editReplaceNote: "Tip: type a date as you see it in the table; type a number as its raw value (dot decimal, no separators or symbols like “zł” or “%”).",
     editRegexLabel: "Regular expression",
     editCaseLabel: "Letter case",
     editApply: "Apply",
@@ -1713,6 +1715,7 @@ function applyStaticTranslations() {
   setFieldLabel("editPatternInput", copy.editPatternLabel);
   setFieldLabel("editFind", copy.editFindLabel);
   setFieldLabel("editReplace", copy.editReplaceLabel);
+  setText("#editReplaceNote", copy.editReplaceNote);
   setCheckboxText("editRegex", copy.editRegexLabel);
   setFieldLabel("editCaseMode", copy.editCaseLabel);
   setText("#applyEditToolBtn", copy.editApply);

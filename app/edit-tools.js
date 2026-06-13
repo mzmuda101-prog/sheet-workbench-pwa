@@ -4,7 +4,10 @@
 // fuzzyGroupTransform z analysis.js (selektory * ** # @ ? oraz = jako rdzeń);
 // (2) znajdź i zamień (dosłownie / regex); (3) zmiana wielkości liter.
 // Zapis idzie przez updateSheetCell -> pendingEdits -> ZIP-patch (zachowuje plik).
-// Działa tylko w trybie "wide" i tylko na komórkach tekstowych (nie rusza liczb/dat).
+// Działa tylko w trybie "wide". "Znajdź i zamień" działa na tekście, datach
+// (po WYŚWIETLANEJ wartości — user wpisuje to, co widzi) i liczbach (po WARTOŚCI
+// SUROWEJ — String(raw), nie po formacie locale); po podmianie odtwarza typ.
+// "Wzorzec" i "wielkość liter" ruszają wyłącznie komórki tekstowe.
 // =====================================================================
 
 const editScopeEl = document.getElementById("editScope");
@@ -120,6 +123,7 @@ function applyEditTool() {
     toast(t("editWideOnly"), "info");
     return;
   }
+  const op = editOpEl.value;
   const tr = buildEditTransform();
   if (!tr.ok) { toast(t(tr.err), "warning"); return; }
   const tg = collectEditTargets();
@@ -128,13 +132,50 @@ function applyEditTool() {
   let changed = 0;
   tg.targets.forEach(({ row, col }) => {
     const raw = Array.isArray(row.values) ? row.values[col] : undefined;
-    if (typeof raw !== "string") return; // tylko tekst — nie ruszamy liczb/dat
+    const isDateCell = raw instanceof Date;
+    const isNumberCell = typeof raw === "number" && Number.isFinite(raw);
+    // "Znajdź i zamień" działa na:
+    //   • tekście — po wartości surowej,
+    //   • datach — po tym, co widać w siatce (dd-mm-yy / format z pliku), żeby
+    //     user wpisywał to, co widzi,
+    //   • liczbach — po WARTOŚCI SUROWEJ (String(raw), z kropką dziesiętną, bez
+    //     separatorów i symboli waluty/%), a NIE po sformatowanym tekście — bo
+    //     format locale (spacje, przecinek, „zł", „%") nie da się jednoznacznie
+    //     re-sparsować z powrotem do liczby.
+    // "wzorzec" / "wielkość liter": tylko czysty tekst (nie ruszamy liczb/dat).
+    let source;
+    if (op === "replace") {
+      if (isDateCell) source = getDisplayValue(row, col);
+      else if (isNumberCell) source = String(raw);
+      else if (typeof raw === "string") source = raw;
+      else return;
+    } else {
+      if (typeof raw !== "string") return; // tylko tekst — nie ruszamy liczb/dat
+      source = raw;
+    }
     let next;
-    try { next = tr.fn(raw); } catch { return; }
-    if (typeof next !== "string" || next === raw) return;
-    updateSheetCell(row.rowIndex0, col, { value: next, type: "string" });
-    row.values[col] = next;
-    if (Array.isArray(row.display)) row.display[col] = toDisplay(next);
+    try { next = tr.fn(source); } catch { return; }
+    if (typeof next !== "string" || next === source) return;
+
+    if (op === "replace" && (isDateCell || isNumberCell)) {
+      // Edycja daty/liczby — odtwórz typ z nowego tekstu (data→data, liczba→liczba);
+      // jeśli się nie uda, zostaw zwykły tekst. Formuła przez "=..." zablokowana.
+      const parsed = parseInputValue(next);
+      if (parsed && parsed.type === "formula") return;
+      const newVal = parsed ? parsed.value : next;
+      const newType = parsed ? parsed.type : "string";
+      updateSheetCell(row.rowIndex0, col, { value: newVal, type: newType });
+      row.values[col] = newVal;
+      if (Array.isArray(row.rawValues)) row.rawValues[col] = newVal;
+      if (Array.isArray(row.display)) row.display[col] = newVal == null ? "" : toDisplay(newVal);
+    } else {
+      // Tekst (i wzorzec/wielkość liter) — wynik zostaje tekstem, by nie gubić
+      // np. zer wiodących w kodach typu "00123".
+      updateSheetCell(row.rowIndex0, col, { value: next, type: "string" });
+      row.values[col] = next;
+      if (Array.isArray(row.rawValues)) row.rawValues[col] = next;
+      if (Array.isArray(row.display)) row.display[col] = toDisplay(next);
+    }
     changed++;
   });
 

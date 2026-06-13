@@ -3662,6 +3662,7 @@ kbd {
   margin-bottom: 6px;
 }
 .monthly-note { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
+.field-note { font-size: 11px; line-height: 1.4; color: var(--muted); margin: 2px 0 0; }
 .monthly-list { display: grid; gap: 5px; }
 .monthly-row { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 8px; }
 .monthly-label { font-size: 11.5px; color: var(--ink-2); white-space: nowrap; }
