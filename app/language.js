@@ -2,7 +2,7 @@
 
 const LANG_KEY = "excel-workbench-lang";
 let currentLang = localStorage.getItem(LANG_KEY) === "en" ? "en" : "pl";
-let BASE_TITLE = document.title || "Excel Workbench";
+let BASE_TITLE = document.title || "Sheet Workbench";
 
 const I18N = {
   pl: {
