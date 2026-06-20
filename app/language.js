@@ -7,7 +7,7 @@ let BASE_TITLE = document.title || "Excel Workbench";
 const I18N = {
   pl: {
     locale: "pl-PL",
-    title: "Excel Workbench",
+    title: "Sheet Workbench",
     description: "Lokalne przeglądanie, filtrowanie i analiza arkuszy Excel",
     values: "Wartości",
     formulas: "Formuły",
@@ -470,7 +470,7 @@ const I18N = {
   },
   en: {
     locale: "en-US",
-    title: "Excel Workbench",
+    title: "Sheet Workbench",
     description: "Local browsing, filtering, and analysis of Excel sheets",
     values: "Values",
     formulas: "Formulas",
