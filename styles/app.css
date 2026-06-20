@@ -2333,6 +2333,30 @@ details.panel[open] > summary {
   overflow: hidden;
 }
 
+/* ── iPad „shutter" przy przewijaniu tabeli ──
+   Kontener przewijania (#tableWrap, overflow:auto) jest BEZPOŚREDNIM dzieckiem
+   karty `.table-panel`, która z reguły `.panel` dziedziczy ciężki
+   `backdrop-filter: blur(26px)` (token --glass). W Safari na iOS element
+   przewijany WEWNĄTRZ elementu z backdrop-filter traci kompozytorowe
+   (przyspieszane) przewijanie — każda klatka repaintuje rozmycie na głównym
+   wątku → szarpanie („shutter"). Najgorzej na iPadzie: duża powierzchnia tabeli
+   + dotyk sprzęga scroll z głównym wątkiem. Na desktopie/laptopie GPU radzi sobie
+   bez problemu (dlatego tam płynnie), a na telefonach powierzchnia jest mała.
+   To rozmycie i tak jest NIEWIDOCZNE — nieprzezroczysta tabela wypełnia kartę.
+   Dlatego na urządzeniach dotykowych zdejmujemy backdrop-filter z karty tabeli
+   i dajemy pełne (nieprzezroczyste) tło → iOS wraca do płynnego, kompozytorowego
+   przewijania. Desktop/laptop (pointer: fine) pozostaje 1:1 bez zmian, a telefony
+   (już płynne) tracą jedynie niewidoczne rozmycie — przewijanie zostaje dobre. */
+@media (pointer: coarse) {
+  .table-panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    /* Bez blura translucentny --panel wyglądałby wyblakle, więc dajemy pełny,
+       nieprzezroczysty --surface → karta czyta się jak solidny panel. */
+    background: var(--glass-sheen), var(--surface);
+  }
+}
+
 .table-toolbar {
   display: flex;
   align-items: center;
