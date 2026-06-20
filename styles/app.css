@@ -797,6 +797,18 @@ body.splashing {
   transition: transform var(--t-slow), opacity var(--t), width var(--t-slow);
 }
 
+/* [EN] Pre-warm: jednorazowe wymuszenie rasteryzacji panelu po starcie (w bezczynności),
+   żeby PIERWSZE otwarcie nie zacinało się na malowaniu dziesiątek paneli/SVG.
+   Panel jest na ekranie (transform:none), ale opacity ~0 i POD treścią (z-index:-1)
+   → całkowicie niewidoczny. Klasę zdejmujemy po 2 klatkach (zob. bootstrap.js). */
+.sidebar.prewarm {
+  transition: none !important;
+  transform: none !important;
+  opacity: 0.001 !important;
+  z-index: -1 !important;
+  pointer-events: none !important;
+}
+
 /* [EN] Auto-widen when a dense accordion is open + room exists — no JS; :has() skips always-open file/actions */
 @media (min-width: 840px) { 
   .sidebar:has(#panel-sheet-inspector[open]),

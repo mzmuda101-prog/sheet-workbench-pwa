@@ -652,6 +652,19 @@ if (canFSA && saveBtn) {
 // offline bez cache) zgłosi bramka ensureXlsxLibs(true) w handleFile/loadSampleFile.
 setRuntimeAvailability(true);
 
+// Anty-lag pierwszego otwarcia panelu: w bezczynności po starcie wymuszamy jednorazową
+// rasteryzację wysuwanego panelu (niewidocznie, pod treścią). Bez tego PIERWSZE otwarcie
+// maluje całe poddrzewo paneli/SVG w jednej klatce (~150ms zacięcia); kolejne są już płynne.
+function prewarmSidebar() {
+  const sidebar = document.querySelector(".sidebar");
+  if (!sidebar) return;
+  sidebar.classList.add("prewarm");
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => sidebar.classList.remove("prewarm"))
+  );
+}
+(window.requestIdleCallback || ((fn) => window.setTimeout(fn, 200)))(prewarmSidebar);
+
 window.addEventListener("beforeunload", (e) => {
   if (!hasUnsavedChanges) return;
   e.preventDefault();
