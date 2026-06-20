@@ -10,6 +10,47 @@ function isXlsxAvailable(showFeedback = false) {
   return available;
 }
 
+// Leniwe doładowanie CIĘŻKICH bibliotek (xlsx-js-style ~416K + JSZip ~96K).
+// NIE są ładowane przy starcie (zob. index.html) — apka bootuje bez ~512K JS.
+// Dogrywamy je dopiero przy pierwszym wczytaniu/zapisie pliku. Po dograniu
+// (i zacache'owaniu przez SW) kolejne wywołania zwracają od razu true.
+// Idempotentne: równoległe wywołania współdzielą jedną obietnicę.
+let _xlsxLibsPromise = null;
+function _loadScriptOnce(src) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.async = false; // zachowaj kolejność wykonania (xlsx przed kodem, który go używa)
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Nie udało się wczytać: " + src));
+    document.head.appendChild(s);
+  });
+}
+async function ensureXlsxLibs(showFeedback = false) {
+  if (window.XLSX && window.JSZip) return true;
+  if (!_xlsxLibsPromise) {
+    _xlsxLibsPromise = Promise.all([
+      window.XLSX ? null : _loadScriptOnce("lib/xlsx-js-style.bundle.min.js"),
+      window.JSZip ? null : _loadScriptOnce("lib/jszip.min.js"),
+    ]).catch((e) => {
+      _xlsxLibsPromise = null; // pozwól spróbować ponownie przy następnej akcji
+      throw e;
+    });
+  }
+  try {
+    await _xlsxLibsPromise;
+  } catch (e) {
+    // np. offline i biblioteki nie ma jeszcze w cache SW
+  }
+  const ok = !!(window.XLSX && window.JSZip);
+  if (!ok && showFeedback) {
+    setStatus(t("xlsxMissingStatus"));
+    toast(t("xlsxMissingToast"), "error");
+    log("Nie udało się doładować bibliotek XLSX/JSZip.", "error");
+  }
+  return ok;
+}
+
 function setRuntimeAvailability(isAvailable) {
   fileInput.disabled = !isAvailable;
   loadBtn.disabled = !isAvailable;

@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260613-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260620-01" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1089,21 +1089,21 @@
       </div>
     </div>
 
-    <!-- Local xlsx-js-style (better style read/write, stable offline) -->
-    <script src="lib/xlsx-js-style.bundle.min.js"></script>
-    <!-- Local JSZip: round-trip XLSX (zachowanie tabel/wykresów/stylów przy zapisie) -->
-    <script src="lib/jszip.min.js"></script>
-    <script src="app/core.js?v=20260613-01"></script>
-    <script src="app/language.js?v=20260613-01"></script>
-    <script src="app/cursor-hint.js?v=20260613-01"></script>
-    <script src="app/analysis.js?v=20260613-01"></script>
-    <script src="app/workbook.js?v=20260613-01"></script>
-    <script src="app/xlsx-patch.js?v=20260613-01"></script>
-    <script src="app/table.js?v=20260613-01"></script>
-    <script src="app/conditional-formatting.js?v=20260613-01"></script>
-    <script src="app/formulas.js?v=20260613-01"></script>
-    <script src="app/edit-tools.js?v=20260613-01"></script>
-    <script src="app/ui-controls.js?v=20260613-01"></script>
-    <script src="app/bootstrap.js?v=20260613-01"></script>
+    <!-- Ciężkie biblioteki xlsx-js-style (~416K) + JSZip (~96K) NIE są ładowane tu na starcie.
+         Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
+         pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
+    <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
+    <script defer src="app/core.js?v=20260620-01"></script>
+    <script defer src="app/language.js?v=20260620-01"></script>
+    <script defer src="app/cursor-hint.js?v=20260620-01"></script>
+    <script defer src="app/analysis.js?v=20260620-01"></script>
+    <script defer src="app/workbook.js?v=20260620-01"></script>
+    <script defer src="app/xlsx-patch.js?v=20260620-01"></script>
+    <script defer src="app/table.js?v=20260620-01"></script>
+    <script defer src="app/conditional-formatting.js?v=20260620-01"></script>
+    <script defer src="app/formulas.js?v=20260620-01"></script>
+    <script defer src="app/edit-tools.js?v=20260620-01"></script>
+    <script defer src="app/ui-controls.js?v=20260620-01"></script>
+    <script defer src="app/bootstrap.js?v=20260620-01"></script>
   </body>
 </html>

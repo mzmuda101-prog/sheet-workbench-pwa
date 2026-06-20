@@ -646,15 +646,11 @@ if (canFSA && saveBtn) {
   saveBtn.removeAttribute("aria-disabled");
 }
 
-const xlsxReady = isXlsxAvailable(false);
-setRuntimeAvailability(xlsxReady);
-if (!xlsxReady) {
-  setEmptyState(
-    t("xlsxMissingStatus"),
-    t("xlsxMissingEmpty")
-  );
-  setStatus(t("xlsxMissingStatus"));
-}
+// Biblioteki XLSX/JSZip dogrywane są LENIWIE (ensureXlsxLibs) przy pierwszym
+// wczytaniu/zapisie pliku — przy starcie traktujemy runtime jako dostępny, żeby
+// UI (input pliku, przyciski, dropzone) NIE był zablokowany. Realny brak (np.
+// offline bez cache) zgłosi bramka ensureXlsxLibs(true) w handleFile/loadSampleFile.
+setRuntimeAvailability(true);
 
 window.addEventListener("beforeunload", (e) => {
   if (!hasUnsavedChanges) return;

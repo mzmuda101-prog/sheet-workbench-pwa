@@ -648,7 +648,7 @@ function formatFileSize(bytes) {
 
 async function handleFile(file, fileHandle = null) {
   if (!file) return;
-  if (!isXlsxAvailable(true)) return;
+  if (!(await ensureXlsxLibs(true))) return; // dogrywa xlsx/jszip przy pierwszym użyciu
   try {
     const sizeHint = file.size > 0 ? ` (${formatFileSize(file.size)})` : "";
     setLoading(true, t("loadingFile") + sizeHint);
@@ -798,7 +798,7 @@ function buildSampleWorkbookArrayBuffer() {
 }
 
 async function loadSampleFile() {
-  if (!isXlsxAvailable(true)) return;
+  if (!(await ensureXlsxLibs(true))) return; // dogrywa xlsx/jszip przy pierwszym użyciu
   let buffer;
   try {
     buffer = buildSampleWorkbookArrayBuffer();
