@@ -987,7 +987,7 @@ const SELECT_VALUE_ALIASES_PL = {
 
 const STATIC_TRANSLATIONS = {
   pl: {
-    title: "Excel Workbench",
+    title: "Sheet Workbench",
     description: "Lokalne przeglądanie, filtrowanie i analiza arkuszy Excel",
     heroSub: "Lokalne przeglądanie, filtrowanie i analiza arkuszy",
     introAria: "Intro Mateusza",
@@ -1189,7 +1189,7 @@ const STATIC_TRANSLATIONS = {
     scrollTopAria: "Przewiń tabelę do góry",
   },
   en: {
-    title: "Excel Workbench",
+    title: "Sheet Workbench",
     description: "Local browsing, filtering, and analysis of Excel sheets",
     heroSub: "Local browsing, filtering, and sheet analysis",
     introAria: "Mateusz intro",
