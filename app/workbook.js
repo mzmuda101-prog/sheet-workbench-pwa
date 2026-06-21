@@ -1044,6 +1044,9 @@ function collectMatchingCellsForRow(row, criteria, dateFilter) {
 }
 
 function applyFilters() {
+  // Filtrowanie i reset sortowania (przez applyCurrentSort) przechodzą tędy —
+  // następny render ma animować odsłonięcie/przestawienie wierszy (FLIP).
+  flipNextRender = true;
   const criteria = [
     {
       query: (searchQueryEl.value || "").trim().toLowerCase(),
@@ -1107,6 +1110,7 @@ function applyFilters() {
 function sortRows() {
   normalizeSortState();
   if (!multiSortState.length) return;
+  flipNextRender = true; // następny render tabeli animuje przestawienie wierszy (FLIP)
   viewRows.sort((a, b) => {
     for (const rule of multiSortState) {
       const idx = currentHeaders.indexOf(rule.col);

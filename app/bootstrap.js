@@ -45,10 +45,12 @@ if (durationAnalysisSummaryEl) {
     if (action === "toggle-long" && canUseLongView()) {
       tableViewMode = tableViewMode === "long" ? "wide" : "long";
       manualColumnWidths = {};
-      renderActiveTable();
-      renderSheetInspectorSummary();
-      renderDurationAnalysis();
-      renderAggregationWorkbench();
+      withSceneTransition(() => {
+        renderActiveTable();
+        renderSheetInspectorSummary();
+        renderDurationAnalysis();
+        renderAggregationWorkbench();
+      });
       toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
       return;
     }
@@ -291,10 +293,12 @@ if (sheetInspectorSummaryEl) {
     if (action === "toggle-long" && canUseLongView()) {
       tableViewMode = tableViewMode === "long" ? "wide" : "long";
       manualColumnWidths = {};
-      renderActiveTable();
-      renderSheetInspectorSummary();
-      renderDurationAnalysis();
-      renderAggregationWorkbench();
+      withSceneTransition(() => {
+        renderActiveTable();
+        renderSheetInspectorSummary();
+        renderDurationAnalysis();
+        renderAggregationWorkbench();
+      });
       toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
       return;
     }
@@ -325,9 +329,11 @@ if (wideLongToggleEl) {
     if (!canUseLongView()) return;
     tableViewMode = tableViewMode === "long" ? "wide" : "long";
     manualColumnWidths = {};
-    renderActiveTable();
-    renderDurationAnalysis();
-    renderAggregationWorkbench();
+    withSceneTransition(() => {
+      renderActiveTable();
+      renderDurationAnalysis();
+      renderAggregationWorkbench();
+    });
     toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
   });
 }

@@ -156,6 +156,109 @@ const formulaWorkbenchListEl = document.getElementById("formulaWorkbenchList");
 const quickRangeButtons = Array.from(document.querySelectorAll(".chip[data-range]"));
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/* ───────────────────────────────────────────────────────────────────────────
+   Animacje „scene change" — wyłącznie transform/opacity (szczyt listy
+   kompozytora), nigdy width/height/top/left. Dwa narzędzia:
+     • withSceneTransition() — View Transitions API: morf starego widoku w nowy
+       (webowy odpowiednik ReplacementTransform). Feature-detect + fallback.
+     • flipRows()            — technika FLIP: wiersze dojeżdżają translateY na
+       nowe pozycje po sortowaniu; tożsamość wiersza = data-row-key.
+   Oba respektują prefers-reduced-motion i degradują się do natychmiastowej
+   zmiany — nie blokują ani nie psują UI, gdy API niedostępne. ───────────── */
+
+// Morf całej sceny (wczytanie arkusza, tryb wide↔long): cross-fade root.
+let sceneTransitionInFlight = false;
+function withSceneTransition(mutate) {
+  if (
+    prefersReducedMotion ||
+    typeof document.startViewTransition !== "function" ||
+    sceneTransitionInFlight
+  ) {
+    mutate();
+    return;
+  }
+  sceneTransitionInFlight = true;
+  document.documentElement.classList.add("vt-scene");
+  const vt = document.startViewTransition(() => mutate());
+  vt.finished.finally(() => {
+    sceneTransitionInFlight = false;
+    document.documentElement.classList.remove("vt-scene");
+  });
+}
+
+// Sygnał „następny render tabeli ma użyć FLIP" — ustawiany przy sortowaniu,
+// resecie sortowania i filtrowaniu (wszystko, co przestawia/odsłania wiersze).
+let flipNextRender = false;
+// Powyżej tylu widocznych wierszy pomijamy FLIP (czysty render — oszczędność).
+// 200 = domyślny limit wyświetlania wierszy, więc typowy pełny widok glide'uje;
+// powyżej (ręcznie podniesiony limit, tysiące wierszy) animacja się wyłącza.
+const FLIP_ROW_CAP = 200;
+
+// FLIP: zmierz pozycje wierszy po kluczu → wykonaj mutację DOM → „cofnij"
+// transformem → puść do zera. Wiersze obecne przed i po płynnie zjeżdżają na
+// nowe miejsca (sort/reset), a wiersze NOWE (np. po poluzowaniu filtra) wchodzą
+// delikatnym fade+slide. Pomiary i zapisy stylów rozdzielone na dwa przebiegi,
+// żeby nie thrashować layoutu.
+function flipRows(mutate) {
+  if (prefersReducedMotion || !tbodyEl) { mutate(); return; }
+  const oldRows = tbodyEl.querySelectorAll("tr[data-row-key]");
+  if (!oldRows.length || oldRows.length > FLIP_ROW_CAP) { mutate(); return; }
+  // Wyzeruj resztkowe transformy z poprzedniej animacji, by mierzyć layout.
+  oldRows.forEach((tr) => { tr.style.transition = "none"; tr.style.transform = ""; });
+  const before = new Map();
+  oldRows.forEach((tr) => before.set(tr.dataset.rowKey, tr.getBoundingClientRect().top));
+
+  mutate();
+
+  // Przebieg 1 (odczyt): nowe pozycje + dopasowanie do „before" po kluczu.
+  const newRows = Array.from(tbodyEl.querySelectorAll("tr[data-row-key]"));
+  const animateEnter = newRows.length <= FLIP_ROW_CAP; // nie zalewaj animacjami przy ogromnym rozwinięciu filtra
+  const measured = newRows.map((tr) => ({
+    tr,
+    top: tr.getBoundingClientRect().top,
+    prev: before.get(tr.dataset.rowKey),
+  }));
+
+  // Przebieg 2 (zapis): ustaw stany startowe (transition: none).
+  const movers = [];
+  const entering = [];
+  measured.forEach(({ tr, top, prev }) => {
+    if (prev == null) {
+      if (!animateEnter) return;
+      tr.style.transition = "none";
+      tr.style.opacity = "0";
+      tr.style.transform = "translateY(6px)";
+      entering.push(tr);
+      return;
+    }
+    const dy = prev - top;
+    if (Math.abs(dy) < 1) return;
+    tr.style.transition = "none";
+    tr.style.transform = `translateY(${dy}px)`;
+    movers.push(tr);
+  });
+  if (!movers.length && !entering.length) return;
+
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      movers.forEach((tr) => {
+        tr.style.transition = "transform 380ms cubic-bezier(0.22, 1, 0.36, 1)";
+        tr.style.transform = "";
+      });
+      entering.forEach((tr) => {
+        tr.style.transition = "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms ease";
+        tr.style.opacity = "";
+        tr.style.transform = "";
+      });
+    })
+  );
+  // Sprzątanie inline styli po animacji, żeby nie kolidowały z kolejnym renderem.
+  setTimeout(() => {
+    movers.forEach((tr) => { tr.style.transition = ""; tr.style.transform = ""; });
+    entering.forEach((tr) => { tr.style.transition = ""; tr.style.transform = ""; tr.style.opacity = ""; });
+  }, 460);
+}
+
 let workbook = null;
 let currentHeaders = [];
 let baseRows = [];
@@ -282,7 +385,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260621-02";
+const APP_BUILD_VERSION = "20260622-03";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

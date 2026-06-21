@@ -347,9 +347,12 @@ body.splashing {
   transform: none;
 }
 
+/* Aktywny przycisk unosi się RAZEM ze swoją pigułką (te same -2px, co
+   .lang-switch-indicator wyżej), żeby etykieta nie dryfowała względem tła —
+   spójnie z tym, jak nieaktywny „EN" leci do góry na hover. */
 .lang-button.is-active:hover,
 .lang-button.is-active:focus-visible {
-  transform: none;
+  transform: translateY(-2px);
 }
 
 .lang-switch:hover::before,
@@ -3777,5 +3780,27 @@ kbd {
     background: var(--surface);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
+  }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   View Transitions — morf „scene change" (wczytanie arkusza, tryb wide↔long).
+   Webowy odpowiednik ReplacementTransform: przeglądarka robi snapshot starego
+   i nowego widoku i animuje przejście (cross-fade na opacity — tania właściwość).
+   Sterowane z JS przez withSceneTransition() (feature-detect + fallback).
+   ─────────────────────────────────────────────────────────────────────────── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Reduced-motion: żadnych animacji przejść (JS i tak pominie startViewTransition,
+   to dodatkowy bezpiecznik także dla przejść nawigacyjnych). */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
   }
 }

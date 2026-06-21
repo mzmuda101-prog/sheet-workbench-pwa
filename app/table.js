@@ -585,7 +585,13 @@ function getDisplayModel() {
 function renderActiveTable() {
   currentDisplayModel = getDisplayModel();
   sortRowsForHeaders(currentDisplayModel.rows, currentDisplayModel.headers);
-  renderTable(currentDisplayModel);
+  const doRender = () => renderTable(currentDisplayModel);
+  if (flipNextRender) {
+    flipNextRender = false;
+    flipRows(doRender); // wiersze dojeżdżają na nowe pozycje / wchodzą fade+slide (FLIP)
+  } else {
+    doRender();
+  }
   updateWideLongToggle();
 }
 

@@ -1208,16 +1208,18 @@ loadBtn.addEventListener("click", () => {
       updateFilterBadge();
       populateSortColumnSelect();
       populateEditColumnSelect();
-      renderActiveTable();
-      renderInsights();
-      renderKpiExtractor();
-      renderSheetInspectorSummary();
-      renderColumnProfiles();
-      renderSections();
-      renderRepeatingBlocks();
-      renderDurationAnalysis();
-      renderAggregationWorkbench();
-      renderFormulaWorkbench();
+      withSceneTransition(() => {
+        renderActiveTable();
+        renderInsights();
+        renderKpiExtractor();
+        renderSheetInspectorSummary();
+        renderColumnProfiles();
+        renderSections();
+        renderRepeatingBlocks();
+        renderDurationAnalysis();
+        renderAggregationWorkbench();
+        renderFormulaWorkbench();
+      });
       setDirtyState(false);
       if ((currentSheetStats?.trimmedColumns || 0) > 0) {
         log(`Przycięto puste kolumny poza realnym zakresem danych: ${currentSheetStats.trimmedColumns}`, "info");
