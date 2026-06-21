@@ -1444,31 +1444,29 @@ if (quickSearchColumnsBtn) {
   });
 }
 
-if (quickSearchEl) {
-  quickSearchEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") applyQuickSearch();
-  });
-}
-
 if (quickSearchModeEl) {
   quickSearchModeEl.addEventListener("change", () => {
     applyQuickSearchMode(getNormalizedSelectValue(quickSearchModeEl));
   });
 }
 
-// Enter uruchamia szukanie z DOWOLNEGO elementu okna (pole, selecty trybu/akcji,
-// checkbox operatorów) — nie tylko z pola tekstowego. Wcześniej Enter łapał tylko
-// input; po kliknięciu innego elementu fokus przechodził na niego i Enter „przepadał".
-// Wyjątek: przyciski (Kolumny/Szukaj) zachowują swoje natywne działanie (klik), żeby
-// Enter na „Kolumny" otwierał picker, a nie wpadał w dwa razy w to samo.
-if (quickSearchPopupEl) {
-  quickSearchPopupEl.addEventListener("keydown", (e) => {
+// Enter uruchamia szukanie z DOWOLNEGO elementu szybkiego szukania (pole, selecty
+// trybu/akcji, checkbox operatorów) — nie tylko z pola tekstowego. Wcześniej Enter
+// wisiał na samym input; po kliknięciu innego elementu fokus przechodził na niego
+// i Enter „przepadał". Dotyczyło OBU wariantów: paska pod przyciskiem (#quickSearchWrap)
+// i okna ze skrótu Cmd+Shift+F (#quickSearchPopup). Wyjątek: przyciski (Kolumny/Szukaj)
+// zachowują natywne działanie (klik), żeby Enter na „Kolumny" otwierał picker.
+function attachQuickSearchEnter(container) {
+  if (!container) return;
+  container.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     if (e.target.closest && e.target.closest("button")) return; // przyciski robią swoje
     e.preventDefault();
     applyQuickSearch();
   });
 }
+attachQuickSearchEnter(quickSearchWrap);   // pasek pod przyciskiem
+attachQuickSearchEnter(quickSearchPopupEl); // okno ze skrótu Cmd+Shift+F
 if (quickSearchPopupModeEl) {
   quickSearchPopupModeEl.addEventListener("change", () => {
     applyQuickSearchMode(getNormalizedSelectValue(quickSearchPopupModeEl));
