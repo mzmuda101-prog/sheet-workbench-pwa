@@ -1374,9 +1374,35 @@ tbodyEl.addEventListener("pointerleave", (e) => {
   hideCellTooltip();
 }, true);
 
+// Podpowiedź wartości komórki pokazujemy DOPIERO na tapnięcie (touchend bez ruchu),
+// a NIE na touchstart. Wcześniej każdy start gestu przewijania odpalał showCellTooltip,
+// który robi wymuszony reflow (scrollWidth/clientWidth + getBoundingClientRect ×2) i pokazuje
+// tooltip z backdrop-filter blur(8px) — synchronicznie w handlerze touchstart, na starcie
+// KAŻDEGO machnięcia i na każdej komórce z przyciętym tekstem (daty/nazwy). Na iOS to
+// „hamowało" scroll pod palcem. Teraz: touchmove > próg = to przewijanie, nie tap → cisza.
+// Wszystkie listenery passive → nigdy nie blokują natywnego przewijania.
+let cellTapTd = null, cellTapX = 0, cellTapY = 0, cellTapMoved = false;
 tbodyEl.addEventListener("touchstart", (e) => {
   const td = e.target.closest("td");
-  if (!td || td.classList.contains("row-head")) return;
+  if (!td || td.classList.contains("row-head")) { cellTapTd = null; return; }
+  cellTapTd = td;
+  cellTapMoved = false;
+  const t = e.touches[0];
+  cellTapX = t ? t.clientX : 0;
+  cellTapY = t ? t.clientY : 0;
+}, { passive: true });
+tbodyEl.addEventListener("touchmove", (e) => {
+  if (!cellTapTd || cellTapMoved) return;
+  const t = e.touches[0];
+  if (!t) return;
+  if (Math.abs(t.clientX - cellTapX) > 8 || Math.abs(t.clientY - cellTapY) > 8) {
+    cellTapMoved = true; // ruch = przewijanie, nie tapnięcie → nie pokazuj podpowiedzi
+  }
+}, { passive: true });
+tbodyEl.addEventListener("touchend", () => {
+  const td = cellTapTd;
+  cellTapTd = null;
+  if (!td || cellTapMoved) return;
   showCellTooltip(td, true);
 }, { passive: true });
 
