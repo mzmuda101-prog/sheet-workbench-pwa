@@ -21,7 +21,6 @@ const APP_ASSETS = [
   "./app/formulas.js?v=20260621-01",
   "./app/edit-tools.js?v=20260621-01",
   "./app/ui-controls.js?v=20260621-01",
-  "./app/ios-momentum.js?v=20260621-01",
   "./app/scroll-diagnostics.js?v=20260621-01",
   "./app/bootstrap.js?v=20260621-01",
   "./assets/images/favicon.png?v=20260610-05",
