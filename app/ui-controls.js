@@ -1456,9 +1456,17 @@ if (quickSearchModeEl) {
   });
 }
 
-if (quickSearchPopupInput) {
-  quickSearchPopupInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { e.preventDefault(); applyQuickSearch(); }
+// Enter uruchamia szukanie z DOWOLNEGO elementu okna (pole, selecty trybu/akcji,
+// checkbox operatorów) — nie tylko z pola tekstowego. Wcześniej Enter łapał tylko
+// input; po kliknięciu innego elementu fokus przechodził na niego i Enter „przepadał".
+// Wyjątek: przyciski (Kolumny/Szukaj) zachowują swoje natywne działanie (klik), żeby
+// Enter na „Kolumny" otwierał picker, a nie wpadał w dwa razy w to samo.
+if (quickSearchPopupEl) {
+  quickSearchPopupEl.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    if (e.target.closest && e.target.closest("button")) return; // przyciski robią swoje
+    e.preventDefault();
+    applyQuickSearch();
   });
 }
 if (quickSearchPopupModeEl) {
