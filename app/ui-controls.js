@@ -892,10 +892,31 @@ async function ensureWritePermission(handle) {
 // Buduje bajty pliku wyjściowego. Preferuje ZIP-patch (zachowuje tabele, wykresy,
 // style i formuły oryginału); gdy brak oryginału lub patch zawiedzie — fallback do
 // XLSX.write (xlsx-js-style), który gubi część elementów, ale zawsze działa.
+// Mapa rozwiniętych formuł z workbooka SheetJS: { sheetName: { ref: "A3*10+B2", … } }.
+// Potrzebna do „od-dzielania" formuł dzielonych przy zapisie (unshareTouchedGroups) —
+// SheetJS przy odczycie poprawnie tłumaczy formuły zależne z grupy shared, więc bierzemy
+// gotowe `.f` zamiast samodzielnie przeliczać przesunięcia referencji.
+function buildSheetFormulaMaps() {
+  const maps = {};
+  if (!workbook || !workbook.Sheets || !Array.isArray(workbook.SheetNames)) return maps;
+  for (const name of workbook.SheetNames) {
+    const sh = workbook.Sheets[name];
+    if (!sh) continue;
+    const m = {};
+    for (const ref in sh) {
+      if (ref.charCodeAt(0) === 33) continue; // pomiń metadane "!ref", "!cols" itp.
+      const cell = sh[ref];
+      if (cell && cell.f) m[ref] = cell.f;
+    }
+    if (Object.keys(m).length) maps[name] = m;
+  }
+  return maps;
+}
+
 async function buildOutputBytes(ext) {
   if (originalFileBytes && typeof buildPatchedXlsx === "function" && typeof JSZip !== "undefined") {
     try {
-      return await buildPatchedXlsx(originalFileBytes, pendingEdits);
+      return await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps());
     } catch (err) {
       log("ZIP-patch nie powiódł się — zapis przez xlsx-js-style (możliwa utrata tabel/wykresów).", "warning");
     }

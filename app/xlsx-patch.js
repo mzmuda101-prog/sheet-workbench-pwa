@@ -129,11 +129,69 @@ function applyValueToCell(doc, cEl, payload) {
   cEl.appendChild(vEl);
 }
 
+// FORMUŁY DZIELONE (shared formulas) — newralgiczne dla zapisu metodą ZIP-patch.
+// W .xlsx jedna komórka („wzorzec") trzyma `<f t="shared" ref="B2:B4" si="0">A2*10</f>`,
+// a pozostałe komórki grupy mają tylko PUSTĄ referencję `<f t="shared" si="0"/>` bez treści.
+// Gdy edytujemy wzorzec na statyczną wartość, applyValueToCell usuwa jego `<f>` — i grupa
+// zostaje OSIEROCONA: zależne komórki wskazują si=0, którego już nikt nie definiuje →
+// Excel zgłasza „plik uszkodzony, naprawić". To była przyczyna nawrotów korupcji zapisu.
+//
+// Rozwiązanie: zanim naniesiemy edycje, „od-dzielamy" (de-share) KAŻDĄ grupę dotkniętą
+// edycją — wzorzec zachowuje swoją treść, a każda zależna dostaje WŁASNĄ, samodzielną
+// formułę (rozwiniętą przez SheetJS, np. „A3*10+B2"; przekazaną w formulaMap). Excel czyta
+// zwykłe formuły bez problemu (i sam je z powrotem „dzieli" przy własnym zapisie).
+// Nietknięte grupy zostają bez zmian (zero zbędnego churnu w wielkich arkuszach).
+function sharedFormulaOf(cEl) {
+  const fs = cEl.getElementsByTagName("f");
+  const f = fs.length ? fs[0] : null;
+  if (!f || f.getAttribute("t") !== "shared") return null;
+  const si = f.getAttribute("si");
+  if (si === null) return null;
+  return { f, si, text: f.textContent || "" };
+}
+
+function unshareTouchedGroups(sheetData, cells, formulaMap) {
+  // grupuj komórki shared po si
+  const groups = {};
+  Array.from(sheetData.getElementsByTagName("c")).forEach((cEl) => {
+    const info = sharedFormulaOf(cEl);
+    if (!info) return;
+    const ref = cEl.getAttribute("r");
+    (groups[info.si] = groups[info.si] || []).push({ ref, f: info.f, text: info.text });
+  });
+
+  Object.keys(groups).forEach((si) => {
+    const members = groups[si];
+    // dotknięta = którakolwiek komórka grupy jest w edycjach (wzorzec LUB zależna)
+    const touched = members.some((m) => Object.prototype.hasOwnProperty.call(cells, m.ref));
+    if (!touched) return;
+
+    members.forEach((m) => {
+      // treść formuły: wzorzec ma własną; zależna bierze rozwiniętą z formulaMap
+      const text = m.text || (formulaMap && formulaMap[m.ref]) || "";
+      m.f.removeAttribute("t");
+      m.f.removeAttribute("ref");
+      m.f.removeAttribute("si");
+      while (m.f.firstChild) m.f.removeChild(m.f.firstChild);
+      if (text) {
+        m.f.appendChild(m.f.ownerDocument.createTextNode(text));
+      } else if (m.f.parentNode) {
+        // brak formuły do odtworzenia → usuń <f>, zostaw zbuforowaną wartość <v> (statyczna,
+        // bezpieczna — żadnego osierocenia, w najgorszym razie utrata żywej formuły)
+        m.f.parentNode.removeChild(m.f);
+      }
+    });
+  });
+}
+
 // Nanosi wszystkie edycje na jeden arkusz (string XML -> string XML).
-function patchSheetXml(xml, cells) {
+function patchSheetXml(xml, cells, formulaMap) {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   const sheetData = doc.getElementsByTagName("sheetData")[0];
   if (!sheetData) return xml;
+
+  // Rozdziel formuły dzielone dotknięte edycją (zanim usuniemy wzorce — patrz wyżej).
+  unshareTouchedGroups(sheetData, cells, formulaMap);
 
   // mapa istniejących komórek ref -> <c>
   const cellIndex = {};
@@ -216,7 +274,9 @@ async function dropCalcChain(zip) {
 }
 
 // Główna funkcja: oryginalne bajty + edycje -> nowe bajty XLSX (zachowany plik).
-async function buildPatchedXlsx(originalBytes, edits) {
+// formulaMaps[sheetName][ref] = rozwinięta formuła (z SheetJS) — używane do odtworzenia
+// samodzielnych formuł przy „od-dzielaniu" grup shared (patrz unshareTouchedGroups).
+async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
   if (typeof JSZip === "undefined") throw new Error("JSZip niedostępny");
   const zip = await JSZip.loadAsync(originalBytes);
   const sheetPaths = await resolveSheetPaths(zip);
@@ -228,7 +288,7 @@ async function buildPatchedXlsx(originalBytes, edits) {
     const path = sheetPaths[sheetName];
     if (!path || !zip.file(path)) continue;
     const xml = await zip.file(path).async("string");
-    zip.file(path, patchSheetXml(xml, cells));
+    zip.file(path, patchSheetXml(xml, cells, (formulaMaps && formulaMaps[sheetName]) || null));
     touched = true;
   }
 
