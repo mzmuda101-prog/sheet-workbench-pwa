@@ -204,6 +204,8 @@ function patchSheetXml(xml, cells, formulaMap) {
     const payload = cells[ref];
     let cEl = cellIndex[ref];
 
+    if (payload === undefined) return; // brak realnej edycji — pomiń (defensywnie)
+
     if (payload === null) {
       // usunięcie wartości
       if (cEl && cEl.parentNode) cEl.parentNode.removeChild(cEl);
