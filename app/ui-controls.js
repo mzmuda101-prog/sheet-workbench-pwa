@@ -1288,6 +1288,10 @@ function applyQuickSearch() {
   searchQueryEl.value = value;
   applyFilters();
   sortRows();
+  // Delikatny feedback przeliczenia: filtrowanie przestawia/odsłania wiersze → FLIP;
+  // tryb „zaznacz" zostawia wiersze w miejscu → łagodny puls trafień.
+  if (quickSearchHighlightMode) animateMatchPulseNextRender = true;
+  else flipNextRender = true;
   renderActiveTable();
   renderInsights();
   renderSheetInspectorSummary();

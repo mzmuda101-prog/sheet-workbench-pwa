@@ -1260,6 +1260,9 @@ function renderTable(modelOrHeaders, maybeRows) {
     : (modelOrHeaders || { headers: [], rows: [] });
   const headers = Array.isArray(model.headers) ? model.headers : [];
   const rows = Array.isArray(model.rows) ? model.rows : [];
+  // Konsumuj sygnał pulsu trafień raz (żeby nie odpalał się przy zwykłych re-renderach).
+  const pulseMatches = animateMatchPulseNextRender;
+  animateMatchPulseNextRender = false;
 
   updateSortControls();
   if (!headers.length) {
@@ -1388,6 +1391,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     if (quickSearchHighlightMode && matchedRowIndexes.size > 0) {
       if (matchedRowIndexes.has(row.rowIndex0)) {
         tr.classList.add("row-matched");
+        if (pulseMatches) tr.classList.add("search-match-pulse");
       } else {
         tr.classList.add("row-unmatched");
       }

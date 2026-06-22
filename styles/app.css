@@ -754,6 +754,8 @@ body.splashing {
   .table-actions,
   .quick-search { transition: none; }
   .guide-attention { animation: none; }
+  tbody tr.row-matched.search-match-pulse td,
+  tbody tr.row-matched.search-match-pulse .row-head { animation: none; }
   /* Animacje dekoracyjne overlay'ów — spinner zostaje (informuje o trwającym wczytywaniu) */
   .modal,
   .modal-content,
@@ -3005,6 +3007,16 @@ tbody tr.row-matched .row-head {
 tbody tr.row-unmatched td,
 tbody tr.row-unmatched .row-head {
   opacity: 0.35;
+}
+/* Feedback przeliczenia (tryb „zaznacz"): trafione wiersze raz łagodnie się
+   rozświetlają. Czyste opacity (tani dla kompozytora), jednorazowo przy szukaniu. */
+@keyframes searchMatchPulse {
+  from { opacity: 0.3; }
+  to   { opacity: 1; }
+}
+tbody tr.row-matched.search-match-pulse td,
+tbody tr.row-matched.search-match-pulse .row-head {
+  animation: searchMatchPulse 340ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 [data-theme="dark"] tbody tr.row-matched td {
   background: color-mix(in srgb, var(--accent) 18%, transparent) !important;

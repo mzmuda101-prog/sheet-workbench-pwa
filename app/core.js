@@ -204,10 +204,28 @@ function withSceneTransition(mutate) {
 // Sygnał „następny render tabeli ma użyć FLIP" — ustawiany przy sortowaniu,
 // resecie sortowania i filtrowaniu (wszystko, co przestawia/odsłania wiersze).
 let flipNextRender = false;
-// Powyżej tylu widocznych wierszy pomijamy FLIP (czysty render — oszczędność).
-// 200 = domyślny limit wyświetlania wierszy, więc typowy pełny widok glide'uje;
-// powyżej (ręcznie podniesiony limit, tysiące wierszy) animacja się wyłącza.
-const FLIP_ROW_CAP = 200;
+// Maks. liczba JEDNOCZEŚNIE animowanych wierszy (movers+entering). Gradient wg
+// mocy CPU/RAM i wysokości ekranu — żeby nie zalać kompozytora na słabszych
+// urządzeniach, ale i nie okrajać sprawnych. To NIE limit wyświetlania: dzięki
+// animacji tylko w paśmie viewportu (flipRows) liczba kandydatów i tak jest mała,
+// a ten cap jest bezpiecznikiem. Liczony przy każdym FLIP (obrót iPada zmienia ekran).
+function computeFlipRowCap() {
+  const cores = navigator.hardwareConcurrency || 8;
+  const mem = navigator.deviceMemory || 8; // Safari nie wspiera → traktuj jak 8
+  let cap = 80;                              // sprawne urządzenia (baza)
+  if (cores <= 2 || mem <= 2) cap = 30;      // bardzo słabe
+  else if (cores <= 4 || mem <= 4) cap = 45; // słabe (sporo iPadów/telefonów)
+  else if (cores <= 6) cap = 65;             // średnie
+  const vh = window.innerHeight || 800;      // mniejszy ekran = mniej widać naraz
+  if (vh < 680) cap = Math.min(cap, 40);
+  else if (vh < 880) cap = Math.min(cap, 65);
+  return cap;
+}
+
+// Sygnał „następny render ma delikatnie rozjaśnić trafione wiersze" — tryb
+// „zaznacz" w szybkim szukaniu nie przestawia wierszy (FLIP nic by nie pokazał),
+// więc zamiast tego trafienia łagodnie się rozświetlają (czyste opacity, raz).
+let animateMatchPulseNextRender = false;
 
 // FLIP: zmierz pozycje wierszy po kluczu → wykonaj mutację DOM → „cofnij"
 // transformem → puść do zera. Wiersze obecne przed i po płynnie zjeżdżają na
@@ -217,41 +235,60 @@ const FLIP_ROW_CAP = 200;
 function flipRows(mutate) {
   if (prefersReducedMotion || !tbodyEl) { mutate(); return; }
   const oldRows = tbodyEl.querySelectorAll("tr[data-row-key]");
-  if (!oldRows.length || oldRows.length > FLIP_ROW_CAP) { mutate(); return; }
+  // Sufit bezpieczeństwa: przy absurdalnie wielkim DOM pomijamy FLIP (czysty render).
+  if (!oldRows.length || oldRows.length > 1500) { mutate(); return; }
+
+  // Pasmo viewportu tabeli + zapas — animujemy TYLKO wiersze blisko widoku. Off-screen
+  // i tak nie widać, więc nie marnujemy mocy kompozytora (kluczowe na słabszym iPadzie),
+  // a widoczne wiersze zawsze glide'ują niezależnie od rozmiaru wyniku.
+  const wrapRect = tableWrapEl
+    ? tableWrapEl.getBoundingClientRect()
+    : { top: 0, bottom: window.innerHeight || 800 };
+  const buffer = Math.max(160, (wrapRect.bottom - wrapRect.top) * 0.6);
+  const bandTop = wrapRect.top - buffer;
+  const bandBottom = wrapRect.bottom + buffer;
+  const inBand = (y) => y != null && y >= bandTop && y <= bandBottom;
+  const cap = computeFlipRowCap();
+
   // Wyzeruj resztkowe transformy z poprzedniej animacji, by mierzyć layout.
   oldRows.forEach((tr) => { tr.style.transition = "none"; tr.style.transform = ""; });
   const before = new Map();
-  oldRows.forEach((tr) => before.set(tr.dataset.rowKey, tr.getBoundingClientRect().top));
+  oldRows.forEach((tr) => {
+    const top = tr.getBoundingClientRect().top;
+    if (inBand(top)) before.set(tr.dataset.rowKey, top); // tylko widoczne pasmo
+  });
 
   mutate();
 
   // Przebieg 1 (odczyt): nowe pozycje + dopasowanie do „before" po kluczu.
   const newRows = Array.from(tbodyEl.querySelectorAll("tr[data-row-key]"));
-  const animateEnter = newRows.length <= FLIP_ROW_CAP; // nie zalewaj animacjami przy ogromnym rozwinięciu filtra
   const measured = newRows.map((tr) => ({
     tr,
     top: tr.getBoundingClientRect().top,
     prev: before.get(tr.dataset.rowKey),
   }));
 
-  // Przebieg 2 (zapis): ustaw stany startowe (transition: none).
+  // Przebieg 2 (zapis): ustaw stany startowe (transition: none). Animujemy tylko
+  // wiersze w paśmie viewportu i nie więcej niż cap (gradientowy bezpiecznik).
   const movers = [];
   const entering = [];
-  measured.forEach(({ tr, top, prev }) => {
+  for (const { tr, top, prev } of measured) {
+    if (movers.length + entering.length >= cap) break;
     if (prev == null) {
-      if (!animateEnter) return;
+      if (!inBand(top)) continue; // nowy/wjeżdżający z daleka, ale ląduje poza widokiem
       tr.style.transition = "none";
       tr.style.opacity = "0";
       tr.style.transform = "translateY(6px)";
       entering.push(tr);
-      return;
+      continue;
     }
     const dy = prev - top;
-    if (Math.abs(dy) < 1) return;
+    if (Math.abs(dy) < 1) continue;
+    if (!inBand(top) && !inBand(prev)) continue; // ruch w całości poza widokiem → snap
     tr.style.transition = "none";
     tr.style.transform = `translateY(${dy}px)`;
     movers.push(tr);
-  });
+  }
   if (!movers.length && !entering.length) return;
 
   requestAnimationFrame(() =>
@@ -400,7 +437,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260622-05";
+const APP_BUILD_VERSION = "20260622-07";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
