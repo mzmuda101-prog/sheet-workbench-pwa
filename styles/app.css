@@ -2617,6 +2617,18 @@ thead th {
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
 }
+/* Słabsze urządzenia dotykowe (iPad/telefon): sticky + backdrop-filter to na iOS
+   kosztowny dla kompozytora wzorzec (rozmycie liczone co klatkę przy przewijaniu).
+   Zdejmujemy blur i dajemy pełne, nieprzezroczyste tło — wizualnie prawie bez różnicy,
+   a płynność przewijania wyraźnie lepsza. Na mocnych urządzeniach zostaje frosted glass. */
+@media (pointer: coarse) {
+  html.low-power .table-wrap.freeze-first-col tbody td:first-child,
+  html.low-power .table-wrap.freeze-first-col tbody td:nth-child(2) {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface);
+  }
+}
 .table-wrap.freeze-first-col tbody td:first-child { left: 0; }
 .table-wrap.freeze-first-col tbody td:nth-child(2) {
   left: var(--row-head-w, 44px);

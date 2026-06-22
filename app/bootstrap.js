@@ -11,6 +11,11 @@ if (panelHandle) panelHandle.addEventListener("click", toggleSidebar);
 if (sidebarScrim) sidebarScrim.addEventListener("click", () => setSidebarOpen(false));
 document.querySelectorAll("details.panel").forEach((det) => {
   det.addEventListener("toggle", () => {
+    // Rozwinięcie panelu → dorenderuj jego analizy, które były pominięte gdy był
+    // zwinięty (leniwe renderowanie analiz, perf na słabszych urządzeniach).
+    if (det.open && typeof renderDirtyAnalysesForPanel === "function") {
+      renderDirtyAnalysesForPanel(det.id);
+    }
     if (!isSidebarOpen()) return;
     requestAnimationFrame(() => syncSidebarHandle()); // [EN] :has() width changes — no resize event; keep handle aligned
     window.setTimeout(() => syncSidebarHandle(), 260);

@@ -1,5 +1,96 @@
 // Sheet/workbook insights and analytical helpers.
 
+// ===========================================================================
+// Leniwe renderowanie paneli analiz (perf)
+// ---------------------------------------------------------------------------
+// Każde szybkie szukanie / filtrowanie odpalało PEŁNĄ kaskadę renderów analiz
+// (agregacje, czas trwania, profile kolumn…), nawet gdy ich panel <details> był
+// zwinięty i niewidoczny. Na słabszym rdzeniu (np. iPad) to dawało odczuwalne
+// zacięcie. Tu: gdy panel jest zwinięty, pomijamy ciężki render i oznaczamy go
+// „brudnym". Brudne panele dorenderowują się:
+//   1) leniwie w bezczynności (requestIdleCallback) — „bezpieczna nadwyżka",
+//      żeby ktoś szybko przewijający otworzył panel już gotowy,
+//   2) natychmiast w momencie rozwinięcia panelu (gwarancja świeżości).
+// Render WIDOCZNEJ tabeli (renderActiveTable) nie jest odraczany.
+const ANALYSIS_PANELS = {
+  insights:    { panelId: "panel-workbench-analysis",   fn: () => renderInsights(),              dirty: true },
+  inspector:   { panelId: "panel-sheet-inspector",      fn: () => renderSheetInspectorSummary(), dirty: true },
+  sections:    { panelId: "panel-sheet-inspector",      fn: () => renderSections(),              dirty: true },
+  columns:     { panelId: "panel-sheet-inspector",      fn: () => renderColumnProfiles(),        dirty: true },
+  repeating:   { panelId: "panel-sheet-inspector",      fn: () => renderRepeatingBlocks(),       dirty: true },
+  duration:    { panelId: "panel-sheet-inspector",      fn: () => renderDurationAnalysis(),      dirty: true },
+  aggregation: { panelId: "panel-aggregation-workbench", fn: () => renderAggregationWorkbench(),  dirty: true },
+  monthly:     { panelId: "panel-monthly-summary",      fn: () => renderMonthlySummary(),        dirty: true },
+};
+let forcingAnalysisRender = false; // true = renderuj mimo zwiniętego panelu (prewarm / rozwinięcie)
+let analysisPrewarmHandle = null;
+
+function analysisPanelIsOpen(panelId) {
+  const el = document.getElementById(panelId);
+  return !el || el.open; // brak panelu (nietypowy layout) → renderuj normalnie
+}
+
+// Zwraca true = render odroczony (panel zwinięty) i należy przerwać funkcję.
+function deferAnalysis(key) {
+  const meta = ANALYSIS_PANELS[key];
+  if (!meta) return false;
+  if (forcingAnalysisRender || analysisPanelIsOpen(meta.panelId)) {
+    meta.dirty = false;
+    return false;
+  }
+  meta.dirty = true;
+  scheduleAnalysisPrewarm();
+  return true;
+}
+
+function runAnalysisPrewarm(deadline) {
+  forcingAnalysisRender = true;
+  try {
+    for (const key of Object.keys(ANALYSIS_PANELS)) {
+      const meta = ANALYSIS_PANELS[key];
+      if (!meta.dirty) continue;
+      // Budżet czasu bezczynności: jeśli się kończy, dokończ w następnej turze,
+      // żeby nie konkurować z przewijaniem/dotykiem na słabszym urządzeniu.
+      if (deadline && typeof deadline.timeRemaining === "function" && deadline.timeRemaining() < 4) {
+        scheduleAnalysisPrewarm();
+        break;
+      }
+      try { meta.fn(); } catch (_) { /* nie psuj prewarmu jednym panelem */ }
+      meta.dirty = false;
+    }
+  } finally {
+    forcingAnalysisRender = false;
+  }
+}
+
+function scheduleAnalysisPrewarm() {
+  if (analysisPrewarmHandle != null) return;
+  const lowPower = typeof IS_LOW_POWER !== "undefined" && IS_LOW_POWER;
+  const ric = window.requestIdleCallback;
+  const start = () => {
+    analysisPrewarmHandle = null;
+    if (ric) ric((dl) => runAnalysisPrewarm(dl), { timeout: 2000 });
+    else runAnalysisPrewarm(null);
+  };
+  // Na słabszych urządzeniach odczekaj dłużej, by nie wchodzić w drogę interakcji.
+  analysisPrewarmHandle = window.setTimeout(start, lowPower ? 600 : 120);
+}
+
+// Rozwinięcie panelu — dorenderuj jego (ewentualnie brudne) analizy natychmiast.
+function renderDirtyAnalysesForPanel(panelId) {
+  forcingAnalysisRender = true;
+  try {
+    for (const key of Object.keys(ANALYSIS_PANELS)) {
+      const meta = ANALYSIS_PANELS[key];
+      if (meta.panelId !== panelId) continue;
+      try { meta.fn(); } catch (_) {}
+      meta.dirty = false;
+    }
+  } finally {
+    forcingAnalysisRender = false;
+  }
+}
+
 function valuesEqual(a, b) {
   if (a === b) return true;
   if (a instanceof Date && b instanceof Date) return a.getTime() === b.getTime();
@@ -182,6 +273,7 @@ function detectSections(sheet, headerRow, data) {
 }
 
 function renderSections() {
+  if (deferAnalysis("sections")) return;
   if (!sectionNavigatorEl) return;
   sectionNavigatorEl.replaceChildren();
   if (!currentSections.length) {
@@ -230,6 +322,7 @@ function renderSections() {
 }
 
 function renderSheetInspectorSummary() {
+  if (deferAnalysis("inspector")) return;
   if (!sheetInspectorSummaryEl) return;
   sheetInspectorSummaryEl.replaceChildren();
 
@@ -809,6 +902,7 @@ function buildDurationAnalysis() {
 }
 
 function renderDurationAnalysis() {
+  if (deferAnalysis("duration")) return;
   if (!durationAnalysisSummaryEl || !durationAnalysisListEl) return;
   durationAnalysisSummaryEl.replaceChildren();
   durationAnalysisListEl.replaceChildren();
@@ -1718,7 +1812,8 @@ function buildAggregationWorkbenchResult() {
 }
 
 function renderAggregationWorkbench() {
-  renderMonthlySummary(); // panel „Podsumowanie miesięczne" odświeża się tym samym cyklem
+  renderMonthlySummary(); // panel „Podsumowanie miesięczne" odświeża się tym samym cyklem (ma własną bramkę)
+  if (deferAnalysis("aggregation")) return;
   if (!aggregationWorkbenchSummaryEl || !aggregationWorkbenchListEl) return;
   aggregationWorkbenchSummaryEl.replaceChildren();
   aggregationWorkbenchListEl.replaceChildren();
@@ -2501,6 +2596,7 @@ function detectRepeatingBlocks(sheet, headerRow, data) {
 }
 
 function renderRepeatingBlocks() {
+  if (deferAnalysis("repeating")) return;
   if (!repeatBlockDetectorEl) return;
   repeatBlockDetectorEl.replaceChildren();
   if (!currentRepeatingBlocks.length) {
@@ -3201,6 +3297,7 @@ function collectColumnProfiles() {
 }
 
 function renderColumnProfiles() {
+  if (deferAnalysis("columns")) return;
   if (!columnProfilerEl) return;
   columnProfilerEl.replaceChildren();
   if (!currentColumnProfiles.length) {
@@ -3292,6 +3389,7 @@ function focusColumnProfile(colIdx) {
 }
 
 function renderInsights() {
+  if (deferAnalysis("insights")) return;
   const data = collectSheetInsights();
   renderInsightList(
     workbookInsightsEl,
@@ -3373,6 +3471,7 @@ function monthlyHeaderBase(header) {
 }
 
 function renderMonthlySummary() {
+  if (deferAnalysis("monthly")) return;
   if (!monthlySummaryEl) return;
   monthlySummaryEl.replaceChildren();
   const model = (typeof currentDisplayModel !== "undefined" && currentDisplayModel) ? currentDisplayModel : getDisplayModel();

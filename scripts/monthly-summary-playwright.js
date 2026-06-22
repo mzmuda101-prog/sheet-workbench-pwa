@@ -45,6 +45,10 @@ async function run() {
     currentDisplayModel = model;
 
     const el = document.getElementById("monthlySummary");
+    // Panele analiz renderują się leniwie (pomijane gdy <details> zwinięty) — żeby
+    // testować logikę obliczeń, otwieramy panel, tak jak zrobiłby to użytkownik.
+    const monthlyPanel = document.getElementById("panel-monthly-summary");
+    if (monthlyPanel) monthlyPanel.open = true;
     const render = (state) => { monthlySummaryState = Object.assign({ months: 12, anchor: "data", split: true }, state); renderMonthlySummary(); };
     const valuesByMonth = () => {
       const map = {};

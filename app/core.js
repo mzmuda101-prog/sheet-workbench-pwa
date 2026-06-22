@@ -1,5 +1,20 @@
 // Core runtime: DOM refs, shared state, and base UI helpers.
 
+// Heurystyka „słabszego urządzenia" — używana do optymalizacji, które wolno
+// odpalać TYLKO tam, gdzie się opłacają (np. tańszy render zamrożonej kolumny
+// na dotykowych tabletach). Na mocnych urządzeniach nic się nie zmienia.
+const IS_LOW_POWER = (() => {
+  try {
+    const cores = navigator.hardwareConcurrency || 8;
+    const mem = navigator.deviceMemory || 8; // Safari nie wspiera → traktuj jak 8
+    const coarse = !!(window.matchMedia && window.matchMedia("(pointer: coarse)").matches);
+    return cores <= 4 || mem <= 4 || (coarse && cores <= 6);
+  } catch (_) {
+    return false;
+  }
+})();
+document.documentElement.classList.toggle("low-power", IS_LOW_POWER);
+
 const rootEl = document.documentElement;
 const appShellEl = document.querySelector(".app");
 const logEl = document.getElementById("log");
@@ -385,7 +400,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260622-04";
+const APP_BUILD_VERSION = "20260622-05";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
