@@ -1720,9 +1720,14 @@ tbodyEl.addEventListener("click", (e) => {
   const rowKey = tr?.dataset.rowKey || "";
   const colIndex0 = parseInt(td.dataset.colIndex || "", 10);
   if (!rowKey || !Number.isFinite(colIndex0)) return;
-  // Shift+klik rozszerza zaznaczenie do prostokąta (kotwica = ostatnia komórka focus).
-  // Pozwala zbudować zakres myszą/dotykiem (tablet), bez klawiatury.
-  if (e.shiftKey && focusedCellState) {
+  // Shift+klik:
+  //  - jest już kotwica → rozszerz zaznaczenie do prostokąta (zakres myszą/dotykiem);
+  //  - brak kotwicy → od razu zaznacz pojedynczą komórkę (zakres 1×1), bez kroku
+  //    „najpierw cały wiersz, dopiero potem komórka".
+  if (e.shiftKey) {
+    if (!focusedCellState) {
+      setFocusedCell(rowKey, colIndex0, { scroll: false });
+    }
     setSelectedCell(rowKey, colIndex0, { scroll: false });
     clearTextSelection(); // sprzątnij ewentualną resztkę zaznaczenia tekstu
     return;

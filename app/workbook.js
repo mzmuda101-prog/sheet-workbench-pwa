@@ -455,8 +455,19 @@ function parseDateFlexible(value) {
     if (month) return new Date(year, month - 1, day);
   }
 
-  const parsed = Date.parse(value);
-  if (!Number.isNaN(parsed)) return new Date(parsed);
+  // Fallback: natywny Date.parse jest skrajnie pobłażliwy — z adresu "Mariańska 27, 29"
+  // wyłuska 2029-03-27, przez co teksty (nazwy ulic, etykiety) trafiają do filtra dat.
+  // Pozwalamy na niego tylko, gdy każde słowo w wartości jest nazwą miesiąca
+  // (formaty słowne typu "March 27, 2029" / "7 czerwca 2026"); inaczej → to nie data.
+  const alphaTokens = v.toLowerCase().match(/[a-ząćęłńóśźż]+/g) || [];
+  const onlyMonthWords = alphaTokens.every(tok => {
+    const key = tok.replace(/\.$/, "");
+    return monthMap[key] != null;
+  });
+  if (onlyMonthWords) {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return new Date(parsed);
+  }
   return null;
 }
 

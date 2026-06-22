@@ -144,6 +144,15 @@ function findFocusedRowElement() {
   return tbodyEl.querySelector(`tr[data-row-key="${CSS.escape(focusedCellState.rowKey)}"]`);
 }
 
+// Czy zaznaczona jest dokładnie jedna komórka (zakres 1×1) — np. po Shift+kliku
+// w pojedynczą komórkę. Wtedy pokazujemy tylko obwódkę komórki, bez zielonego
+// podświetlenia całego wiersza.
+function isSingleCellSelection() {
+  return !!(focusedCellState && selectedCellState &&
+    focusedCellState.rowKey === selectedCellState.rowKey &&
+    focusedCellState.colIndex0 === selectedCellState.colIndex0);
+}
+
 function syncFocusedCellInDom(options = {}) {
   tbodyEl.querySelectorAll("tr.row-focused").forEach((row) => row.classList.remove("row-focused"));
   const rowEl = findFocusedRowElement();
@@ -151,7 +160,7 @@ function syncFocusedCellInDom(options = {}) {
     if (options.clearMissing !== false) focusedCellState = null;
     return null;
   }
-  rowEl.classList.add("row-focused");
+  if (!isSingleCellSelection()) rowEl.classList.add("row-focused");
   const cell = findCellElement(focusedCellState);
   if (options.scroll) {
     (cell || rowEl).scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -188,6 +197,9 @@ function setFocusedCell(rowKey, colIndex0, options = {}) {
   // zwykły klik / strzałka daje pojedynczą komórkę, a nie zakres od starego końca.
   if (!options.keepSelection) selectedCellState = null;
   syncFocusedCellInDom(options);
+  // Po wyczyszczeniu zakresu zdejmij też zalegającą obwódkę poprzedniej komórki
+  // (cell-selected), inaczej zostałaby w DOM aż do kolejnego pełnego renderu.
+  if (!options.keepSelection) syncSelectedCellInDom({ clearMissing: false });
   syncRangeHighlightInDom();
   updateCellStats();
   updateTableStatus(currentDisplayModel);
@@ -203,6 +215,9 @@ function setSelectedCell(rowKey, colIndex0, options = {}) {
   }
   selectedCellState = { rowKey, colIndex0 };
   syncSelectedCellInDom(options);
+  // Zaznaczenie mogło zwinąć się do 1×1 (lub rozszerzyć) — odśwież podświetlenie
+  // wiersza, by przy pojedynczej komórce nie świecił cały wiersz.
+  syncFocusedCellInDom({ clearMissing: false });
   syncRangeHighlightInDom();
   updateCellStats();
 }
@@ -1368,7 +1383,7 @@ function renderTable(modelOrHeaders, maybeRows) {
   rowsShown.forEach((row, rowPos) => {
     const tr = document.createElement("tr");
     tr.dataset.rowKey = getRowSelectionKey(row);
-    if (focusedCellState && focusedCellState.rowKey === tr.dataset.rowKey) tr.classList.add("row-focused");
+    if (focusedCellState && focusedCellState.rowKey === tr.dataset.rowKey && !isSingleCellSelection()) tr.classList.add("row-focused");
     if (cellStyleShowSubheaders && row.isSubheader) tr.classList.add("row-subheader");
     if (quickSearchHighlightMode && matchedRowIndexes.size > 0) {
       if (matchedRowIndexes.has(row.rowIndex0)) {
