@@ -317,6 +317,7 @@ body.splashing {
     border: none;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
+    touch-action: none; /* uchwyt łapie pionowy gest przeciągnięcia (nie scrolluje strony) */
     transition: margin 300ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   body.hero-collapsed .hero-grip { margin-top: 4px; }

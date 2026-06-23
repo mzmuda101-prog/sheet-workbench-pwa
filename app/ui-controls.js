@@ -1390,13 +1390,26 @@ if (toolbarToggleEl) {
   setToolbarCollapsed(localStorage.getItem(TOOLBAR_COLLAPSED_KEY) === "1");
 }
 
-// ── Zwijany nagłówek (mobile): uchwyt tap + auto-chowanie przy scrollu tabeli ──
+// ── Zwijany nagłówek (mobile): uchwyt tap/drag + auto-chowanie przy scrollu tabeli ──
 // Odzyskane miejsce trafia do tabeli (syncTableViewportHeight liczy z offsetu panelu).
 // Na desktopie (>768px) cały mechanizm jest bezczynny (CSS chowa uchwyt, JS wymusza off).
+//
+// REGUŁA ROZWIJANIA (świadoma, bez „migotania"): hero rozwija się TYLKO gdy:
+//   1) przewiniesz tabelę do samej GÓRY (scrollTop ≈ 0),
+//   2) klikniesz w uchwyt, albo
+//   3) pociągniesz uchwyt palcem w dół.
+// Zwija się przy scrollu w dół poza próg. Rozwijanie „przy każdym ruchu w górę"
+// powodowało pętlę: zwinięcie rosło panel → przycinało scrollTop → fałszywy scroll-up
+// → rozwinięcie → reflow → … . Histereza (dół-zwija / sama-góra-rozwija) + strażnik
+// animacji rozrywają tę pętlę.
 const heroEl = document.querySelector(".hero");
 const heroGripEl = document.getElementById("heroGrip");
 const heroNarrowMQ = typeof matchMedia === "function" ? matchMedia("(max-width: 768px)") : null;
 let heroScrollLast = 0;
+let heroAnimating = false;       // true w trakcie animacji zwijania — nie reaguj wtedy na scroll
+let heroAnimTimer = null;
+const HERO_COLLAPSE_AFTER = 48;  // zwijaj dopiero po zejściu poniżej tylu px
+const HERO_EXPAND_AT_TOP = 6;    // rozwijaj dopiero przy samej górze widoku
 
 function heroIsNarrow() { return !heroNarrowMQ || heroNarrowMQ.matches; }
 
@@ -1414,26 +1427,56 @@ function setHeroCollapsed(on) {
   if (was === !!on) return;
   if (on) measureHeroHeight(); // zmierz PRZED zwinięciem
   document.body.classList.toggle("hero-collapsed", !!on);
+  // Strażnik anty-oscylacji: w trakcie animacji ignoruj scroll wywołany reflowem.
+  // Na końcu (lub po fallbacku, gdy brak transition) przelicz wysokość panelu tabeli.
+  heroAnimating = true;
+  clearTimeout(heroAnimTimer);
+  heroAnimTimer = setTimeout(() => {
+    heroAnimating = false;
+    if (typeof syncTableViewportHeight === "function") syncTableViewportHeight();
+    heroScrollLast = tableWrapEl ? tableWrapEl.scrollTop : heroScrollLast; // świeży punkt odniesienia
+  }, 340);
 }
 
 function handleHeroScroll(scrollTop) {
-  if (!heroEl || !heroIsNarrow()) { heroScrollLast = scrollTop; return; }
+  if (!heroEl || !heroIsNarrow() || heroAnimating) { heroScrollLast = scrollTop; return; }
   const y = scrollTop;
-  // Próg 6px tłumi drgania; chowamy dopiero po zejściu poniżej pierwszego ekranu treści.
-  if (y > heroScrollLast + 6 && y > 40) setHeroCollapsed(true);
-  else if (y < heroScrollLast - 6) setHeroCollapsed(false);
+  const collapsed = document.body.classList.contains("hero-collapsed");
+  if (!collapsed && y > heroScrollLast + 4 && y > HERO_COLLAPSE_AFTER) {
+    setHeroCollapsed(true);                 // scroll w dół poza próg → zwiń
+  } else if (collapsed && y <= HERO_EXPAND_AT_TOP) {
+    setHeroCollapsed(false);                // dotarcie do samej góry → rozwiń
+  }
   heroScrollLast = y;
 }
 
 if (heroEl) {
   measureHeroHeight();
   if (heroGripEl) {
+    // Gest: pociągnięcie uchwytu palcem (w dół rozwija, w górę zwija). Tap = toggle.
+    let dragStartY = null;
+    let dragMoved = false;
+    heroGripEl.addEventListener("pointerdown", (e) => {
+      dragStartY = e.clientY; dragMoved = false;
+      try { heroGripEl.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    heroGripEl.addEventListener("pointermove", (e) => {
+      if (dragStartY == null) return;
+      const dy = e.clientY - dragStartY;
+      if (Math.abs(dy) > 6) dragMoved = true;
+      if (dy > 18) { setHeroCollapsed(false); dragStartY = e.clientY; }       // w dół → rozwiń
+      else if (dy < -18) { setHeroCollapsed(true); dragStartY = e.clientY; }  // w górę → zwiń
+    });
+    const endDrag = () => { dragStartY = null; };
+    heroGripEl.addEventListener("pointerup", endDrag);
+    heroGripEl.addEventListener("pointercancel", endDrag);
     heroGripEl.addEventListener("click", () => {
+      if (dragMoved) { dragMoved = false; return; } // to było przeciągnięcie, nie tap
       setHeroCollapsed(!document.body.classList.contains("hero-collapsed"));
       replayPop(heroGripEl, "btn-pop");
     });
   }
-  // Po zakończeniu animacji wysokości hero — przelicz wysokość panelu tabeli (urośnie/zmaleje).
+  // Snappy sync na końcu animacji (poza fallbackiem w setHeroCollapsed).
   heroEl.addEventListener("transitionend", (e) => {
     if (e.propertyName === "max-height" && typeof syncTableViewportHeight === "function") {
       syncTableViewportHeight();
