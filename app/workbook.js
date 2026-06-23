@@ -631,8 +631,14 @@ function cellSatisfiesComparison(row, i, cmp) {
   const raw = row.values[i];
   const display = getDisplayValue(row, i);
   if (cmp.kind === "date") {
-    // tylko komórki będące faktycznie datą — nie parsuj liczb jako numerów seryjnych
-    const looksDate = raw instanceof Date || /\d[-/.]\d/.test(String(display));
+    // tylko komórki będące faktycznie datą — nie parsuj liczb jako numerów seryjnych.
+    // Oprócz formatu z separatorem (23-05-26) dopuszczamy też daty słowne („01 sty 26",
+    // „1 stycznia 2026"): kandydatem jest tekst z cyfrą i literą, a parseDateFlexible
+    // i tak waliduje (formaty słowne przyjmuje tylko gdy wszystkie słowa to miesiące).
+    const ds = String(display);
+    const looksDate = raw instanceof Date
+      || /\d[-/.]\d/.test(ds)
+      || (/\d/.test(ds) && /[a-ząćęłńóśźż]/i.test(ds));
     if (!looksDate) return false;
     const d = parseDateFlexible(raw != null ? raw : display);
     if (!(d instanceof Date) || Number.isNaN(d.getTime())) return false;
