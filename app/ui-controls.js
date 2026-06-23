@@ -1314,6 +1314,7 @@ if (tableWrapEl && tableScrollbarEl) {
   tableWrapEl.addEventListener("scroll", () => {
     hideCellTooltip();
     updateScrollTopFab();
+    handleHeroScroll(tableWrapEl.scrollTop); // auto-chowanie nagłówka (mobile)
     if (syncingHorizontalScroll) return;
     syncingHorizontalScroll = true;
     tableScrollbarEl.scrollLeft = tableWrapEl.scrollLeft;
@@ -1387,6 +1388,61 @@ if (toolbarToggleEl) {
     replayPop(toolbarToggleEl, "btn-pop");
   });
   setToolbarCollapsed(localStorage.getItem(TOOLBAR_COLLAPSED_KEY) === "1");
+}
+
+// ── Zwijany nagłówek (mobile): uchwyt tap + auto-chowanie przy scrollu tabeli ──
+// Odzyskane miejsce trafia do tabeli (syncTableViewportHeight liczy z offsetu panelu).
+// Na desktopie (>768px) cały mechanizm jest bezczynny (CSS chowa uchwyt, JS wymusza off).
+const heroEl = document.querySelector(".hero");
+const heroGripEl = document.getElementById("heroGrip");
+const heroNarrowMQ = typeof matchMedia === "function" ? matchMedia("(max-width: 768px)") : null;
+let heroScrollLast = 0;
+
+function heroIsNarrow() { return !heroNarrowMQ || heroNarrowMQ.matches; }
+
+// Zmierz wysokość ROZWINIĘTEGO hero do CSS var (nie da się animować z „auto").
+function measureHeroHeight() {
+  if (!heroEl || document.body.classList.contains("hero-collapsed")) return;
+  const h = heroEl.getBoundingClientRect().height;
+  if (h) document.documentElement.style.setProperty("--hero-h", `${Math.round(h)}px`);
+}
+
+function setHeroCollapsed(on) {
+  if (!heroEl) return;
+  if (!heroIsNarrow()) on = false; // desktop zawsze rozwinięty
+  const was = document.body.classList.contains("hero-collapsed");
+  if (was === !!on) return;
+  if (on) measureHeroHeight(); // zmierz PRZED zwinięciem
+  document.body.classList.toggle("hero-collapsed", !!on);
+}
+
+function handleHeroScroll(scrollTop) {
+  if (!heroEl || !heroIsNarrow()) { heroScrollLast = scrollTop; return; }
+  const y = scrollTop;
+  // Próg 6px tłumi drgania; chowamy dopiero po zejściu poniżej pierwszego ekranu treści.
+  if (y > heroScrollLast + 6 && y > 40) setHeroCollapsed(true);
+  else if (y < heroScrollLast - 6) setHeroCollapsed(false);
+  heroScrollLast = y;
+}
+
+if (heroEl) {
+  measureHeroHeight();
+  if (heroGripEl) {
+    heroGripEl.addEventListener("click", () => {
+      setHeroCollapsed(!document.body.classList.contains("hero-collapsed"));
+      replayPop(heroGripEl, "btn-pop");
+    });
+  }
+  // Po zakończeniu animacji wysokości hero — przelicz wysokość panelu tabeli (urośnie/zmaleje).
+  heroEl.addEventListener("transitionend", (e) => {
+    if (e.propertyName === "max-height" && typeof syncTableViewportHeight === "function") {
+      syncTableViewportHeight();
+    }
+  });
+  window.addEventListener("resize", () => {
+    if (!heroIsNarrow()) setHeroCollapsed(false); // wejście w desktop → rozwiń
+    if (!document.body.classList.contains("hero-collapsed")) measureHeroHeight();
+  });
 }
 
 tbodyEl.addEventListener("pointerenter", (e) => {

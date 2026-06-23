@@ -219,6 +219,7 @@ const I18N = {
     duplicatedHeaders: "Zdublowane naglowki rozrozniono ({count})",
     themeToggleTitle: "Zmień motyw (jasny / ciemny)",
     themeToggleAria: "Zmień motyw",
+    heroGripAria: "Zwiń lub rozwiń nagłówek",
     brandRefreshTitle: "Odśwież aplikację",
     brandRefreshAria: "Odśwież aplikację",
     networkSafety: "Pliki Excel są wczytywane i przetwarzane lokalnie na Twoim urządzeniu.",
@@ -682,6 +683,7 @@ const I18N = {
     duplicatedHeaders: "Duplicate headers were disambiguated ({count})",
     themeToggleTitle: "Change theme (light / dark)",
     themeToggleAria: "Change theme",
+    heroGripAria: "Collapse or expand the header",
     brandRefreshTitle: "Refresh app",
     brandRefreshAria: "Refresh app",
     networkSafety: "Excel files are loaded and processed locally on your device.",
@@ -1678,6 +1680,7 @@ function applyStaticTranslations() {
   setAttr("#brandRefresh", "aria-label", t("brandRefreshAria"));
   setText("#appUpdateBtn", t("updateNow"));
   setAttr("#themeToggle", "aria-label", t("themeToggleAria"));
+  setAttr("#heroGrip", "aria-label", t("heroGripAria"));
 
   setText("#group-data-title", copy.groupData);
   setText("#group-work-title", copy.groupWork);

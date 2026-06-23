@@ -278,6 +278,65 @@ body.splashing {
   min-width: 0;
 }
 
+/* ===================================================
+   Zwijany nagłówek (mobile) — uchwyt + płynne zwijanie
+   =================================================== */
+.hero-grip { display: none; } /* desktop: brak (hero zawsze rozwinięty) */
+
+@media (max-width: 768px) {
+  /* hero animuje wysokość; --hero-h liczone w JS (nie da się animować z auto) */
+  .hero {
+    overflow: hidden;
+    max-height: var(--hero-h, 320px);
+    transition:
+      max-height 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 200ms ease,
+      padding 300ms cubic-bezier(0.22, 1, 0.36, 1),
+      margin-bottom 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  body.hero-collapsed .hero {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    opacity: 0;
+    border-width: 0;
+    pointer-events: none;
+  }
+
+  /* Cienki uchwyt-„pigułka" (drawer handle) — tap toggluje, czytelny affordance */
+  .hero-grip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 18px;
+    margin: -8px 0 8px;
+    padding: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: margin 300ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  body.hero-collapsed .hero-grip { margin-top: 4px; }
+  .hero-grip-bar {
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border);
+    transition: background var(--t), width var(--t);
+  }
+  .hero-grip:active .hero-grip-bar,
+  body.hero-collapsed .hero-grip .hero-grip-bar { background: color-mix(in srgb, var(--accent) 55%, var(--border)); }
+  body.hero-collapsed .hero-grip .hero-grip-bar { width: 52px; } /* zwinięte = trochę szerszy, „chwytniejszy" */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero { transition: none; }
+  .hero-grip { transition: none; }
+}
+
 .lang-switch {
   position: relative;
   display: inline-flex;
