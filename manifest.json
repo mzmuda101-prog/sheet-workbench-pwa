@@ -1,6 +1,6 @@
 {
-  "name": "Excel Workbench PWA",
-  "short_name": "ExcelWB",
+  "name": "Sheet Workbench",
+  "short_name": "Sheet Workbench",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#f3f1ea",

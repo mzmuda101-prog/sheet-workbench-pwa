@@ -203,6 +203,7 @@ function resetFilterInputs() {
   columnSelections.date.clear();
   quickSearchHighlightMode = false;
   quickSearchCellsMode = false;
+  quickSearchFilterCellsMode = false;
   filtersCommitted = false;
   matchedRowIndexes = new Set();
   quickSearchOperatorsEnabled = false;
@@ -1256,6 +1257,7 @@ applyFilterBtn.addEventListener("click", () => {
   // tryby szybkiego szukania (zaznacz/cells), żeby się nie „lepiły" i nie blokowały ukrywania.
   quickSearchHighlightMode = false;
   quickSearchCellsMode = false;
+  quickSearchFilterCellsMode = false;
   filtersCommitted = true;
   applyFilters();
   sortRows();
@@ -1283,12 +1285,14 @@ function applyQuickSearch() {
   else if (quickSearchModeEl) applyQuickSearchMode(getNormalizedSelectValue(quickSearchModeEl));
 
   // Odczytaj tryb akcji: filtruj (ukryj niepasujące) / zaznacz (wyróżnij wiersze) /
-  // cells (pokaż wszystkie, podświetl pasujące KOMÓRKI).
+  // cells (pokaż wszystkie, podświetl KOMÓRKI) / filter-cells (filtruj wiersze ORAZ
+  // podświetl pasujące komórki w pozostałych).
   const actionEl = (popupActive && quickSearchPopupActionEl) ? quickSearchPopupActionEl : quickSearchActionEl;
   const action = actionEl ? actionEl.value : "filter";
   quickSearchHighlightMode = action === "highlight";
   quickSearchCellsMode = action === "cells";
-  if (action === "filter") filtersCommitted = true;
+  quickSearchFilterCellsMode = action === "filter-cells";
+  if (action === "filter" || action === "filter-cells") filtersCommitted = true;
 
   // Odczytaj i synchronizuj checkbox operatorów
   const operatorsEl = (popupActive && quickSearchPopupOperatorsEl) ? quickSearchPopupOperatorsEl : quickSearchOperatorsEl;

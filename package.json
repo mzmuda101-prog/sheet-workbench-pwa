@@ -1,5 +1,5 @@
 {
-  "name": "excel-workbench-pwa",
+  "name": "sheet-workbench-pwa",
   "version": "1.0.0",
   "description": "Local, offline-first workbook workbench for exploring, filtering, restructuring, and lightly editing Excel files in the browser.",
   "private": true,

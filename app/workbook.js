@@ -1139,8 +1139,8 @@ function applyFilters() {
   };
   const onlyNonEmpty = onlyNonEmptyEl.checked;
   // Podświetlanie komórek: checkbox z filtra tekstowego LUB dat (zsynchronizowane),
-  // ALBO tryb „Podświetl pasujące" z szybkiego szukania (quickSearchCellsMode).
-  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked) || quickSearchCellsMode);
+  // ALBO tryby szybkiego szukania „Podświetl pasujące" (cells) / „Filtruj + podświetl" (filter-cells).
+  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked) || quickSearchCellsMode || quickSearchFilterCellsMode);
 
   const rowPasses = (row) => {
     if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;

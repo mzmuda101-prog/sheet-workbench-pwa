@@ -318,6 +318,7 @@ let viewRows = [];
 let matchedRowIndexes = new Set(); // wiersze pasujące do quick search w trybie "zaznacz"
 let quickSearchHighlightMode = false; // true = zaznacz (pokaż wszystkie, wyróżnij WIERSZE)
 let quickSearchCellsMode = false;     // true = pokaż wszystkie, podświetl pasujące KOMÓRKI (bez wierszy)
+let quickSearchFilterCellsMode = false; // true = filtruj wiersze ORAZ podświetl pasujące komórki w pozostałych
 // Mapa rowIndex0 -> Set(colIndex) komórek, które pozytywnie dopasowały filtr.
 // Wypełniana tylko gdy highlightMatchedCells === true. Służy do subtelnego
 // podświetlenia w siatce komórek „dzięki którym" wiersz przeszedł filtr.
@@ -438,7 +439,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260623-10";
+const APP_BUILD_VERSION = "20260623-11";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

@@ -5,12 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta id="pageDescription" name="description" content="Lokalne przeglądanie, filtrowanie i analiza arkuszy Excel" />
     <title>Sheet Workbench</title>
+    <meta name="application-name" content="Sheet Workbench" />
+    <meta name="apple-mobile-web-app-title" content="Sheet Workbench" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <link rel="icon" type="image/png" href="assets/images/favicon.png?v=20260610-05" />
     <link rel="manifest" href="manifest.json" />
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260623-10" />
+    <link rel="stylesheet" href="styles/app.css?v=20260623-11" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -950,10 +953,11 @@
                   <option value="contains">Zawiera</option>
                   <option value="exact">Dokładnie</option>
                 </select>
-                <select id="quickSearchAction" aria-label="Akcja szybkiego szukania" data-hint data-hint-pl="Filtruj – ukrywa niepasujące wiersze · Zaznacz – pokazuje wszystkie i wyróżnia pasujące wiersze · Podświetl pasujące – pokazuje wszystkie i podświetla tylko pasujące komórki" data-hint-en="Filter – hides non-matching rows · Highlight – shows all, marks matching rows · Highlight matches – shows all, highlights only matching cells" data-hint-delay="1.1" data-hint-touch="on">
+                <select id="quickSearchAction" aria-label="Akcja szybkiego szukania" data-hint data-hint-pl="Filtruj – ukrywa niepasujące wiersze · Zaznacz – pokazuje wszystkie i wyróżnia pasujące wiersze · Podświetl pasujące – pokazuje wszystkie i podświetla tylko pasujące komórki · Filtruj + podświetl – ukrywa niepasujące wiersze i podświetla pasujące komórki w pozostałych" data-hint-en="Filter – hides non-matching rows · Highlight – shows all, marks matching rows · Highlight matches – shows all, highlights only matching cells · Filter + highlight – hides non-matching rows and highlights matching cells in the rest" data-hint-delay="1.1" data-hint-touch="on">
                   <option value="filter">Filtruj</option>
                   <option value="highlight">Zaznacz</option>
                   <option value="cells">Podświetl pasujące</option>
+                  <option value="filter-cells">Filtruj + podświetl</option>
                 </select>
                 <label class="qs-operators-toggle" data-hint data-hint-touch="on">
                   <input type="checkbox" id="quickSearchOperators" />
@@ -1071,6 +1075,7 @@
             <option value="filter">Filtruj</option>
             <option value="highlight">Zaznacz</option>
             <option value="cells">Podświetl pasujące</option>
+            <option value="filter-cells">Filtruj + podświetl</option>
           </select>
           <label class="qs-operators-toggle" data-hint data-hint-touch="on">
             <input type="checkbox" id="quickSearchPopupOperators" />
@@ -1104,18 +1109,18 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260623-10"></script>
-    <script defer src="app/language.js?v=20260623-10"></script>
-    <script defer src="app/cursor-hint.js?v=20260623-10"></script>
-    <script defer src="app/analysis.js?v=20260623-10"></script>
-    <script defer src="app/workbook.js?v=20260623-10"></script>
-    <script defer src="app/xlsx-patch.js?v=20260623-10"></script>
-    <script defer src="app/table.js?v=20260623-10"></script>
-    <script defer src="app/conditional-formatting.js?v=20260623-10"></script>
-    <script defer src="app/formulas.js?v=20260623-10"></script>
-    <script defer src="app/edit-tools.js?v=20260623-10"></script>
-    <script defer src="app/ui-controls.js?v=20260623-10"></script>
-    <script defer src="app/scroll-diagnostics.js?v=20260623-10"></script>
-    <script defer src="app/bootstrap.js?v=20260623-10"></script>
+    <script defer src="app/core.js?v=20260623-11"></script>
+    <script defer src="app/language.js?v=20260623-11"></script>
+    <script defer src="app/cursor-hint.js?v=20260623-11"></script>
+    <script defer src="app/analysis.js?v=20260623-11"></script>
+    <script defer src="app/workbook.js?v=20260623-11"></script>
+    <script defer src="app/xlsx-patch.js?v=20260623-11"></script>
+    <script defer src="app/table.js?v=20260623-11"></script>
+    <script defer src="app/conditional-formatting.js?v=20260623-11"></script>
+    <script defer src="app/formulas.js?v=20260623-11"></script>
+    <script defer src="app/edit-tools.js?v=20260623-11"></script>
+    <script defer src="app/ui-controls.js?v=20260623-11"></script>
+    <script defer src="app/scroll-diagnostics.js?v=20260623-11"></script>
+    <script defer src="app/bootstrap.js?v=20260623-11"></script>
   </body>
 </html>
