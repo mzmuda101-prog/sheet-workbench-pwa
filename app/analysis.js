@@ -323,6 +323,7 @@ function renderSections() {
 
 function renderSheetInspectorSummary() {
   if (deferAnalysis("inspector")) return;
+  ensureColumnProfilesFresh(); // flaggedProfiles/topProfile mają odzwierciedlać filtr
   if (!sheetInspectorSummaryEl) return;
   sheetInspectorSummaryEl.replaceChildren();
 
@@ -3184,8 +3185,12 @@ function formatColumnProfileRange(profile) {
 }
 
 function collectColumnProfiles() {
-  if (!currentHeaders.length || !baseRows.length) return [];
-  const totalRows = baseRows.length;
+  // Profile liczymy po WIDOCZNYM (przefiltrowanym) zbiorze — żeby „% wypełnienia",
+  // liczba unikatów, zakresy itp. odpowiadały temu, co user widzi po filtrze, a nie
+  // całemu plikowi. (W trybie „zaznacz"/podgląd viewRows = wszystkie, więc bez filtra
+  // wynik jest jak dawniej.)
+  if (!currentHeaders.length || !viewRows.length) return [];
+  const totalRows = viewRows.length;
   const profiles = currentHeaders.map((header, colIdx) => {
     const stats = {
       nonEmpty: 0,
@@ -3201,7 +3206,7 @@ function collectColumnProfiles() {
       unique: new Map(),
     };
 
-    baseRows.forEach((row) => {
+    viewRows.forEach((row) => {
       const value = row.values[colIdx];
       const displayValue = getDisplayValue(row, colIdx);
       const text = String(displayValue ?? "").trim();
@@ -3296,8 +3301,19 @@ function collectColumnProfiles() {
   });
 }
 
+// Przelicz profile kolumn tylko gdy zmienił się widoczny zbiór (viewRows to świeża
+// tablica po każdym filtrze/sortowaniu), inaczej no-op. Memoizacja po referencji —
+// żeby wspólni konsumenci (profil + podsumowanie) nie liczyli dwa razy w tej samej turze.
+let lastProfiledViewRows = false;
+function ensureColumnProfilesFresh() {
+  if (viewRows === lastProfiledViewRows) return;
+  lastProfiledViewRows = viewRows;
+  currentColumnProfiles = collectColumnProfiles();
+}
+
 function renderColumnProfiles() {
   if (deferAnalysis("columns")) return;
+  ensureColumnProfilesFresh();
   if (!columnProfilerEl) return;
   columnProfilerEl.replaceChildren();
   if (!currentColumnProfiles.length) {
