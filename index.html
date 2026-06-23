@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260623-09" />
+    <link rel="stylesheet" href="styles/app.css?v=20260623-10" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -950,9 +950,10 @@
                   <option value="contains">Zawiera</option>
                   <option value="exact">Dokładnie</option>
                 </select>
-                <select id="quickSearchAction" aria-label="Akcja szybkiego szukania" data-hint data-hint-pl="Filtruj – ukrywa niezaznaczone wiersze; Zaznacz – pokazuje wszystkie, wyróżnia pasujące" data-hint-en="Filter – hides non-matching rows; Highlight – shows all, highlights matches" data-hint-delay="1.1" data-hint-touch="on">
+                <select id="quickSearchAction" aria-label="Akcja szybkiego szukania" data-hint data-hint-pl="Filtruj – ukrywa niepasujące wiersze · Zaznacz – pokazuje wszystkie i wyróżnia pasujące wiersze · Podświetl pasujące – pokazuje wszystkie i podświetla tylko pasujące komórki" data-hint-en="Filter – hides non-matching rows · Highlight – shows all, marks matching rows · Highlight matches – shows all, highlights only matching cells" data-hint-delay="1.1" data-hint-touch="on">
                   <option value="filter">Filtruj</option>
                   <option value="highlight">Zaznacz</option>
+                  <option value="cells">Podświetl pasujące</option>
                 </select>
                 <label class="qs-operators-toggle" data-hint data-hint-touch="on">
                   <input type="checkbox" id="quickSearchOperators" />
@@ -1069,6 +1070,7 @@
           <select id="quickSearchPopupAction" aria-label="Akcja szybkiego szukania w oknie">
             <option value="filter">Filtruj</option>
             <option value="highlight">Zaznacz</option>
+            <option value="cells">Podświetl pasujące</option>
           </select>
           <label class="qs-operators-toggle" data-hint data-hint-touch="on">
             <input type="checkbox" id="quickSearchPopupOperators" />
@@ -1102,18 +1104,18 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260623-09"></script>
-    <script defer src="app/language.js?v=20260623-09"></script>
-    <script defer src="app/cursor-hint.js?v=20260623-09"></script>
-    <script defer src="app/analysis.js?v=20260623-09"></script>
-    <script defer src="app/workbook.js?v=20260623-09"></script>
-    <script defer src="app/xlsx-patch.js?v=20260623-09"></script>
-    <script defer src="app/table.js?v=20260623-09"></script>
-    <script defer src="app/conditional-formatting.js?v=20260623-09"></script>
-    <script defer src="app/formulas.js?v=20260623-09"></script>
-    <script defer src="app/edit-tools.js?v=20260623-09"></script>
-    <script defer src="app/ui-controls.js?v=20260623-09"></script>
-    <script defer src="app/scroll-diagnostics.js?v=20260623-09"></script>
-    <script defer src="app/bootstrap.js?v=20260623-09"></script>
+    <script defer src="app/core.js?v=20260623-10"></script>
+    <script defer src="app/language.js?v=20260623-10"></script>
+    <script defer src="app/cursor-hint.js?v=20260623-10"></script>
+    <script defer src="app/analysis.js?v=20260623-10"></script>
+    <script defer src="app/workbook.js?v=20260623-10"></script>
+    <script defer src="app/xlsx-patch.js?v=20260623-10"></script>
+    <script defer src="app/table.js?v=20260623-10"></script>
+    <script defer src="app/conditional-formatting.js?v=20260623-10"></script>
+    <script defer src="app/formulas.js?v=20260623-10"></script>
+    <script defer src="app/edit-tools.js?v=20260623-10"></script>
+    <script defer src="app/ui-controls.js?v=20260623-10"></script>
+    <script defer src="app/scroll-diagnostics.js?v=20260623-10"></script>
+    <script defer src="app/bootstrap.js?v=20260623-10"></script>
   </body>
 </html>

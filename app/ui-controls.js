@@ -202,6 +202,7 @@ function resetFilterInputs() {
   columnSelections.filter2.clear();
   columnSelections.date.clear();
   quickSearchHighlightMode = false;
+  quickSearchCellsMode = false;
   filtersCommitted = false;
   matchedRowIndexes = new Set();
   quickSearchOperatorsEnabled = false;
@@ -1251,6 +1252,10 @@ loadBtn.addEventListener("click", () => {
 
 applyFilterBtn.addEventListener("click", () => {
   if (!currentHeaders.length) return;
+  // Świadomy „Filtruj" z sidebara = deterministyczne filtrowanie wierszy: zdejmij
+  // tryby szybkiego szukania (zaznacz/cells), żeby się nie „lepiły" i nie blokowały ukrywania.
+  quickSearchHighlightMode = false;
+  quickSearchCellsMode = false;
   filtersCommitted = true;
   applyFilters();
   sortRows();
@@ -1277,10 +1282,13 @@ function applyQuickSearch() {
   if (popupActive && quickSearchPopupModeEl) applyQuickSearchMode(getNormalizedSelectValue(quickSearchPopupModeEl));
   else if (quickSearchModeEl) applyQuickSearchMode(getNormalizedSelectValue(quickSearchModeEl));
 
-  // Odczytaj tryb akcji (filtruj / zaznacz)
+  // Odczytaj tryb akcji: filtruj (ukryj niepasujące) / zaznacz (wyróżnij wiersze) /
+  // cells (pokaż wszystkie, podświetl pasujące KOMÓRKI).
   const actionEl = (popupActive && quickSearchPopupActionEl) ? quickSearchPopupActionEl : quickSearchActionEl;
-  quickSearchHighlightMode = actionEl ? actionEl.value === "highlight" : false;
-  if (!quickSearchHighlightMode) filtersCommitted = true;
+  const action = actionEl ? actionEl.value : "filter";
+  quickSearchHighlightMode = action === "highlight";
+  quickSearchCellsMode = action === "cells";
+  if (action === "filter") filtersCommitted = true;
 
   // Odczytaj i synchronizuj checkbox operatorów
   const operatorsEl = (popupActive && quickSearchPopupOperatorsEl) ? quickSearchPopupOperatorsEl : quickSearchOperatorsEl;
@@ -1299,9 +1307,10 @@ function applyQuickSearch() {
   applyFilters();
   sortRows();
   // Delikatny feedback przeliczenia: filtrowanie przestawia/odsłania wiersze → FLIP;
-  // tryb „zaznacz" zostawia wiersze w miejscu → łagodny puls trafień.
+  // „zaznacz" zostawia wiersze w miejscu → łagodny puls trafień; „cells" pokazuje
+  // wszystkie wiersze (bez przestawiania) → bez FLIP-a.
   if (quickSearchHighlightMode) animateMatchPulseNextRender = true;
-  else flipNextRender = true;
+  else if (!quickSearchCellsMode) flipNextRender = true;
   renderActiveTable();
   renderInsights();
   renderSheetInspectorSummary();

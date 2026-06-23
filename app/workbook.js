@@ -1138,8 +1138,9 @@ function applyFilters() {
     negated: dateNegateEl.checked,
   };
   const onlyNonEmpty = onlyNonEmptyEl.checked;
-  // Podświetlanie sterowane checkboxem z filtra tekstowego LUB z filtra dat (zsynchronizowane).
-  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked));
+  // Podświetlanie komórek: checkbox z filtra tekstowego LUB dat (zsynchronizowane),
+  // ALBO tryb „Podświetl pasujące" z szybkiego szukania (quickSearchCellsMode).
+  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked) || quickSearchCellsMode);
 
   const rowPasses = (row) => {
     if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;
@@ -1154,7 +1155,7 @@ function applyFilters() {
     if (cols.size) matchedCellsByRow.set(row.rowIndex0, cols);
   };
 
-  const shouldFilterRows = filtersCommitted && !quickSearchHighlightMode;
+  const shouldFilterRows = filtersCommitted && !quickSearchHighlightMode && !quickSearchCellsMode;
   if (shouldFilterRows) {
     // Tryb „filtruj": tylko pasujące wiersze (po kliknięciu Filtruj lub równoważnej akcji)
     matchedRowIndexes = new Set();
