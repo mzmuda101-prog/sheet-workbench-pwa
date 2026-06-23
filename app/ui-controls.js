@@ -226,6 +226,16 @@ function replayPop(el, cls) {
   el.classList.add(cls);
 }
 
+// Tryb „drawer" (nakładka, którą zamyka klik poza nią): telefon ZAWSZE; tablet TYLKO
+// w pionie i tylko do ~900px szerokości; desktop, tablet w poziomie ORAZ szerokie tablety
+// w pionie (iPad Pro 12.9" = 1024px) = panel STAŁY (klik poza nim NIE zamyka). Próg 900px:
+// powyżej mieści się panel (~311px) + użyteczna tabela (~690px) obok siebie, jak na laptopie,
+// więc drawer nie ma sensu. Zwykłe iPady w pionie (≤834px) nadal są drawerem.
+const sidebarDrawerMQ = typeof matchMedia === "function"
+  ? matchMedia("(max-width: 768px), (orientation: portrait) and (max-width: 900px)")
+  : null;
+function sidebarIsDrawer() { return !sidebarDrawerMQ || sidebarDrawerMQ.matches; }
+
 let prevSidebarOpenState = null;
 function setSidebarOpen(open) {
   const shouldOpen = !!open;

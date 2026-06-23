@@ -432,6 +432,9 @@ const _debouncedRenderFormula = (() => {
 
 document.addEventListener("click", (e) => {
   if (!isSidebarOpen()) return;
+  // Klik poza panelem zamyka go TYLKO w trybie drawer (telefon / tablet w pionie).
+  // Na desktopie i tablecie w poziomie panel jest stały — klik w tabelę go nie chowa.
+  if (typeof sidebarIsDrawer === "function" && !sidebarIsDrawer()) return;
   if (sidebarEl && sidebarEl.contains(e.target)) return;
   if (panelToggle && panelToggle.contains(e.target)) return;
   if (panelHandle && panelHandle.contains(e.target)) return;
@@ -666,15 +669,28 @@ setRuntimeAvailability(true);
 // Anty-lag pierwszego otwarcia panelu: w bezczynności po starcie wymuszamy jednorazową
 // rasteryzację wysuwanego panelu (niewidocznie, pod treścią). Bez tego PIERWSZE otwarcie
 // maluje całe poddrzewo paneli/SVG w jednej klatce (~150ms zacięcia); kolejne są już płynne.
+//
+// WAŻNE (fix glitcha „przezroczysty panel po wczytaniu arkusza"): pre-warm zakłada panel
+// SCHOWANY. Pomijamy go, gdy:
+//   • sidebar jest OTWARTY/widoczny (desktop) — `.prewarm` (opacity:0.001, z-index:-1)
+//     zrobiłby z widocznego panelu przezroczystą dziurę za treścią;
+//   • arkusz jest już wczytany (po interakcji) — wtedy idle-callback potrafił odpalić się
+//     późno, w trakcie ciężkiego renderu, a zdjęcie klasy przez rAF było głodzone → panel
+//     zostawał przezroczysty aż do następnego kliknięcia.
+// Dodatkowo TWARDY bezpiecznik (setTimeout) zdejmuje klasę, nawet gdyby rAF utknął.
 function prewarmSidebar() {
   const sidebar = document.querySelector(".sidebar");
   if (!sidebar) return;
+  if ((typeof isSidebarOpen === "function" && isSidebarOpen()) || workbook) return;
   sidebar.classList.add("prewarm");
-  requestAnimationFrame(() =>
-    requestAnimationFrame(() => sidebar.classList.remove("prewarm"))
-  );
+  const clear = () => sidebar.classList.remove("prewarm");
+  requestAnimationFrame(() => requestAnimationFrame(clear));
+  window.setTimeout(clear, 250); // bezpiecznik: .prewarm nigdy nie utknie
 }
-(window.requestIdleCallback || ((fn) => window.setTimeout(fn, 200)))(prewarmSidebar);
+// timeout na idle-callback, żeby nie odpalił się „kiedyś później" w trakcie wczytywania
+(window.requestIdleCallback
+  ? (fn) => window.requestIdleCallback(fn, { timeout: 1200 })
+  : (fn) => window.setTimeout(fn, 200))(prewarmSidebar);
 
 window.addEventListener("beforeunload", (e) => {
   if (!hasUnsavedChanges) return;
