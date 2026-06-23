@@ -592,11 +592,64 @@ function cellMatchesTerm(row, i, q, mode) {
   return false;
 }
 
+// ── Operatory porównań (liczby/daty) — TYLKO podwójne, tylko przy włączonych
+// „Operatorach wyszukiwania". `>>` większe, `<<` mniejsze, `>>=`/`=>>` ≥, `<<=`/`=<<` ≤.
+// Term staje się porównaniem dopiero gdy operand parsuje się jako liczba lub data —
+// inaczej zostaje zwykłym tekstem (fallback). Komponuje się z &&/||/!/{} za darmo.
+function comparisonDayValue(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+function operandLooksLikeDate(s) {
+  const t = String(s).trim();
+  if (/[a-ząćęłńóśźż]/i.test(t)) return true;             // słowo-miesiąc (np. „1 stycznia 2026")
+  if (/\d{4}/.test(t) && /[-/.]/.test(t)) return true;    // rok 4-cyfrowy + separator
+  if ((t.match(/[-/.]/g) || []).length >= 2) return true; // dwa separatory → dd-mm-yyyy itp.
+  return false;                                            // np. „5.5" → liczba, nie data
+}
+// Zwraca { op:">"|">="|"<"|"<=", kind:"number"|"date", value:number } albo null.
+function parseComparisonTerm(q) {
+  const m = String(q).match(/^(>>=|=>>|<<=|=<<|>>|<<)\s*(.+)$/);
+  if (!m) return null;
+  const raw = m[1];
+  const operand = m[2].trim();
+  const op = (raw === ">>=" || raw === "=>>") ? ">="
+           : (raw === "<<=" || raw === "=<<") ? "<="
+           : (raw === ">>") ? ">" : "<";
+  if (operandLooksLikeDate(operand)) {
+    const d = parseDateFlexible(operand);
+    if (d instanceof Date && !Number.isNaN(d.getTime())) return { op, kind: "date", value: comparisonDayValue(d) };
+  }
+  const n = parseCellNumber(operand, operand);
+  if (n != null && Number.isFinite(n)) return { op, kind: "number", value: n };
+  return null; // operand nie jest liczbą ani datą → nie porównanie
+}
+function compareWithOp(op, a, b) {
+  return op === ">" ? a > b : op === ">=" ? a >= b : op === "<" ? a < b : a <= b;
+}
+function cellSatisfiesComparison(row, i, cmp) {
+  if (i >= row.values.length) return false;
+  const raw = row.values[i];
+  const display = getDisplayValue(row, i);
+  if (cmp.kind === "date") {
+    // tylko komórki będące faktycznie datą — nie parsuj liczb jako numerów seryjnych
+    const looksDate = raw instanceof Date || /\d[-/.]\d/.test(String(display));
+    if (!looksDate) return false;
+    const d = parseDateFlexible(raw != null ? raw : display);
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return false;
+    return compareWithOp(cmp.op, comparisonDayValue(d), cmp.value);
+  }
+  if (raw instanceof Date) return false; // porównanie liczbowe, a komórka to data
+  const n = parseCellNumber(raw, display);
+  if (n == null || !Number.isFinite(n)) return false;
+  return compareWithOp(cmp.op, n, cmp.value);
+}
+
 function rowMatchesSingleTerm(row, term, criterion) {
   const q = term.trim().toLowerCase();
   if (!q) return true;
+  const cmp = criterion.operatorsEnabled ? parseComparisonTerm(q) : null;
   for (const i of criterion.indexes) {
-    if (cellMatchesTerm(row, i, q, criterion.mode)) return true;
+    if (cmp ? cellSatisfiesComparison(row, i, cmp) : cellMatchesTerm(row, i, q, criterion.mode)) return true;
   }
   return false;
 }
@@ -1034,8 +1087,9 @@ function collectMatchingCellsForRow(row, criteria, dateFilter) {
     const parsed = parseQueryTerms(criterion.query, criterion.operatorsEnabled);
     const positiveTerms = gatherPositiveTermStrings(parsed);
     for (const q of positiveTerms) {
+      const cmp = criterion.operatorsEnabled ? parseComparisonTerm(q) : null;
       for (const i of criterion.indexes) {
-        if (cellMatchesTerm(row, i, q, criterion.mode)) cols.add(i);
+        if (cmp ? cellSatisfiesComparison(row, i, cmp) : cellMatchesTerm(row, i, q, criterion.mode)) cols.add(i);
       }
     }
   }

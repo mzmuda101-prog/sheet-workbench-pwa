@@ -10,7 +10,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260623-06" />
+    <link rel="stylesheet" href="styles/app.css?v=20260623-07" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -909,6 +909,7 @@
               <div class="shortcut-row"><kbd>&&</kbd> <span><strong data-shortcut-text="andStrong">I</strong> <span data-shortcut-text="searchOperatorAndRest">— wiersz zawiera wszystkie wyrazy jednocześnie</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorAndExample">np. „Kowalski && Faktura" · ma pierwszeństwo nad ||</em></span></div>
               <div class="shortcut-row"><kbd>!</kbd> <span data-shortcut-text="searchOperatorNot">wykluczenie pojedynczego warunku</span></div>
               <div class="shortcut-row"><kbd>{&nbsp;}</kbd> <em class="shortcut-example" data-shortcut-text="searchOperatorBracket">nawiasy {} wymuszają kolejność, np. „{Kowalski || Nowak} && Faktura"</em></div>
+              <div class="shortcut-row"><kbd>&gt;&gt;</kbd> <kbd>&lt;&lt;</kbd> <span><strong data-shortcut-text="searchCmpStrong">Porównania liczb i dat</strong> <span data-shortcut-text="searchCmpRest">— „&gt;&gt;" większe, „&lt;&lt;" mniejsze; dodaj „=" dla ≥/≤ (&gt;&gt;=, =&lt;&lt;)</span><br><em class="shortcut-example" data-shortcut-text="searchCmpExample">np. „&gt;&gt;1000", „=&lt;&lt;50", „&gt;&gt;2026-01-01" · zakres: „&gt;&gt;5 &amp;&amp; &lt;&lt;10"</em></span></div>
               <div class="shortcut-row"><kbd>info:</kbd><span data-shortcut-text="searchOperatorCombined">możesz łączyć operatory, np. „Kowalski && !Anulowana || Nowak"</span></div>
             </div>
             <div class="shortcut-hint">
@@ -1101,18 +1102,18 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260623-06"></script>
-    <script defer src="app/language.js?v=20260623-06"></script>
-    <script defer src="app/cursor-hint.js?v=20260623-06"></script>
-    <script defer src="app/analysis.js?v=20260623-06"></script>
-    <script defer src="app/workbook.js?v=20260623-06"></script>
-    <script defer src="app/xlsx-patch.js?v=20260623-06"></script>
-    <script defer src="app/table.js?v=20260623-06"></script>
-    <script defer src="app/conditional-formatting.js?v=20260623-06"></script>
-    <script defer src="app/formulas.js?v=20260623-06"></script>
-    <script defer src="app/edit-tools.js?v=20260623-06"></script>
-    <script defer src="app/ui-controls.js?v=20260623-06"></script>
-    <script defer src="app/scroll-diagnostics.js?v=20260623-06"></script>
-    <script defer src="app/bootstrap.js?v=20260623-06"></script>
+    <script defer src="app/core.js?v=20260623-07"></script>
+    <script defer src="app/language.js?v=20260623-07"></script>
+    <script defer src="app/cursor-hint.js?v=20260623-07"></script>
+    <script defer src="app/analysis.js?v=20260623-07"></script>
+    <script defer src="app/workbook.js?v=20260623-07"></script>
+    <script defer src="app/xlsx-patch.js?v=20260623-07"></script>
+    <script defer src="app/table.js?v=20260623-07"></script>
+    <script defer src="app/conditional-formatting.js?v=20260623-07"></script>
+    <script defer src="app/formulas.js?v=20260623-07"></script>
+    <script defer src="app/edit-tools.js?v=20260623-07"></script>
+    <script defer src="app/ui-controls.js?v=20260623-07"></script>
+    <script defer src="app/scroll-diagnostics.js?v=20260623-07"></script>
+    <script defer src="app/bootstrap.js?v=20260623-07"></script>
   </body>
 </html>
