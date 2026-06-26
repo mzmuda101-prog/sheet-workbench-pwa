@@ -575,9 +575,19 @@ function combinePrimaryAndEmptyMatch(primaryMatched, emptyMatched, negated, hasP
 function cellMatchesTerm(row, i, q, mode) {
   const values = row.values;
   if (i >= values.length) return false;
-  const text = getDisplayValue(row, i).toLowerCase();
-  const altDate = parseDateFlexible(values[i]);
+  const display = getDisplayValue(row, i);
+  const text = display.toLowerCase();
   const candidates = [text];
+  // Kandydaci-daty (dd-mm-yy / dd-mm-yyyy) dokładamy TYLKO dla komórek, które faktycznie
+  // wyglądają jak data. Goła liczba (np. kolumna „Nr." 4, 8, 190…) NIE jest datą — inaczej
+  // parseDateFlexible zrobiłby z niej numer seryjny Excela (1900-…), a kandydat „dd-mm-1900"
+  // zawiera podciąg „190"/„00" i w trybie „zawiera" pasowałby do prawie każdego wiersza.
+  const raw = values[i];
+  const ds = String(display);
+  const looksDate = raw instanceof Date
+    || /\d[-/.]\d/.test(ds)
+    || (/\d/.test(ds) && /[a-ząćęłńóśźż]/i.test(ds));
+  const altDate = looksDate ? parseDateFlexible(raw) : null;
   if (altDate instanceof Date) {
     const dd = String(altDate.getDate()).padStart(2, "0");
     const mm = String(altDate.getMonth() + 1).padStart(2, "0");
