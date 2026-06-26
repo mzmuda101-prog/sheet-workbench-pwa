@@ -3203,6 +3203,7 @@ function collectColumnProfiles() {
       maxValue: null,
       minDate: null,
       maxDate: null,
+      sum: 0,
       unique: new Map(),
     };
 
@@ -3219,6 +3220,7 @@ function collectColumnProfiles() {
       if (typeof value === "string" && value.startsWith("=")) stats.formulaCount += 1;
       if (typeof value === "number") {
         stats.numericCount += 1;
+        stats.sum += value;
         stats.minValue = stats.minValue == null ? value : Math.min(stats.minValue, value);
         stats.maxValue = stats.maxValue == null ? value : Math.max(stats.maxValue, value);
       }
@@ -3280,6 +3282,8 @@ function collectColumnProfiles() {
       emptyCount,
       emptyPct: totalRows ? Math.round((emptyCount / totalRows) * 100) : 0,
       uniqueCount,
+      numericCount: stats.numericCount,
+      sum: stats.sum,
       type,
       topValues,
       rangeLabel: formatColumnProfileRange({

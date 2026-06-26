@@ -403,32 +403,41 @@ function updateClearSelectionFab() {
   clearSelectionFabEl.classList.toggle("is-visible", active);
 }
 
-function updateCellStats() {
-  updateClearSelectionFab();
-  if (!cellStatsBarEl) return;
-  const rect = getSelectionRectangle();
-  // Jedna komórka = cisza (jak w Excelu — pasek pojawia się przy zakresie).
-  if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) {
-    cellStatsBarEl.classList.add("hidden");
-    cellStatsBarEl.replaceChildren();
-    return;
-  }
-  const stats = computeSelectionStats(rect);
-  if (!stats || stats.cellCount === 0) {
-    cellStatsBarEl.classList.add("hidden");
-    cellStatsBarEl.replaceChildren();
-    return;
-  }
-  const parts = [
-    [t("cellStatsRange"), `${rect.rowCount}×${rect.colCount}`],
-    [t("cellStatsCount"), formatStatNumber(stats.cellCount)],
-  ];
-  if (stats.numericCount > 0) {
-    parts.push([t("cellStatsSum"), formatStatNumber(stats.sum)]);
-    parts.push([t("cellStatsAvg"), formatStatNumber(stats.avg)]);
-    parts.push([t("cellStatsMin"), formatStatNumber(stats.min)]);
-    parts.push([t("cellStatsMax"), formatStatNumber(stats.max)]);
-  }
+// Nagłówki, których sumowanie nie ma sensu (identyfikatory: Nr/ID/LP/kod… oraz lata)
+// — pomijamy je w totalach widoku, bo „suma ID/lat" to szum, nie informacja.
+function isNonSummableHeader(header) {
+  const h = String(header || "").trim().toLowerCase();
+  if (!h) return false;
+  if (/^(rok|lata|year)\b/.test(h) || /\b(rok|year)$/.test(h)) return true;
+  return /^(id|nr|nr\.|lp|lp\.|l\.?p\.?|kod|numer|no|nº|#|poz|poz\.)\b/.test(h) || /\bid$/.test(h);
+}
+
+// Totale CAŁEGO przefiltrowanego widoku (status bar w stylu ERP): liczba wierszy
+// + suma każdej kolumny liczbowej. Reużywa zmemoizowanych profili kolumn
+// (ensureColumnProfilesFresh liczy po viewRows raz na turę), więc jest niemal darmowe.
+function computeViewTotals() {
+  if (!currentHeaders.length || !viewRows.length) return null;
+  if (typeof ensureColumnProfilesFresh === "function") ensureColumnProfilesFresh();
+  const profiles = Array.isArray(currentColumnProfiles) ? currentColumnProfiles : [];
+  // Kryterium liczbowości oparte o DANE, nie o etykietę typu: kolumna jest „miarą",
+  // gdy ≥80% niepustych komórek to prawdziwe liczby. (Etykieta type bywa „daty" dla
+  // kolumn całkowitych — parseDateFlexible myli gołe liczby z datami 1900.)
+  const columns = profiles
+    .filter(
+      (p) =>
+        p &&
+        p.numericCount > 0 &&
+        p.nonEmpty > 0 &&
+        p.numericCount / p.nonEmpty >= 0.8 &&
+        !isNonSummableHeader(p.header)
+    )
+    .sort((a, b) => a.colIdx - b.colIdx)
+    .slice(0, 8) // chronimy pasek przed zalaniem przy arkuszach z wieloma kolumnami liczb
+    .map((p) => ({ header: p.header, sum: p.sum }));
+  return { rowCount: viewRows.length, columns };
+}
+
+function renderCellStatsChips(parts) {
   const frag = document.createDocumentFragment();
   parts.forEach(([label, value]) => {
     const chip = document.createElement("span");
@@ -444,6 +453,48 @@ function updateCellStats() {
   });
   cellStatsBarEl.replaceChildren(frag);
   cellStatsBarEl.classList.remove("hidden");
+}
+
+function updateCellStats() {
+  updateClearSelectionFab();
+  if (!cellStatsBarEl) return;
+  const rect = getSelectionRectangle();
+  const hasRange = rect && !(rect.rowCount === 1 && rect.colCount === 1);
+
+  // 1) Zaznaczony zakres (>1 komórki) → statystyki zaznaczenia (jak w Excelu).
+  if (hasRange) {
+    const stats = computeSelectionStats(rect);
+    if (stats && stats.cellCount > 0) {
+      const parts = [
+        [t("cellStatsRange"), `${rect.rowCount}×${rect.colCount}`],
+        [t("cellStatsCount"), formatStatNumber(stats.cellCount)],
+      ];
+      if (stats.numericCount > 0) {
+        parts.push([t("cellStatsSum"), formatStatNumber(stats.sum)]);
+        parts.push([t("cellStatsAvg"), formatStatNumber(stats.avg)]);
+        parts.push([t("cellStatsMin"), formatStatNumber(stats.min)]);
+        parts.push([t("cellStatsMax"), formatStatNumber(stats.max)]);
+      }
+      cellStatsBarEl.classList.remove("view-totals");
+      renderCellStatsChips(parts);
+      return;
+    }
+  }
+
+  // 2) Brak zaznaczenia → totale całego przefiltrowanego widoku.
+  const totals = computeViewTotals();
+  if (!totals) {
+    cellStatsBarEl.classList.add("hidden");
+    cellStatsBarEl.classList.remove("view-totals");
+    cellStatsBarEl.replaceChildren();
+    return;
+  }
+  const parts = [[t("cellStatsRows"), formatStatNumber(totals.rowCount)]];
+  totals.columns.forEach((col) => {
+    parts.push([`Σ ${col.header}`, formatStatNumber(col.sum)]);
+  });
+  cellStatsBarEl.classList.add("view-totals");
+  renderCellStatsChips(parts);
 }
 
 function shouldIgnoreTableArrowNavigation() {
@@ -1269,12 +1320,14 @@ function renderTable(modelOrHeaders, maybeRows) {
     setStatus(t("tableNoData"));
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
     setEmptyState(DEFAULT_EMPTY_TITLE, DEFAULT_EMPTY_SUB);
+    updateCellStats();
     return;
   }
   if (!rows.length) {
     setStatus(t("statusTableRowsEmpty"));
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
     setEmptyState(t("tableNoResults"), t("tableNoResultsHint"));
+    updateCellStats();
     return;
   }
 

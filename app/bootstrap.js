@@ -403,6 +403,156 @@ if (recalcDatesEl) {
     updateFilterBadge();
   });
 });
+// ── Globalne szukanie po WSZYSTKICH arkuszach skoroszytu ──
+// Skanuje surowe komórki każdego arkusza (workbook.Sheets), grupuje trafienia po
+// arkuszu, a klik w wynik skacze do arkusza i filtruje go do pasujących wierszy
+// przez rdzenny pipeline (applyFilters). Lokalne, bez ruszania pliku źródłowego.
+(() => {
+  const popup = document.getElementById("globalSearchPopup");
+  const openBtn = document.getElementById("globalSearchBtn");
+  const closeBtn = document.getElementById("globalSearchClose");
+  const input = document.getElementById("globalSearchInput");
+  const resultsEl = document.getElementById("globalSearchResults");
+  const hintEl = document.getElementById("globalSearchHint");
+  if (!popup || !openBtn || !input || !resultsEl) return;
+
+  const PER_SHEET = 50; // ile przykładowych trafień pokazać na arkusz
+  const TOTAL_CAP = 200; // twardy limit skanu (ochrona przy ogromnych skoroszytach)
+  let debounceTimer = null;
+
+  function scanWorkbook(term) {
+    const q = term.trim().toLowerCase();
+    const out = { total: 0, groups: [], capped: false };
+    if (q.length < 2 || !workbook || !Array.isArray(workbook.SheetNames)) return out;
+    for (const name of workbook.SheetNames) {
+      const sheet = workbook.Sheets[name];
+      if (!sheet) continue;
+      const hits = [];
+      let count = 0;
+      for (const addr in sheet) {
+        if (addr.charCodeAt(0) === 33) continue; // klucze meta („!ref", „!merges"…)
+        const cell = sheet[addr];
+        if (!cell) continue;
+        const raw = cell.w != null ? cell.w : cell.v; // sformatowany tekst, inaczej wartość
+        if (raw == null) continue;
+        const s = String(raw);
+        if (s && s.toLowerCase().includes(q)) {
+          count += 1;
+          out.total += 1;
+          if (hits.length < PER_SHEET) hits.push({ addr, text: s });
+          if (out.total >= TOTAL_CAP) { out.capped = true; break; }
+        }
+      }
+      if (count > 0) out.groups.push({ sheet: name, count, hits });
+      if (out.capped) break;
+    }
+    return out;
+  }
+
+  function navigateTo(sheetName, term) {
+    closePopup();
+    const apply = () => {
+      if (searchQueryEl) searchQueryEl.value = term;
+      if (filterModeEl) filterModeEl.value = "contains";
+      if (typeof syncQuickSearchInputs === "function") syncQuickSearchInputs();
+      if (typeof applyFilters === "function") applyFilters();
+      if (typeof sortRows === "function") sortRows();
+      if (typeof renderActiveTable === "function") renderActiveTable();
+      if (typeof updateFilterBadge === "function") updateFilterBadge();
+    };
+    if (sheetName && sheetName !== currentSheetName) {
+      sheetSelect.value = sheetName;
+      loadBtn.click(); // odbudowa arkusza jest asynchroniczna (setLoading + setTimeout)
+      const deadline = Date.now() + 4000;
+      (function waitLoaded() {
+        if (currentSheetName === sheetName || Date.now() > deadline) apply();
+        else setTimeout(waitLoaded, 50);
+      })();
+    } else {
+      apply();
+    }
+  }
+
+  function renderResults(term) {
+    resultsEl.replaceChildren();
+    if (term.trim().length < 2) { hintEl.classList.remove("hidden"); return; }
+    hintEl.classList.add("hidden");
+    const res = scanWorkbook(term);
+    if (!res.total) {
+      const empty = document.createElement("div");
+      empty.className = "gsp-empty";
+      empty.textContent = t("globalSearchEmpty");
+      resultsEl.appendChild(empty);
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    res.groups.forEach((g) => {
+      const title = document.createElement("div");
+      title.className = "gsp-group-title";
+      title.textContent = `${g.sheet} · ${g.count}`;
+      frag.appendChild(title);
+      g.hits.forEach((h) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "gsp-item";
+        item.setAttribute("role", "option");
+        const addr = document.createElement("span");
+        addr.className = "gsp-item-addr";
+        addr.textContent = h.addr;
+        const text = document.createElement("span");
+        text.className = "gsp-item-text";
+        text.textContent = h.text.length > 80 ? `${h.text.slice(0, 80)}…` : h.text;
+        item.append(addr, text);
+        item.addEventListener("click", () => navigateTo(g.sheet, term.trim()));
+        frag.appendChild(item);
+      });
+      if (g.count > g.hits.length) {
+        const more = document.createElement("div");
+        more.className = "gsp-item-more";
+        more.textContent = t("globalSearchMore", { count: g.count - g.hits.length });
+        frag.appendChild(more);
+      }
+    });
+    resultsEl.appendChild(frag);
+  }
+
+  function openPopup() {
+    if (!workbook || !Array.isArray(workbook.SheetNames) || !workbook.SheetNames.length) {
+      toast(t("loadSheetToSearch"), "info");
+      return;
+    }
+    popup.classList.remove("hidden");
+    input.value = "";
+    resultsEl.replaceChildren();
+    hintEl.classList.remove("hidden");
+    input.focus();
+  }
+  function closePopup() {
+    popup.classList.add("hidden");
+  }
+
+  openBtn.addEventListener("click", openPopup);
+  if (closeBtn) closeBtn.addEventListener("click", closePopup);
+  input.addEventListener("input", () => {
+    window.clearTimeout(debounceTimer);
+    const term = input.value;
+    debounceTimer = window.setTimeout(() => renderResults(term), 180);
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { e.preventDefault(); closePopup(); }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      window.clearTimeout(debounceTimer);
+      renderResults(input.value);
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (popup.classList.contains("hidden")) return;
+    if (popup.contains(e.target) || openBtn.contains(e.target)) return;
+    closePopup();
+  });
+})();
+
 window.addEventListener("resize", () => {
   syncTableViewportHeight();
   syncFrozenHeaderMetrics();

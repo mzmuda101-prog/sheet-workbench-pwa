@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260626-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260627-01" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -983,8 +983,27 @@
                 </button>
                 <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
                 <button class="btn btn-sm ghost toggle-pill" id="readingToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Tryb pracy z szybkim szukaniem" data-hint-en="Quick search working mode" data-hint-delay="1.1">Tryb szybkie szukanie</button>
+                <button class="btn btn-sm ghost" id="globalSearchBtn" type="button" data-hint data-hint-pl="Przeszukaj WSZYSTKIE arkusze skoroszytu naraz i skocz do arkusza z trafieniem" data-hint-en="Search ALL sheets of the workbook at once and jump to the sheet with a match" data-hint-delay="1.1" data-hint-touch="on">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7"></circle>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    <line x1="11" y1="8" x2="11" y2="14"></line>
+                    <line x1="8" y1="11" x2="14" y2="11"></line>
+                  </svg>
+                  <span class="btn-text">Cały skoroszyt</span>
+                </button>
                 <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport CSV</button>
               </div>
+            </div>
+
+            <div class="global-search-popup hidden" id="globalSearchPopup" role="dialog" aria-modal="true" aria-labelledby="globalSearchTitle">
+              <div class="gsp-head">
+                <span class="gsp-title" id="globalSearchTitle">Szukaj w całym skoroszycie</span>
+                <button class="btn btn-sm ghost icon-only" id="globalSearchClose" type="button" aria-label="Zamknij">✕</button>
+              </div>
+              <input class="gsp-input" id="globalSearchInput" type="text" placeholder="Szukaj we wszystkich arkuszach…" autocomplete="off" spellcheck="false" />
+              <div class="gsp-hint" id="globalSearchHint">Wpisz min. 2 znaki — przeszukiwane są wszystkie arkusze</div>
+              <div class="gsp-results" id="globalSearchResults" role="listbox"></div>
             </div>
 
             <div class="empty-state" id="emptyState">
@@ -1109,18 +1128,18 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260626-01"></script>
-    <script defer src="app/language.js?v=20260626-01"></script>
-    <script defer src="app/cursor-hint.js?v=20260626-01"></script>
-    <script defer src="app/analysis.js?v=20260626-01"></script>
-    <script defer src="app/workbook.js?v=20260626-01"></script>
-    <script defer src="app/xlsx-patch.js?v=20260626-01"></script>
-    <script defer src="app/table.js?v=20260626-01"></script>
-    <script defer src="app/conditional-formatting.js?v=20260626-01"></script>
-    <script defer src="app/formulas.js?v=20260626-01"></script>
-    <script defer src="app/edit-tools.js?v=20260626-01"></script>
-    <script defer src="app/ui-controls.js?v=20260626-01"></script>
-    <script defer src="app/scroll-diagnostics.js?v=20260626-01"></script>
-    <script defer src="app/bootstrap.js?v=20260626-01"></script>
+    <script defer src="app/core.js?v=20260627-01"></script>
+    <script defer src="app/language.js?v=20260627-01"></script>
+    <script defer src="app/cursor-hint.js?v=20260627-01"></script>
+    <script defer src="app/analysis.js?v=20260627-01"></script>
+    <script defer src="app/workbook.js?v=20260627-01"></script>
+    <script defer src="app/xlsx-patch.js?v=20260627-01"></script>
+    <script defer src="app/table.js?v=20260627-01"></script>
+    <script defer src="app/conditional-formatting.js?v=20260627-01"></script>
+    <script defer src="app/formulas.js?v=20260627-01"></script>
+    <script defer src="app/edit-tools.js?v=20260627-01"></script>
+    <script defer src="app/ui-controls.js?v=20260627-01"></script>
+    <script defer src="app/scroll-diagnostics.js?v=20260627-01"></script>
+    <script defer src="app/bootstrap.js?v=20260627-01"></script>
   </body>
 </html>
