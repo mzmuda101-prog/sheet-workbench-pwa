@@ -481,18 +481,16 @@ function updateCellStats() {
     }
   }
 
-  // 2) Brak zaznaczenia → totale całego przefiltrowanego widoku.
+  // 2) Brak zaznaczenia → SUMY kolumn-miar całego przefiltrowanego widoku.
+  // (Liczby wierszy NIE dublujemy — pokazuje ją już górna pigułka statusu nad tabelą.)
   const totals = computeViewTotals();
-  if (!totals) {
+  if (!totals || !totals.columns.length) {
     cellStatsBarEl.classList.add("hidden");
     cellStatsBarEl.classList.remove("view-totals");
     cellStatsBarEl.replaceChildren();
     return;
   }
-  const parts = [[t("cellStatsRows"), formatStatNumber(totals.rowCount)]];
-  totals.columns.forEach((col) => {
-    parts.push([`Σ ${col.header}`, formatStatNumber(col.sum)]);
-  });
+  const parts = totals.columns.map((col) => [`Σ ${col.header}`, formatStatNumber(col.sum)]);
   cellStatsBarEl.classList.add("view-totals");
   renderCellStatsChips(parts);
 }

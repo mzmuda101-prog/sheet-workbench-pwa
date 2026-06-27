@@ -2412,6 +2412,7 @@ details.panel[open] > summary {
 }
 
 .quick-search {
+  position: relative; /* kotwica dla live-podglądu wyników (.qs-live) */
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2993,45 +2994,46 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   animation: cellStatsIn 0.12s ease;
 }
 .cell-stats-bar.hidden { display: none; }
-/* Globalne szukanie po wszystkich arkuszach — pływający panel (command-palette style) */
-.global-search-popup {
-  position: fixed;
-  top: 12vh;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(560px, 92vw);
-  max-height: 70vh;
+/* Przełącznik zakresu szukania (bieżący arkusz ↔ wszystkie arkusze) — kompaktowy:
+   na wąskich ekranach chowa etykietę i zostaje sama ikona, by nie zjadać miejsca. */
+.qs-scope-toggle { display: inline-flex; align-items: center; gap: 6px; }
+.qs-scope-toggle[aria-pressed="true"] {
+  background: var(--accent-soft, rgba(64, 130, 109, 0.16));
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.qs-scope-toggle svg { flex: 0 0 auto; }
+@media (max-width: 720px) {
+  /* mniej miejsca → sama ikona (etykieta nadal czytana przez screen-readery przez aria-label JS) */
+  .qs-scope-text { display: none; }
+  .qs-scope-toggle { padding-inline: 8px; }
+}
+
+/* Live-podgląd wyników szukania (działa dla bieżącego arkusza i dla „wszystkie arkusze”) */
+.qs-live {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: min(440px, 100%);
+  max-height: 50vh;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px;
-  z-index: 1200;
+  gap: 1px;
+  padding: 6px;
+  z-index: 60;
   background: var(--surface);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--r-md, 12px);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
-  animation: gspIn 0.14s ease;
+  border-radius: var(--r-sm, 10px);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.24);
+  animation: qsLiveIn 0.12s ease;
 }
-.global-search-popup.hidden { display: none; }
-@keyframes gspIn {
-  from { opacity: 0; transform: translate(-50%, -6px); }
-  to { opacity: 1; transform: translate(-50%, 0); }
+.qs-live.hidden { display: none; }
+@keyframes qsLiveIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-.gsp-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.gsp-title { font-weight: 600; font-size: 14px; }
-.gsp-input {
-  width: 100%;
-  padding: 10px 12px;
-  font-size: 15px;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--r-sm, 8px);
-  background: var(--surface-2, var(--surface));
-  color: inherit;
-}
-.gsp-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-.gsp-hint { font-size: 12px; opacity: 0.7; }
-.gsp-results { overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.gsp-group-title {
+.qs-live-group {
   position: sticky;
   top: 0;
   background: var(--surface);
@@ -3039,9 +3041,9 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   opacity: 0.7;
-  padding: 6px 4px 3px;
+  padding: 6px 6px 3px;
 }
-.gsp-item {
+.qs-live-item {
   display: flex;
   gap: 8px;
   align-items: baseline;
@@ -3055,11 +3057,11 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   cursor: pointer;
   font-size: 13px;
 }
-.gsp-item:hover, .gsp-item:focus-visible { background: var(--surface-hover, rgba(127, 127, 127, 0.12)); }
-.gsp-item-addr { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); flex: 0 0 auto; }
-.gsp-item-text { opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gsp-item-more { font-size: 12px; opacity: 0.65; padding: 4px 8px; }
-.gsp-empty { font-size: 13px; opacity: 0.7; padding: 8px 4px; }
+.qs-live-item:hover, .qs-live-item:focus-visible { background: var(--surface-hover, rgba(127, 127, 127, 0.12)); }
+.qs-live-addr { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); flex: 0 0 auto; }
+.qs-live-text { opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qs-live-more { font-size: 12px; opacity: 0.65; padding: 4px 8px; }
+.qs-live-empty { font-size: 13px; opacity: 0.7; padding: 8px 6px; }
 /* Tryb totali widoku: etykiety to nagłówki kolumn (np. „Σ Kwota netto") — bez
    wersalików/letter-spacingu czytają się naturalniej niż statystyki zaznaczenia. */
 .cell-stats-bar.view-totals .cell-stat-label {

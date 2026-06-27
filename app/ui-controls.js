@@ -1329,6 +1329,183 @@ function applyQuickSearch() {
   }
 }
 
+// ── Szybkie szukanie: zakres „wszystkie arkusze" + live-podgląd wyników ──
+// Przełącznik rozszerza szybkie szukanie na CAŁY skoroszyt; live-dropdown pokazuje
+// na żywo przykładowe trafienia (w jednym arkuszu lub pogrupowane po arkuszach),
+// a klik / Enter stosuje wyszukiwanie przez applyQuickSearch (z trybem, akcją,
+// kolumnami i operatorami), skacząc najpierw do arkusza z trafieniem, jeśli trzeba.
+let qsAllSheetsScope = false;
+const qsAllSheetsEl = document.getElementById("qsAllSheets");
+const qsLiveEl = document.getElementById("qsLiveResults");
+let qsLiveTimer = null;
+
+function qsIsExact() {
+  return quickSearchModeEl ? getNormalizedSelectValue(quickSearchModeEl) === "exact" : false;
+}
+
+// Skan surowych komórek arkusza (cell.w||cell.v), bez rozróżniania wielkości liter.
+function qsScanSheet(sheetName, q, exact, perSheet) {
+  const sheet = workbook && workbook.Sheets ? workbook.Sheets[sheetName] : null;
+  const res = { count: 0, hits: [] };
+  if (!sheet) return res;
+  for (const addr in sheet) {
+    if (addr.charCodeAt(0) === 33) continue; // klucze meta („!ref", „!merges"…)
+    const cell = sheet[addr];
+    if (!cell) continue;
+    const raw = cell.w != null ? cell.w : cell.v;
+    if (raw == null) continue;
+    const s = String(raw);
+    if (!s) continue;
+    const hay = s.toLowerCase();
+    const ok = exact ? hay === q : hay.includes(q);
+    if (ok) {
+      res.count += 1;
+      if (res.hits.length < perSheet) res.hits.push({ addr, text: s });
+    }
+  }
+  return res;
+}
+
+// Kolejność arkuszy do skanu: bieżący zawsze pierwszy; reszta tylko gdy zakres=wszystkie.
+function qsSheetOrder() {
+  if (!workbook || !Array.isArray(workbook.SheetNames)) return [];
+  if (!qsAllSheetsScope) return currentSheetName ? [currentSheetName] : [];
+  const rest = workbook.SheetNames.filter((n) => n !== currentSheetName);
+  return currentSheetName ? [currentSheetName, ...rest] : workbook.SheetNames.slice();
+}
+
+function qsFirstMatchingSheet(q, exact) {
+  for (const name of qsSheetOrder()) {
+    if (qsScanSheet(name, q, exact, 1).count > 0) return name;
+  }
+  return currentSheetName;
+}
+
+function hideQsLive() {
+  if (qsLiveEl) { qsLiveEl.classList.add("hidden"); qsLiveEl.replaceChildren(); }
+}
+
+// Stosuje szukanie przez applyQuickSearch (respektuje tryb/akcję/kolumny/operatory),
+// skacząc najpierw do wskazanego arkusza, jeśli różni się od bieżącego.
+function qsApplyOnSheet(sheetName, value) {
+  hideQsLive();
+  if (quickSearchEl) quickSearchEl.value = value;
+  if (sheetName && sheetName !== currentSheetName) {
+    sheetSelect.value = sheetName;
+    loadBtn.click(); // odbudowa arkusza jest asynchroniczna (setLoading + setTimeout)
+    const deadline = Date.now() + 4000;
+    (function waitLoaded() {
+      if (currentSheetName === sheetName || Date.now() > deadline) {
+        if (quickSearchEl) quickSearchEl.value = value;
+        applyQuickSearch();
+      } else setTimeout(waitLoaded, 50);
+    })();
+  } else {
+    applyQuickSearch();
+  }
+}
+
+// Wspólny commit dla Enter / przycisku „Szukaj" na pasku: przy zakresie „wszystkie
+// arkusze" skacze do pierwszego arkusza z trafieniem (bieżący ma priorytet).
+function commitQuickSearch() {
+  const value = quickSearchEl ? quickSearchEl.value : (searchQueryEl ? searchQueryEl.value : "");
+  if (qsAllSheetsScope && value.trim().length >= 1) {
+    qsApplyOnSheet(qsFirstMatchingSheet(value.trim().toLowerCase(), qsIsExact()), value);
+  } else {
+    hideQsLive();
+    applyQuickSearch();
+  }
+}
+
+function renderQsLive() {
+  if (!qsLiveEl || !quickSearchEl) return;
+  const value = quickSearchEl.value || "";
+  const q = value.trim().toLowerCase();
+  if (q.length < 2 || !currentHeaders.length) { hideQsLive(); return; }
+  const exact = qsIsExact();
+  const PER_SHEET = 8;
+  const groups = [];
+  let total = 0;
+  for (const name of qsSheetOrder()) {
+    const r = qsScanSheet(name, q, exact, PER_SHEET);
+    if (r.count > 0) { groups.push({ sheet: name, count: r.count, hits: r.hits }); total += r.count; }
+    if (groups.length >= 8) break; // ochrona długości listy
+  }
+  qsLiveEl.replaceChildren();
+  if (!total) {
+    const empty = document.createElement("div");
+    empty.className = "qs-live-empty";
+    empty.textContent = t("globalSearchEmpty");
+    qsLiveEl.appendChild(empty);
+    qsLiveEl.classList.remove("hidden");
+    return;
+  }
+  const frag = document.createDocumentFragment();
+  groups.forEach((g) => {
+    // Nagłówek arkusza tylko w trybie „wszystkie arkusze" (w jednym arkuszu zbędny).
+    if (qsAllSheetsScope) {
+      const title = document.createElement("div");
+      title.className = "qs-live-group";
+      title.textContent = `${g.sheet} · ${g.count}`;
+      frag.appendChild(title);
+    }
+    g.hits.forEach((h) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "qs-live-item";
+      item.setAttribute("role", "option");
+      const addr = document.createElement("span");
+      addr.className = "qs-live-addr";
+      addr.textContent = h.addr;
+      const text = document.createElement("span");
+      text.className = "qs-live-text";
+      text.textContent = h.text.length > 80 ? `${h.text.slice(0, 80)}…` : h.text;
+      item.append(addr, text);
+      item.addEventListener("click", () => qsApplyOnSheet(g.sheet, value));
+      frag.appendChild(item);
+    });
+    if (g.count > g.hits.length) {
+      const more = document.createElement("div");
+      more.className = "qs-live-more";
+      more.textContent = t("globalSearchMore", { count: g.count - g.hits.length });
+      frag.appendChild(more);
+    }
+  });
+  qsLiveEl.appendChild(frag);
+  qsLiveEl.classList.remove("hidden");
+}
+
+function scheduleQsLive() {
+  window.clearTimeout(qsLiveTimer);
+  qsLiveTimer = window.setTimeout(renderQsLive, 180);
+}
+
+if (qsAllSheetsEl) {
+  qsAllSheetsEl.addEventListener("click", () => {
+    qsAllSheetsScope = !qsAllSheetsScope;
+    qsAllSheetsEl.setAttribute("aria-pressed", String(qsAllSheetsScope));
+    if (quickSearchEl) quickSearchEl.focus();
+    renderQsLive();
+  });
+}
+if (quickSearchEl) {
+  quickSearchEl.addEventListener("input", scheduleQsLive);
+  quickSearchEl.addEventListener("focus", () => {
+    if ((quickSearchEl.value || "").trim().length >= 2) renderQsLive();
+  });
+  quickSearchEl.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") hideQsLive();
+  });
+}
+if (quickSearchModeEl) {
+  quickSearchModeEl.addEventListener("change", scheduleQsLive);
+}
+document.addEventListener("click", (e) => {
+  if (!qsLiveEl || qsLiveEl.classList.contains("hidden")) return;
+  if (quickSearchWrap && quickSearchWrap.contains(e.target)) return;
+  hideQsLive();
+});
+
 if (tableWrapEl && tableScrollbarEl) {
   // Touch axis-lock USUNIĘTY — psuł natywne przewijanie/momentum na tabletach i telefonach
   // (pionowe gesty bywały ignorowane, tabela „dryfowała" po puszczeniu, przeszkadzał resize).
@@ -1562,7 +1739,7 @@ window.addEventListener("resize", () => {
 });
 
 if (quickSearchBtn) {
-  quickSearchBtn.addEventListener("click", applyQuickSearch);
+  quickSearchBtn.addEventListener("click", commitQuickSearch);
 }
 
 if (quickSearchColumnsBtn) {
@@ -1584,17 +1761,17 @@ if (quickSearchModeEl) {
 // i Enter „przepadał". Dotyczyło OBU wariantów: paska pod przyciskiem (#quickSearchWrap)
 // i okna ze skrótu Cmd+Shift+F (#quickSearchPopup). Wyjątek: przyciski (Kolumny/Szukaj)
 // zachowują natywne działanie (klik), żeby Enter na „Kolumny" otwierał picker.
-function attachQuickSearchEnter(container) {
+function attachQuickSearchEnter(container, handler) {
   if (!container) return;
   container.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     if (e.target.closest && e.target.closest("button")) return; // przyciski robią swoje
     e.preventDefault();
-    applyQuickSearch();
+    handler();
   });
 }
-attachQuickSearchEnter(quickSearchWrap);   // pasek pod przyciskiem
-attachQuickSearchEnter(quickSearchPopupEl); // okno ze skrótu Cmd+Shift+F
+attachQuickSearchEnter(quickSearchWrap, commitQuickSearch);   // pasek pod przyciskiem (z zakresem)
+attachQuickSearchEnter(quickSearchPopupEl, applyQuickSearch); // okno ze skrótu Cmd+Shift+F
 if (quickSearchPopupModeEl) {
   quickSearchPopupModeEl.addEventListener("change", () => {
     applyQuickSearchMode(getNormalizedSelectValue(quickSearchPopupModeEl));

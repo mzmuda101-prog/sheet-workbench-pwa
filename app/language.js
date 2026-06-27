@@ -462,15 +462,11 @@ const I18N = {
     formulaAddresses: "Adresy",
     formulaOutsideTable: "poza tabelą",
     formulaEmptyResult: "pusty wynik",
-    globalSearchBtn: "Cały skoroszyt",
-    globalSearchTitle: "Szukaj w całym skoroszycie",
-    globalSearchPlaceholder: "Szukaj we wszystkich arkuszach…",
-    globalSearchHint: "Wpisz min. 2 znaki — przeszukiwane są wszystkie arkusze",
-    globalSearchEmpty: "Brak trafień w żadnym arkuszu",
+    qsAllSheetsLabel: "Wszystkie arkusze",
+    globalSearchEmpty: "Brak trafień",
     globalSearchMore: "+{count} więcej w tym arkuszu",
     cellStatsRange: "Zakres",
     cellStatsCount: "Liczba",
-    cellStatsRows: "Wiersze",
     cellStatsSum: "Suma",
     cellStatsAvg: "Średnia",
     cellStatsMin: "Min",
@@ -935,15 +931,11 @@ const I18N = {
     formulaAddresses: "Addresses",
     formulaOutsideTable: "outside table",
     formulaEmptyResult: "empty result",
-    globalSearchBtn: "Whole workbook",
-    globalSearchTitle: "Search the whole workbook",
-    globalSearchPlaceholder: "Search across all sheets…",
-    globalSearchHint: "Type at least 2 characters — every sheet is searched",
-    globalSearchEmpty: "No matches in any sheet",
+    qsAllSheetsLabel: "All sheets",
+    globalSearchEmpty: "No matches",
     globalSearchMore: "+{count} more in this sheet",
     cellStatsRange: "Range",
     cellStatsCount: "Count",
-    cellStatsRows: "Rows",
     cellStatsSum: "Sum",
     cellStatsAvg: "Average",
     cellStatsMin: "Min",
@@ -1729,10 +1721,8 @@ function applyStaticTranslations() {
   setButtonLabel("#loadBtn", copy.loadSheet);
   setButtonLabel("#loadSampleBtn", t("sampleBtn"));
   setButtonLabel("#emptyOpenBtn", t("openFileBtn"));
-  setText("#globalSearchBtn .btn-text", t("globalSearchBtn"));
-  setText("#globalSearchTitle", t("globalSearchTitle"));
-  setText("#globalSearchHint", t("globalSearchHint"));
-  setAttr("#globalSearchInput", "placeholder", t("globalSearchPlaceholder"));
+  setText("#qsAllSheets .qs-scope-text", t("qsAllSheetsLabel"));
+  setAttr("#qsAllSheets", "aria-label", t("qsAllSheetsLabel"));
   setText("#panel-text-filters .panel-title", copy.textFilters);
   setText("#filter1BlockTitle", copy.filterBlock1);
   setFieldLabel("searchQuery", copy.search);
