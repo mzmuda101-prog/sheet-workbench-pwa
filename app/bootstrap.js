@@ -19,6 +19,9 @@ document.querySelectorAll("details.panel").forEach((det) => {
     // pomijają to całkowicie (renderDirtyAnalysesForPanel liczy tylko brudne).
     if (det.open && typeof renderDirtyAnalysesForPanel === "function"
         && typeof panelHasDirtyAnalyses === "function" && panelHasDirtyAnalyses(det.id)) {
+      // Najpierw natychmiast pokaż „Liczę…" (panel nie wygląda na pusty/niedziałający),
+      // dopiero potem (po paincie) policz — ciężkie liczenie nie zacina animacji otwarcia.
+      if (typeof showHeavyComputingHint === "function") showHeavyComputingHint(det.id);
       requestAnimationFrame(() => requestAnimationFrame(() => {
         if (det.open) renderDirtyAnalysesForPanel(det.id);
       }));

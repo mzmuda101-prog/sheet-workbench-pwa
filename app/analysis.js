@@ -95,6 +95,24 @@ function panelHasDirtyAnalyses(panelId) {
   return false;
 }
 
+// Natychmiastowy placeholder „Liczę…" dla ciężkich, brudnych analiz danego panelu.
+// Wołany SYNCHRONICZNIE przy otwarciu (przed odroczonym liczeniem), żeby panel nie był
+// pusty przez ~1–2s i nie wyglądał jakby się „nie otworzył" (zwłaszcza panel agregacji,
+// który ma wyłącznie własną treść). Pokazujemy tylko gdy kontener jest pusty — nie
+// nadpisujemy istniejącego wyniku przy ponownym liczeniu po zmianie danych.
+function showHeavyComputingHint(panelId) {
+  for (const key of Object.keys(ANALYSIS_PANELS)) {
+    const meta = ANALYSIS_PANELS[key];
+    if (meta.panelId !== panelId || !meta.heavy || !meta.dirty) continue;
+    const el = key === "aggregation" ? aggregationWorkbenchSummaryEl
+      : key === "duration" ? durationAnalysisSummaryEl
+      : null;
+    if (el && !el.children.length) {
+      try { el.appendChild(createEmptyInsight(t("analysisComputing"))); } catch (_) {}
+    }
+  }
+}
+
 function renderDirtyAnalysesForPanel(panelId) {
   forcingAnalysisRender = true;
   try {
