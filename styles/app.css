@@ -2997,17 +2997,29 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
 /* Przełącznik zakresu szukania (bieżący arkusz ↔ wszystkie arkusze) — kompaktowy:
    na wąskich ekranach chowa etykietę i zostaje sama ikona, by nie zjadać miejsca. */
 .qs-scope-toggle { display: inline-flex; align-items: center; gap: 6px; }
-.qs-scope-toggle[aria-pressed="true"] {
-  background: var(--accent-soft, rgba(64, 130, 109, 0.16));
-  border-color: var(--accent);
-  color: var(--accent);
-}
 .qs-scope-toggle svg { flex: 0 0 auto; }
+/* Stan WŁĄCZONY musi być jednoznaczny i wyraźnie inny od zwykłego :hover (inaczej po
+   kliknięciu, gdy kursor zostaje nad przyciskiem, OFF wygląda jak ON) → pełny akcent + biały. */
+.qs-scope-toggle[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow:
+    0 6px 16px color-mix(in srgb, var(--accent) 26%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+.qs-scope-toggle[aria-pressed="true"]:hover:not(:disabled) {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
 @media (max-width: 720px) {
   /* mniej miejsca → sama ikona (etykieta nadal czytana przez screen-readery przez aria-label JS) */
   .qs-scope-text { display: none; }
   .qs-scope-toggle { padding-inline: 8px; }
 }
+
+/* Kotwica live-podglądu w wyskakującym oknie szybkiego szukania */
+.quick-search-popup-row { position: relative; }
 
 /* Live-podgląd wyników szukania (działa dla bieżącego arkusza i dla „wszystkie arkusze”) */
 .qs-live {

@@ -1330,18 +1330,13 @@ function applyQuickSearch() {
 }
 
 // ── Szybkie szukanie: zakres „wszystkie arkusze" + live-podgląd wyników ──
-// Przełącznik rozszerza szybkie szukanie na CAŁY skoroszyt; live-dropdown pokazuje
-// na żywo przykładowe trafienia (w jednym arkuszu lub pogrupowane po arkuszach),
-// a klik / Enter stosuje wyszukiwanie przez applyQuickSearch (z trybem, akcją,
-// kolumnami i operatorami), skacząc najpierw do arkusza z trafieniem, jeśli trzeba.
+// JEDNA logika dla OBU wariantów paska (inline #quickSearchWrap oraz wyskakujące
+// okno #quickSearchPopup ze skrótu Cmd/Ctrl+Shift+F). Każdy pasek to „kontekst"
+// (input + select trybu + przełącznik + lista wyników + element-kotwica), a stan
+// zakresu (bieżący ↔ wszystkie arkusze) jest WSPÓLNY i synchronizowany między nimi.
+// Dzięki temu zmiana zachowania robi się w jednym miejscu i nie rozjeżdża między pasami.
 let qsAllSheetsScope = false;
-const qsAllSheetsEl = document.getElementById("qsAllSheets");
-const qsLiveEl = document.getElementById("qsLiveResults");
-let qsLiveTimer = null;
-
-function qsIsExact() {
-  return quickSearchModeEl ? getNormalizedSelectValue(quickSearchModeEl) === "exact" : false;
-}
+const qsContexts = [];
 
 // Skan surowych komórek arkusza (cell.w||cell.v), bez rozróżniania wielkości liter.
 function qsScanSheet(sheetName, q, exact, perSheet) {
@@ -1381,15 +1376,26 @@ function qsFirstMatchingSheet(q, exact) {
   return currentSheetName;
 }
 
-function hideQsLive() {
-  if (qsLiveEl) { qsLiveEl.classList.add("hidden"); qsLiveEl.replaceChildren(); }
+function qsCtxExact(ctx) {
+  return ctx.modeEl ? getNormalizedSelectValue(ctx.modeEl) === "exact" : false;
+}
+function hideQsLive(ctx) {
+  if (ctx && ctx.liveEl) { ctx.liveEl.classList.add("hidden"); ctx.liveEl.replaceChildren(); }
+}
+function hideAllQsLive() {
+  qsContexts.forEach(hideQsLive);
+}
+function qsSyncToggles() {
+  qsContexts.forEach((c) => { if (c.toggleEl) c.toggleEl.setAttribute("aria-pressed", String(qsAllSheetsScope)); });
 }
 
-// Stosuje szukanie przez applyQuickSearch (respektuje tryb/akcję/kolumny/operatory),
-// skacząc najpierw do wskazanego arkusza, jeśli różni się od bieżącego.
+// Stosuje szukanie przez applyQuickSearch (respektuje tryb/akcję/kolumny/operatory
+// AKTYWNEGO paska), skacząc najpierw do wskazanego arkusza, jeśli różni się od bieżącego.
+// Ustawiamy wartość w OBU polach, bo applyQuickSearch czyta z aktywnego paska.
 function qsApplyOnSheet(sheetName, value) {
-  hideQsLive();
+  hideAllQsLive();
   if (quickSearchEl) quickSearchEl.value = value;
+  if (quickSearchPopupInput) quickSearchPopupInput.value = value;
   if (sheetName && sheetName !== currentSheetName) {
     sheetSelect.value = sheetName;
     loadBtn.click(); // odbudowa arkusza jest asynchroniczna (setLoading + setTimeout)
@@ -1397,6 +1403,7 @@ function qsApplyOnSheet(sheetName, value) {
     (function waitLoaded() {
       if (currentSheetName === sheetName || Date.now() > deadline) {
         if (quickSearchEl) quickSearchEl.value = value;
+        if (quickSearchPopupInput) quickSearchPopupInput.value = value;
         applyQuickSearch();
       } else setTimeout(waitLoaded, 50);
     })();
@@ -1405,24 +1412,28 @@ function qsApplyOnSheet(sheetName, value) {
   }
 }
 
-// Wspólny commit dla Enter / przycisku „Szukaj" na pasku: przy zakresie „wszystkie
+// Wspólny commit dla Enter / przycisku „Szukaj" (oba paski): przy zakresie „wszystkie
 // arkusze" skacze do pierwszego arkusza z trafieniem (bieżący ma priorytet).
 function commitQuickSearch() {
-  const value = quickSearchEl ? quickSearchEl.value : (searchQueryEl ? searchQueryEl.value : "");
+  const popupActive = quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden");
+  const inputEl = popupActive ? quickSearchPopupInput : quickSearchEl;
+  const modeEl = popupActive ? quickSearchPopupModeEl : quickSearchModeEl;
+  const value = inputEl ? inputEl.value : (searchQueryEl ? searchQueryEl.value : "");
   if (qsAllSheetsScope && value.trim().length >= 1) {
-    qsApplyOnSheet(qsFirstMatchingSheet(value.trim().toLowerCase(), qsIsExact()), value);
+    const exact = modeEl ? getNormalizedSelectValue(modeEl) === "exact" : false;
+    qsApplyOnSheet(qsFirstMatchingSheet(value.trim().toLowerCase(), exact), value);
   } else {
-    hideQsLive();
+    hideAllQsLive();
     applyQuickSearch();
   }
 }
 
-function renderQsLive() {
-  if (!qsLiveEl || !quickSearchEl) return;
-  const value = quickSearchEl.value || "";
+function renderQsLive(ctx) {
+  if (!ctx || !ctx.liveEl || !ctx.inputEl) return;
+  const value = ctx.inputEl.value || "";
   const q = value.trim().toLowerCase();
-  if (q.length < 2 || !currentHeaders.length) { hideQsLive(); return; }
-  const exact = qsIsExact();
+  if (q.length < 2 || !currentHeaders.length) { hideQsLive(ctx); return; }
+  const exact = qsCtxExact(ctx);
   const PER_SHEET = 8;
   const groups = [];
   let total = 0;
@@ -1431,13 +1442,13 @@ function renderQsLive() {
     if (r.count > 0) { groups.push({ sheet: name, count: r.count, hits: r.hits }); total += r.count; }
     if (groups.length >= 8) break; // ochrona długości listy
   }
-  qsLiveEl.replaceChildren();
+  ctx.liveEl.replaceChildren();
   if (!total) {
     const empty = document.createElement("div");
     empty.className = "qs-live-empty";
     empty.textContent = t("globalSearchEmpty");
-    qsLiveEl.appendChild(empty);
-    qsLiveEl.classList.remove("hidden");
+    ctx.liveEl.appendChild(empty);
+    ctx.liveEl.classList.remove("hidden");
     return;
   }
   const frag = document.createDocumentFragment();
@@ -1471,39 +1482,56 @@ function renderQsLive() {
       frag.appendChild(more);
     }
   });
-  qsLiveEl.appendChild(frag);
-  qsLiveEl.classList.remove("hidden");
+  ctx.liveEl.appendChild(frag);
+  ctx.liveEl.classList.remove("hidden");
 }
 
-function scheduleQsLive() {
-  window.clearTimeout(qsLiveTimer);
-  qsLiveTimer = window.setTimeout(renderQsLive, 180);
+// Podpina identyczne zachowanie (przełącznik zakresu + live-podgląd) do jednego paska.
+function wireQuickSearchScope(ctx) {
+  if (!ctx.inputEl && !ctx.toggleEl) return;
+  qsContexts.push(ctx);
+  let timer = null;
+  if (ctx.toggleEl) {
+    ctx.toggleEl.addEventListener("click", () => {
+      qsAllSheetsScope = !qsAllSheetsScope;
+      qsSyncToggles(); // wspólny stan → druga belka też pokazuje aktualny zakres
+      if (ctx.inputEl) ctx.inputEl.focus();
+      renderQsLive(ctx);
+    });
+  }
+  if (ctx.inputEl) {
+    ctx.inputEl.addEventListener("input", () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => renderQsLive(ctx), 180);
+    });
+    ctx.inputEl.addEventListener("focus", () => {
+      if ((ctx.inputEl.value || "").trim().length >= 2) renderQsLive(ctx);
+    });
+    ctx.inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") hideQsLive(ctx);
+    });
+  }
+  if (ctx.modeEl) ctx.modeEl.addEventListener("change", () => renderQsLive(ctx));
+  document.addEventListener("click", (e) => {
+    if (!ctx.liveEl || ctx.liveEl.classList.contains("hidden")) return;
+    if (ctx.wrapEl && ctx.wrapEl.contains(e.target)) return;
+    hideQsLive(ctx);
+  });
 }
 
-if (qsAllSheetsEl) {
-  qsAllSheetsEl.addEventListener("click", () => {
-    qsAllSheetsScope = !qsAllSheetsScope;
-    qsAllSheetsEl.setAttribute("aria-pressed", String(qsAllSheetsScope));
-    if (quickSearchEl) quickSearchEl.focus();
-    renderQsLive();
-  });
-}
-if (quickSearchEl) {
-  quickSearchEl.addEventListener("input", scheduleQsLive);
-  quickSearchEl.addEventListener("focus", () => {
-    if ((quickSearchEl.value || "").trim().length >= 2) renderQsLive();
-  });
-  quickSearchEl.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") hideQsLive();
-  });
-}
-if (quickSearchModeEl) {
-  quickSearchModeEl.addEventListener("change", scheduleQsLive);
-}
-document.addEventListener("click", (e) => {
-  if (!qsLiveEl || qsLiveEl.classList.contains("hidden")) return;
-  if (quickSearchWrap && quickSearchWrap.contains(e.target)) return;
-  hideQsLive();
+wireQuickSearchScope({
+  inputEl: quickSearchEl,
+  modeEl: quickSearchModeEl,
+  toggleEl: document.getElementById("qsAllSheets"),
+  liveEl: document.getElementById("qsLiveResults"),
+  wrapEl: quickSearchWrap,
+});
+wireQuickSearchScope({
+  inputEl: quickSearchPopupInput,
+  modeEl: quickSearchPopupModeEl,
+  toggleEl: document.getElementById("qsAllSheetsPopup"),
+  liveEl: document.getElementById("qsLiveResultsPopup"),
+  wrapEl: quickSearchPopupEl,
 });
 
 if (tableWrapEl && tableScrollbarEl) {

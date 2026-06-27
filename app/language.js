@@ -1723,6 +1723,8 @@ function applyStaticTranslations() {
   setButtonLabel("#emptyOpenBtn", t("openFileBtn"));
   setText("#qsAllSheets .qs-scope-text", t("qsAllSheetsLabel"));
   setAttr("#qsAllSheets", "aria-label", t("qsAllSheetsLabel"));
+  setText("#qsAllSheetsPopup .qs-scope-text", t("qsAllSheetsLabel"));
+  setAttr("#qsAllSheetsPopup", "aria-label", t("qsAllSheetsLabel"));
   setText("#panel-text-filters .panel-title", copy.textFilters);
   setText("#filter1BlockTitle", copy.filterBlock1);
   setFieldLabel("searchQuery", copy.search);

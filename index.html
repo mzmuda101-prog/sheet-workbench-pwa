@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260627-02" />
+    <link rel="stylesheet" href="styles/app.css?v=20260627-03" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1090,8 +1090,17 @@
             <input type="checkbox" id="quickSearchPopupOperators" />
             <span class="qs-operators-toggle-text">Operatory wyszukiwania</span>
           </label>
+          <button class="btn btn-sm ghost qs-scope-toggle" id="qsAllSheetsPopup" type="button" aria-pressed="false" data-hint data-hint-pl="Szukaj we WSZYSTKICH arkuszach skoroszytu — wyniki na żywo, klik skacze do arkusza z trafieniem" data-hint-en="Search across ALL sheets — live results, click jumps to the matching sheet" data-hint-delay="1.1" data-hint-touch="on">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+            <span class="qs-scope-text">Wszystkie arkusze</span>
+          </button>
           <button class="btn btn-sm ghost" id="quickSearchPopupColumnsBtn" type="button">Kolumny</button>
           <button class="btn btn-sm" id="quickSearchPopupBtn" type="button">Szukaj</button>
+          <div class="qs-live hidden" id="qsLiveResultsPopup" role="listbox" aria-label="Podgląd wyników szukania"></div>
         </div>
         <p class="quick-search-popup-hint">Enter – zastosuj, Esc – zamknij</p>
       </div>
@@ -1118,18 +1127,18 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260627-02"></script>
-    <script defer src="app/language.js?v=20260627-02"></script>
-    <script defer src="app/cursor-hint.js?v=20260627-02"></script>
-    <script defer src="app/analysis.js?v=20260627-02"></script>
-    <script defer src="app/workbook.js?v=20260627-02"></script>
-    <script defer src="app/xlsx-patch.js?v=20260627-02"></script>
-    <script defer src="app/table.js?v=20260627-02"></script>
-    <script defer src="app/conditional-formatting.js?v=20260627-02"></script>
-    <script defer src="app/formulas.js?v=20260627-02"></script>
-    <script defer src="app/edit-tools.js?v=20260627-02"></script>
-    <script defer src="app/ui-controls.js?v=20260627-02"></script>
-    <script defer src="app/scroll-diagnostics.js?v=20260627-02"></script>
-    <script defer src="app/bootstrap.js?v=20260627-02"></script>
+    <script defer src="app/core.js?v=20260627-03"></script>
+    <script defer src="app/language.js?v=20260627-03"></script>
+    <script defer src="app/cursor-hint.js?v=20260627-03"></script>
+    <script defer src="app/analysis.js?v=20260627-03"></script>
+    <script defer src="app/workbook.js?v=20260627-03"></script>
+    <script defer src="app/xlsx-patch.js?v=20260627-03"></script>
+    <script defer src="app/table.js?v=20260627-03"></script>
+    <script defer src="app/conditional-formatting.js?v=20260627-03"></script>
+    <script defer src="app/formulas.js?v=20260627-03"></script>
+    <script defer src="app/edit-tools.js?v=20260627-03"></script>
+    <script defer src="app/ui-controls.js?v=20260627-03"></script>
+    <script defer src="app/scroll-diagnostics.js?v=20260627-03"></script>
+    <script defer src="app/bootstrap.js?v=20260627-03"></script>
   </body>
 </html>
