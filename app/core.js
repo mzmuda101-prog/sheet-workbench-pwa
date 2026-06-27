@@ -442,7 +442,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260627-06";
+const APP_BUILD_VERSION = "20260627-07";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
@@ -514,14 +514,33 @@ function applyZoom() {
   syncTableViewportHeight();
 }
 
-function syncFrozenHeaderMetrics() {
+// Te dwie funkcje CZYTAJĄ layout (getBoundingClientRect) i ustawiają CSS-zmienne.
+// Wołane są kilka razy podczas jednego renderu/zmiany (applyZoom + applyFreezeHeaders
+// + render tail) — gdy odpalały się synchronicznie tuż po zapisach klas/stylów,
+// każda wymuszała pełny re-layout tabeli (forced reflow / layout thrashing, ~270ms
+// na słabszym iPadzie przy 500 wierszach). Żaden wołacz nie czyta tych zmiennych
+// z powrotem w JS, więc bezpiecznie zlewamy je do JEDNEGO odczytu w najbliższym
+// rAF — po naturalnym layoucie przeglądarki, bez wymuszania synchronicznego.
+let _frozenMetricsScheduled = false;
+let _viewportHeightScheduled = false;
+
+function readFrozenHeaderMetrics() {
   if (!tableWrapEl || !theadEl) return;
   const guideRow = theadEl.querySelector(".guide-row");
   const guideHeight = guideRow ? Math.ceil(guideRow.getBoundingClientRect().height) : 0;
   tableWrapEl.style.setProperty("--frozen-guide-height", `${guideHeight}px`);
 }
 
-function syncTableViewportHeight() {
+function syncFrozenHeaderMetrics() {
+  if (!tableWrapEl || !theadEl || _frozenMetricsScheduled) return;
+  _frozenMetricsScheduled = true;
+  requestAnimationFrame(() => {
+    _frozenMetricsScheduled = false;
+    readFrozenHeaderMetrics();
+  });
+}
+
+function readTableViewportHeight() {
   if (!tablePanelEl) return;
   const rect = tablePanelEl.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 720;
@@ -529,6 +548,15 @@ function syncTableViewportHeight() {
   const available = Math.floor(viewportHeight - rect.top - bottomGap);
   const minHeight = window.matchMedia("(max-width: 768px)").matches ? 320 : 420;
   tablePanelEl.style.setProperty("--table-panel-height", `${Math.max(minHeight, available)}px`);
+}
+
+function syncTableViewportHeight() {
+  if (!tablePanelEl || _viewportHeightScheduled) return;
+  _viewportHeightScheduled = true;
+  requestAnimationFrame(() => {
+    _viewportHeightScheduled = false;
+    readTableViewportHeight();
+  });
 }
 
 function applyFreezeHeaders() {

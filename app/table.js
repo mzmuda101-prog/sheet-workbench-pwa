@@ -1510,10 +1510,17 @@ function renderTable(modelOrHeaders, maybeRows) {
   syncSelectedCellInDom({ clearMissing: true });
   syncRangeHighlightInDom();
   updateCellStats();
-  if (typeof updateScrollTopFab === "function") updateScrollTopFab();
-  syncHorizontalScrollbar();
   applyZoom();
   applyFreezeHeaders();
+  // Odczyty layoutu zależne od świeżo wstawionych wierszy (scrollTop dla FAB-a „do góry",
+  // scrollWidth dla poziomego paska) robimy w rAF — po naturalnym layoucie przeglądarki.
+  // Wcześniej biegły synchronicznie w środku renderu i wymuszały pełny reflow tabeli
+  // (forced reflow). Jedna klatka opóźnienia jest niewidoczna, a zadanie renderu kończy
+  // się szybciej → płynniejsze sort/filtr/toggle na słabszych urządzeniach.
+  requestAnimationFrame(() => {
+    if (typeof updateScrollTopFab === "function") updateScrollTopFab();
+    syncHorizontalScrollbar();
+  });
 }
 
 function buildRows(sheet, headerRow, wb) {
