@@ -1651,8 +1651,59 @@ function applyQuickSearch() {
 let qsAllSheetsScope = false;
 const qsContexts = [];
 
-// Skan surowych komórek arkusza (cell.w||cell.v), bez rozróżniania wielkości liter.
-function qsScanSheet(sheetName, q, exact, perSheet) {
+// Porównanie liczbowo/datowe na surowej komórce (raw=cell.v, display=cell.w/v) — odbicie
+// cellSatisfiesComparison, ale bez obiektu-wiersza (live-podgląd skanuje surowe komórki,
+// też z innych arkuszy). Reużywa globalnych parseCellNumber/parseDateFlexible/compareWithOp.
+function qsCellSatisfiesComparison(raw, display, cmp) {
+  if (cmp.kind === "date") {
+    const ds = String(display);
+    const looksDate = raw instanceof Date || /\d[-/.]\d/.test(ds) || (/\d/.test(ds) && /[a-ząćęłńóśźż]/i.test(ds));
+    if (!looksDate) return false;
+    const d = parseDateFlexible(raw != null ? raw : display);
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return false;
+    return compareWithOp(cmp.op, comparisonDayValue(d), cmp.value);
+  }
+  if (raw instanceof Date) return false;
+  const n = parseCellNumber(raw, display);
+  if (n == null || !Number.isFinite(n)) return false;
+  return compareWithOp(cmp.op, n, cmp.value);
+}
+
+// Pojedynczy term (z opcjonalnym „!") wobec komórki: porównanie >>/<< albo tekst zawiera/=.
+function qsTermMatchesCell(raw, display, term, exact) {
+  let t = term.trim();
+  if (!t) return true;
+  let neg = false;
+  if (t.startsWith("!") && t.length > 1) { neg = true; t = t.slice(1).trim(); }
+  const cmp = parseComparisonTerm(t);
+  let ok;
+  if (cmp) ok = qsCellSatisfiesComparison(raw, display, cmp);
+  else {
+    const hay = display.toLowerCase();
+    ok = exact ? hay === t : hay.includes(t);
+  }
+  return neg ? !ok : ok;
+}
+
+// Operator-świadome dopasowanie KOMÓRKI: OR (||) grup AND (&&), z „!" i porównaniami.
+// Gdy operatory wyłączone — zwykłe zawiera/dokładnie (jak dawniej). Składnia spójna z
+// silnikiem filtra, tyle że oceniana per komórka (preview), więc międzykolumnowe && nie
+// „połączy" dwóch komórek — ale porównania (główny przypadek operatorów) działają wiernie.
+function qsCellMatches(raw, display, q, exact, operators) {
+  if (!operators) {
+    const hay = display.toLowerCase();
+    return exact ? hay === q : hay.includes(q);
+  }
+  return q.split("||").some((part) => {
+    const terms = part.split("&&").map((s) => s.trim()).filter(Boolean);
+    if (!terms.length) return false;
+    return terms.every((term) => qsTermMatchesCell(raw, display, term, exact));
+  });
+}
+
+// Skan surowych komórek arkusza. `q` jest już .trim().toLowerCase(). Gdy `operators`,
+// dopasowanie honoruje operatory wyszukiwania (>>/<</&&/||/!).
+function qsScanSheet(sheetName, q, exact, perSheet, operators) {
   const sheet = workbook && workbook.Sheets ? workbook.Sheets[sheetName] : null;
   const res = { count: 0, hits: [] };
   if (!sheet) return res;
@@ -1660,15 +1711,12 @@ function qsScanSheet(sheetName, q, exact, perSheet) {
     if (addr.charCodeAt(0) === 33) continue; // klucze meta („!ref", „!merges"…)
     const cell = sheet[addr];
     if (!cell) continue;
-    const raw = cell.w != null ? cell.w : cell.v;
-    if (raw == null) continue;
-    const s = String(raw);
-    if (!s) continue;
-    const hay = s.toLowerCase();
-    const ok = exact ? hay === q : hay.includes(q);
-    if (ok) {
+    const cellVal = cell.v; // surowa wartość (liczba/Data) — do porównań
+    const display = cell.w != null ? String(cell.w) : (cell.v != null ? String(cell.v) : "");
+    if (display === "") continue;
+    if (qsCellMatches(cellVal, display, q, exact, operators)) {
       res.count += 1;
-      if (res.hits.length < perSheet) res.hits.push({ addr, text: s });
+      if (res.hits.length < perSheet) res.hits.push({ addr, text: display });
     }
   }
   return res;
@@ -1682,9 +1730,9 @@ function qsSheetOrder() {
   return currentSheetName ? [currentSheetName, ...rest] : workbook.SheetNames.slice();
 }
 
-function qsFirstMatchingSheet(q, exact) {
+function qsFirstMatchingSheet(q, exact, operators) {
   for (const name of qsSheetOrder()) {
-    if (qsScanSheet(name, q, exact, 1).count > 0) return name;
+    if (qsScanSheet(name, q, exact, 1, operators).count > 0) return name;
   }
   return currentSheetName;
 }
@@ -1731,10 +1779,12 @@ function commitQuickSearch() {
   const popupActive = quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden");
   const inputEl = popupActive ? quickSearchPopupInput : quickSearchEl;
   const modeEl = popupActive ? quickSearchPopupModeEl : quickSearchModeEl;
+  const operatorsEl = popupActive ? quickSearchPopupOperatorsEl : quickSearchOperatorsEl;
   const value = inputEl ? inputEl.value : (searchQueryEl ? searchQueryEl.value : "");
   if (qsAllSheetsScope && value.trim().length >= 1) {
     const exact = modeEl ? getNormalizedSelectValue(modeEl) === "exact" : false;
-    qsApplyOnSheet(qsFirstMatchingSheet(value.trim().toLowerCase(), exact), value);
+    const operators = !!(operatorsEl && operatorsEl.checked);
+    qsApplyOnSheet(qsFirstMatchingSheet(value.trim().toLowerCase(), exact, operators), value);
   } else {
     hideAllQsLive();
     applyQuickSearch();
@@ -1747,11 +1797,12 @@ function renderQsLive(ctx) {
   const q = value.trim().toLowerCase();
   if (q.length < 2 || !currentHeaders.length) { hideQsLive(ctx); return; }
   const exact = qsCtxExact(ctx);
+  const operators = !!(ctx.operatorsEl && ctx.operatorsEl.checked);
   const PER_SHEET = 8;
   const groups = [];
   let total = 0;
   for (const name of qsSheetOrder()) {
-    const r = qsScanSheet(name, q, exact, PER_SHEET);
+    const r = qsScanSheet(name, q, exact, PER_SHEET, operators);
     if (r.count > 0) { groups.push({ sheet: name, count: r.count, hits: r.hits }); total += r.count; }
     if (groups.length >= 8) break; // ochrona długości listy
   }
@@ -1825,6 +1876,8 @@ function wireQuickSearchScope(ctx) {
     });
   }
   if (ctx.modeEl) ctx.modeEl.addEventListener("change", () => renderQsLive(ctx));
+  // Przełączenie „Operatory wyszukiwania" → przelicz live-podgląd tym samym trybem.
+  if (ctx.operatorsEl) ctx.operatorsEl.addEventListener("change", () => renderQsLive(ctx));
   document.addEventListener("click", (e) => {
     if (!ctx.liveEl || ctx.liveEl.classList.contains("hidden")) return;
     if (ctx.wrapEl && ctx.wrapEl.contains(e.target)) return;
@@ -1835,6 +1888,7 @@ function wireQuickSearchScope(ctx) {
 wireQuickSearchScope({
   inputEl: quickSearchEl,
   modeEl: quickSearchModeEl,
+  operatorsEl: quickSearchOperatorsEl,
   toggleEl: document.getElementById("qsAllSheets"),
   liveEl: document.getElementById("qsLiveResults"),
   wrapEl: quickSearchWrap,
@@ -1842,6 +1896,7 @@ wireQuickSearchScope({
 wireQuickSearchScope({
   inputEl: quickSearchPopupInput,
   modeEl: quickSearchPopupModeEl,
+  operatorsEl: quickSearchPopupOperatorsEl,
   toggleEl: document.getElementById("qsAllSheetsPopup"),
   liveEl: document.getElementById("qsLiveResultsPopup"),
   wrapEl: quickSearchPopupEl,
