@@ -617,6 +617,11 @@ document.addEventListener("keydown", (e) => {
     closeColumnPicker();
     return;
   }
+  if (e.key === "Escape" && exportModalEl && !exportModalEl.classList.contains("hidden")) {
+    e.preventDefault();
+    closeExportModal();
+    return;
+  }
   if (e.key === "Escape" && quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden")) {
     e.preventDefault();
     quickSearchPopupEl.classList.add("hidden");

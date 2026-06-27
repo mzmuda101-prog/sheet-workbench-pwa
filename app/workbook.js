@@ -1124,6 +1124,23 @@ function collectMatchingCellsForRow(row, criteria, dateFilter) {
   return cols;
 }
 
+// Wspólna normalizacja wartości do porównań walidacji: przy „ignoruj wielkość/spacje"
+// → trim + lowercase; inaczej dosłownie. Używana i przy budowie zbioru dozwolonych,
+// i przy sprawdzaniu wierszy, żeby reguła była identyczna po obu stronach.
+function normalizeValidationValue(raw, caseInsensitive) {
+  const s = String(raw == null ? "" : raw);
+  return caseInsensitive ? s.trim().toLowerCase() : s;
+}
+
+// Czy wiersz narusza listę dozwolonych wartości w kolumnie validationState.colIdx.
+function rowIsValidationViolation(row) {
+  const st = validationState;
+  if (st.colIdx < 0 || !st.allowed) return false;
+  const raw = getDisplayValue(row, st.colIdx);
+  if (String(raw == null ? "" : raw).trim() === "") return !st.ignoreEmpty;
+  return !st.allowed.has(normalizeValidationValue(raw, st.caseInsensitive));
+}
+
 function applyFilters() {
   // Filtrowanie i reset sortowania (przez applyCurrentSort) przechodzą tędy —
   // następny render ma animować odsłonięcie/przestawienie wierszy (FLIP).
@@ -1161,6 +1178,8 @@ function applyFilters() {
   const rowPasses = (row) => {
     if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;
     if (!rowMatchesDateFilter(row, dateFilter)) return false;
+    // Walidacja listą: w trybie „pokaż tylko niezgodne" zostają wyłącznie naruszenia.
+    if (validationState.showOnly && !rowIsValidationViolation(row)) return false;
     return true;
   };
 
@@ -1171,7 +1190,7 @@ function applyFilters() {
     if (cols.size) matchedCellsByRow.set(row.rowIndex0, cols);
   };
 
-  const shouldFilterRows = filtersCommitted && !quickSearchHighlightMode && !quickSearchCellsMode;
+  const shouldFilterRows = (filtersCommitted || validationState.showOnly) && !quickSearchHighlightMode && !quickSearchCellsMode;
   if (shouldFilterRows) {
     // Tryb „filtruj": tylko pasujące wiersze (po kliknięciu Filtruj lub równoważnej akcji)
     matchedRowIndexes = new Set();

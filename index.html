@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260627-03" />
+    <link rel="stylesheet" href="styles/app.css?v=20260627-04" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -760,6 +760,59 @@
               <div class="duration-analysis-list" id="durationAnalysisList"></div>
             </div>
           </details>
+
+          <details class="panel" id="panel-validation">
+            <summary>
+              <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2 4 5v6c0 5 3.5 8 8 11 4.5-3 8-6 8-11V5z" />
+                <path d="m9 11 2 2 4-4" />
+              </svg>
+              <span class="panel-title" id="validationPanelTitle">Walidacja listą</span>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </summary>
+            <div class="panel-body">
+              <div class="panel-hint" id="validationHint">Wskaż kolumnę i listę dozwolonych wartości (wpisaną albo wziętą z innej kolumny). Pokażę, które wiersze mają wartości SPOZA listy — to szybka kontrola jakości danych.</div>
+              <div class="field">
+                <label for="validationColumn" id="validationColumnLabel">Kolumna do sprawdzenia</label>
+                <select id="validationColumn"></select>
+              </div>
+              <div class="field">
+                <label for="validationSource" id="validationSourceLabel">Źródło dozwolonych wartości</label>
+                <select id="validationSource">
+                  <option value="list" id="validationSourceList">Wpisana lista</option>
+                  <option value="column" id="validationSourceColumn">Inna kolumna (słownik)</option>
+                </select>
+              </div>
+              <div class="field" id="validationListWrap">
+                <label for="validationAllowed" id="validationAllowedLabel">Dozwolone wartości (po jednej w wierszu lub po przecinku)</label>
+                <textarea id="validationAllowed" rows="3" placeholder="Otwarte, Zamknięte, W trakcie"></textarea>
+              </div>
+              <div class="field hidden" id="validationColumnWrap">
+                <label for="validationDictColumn" id="validationDictColumnLabel">Kolumna-słownik (jej unikalne wartości = dozwolone)</label>
+                <select id="validationDictColumn"></select>
+              </div>
+              <div class="field checkbox">
+                <input type="checkbox" id="validationIgnoreEmpty" checked />
+                <label for="validationIgnoreEmpty" id="validationIgnoreEmptyLabel">Pomijaj puste komórki</label>
+              </div>
+              <div class="field checkbox">
+                <input type="checkbox" id="validationCaseInsensitive" checked />
+                <label for="validationCaseInsensitive" id="validationCaseLabel">Ignoruj wielkość liter i spacje brzegowe</label>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-sm" id="validationCheckBtn" type="button">Sprawdź</button>
+                <button class="btn btn-sm ghost" id="validationClearBtn" type="button">Wyczyść</button>
+              </div>
+              <div class="validation-summary" id="validationSummary"></div>
+              <div class="field checkbox hidden" id="validationShowOnlyWrap">
+                <input type="checkbox" id="validationShowOnly" />
+                <label for="validationShowOnly" id="validationShowOnlyLabel">Pokaż w tabeli tylko niezgodne wiersze</label>
+              </div>
+              <div class="validation-results" id="validationResults"></div>
+            </div>
+          </details>
           </section>
 
           <section class="sidebar-group" id="group-analyze">
@@ -992,7 +1045,7 @@
                 </button>
                 <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
                 <button class="btn btn-sm ghost toggle-pill" id="readingToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Tryb pracy z szybkim szukaniem" data-hint-en="Quick search working mode" data-hint-delay="1.1">Tryb szybkie szukanie</button>
-                <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport CSV</button>
+                <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport</button>
               </div>
             </div>
 
@@ -1070,6 +1123,29 @@
       </div>
     </div>
 
+    <!-- Export / report modal -->
+    <div class="modal hidden" id="exportModal" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
+      <div class="modal-content">
+        <div class="modal-head">
+          <div class="modal-title" id="exportModalTitle">Eksport / Raport</div>
+          <button class="modal-close" id="closeExport" type="button" aria-label="Zamknij">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <p class="export-sub" id="exportModalSub">Wybierz kolumny do eksportu (bieżący, przefiltrowany widok)</p>
+        <div class="modal-list" id="exportColumnList"></div>
+        <div class="modal-actions">
+          <button class="btn ghost" id="exportSelectAll" type="button">Zaznacz wszystko</button>
+          <button class="btn ghost" id="exportClearAll" type="button">Wyczyść</button>
+          <button class="btn ghost" id="exportCsvAction" type="button">CSV</button>
+          <button class="btn" id="exportPrintAction" type="button">Drukuj / PDF</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Quick search popup (Ctrl/Cmd+Shift+F) -->
     <div class="quick-search-popup hidden" id="quickSearchPopup" role="dialog" aria-label="Szybkie szukanie">
       <div class="quick-search-popup-box">
@@ -1127,18 +1203,18 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260627-03"></script>
-    <script defer src="app/language.js?v=20260627-03"></script>
-    <script defer src="app/cursor-hint.js?v=20260627-03"></script>
-    <script defer src="app/analysis.js?v=20260627-03"></script>
-    <script defer src="app/workbook.js?v=20260627-03"></script>
-    <script defer src="app/xlsx-patch.js?v=20260627-03"></script>
-    <script defer src="app/table.js?v=20260627-03"></script>
-    <script defer src="app/conditional-formatting.js?v=20260627-03"></script>
-    <script defer src="app/formulas.js?v=20260627-03"></script>
-    <script defer src="app/edit-tools.js?v=20260627-03"></script>
-    <script defer src="app/ui-controls.js?v=20260627-03"></script>
-    <script defer src="app/scroll-diagnostics.js?v=20260627-03"></script>
-    <script defer src="app/bootstrap.js?v=20260627-03"></script>
+    <script defer src="app/core.js?v=20260627-04"></script>
+    <script defer src="app/language.js?v=20260627-04"></script>
+    <script defer src="app/cursor-hint.js?v=20260627-04"></script>
+    <script defer src="app/analysis.js?v=20260627-04"></script>
+    <script defer src="app/workbook.js?v=20260627-04"></script>
+    <script defer src="app/xlsx-patch.js?v=20260627-04"></script>
+    <script defer src="app/table.js?v=20260627-04"></script>
+    <script defer src="app/conditional-formatting.js?v=20260627-04"></script>
+    <script defer src="app/formulas.js?v=20260627-04"></script>
+    <script defer src="app/edit-tools.js?v=20260627-04"></script>
+    <script defer src="app/ui-controls.js?v=20260627-04"></script>
+    <script defer src="app/scroll-diagnostics.js?v=20260627-04"></script>
+    <script defer src="app/bootstrap.js?v=20260627-04"></script>
   </body>
 </html>

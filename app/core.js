@@ -325,6 +325,9 @@ let quickSearchFilterCellsMode = false; // true = filtruj wiersze ORAZ podświet
 let matchedCellsByRow = new Map();
 let highlightMatchedCells = false; // true = podświetl pasujące komórki po filtrowaniu
 let filtersCommitted = false; // true dopiero po jawnym „Filtruj" — wtedy applyFilters ukrywa wiersze
+// Walidacja listą referencyjną: gdy showOnly === true, applyFilters zostawia w widoku
+// tylko wiersze z wartością w `colIdx` SPOZA `allowed` (kompozycja z filtrami tekstu/dat).
+let validationState = { colIdx: -1, allowed: null, ignoreEmpty: true, caseInsensitive: true, showOnly: false };
 // Map<sheetName, Map<cellRef, xfIndex>> odzyskana z surowego .xlsx (JSZip) — bo ten
 // build xlsx-js-style gubi font/border/alignment z cell.s; indeks pozwala je odtworzyć
 // z wb.Styles.CellXf/Fonts/Fills. null = brak (sample, nie-xlsx, błąd) → fallback do cell.s.
@@ -439,7 +442,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260627-03";
+const APP_BUILD_VERSION = "20260627-04";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

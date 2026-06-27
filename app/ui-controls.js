@@ -117,6 +117,7 @@ function updateFilterBadge() {
   if (columnSelections.filter1.size) count += 1;
   if (columnSelections.filter2.size) count += 1;
   if (columnSelections.date.size) count += 1;
+  if (validationState.showOnly) count += 1;
 
   filterBadgeEl.textContent = String(count);
   filterBadgeEl.classList.toggle("hidden", count === 0);
@@ -866,6 +867,316 @@ function exportCsv() {
   toast(t("csvExported"), "success");
 }
 
+// ── Eksport / Raport: wybór kolumn + CSV + Drukuj/PDF ──
+// Działa na BIEŻĄCYM (przefiltrowanym, posortowanym) modelu widoku — eksportujesz to,
+// co widzisz. Wybór kolumn ogranicza wynik do zaznaczonych (po INDEKSIE, bo nagłówki
+// bywają puste/zduplikowane). Druk buduje czysty #printArea (tylko wybrane kolumny)
+// i woła window.print() → użytkownik zapisuje jako PDF systemowym dialogiem.
+const exportModalEl = document.getElementById("exportModal");
+const exportColumnListEl = document.getElementById("exportColumnList");
+
+function exportModelOrNull() {
+  const model = currentDisplayModel || getDisplayModel();
+  if (!model.headers.length || !model.rows.length) {
+    toast(t("noDataForExport"), "warning");
+    return null;
+  }
+  return model;
+}
+
+function exportColLabel(header, idx) {
+  const h = String(header ?? "").trim();
+  return h || t("exportColumnFallback", { n: idx + 1 });
+}
+
+function getSelectedExportCols() {
+  if (!exportColumnListEl) return [];
+  return Array.from(exportColumnListEl.querySelectorAll("input[type=checkbox]"))
+    .filter((cb) => cb.checked)
+    .map((cb) => Number(cb.value));
+}
+
+function runCsvExport(cols) {
+  const model = exportModelOrNull();
+  if (!model) return;
+  const useCols = cols && cols.length ? cols : model.headers.map((_, i) => i);
+  const rows = [
+    useCols.map((ci) => exportColLabel(model.headers[ci], ci)),
+    ...model.rows.map((row) => useCols.map((ci) => getDisplayValue(row, ci))),
+  ];
+  const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
+  const base = currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : "excel-workbench";
+  const sheet = sheetSelect.value ? sheetSelect.value.replace(/\s+/g, "_") : "arkusz";
+  const suffix = model.mode === "long" ? "long" : "wide";
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${base}_${sheet}_${suffix}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  toast(t("csvExported"), "success");
+}
+
+// Kontener druku jest BEZPOŚREDNIM dzieckiem <body>, żeby @media print mógł ukryć
+// całą resztę przez `body > *:not(#printArea)`.
+function ensurePrintArea() {
+  let area = document.getElementById("printArea");
+  if (!area) {
+    area = document.createElement("div");
+    area.id = "printArea";
+    area.setAttribute("aria-hidden", "true");
+    document.body.appendChild(area);
+  }
+  return area;
+}
+
+function runPrintExport(cols) {
+  const model = exportModelOrNull();
+  if (!model) return;
+  const useCols = cols && cols.length ? cols : model.headers.map((_, i) => i);
+  const area = ensurePrintArea();
+  area.replaceChildren();
+
+  const title = document.createElement("h1");
+  title.className = "print-title";
+  title.textContent = currentFileName || t("exportReportTitle");
+  const meta = document.createElement("div");
+  meta.className = "print-meta";
+  const locale = (I18N[currentLang] && I18N[currentLang].locale) || "pl-PL";
+  const dateStr = new Date().toLocaleString(locale);
+  const sheetName = sheetSelect.value || "";
+  meta.textContent = `${sheetName ? sheetName + " · " : ""}${dateStr} · ${t("exportRowsMeta", { count: model.rows.length })}`;
+
+  const table = document.createElement("table");
+  table.className = "print-table";
+  const thead = document.createElement("thead");
+  const htr = document.createElement("tr");
+  useCols.forEach((ci) => {
+    const th = document.createElement("th");
+    th.textContent = exportColLabel(model.headers[ci], ci);
+    htr.appendChild(th);
+  });
+  thead.appendChild(htr);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  model.rows.forEach((row) => {
+    const tr = document.createElement("tr");
+    useCols.forEach((ci) => {
+      const td = document.createElement("td");
+      td.textContent = String(getDisplayValue(row, ci) ?? "");
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  area.append(title, meta, table);
+  window.print();
+}
+
+function openExportModal() {
+  const model = exportModelOrNull();
+  if (!model || !exportModalEl || !exportColumnListEl) return;
+  exportColumnListEl.replaceChildren();
+  model.headers.forEach((h, idx) => {
+    const row = document.createElement("div");
+    row.className = "field checkbox";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.id = `exportcol-${idx}`;
+    input.value = String(idx);
+    input.checked = true;
+    const label = document.createElement("label");
+    label.htmlFor = input.id;
+    label.textContent = exportColLabel(h, idx);
+    row.appendChild(input);
+    row.appendChild(label);
+    exportColumnListEl.appendChild(row);
+  });
+  exportModalEl.classList.remove("hidden");
+}
+
+function closeExportModal() {
+  if (exportModalEl) exportModalEl.classList.add("hidden");
+}
+
+// ── Walidacja listą referencyjną (data validation) ──
+// Wskaż kolumnę + zbiór dozwolonych wartości (wpisanych albo z innej kolumny-słownika),
+// a aplikacja policzy i pokaże wiersze z wartościami SPOZA listy. „Pokaż tylko niezgodne"
+// komponuje się z filtrami tekstu/dat przez rdzenny applyFilters (rowIsValidationViolation).
+const validationColumnEl = document.getElementById("validationColumn");
+const validationDictColumnEl = document.getElementById("validationDictColumn");
+const validationSourceEl = document.getElementById("validationSource");
+const validationListWrapEl = document.getElementById("validationListWrap");
+const validationColumnWrapEl = document.getElementById("validationColumnWrap");
+const validationAllowedEl = document.getElementById("validationAllowed");
+const validationIgnoreEmptyEl = document.getElementById("validationIgnoreEmpty");
+const validationCaseEl = document.getElementById("validationCaseInsensitive");
+const validationCheckBtn = document.getElementById("validationCheckBtn");
+const validationClearBtn = document.getElementById("validationClearBtn");
+const validationSummaryEl = document.getElementById("validationSummary");
+const validationResultsEl = document.getElementById("validationResults");
+const validationShowOnlyWrapEl = document.getElementById("validationShowOnlyWrap");
+const validationShowOnlyEl = document.getElementById("validationShowOnly");
+
+function populateValidationColumns() {
+  if (!validationColumnEl) return;
+  const prev = validationColumnEl.value;
+  const prevDict = validationDictColumnEl ? validationDictColumnEl.value : "";
+  const fill = (sel) => {
+    if (!sel) return;
+    sel.replaceChildren();
+    currentHeaders.forEach((h, idx) => {
+      const opt = document.createElement("option");
+      opt.value = String(idx);
+      opt.textContent = exportColLabel(h, idx);
+      sel.appendChild(opt);
+    });
+  };
+  fill(validationColumnEl);
+  fill(validationDictColumnEl);
+  if (prev && validationColumnEl.querySelector(`option[value="${prev}"]`)) validationColumnEl.value = prev;
+  if (prevDict && validationDictColumnEl && validationDictColumnEl.querySelector(`option[value="${prevDict}"]`)) validationDictColumnEl.value = prevDict;
+}
+
+function resetValidationUi() {
+  validationState = { colIdx: -1, allowed: null, ignoreEmpty: true, caseInsensitive: true, showOnly: false };
+  if (validationSummaryEl) { validationSummaryEl.textContent = ""; validationSummaryEl.className = "validation-summary"; }
+  if (validationResultsEl) validationResultsEl.replaceChildren();
+  if (validationShowOnlyEl) validationShowOnlyEl.checked = false;
+  if (validationShowOnlyWrapEl) validationShowOnlyWrapEl.classList.add("hidden");
+}
+
+function buildValidationAllowedSet(caseInsensitive) {
+  const source = validationSourceEl ? validationSourceEl.value : "list";
+  const set = new Set();
+  if (source === "column" && validationDictColumnEl) {
+    const dictIdx = Number(validationDictColumnEl.value);
+    if (Number.isInteger(dictIdx) && dictIdx >= 0) {
+      baseRows.forEach((row) => {
+        const raw = getDisplayValue(row, dictIdx);
+        if (String(raw == null ? "" : raw).trim() === "") return;
+        set.add(normalizeValidationValue(raw, caseInsensitive));
+      });
+    }
+  } else {
+    const text = validationAllowedEl ? validationAllowedEl.value : "";
+    text.split(/[\n,;]+/).forEach((tok) => {
+      const v = tok.trim();
+      if (v) set.add(normalizeValidationValue(v, caseInsensitive));
+    });
+  }
+  return set;
+}
+
+function refreshValidationView() {
+  applyFilters();
+  sortRows();
+  renderActiveTable();
+  updateFilterBadge();
+}
+
+function renderValidationSummary(violations, total, distinctCount) {
+  if (!validationSummaryEl) return;
+  if (violations === 0) {
+    validationSummaryEl.textContent = t("validationAllValid", { total });
+    validationSummaryEl.className = "validation-summary ok";
+  } else {
+    validationSummaryEl.textContent = t("validationSummaryText", { bad: violations, total, values: distinctCount });
+    validationSummaryEl.className = "validation-summary bad";
+  }
+}
+
+function renderValidationResults(badValues) {
+  if (!validationResultsEl) return;
+  validationResultsEl.replaceChildren();
+  if (!badValues.size) return;
+  const title = document.createElement("div");
+  title.className = "validation-results-title";
+  title.textContent = t("validationBadValuesTitle");
+  validationResultsEl.appendChild(title);
+  Array.from(badValues.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 50)
+    .forEach((v) => {
+      const rowEl = document.createElement("div");
+      rowEl.className = "validation-bad-row";
+      const lab = document.createElement("span");
+      lab.className = "validation-bad-label";
+      lab.textContent = v.label;
+      const cnt = document.createElement("span");
+      cnt.className = "validation-bad-count";
+      cnt.textContent = String(v.count);
+      rowEl.append(lab, cnt);
+      validationResultsEl.appendChild(rowEl);
+    });
+}
+
+function runValidation() {
+  if (!currentHeaders.length) { toast(t("loadSheetToPickColumns"), "info"); return; }
+  const colIdx = validationColumnEl ? Number(validationColumnEl.value) : -1;
+  if (!Number.isInteger(colIdx) || colIdx < 0) return;
+  const caseInsensitive = !!(validationCaseEl && validationCaseEl.checked);
+  const ignoreEmpty = !!(validationIgnoreEmptyEl && validationIgnoreEmptyEl.checked);
+  const allowed = buildValidationAllowedSet(caseInsensitive);
+  if (!allowed.size) { toast(t("validationNeedValues"), "warning"); return; }
+
+  validationState = {
+    colIdx,
+    allowed,
+    ignoreEmpty,
+    caseInsensitive,
+    showOnly: !!(validationShowOnlyEl && validationShowOnlyEl.checked),
+  };
+
+  // Liczymy po CAŁYM arkuszu (baseRows) — to samo, co rowIsValidationViolation.
+  let total = 0;
+  let violations = 0;
+  const badValues = new Map(); // norm -> { label, count }
+  baseRows.forEach((row) => {
+    total += 1;
+    const raw = getDisplayValue(row, colIdx);
+    const str = String(raw == null ? "" : raw);
+    if (str.trim() === "") { if (!ignoreEmpty) violations += 1; return; }
+    const norm = normalizeValidationValue(raw, caseInsensitive);
+    if (!allowed.has(norm)) {
+      violations += 1;
+      const ex = badValues.get(norm);
+      if (ex) ex.count += 1;
+      else badValues.set(norm, { label: str.trim(), count: 1 });
+    }
+  });
+
+  renderValidationSummary(violations, total, badValues.size);
+  renderValidationResults(badValues);
+  if (validationShowOnlyWrapEl) validationShowOnlyWrapEl.classList.toggle("hidden", violations === 0);
+  refreshValidationView();
+}
+
+function clearValidation() {
+  resetValidationUi();
+  if (validationAllowedEl) validationAllowedEl.value = "";
+  refreshValidationView();
+}
+
+if (validationSourceEl) {
+  validationSourceEl.addEventListener("change", () => {
+    const useColumn = validationSourceEl.value === "column";
+    if (validationListWrapEl) validationListWrapEl.classList.toggle("hidden", useColumn);
+    if (validationColumnWrapEl) validationColumnWrapEl.classList.toggle("hidden", !useColumn);
+  });
+}
+if (validationCheckBtn) validationCheckBtn.addEventListener("click", runValidation);
+if (validationClearBtn) validationClearBtn.addEventListener("click", clearValidation);
+if (validationShowOnlyEl) {
+  validationShowOnlyEl.addEventListener("change", () => {
+    validationState.showOnly = validationShowOnlyEl.checked;
+    refreshValidationView();
+  });
+}
+
 // Typy plików dla OTWIERANIA (showOpenFilePicker) — akceptuj oba formaty.
 const FSA_FILE_TYPES = [
   {
@@ -1220,6 +1531,8 @@ loadBtn.addEventListener("click", () => {
       updateFilterBadge();
       populateSortColumnSelect();
       populateEditColumnSelect();
+      resetValidationUi(); // nowy arkusz → zacznij walidację od zera (nie filtruj po starej regule)
+      populateValidationColumns();
       withSceneTransition(() => {
         renderActiveTable();
         renderInsights();
@@ -2013,7 +2326,33 @@ closePickerBtn.addEventListener("click", () => {
 });
 columnSearchEl.addEventListener("input", filterColumnList);
 
-exportCsvBtn.addEventListener("click", exportCsv);
+exportCsvBtn.addEventListener("click", openExportModal);
+if (exportModalEl) {
+  const exportCsvActionEl = document.getElementById("exportCsvAction");
+  const exportPrintActionEl = document.getElementById("exportPrintAction");
+  const exportSelectAllEl = document.getElementById("exportSelectAll");
+  const exportClearAllEl = document.getElementById("exportClearAll");
+  const closeExportEl = document.getElementById("closeExport");
+  const setAllExportCols = (checked) => {
+    exportColumnListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => { cb.checked = checked; });
+  };
+  if (exportSelectAllEl) exportSelectAllEl.addEventListener("click", () => setAllExportCols(true));
+  if (exportClearAllEl) exportClearAllEl.addEventListener("click", () => setAllExportCols(false));
+  if (closeExportEl) closeExportEl.addEventListener("click", closeExportModal);
+  if (exportCsvActionEl) exportCsvActionEl.addEventListener("click", () => {
+    const cols = getSelectedExportCols();
+    if (!cols.length) { toast(t("exportNoColumns"), "warning"); return; }
+    closeExportModal();
+    runCsvExport(cols);
+  });
+  if (exportPrintActionEl) exportPrintActionEl.addEventListener("click", () => {
+    const cols = getSelectedExportCols();
+    if (!cols.length) { toast(t("exportNoColumns"), "warning"); return; }
+    closeExportModal();
+    runPrintExport(cols);
+  });
+  exportModalEl.addEventListener("click", (e) => { if (e.target === exportModalEl) closeExportModal(); });
+}
 if (resetSortBtn) {
   resetSortBtn.addEventListener("click", () => {
     multiSortState = [];

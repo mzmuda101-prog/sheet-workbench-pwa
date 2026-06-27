@@ -93,6 +93,33 @@ const I18N = {
     fileLoadFailed: "Nie udalo sie wczytac pliku",
     noDataForExport: "Brak danych do eksportu",
     csvExported: "Wyeksportowano CSV",
+    exportNoColumns: "Zaznacz przynajmniej jedną kolumnę",
+    exportColumnFallback: "(kolumna {n})",
+    exportReportTitle: "Raport",
+    exportRowsMeta: "{count} wierszy",
+    exportModalTitle: "Eksport / Raport",
+    exportModalSub: "Wybierz kolumny do eksportu (bieżący, przefiltrowany widok)",
+    exportSelectAll: "Zaznacz wszystko",
+    exportClearAll: "Wyczyść",
+    exportActionCsv: "CSV",
+    exportActionPrint: "Drukuj / PDF",
+    validationNeedValues: "Podaj listę dozwolonych wartości (lub wybierz kolumnę-słownik)",
+    validationAllValid: "Wszystko zgodne — 0 wartości spoza listy ({total} wierszy)",
+    validationSummaryText: "{bad} z {total} wierszy poza listą · {values} różnych wartości spoza listy",
+    validationBadValuesTitle: "Wartości spoza listy:",
+    validationPanelTitle: "Walidacja listą",
+    validationHintText: "Wskaż kolumnę i listę dozwolonych wartości (wpisaną albo wziętą z innej kolumny). Pokażę, które wiersze mają wartości SPOZA listy — to szybka kontrola jakości danych.",
+    validationColumnLabel: "Kolumna do sprawdzenia",
+    validationSourceLabel: "Źródło dozwolonych wartości",
+    validationSourceListOpt: "Wpisana lista",
+    validationSourceColumnOpt: "Inna kolumna (słownik)",
+    validationAllowedLabel: "Dozwolone wartości (po jednej w wierszu lub po przecinku)",
+    validationDictColumnLabel: "Kolumna-słownik (jej unikalne wartości = dozwolone)",
+    validationIgnoreEmptyLabel: "Pomijaj puste komórki",
+    validationCaseLabel: "Ignoruj wielkość liter i spacje brzegowe",
+    validationCheckLabel: "Sprawdź",
+    validationClearLabel: "Wyczyść",
+    validationShowOnlyLabel: "Pokaż w tabeli tylko niezgodne wiersze",
     noFileToSave: "Brak pliku do zapisu",
     xlsmConfirm: "Plik .xlsm moze utracic makra. Kontynuowac zapis?",
     fileSaved: "Zapisano plik",
@@ -562,6 +589,33 @@ const I18N = {
     fileLoadFailed: "Failed to load the file",
     noDataForExport: "No data to export",
     csvExported: "CSV exported",
+    exportNoColumns: "Select at least one column",
+    exportColumnFallback: "(column {n})",
+    exportReportTitle: "Report",
+    exportRowsMeta: "{count} rows",
+    exportModalTitle: "Export / Report",
+    exportModalSub: "Choose columns to export (current, filtered view)",
+    exportSelectAll: "Select all",
+    exportClearAll: "Clear",
+    exportActionCsv: "CSV",
+    exportActionPrint: "Print / PDF",
+    validationNeedValues: "Provide a list of allowed values (or pick a dictionary column)",
+    validationAllValid: "All valid — 0 values outside the list ({total} rows)",
+    validationSummaryText: "{bad} of {total} rows outside the list · {values} distinct off-list values",
+    validationBadValuesTitle: "Values outside the list:",
+    validationPanelTitle: "List validation",
+    validationHintText: "Pick a column and a list of allowed values (typed or taken from another column). I'll show which rows hold values OUTSIDE the list — a quick data-quality check.",
+    validationColumnLabel: "Column to check",
+    validationSourceLabel: "Source of allowed values",
+    validationSourceListOpt: "Typed list",
+    validationSourceColumnOpt: "Another column (dictionary)",
+    validationAllowedLabel: "Allowed values (one per line or comma-separated)",
+    validationDictColumnLabel: "Dictionary column (its unique values = allowed)",
+    validationIgnoreEmptyLabel: "Skip empty cells",
+    validationCaseLabel: "Ignore case and surrounding spaces",
+    validationCheckLabel: "Check",
+    validationClearLabel: "Clear",
+    validationShowOnlyLabel: "Show only non-matching rows in the table",
     noFileToSave: "No file to save",
     xlsmConfirm: ".xlsm files may lose macros. Continue saving?",
     fileSaved: "File saved",
@@ -1173,7 +1227,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchAria: "Tryb szybkiego szukania",
     quickSearchColumnsTitle: "Wybierz kolumny dla szybkiego szukania",
     resetSort: "Domyślne sortowanie",
-    exportCsv: "Eksport CSV",
+    exportCsv: "Eksport",
     sidebarScrimAria: "Zamknij panel filtrów",
     chooseColumns: "Wybierz kolumny",
     close: "Zamknij",
@@ -1380,7 +1434,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchAria: "Quick search mode",
     quickSearchColumnsTitle: "Choose columns for quick search",
     resetSort: "Default sort",
-    exportCsv: "Export CSV",
+    exportCsv: "Export",
     sidebarScrimAria: "Close filters panel",
     chooseColumns: "Choose columns",
     close: "Close",
@@ -1873,6 +1927,25 @@ function applyStaticTranslations() {
   setText(".quick-search-popup-hint", copy.quickSearchHint);
   setAttr("#quickSearch", "placeholder", copy.quickSearchPlaceholder);
   setText("#exportCsvBtn", copy.exportCsv);
+  setText("#exportModalTitle", t("exportModalTitle"));
+  setText("#exportModalSub", t("exportModalSub"));
+  setText("#exportSelectAll", t("exportSelectAll"));
+  setText("#exportClearAll", t("exportClearAll"));
+  setText("#exportCsvAction", t("exportActionCsv"));
+  setText("#exportPrintAction", t("exportActionPrint"));
+  setText("#validationPanelTitle", t("validationPanelTitle"));
+  setText("#validationHint", t("validationHintText"));
+  setText("#validationColumnLabel", t("validationColumnLabel"));
+  setText("#validationSourceLabel", t("validationSourceLabel"));
+  setText("#validationSourceList", t("validationSourceListOpt"));
+  setText("#validationSourceColumn", t("validationSourceColumnOpt"));
+  setText("#validationAllowedLabel", t("validationAllowedLabel"));
+  setText("#validationDictColumnLabel", t("validationDictColumnLabel"));
+  setText("#validationIgnoreEmptyLabel", t("validationIgnoreEmptyLabel"));
+  setText("#validationCaseLabel", t("validationCaseLabel"));
+  setText("#validationCheckBtn", t("validationCheckLabel"));
+  setText("#validationClearBtn", t("validationClearLabel"));
+  setText("#validationShowOnlyLabel", t("validationShowOnlyLabel"));
   setText("#resetSortBtn", copy.resetSort);
   setText("#loadingText", t("loadingGeneric"));
   setText("#scrollTopFab .fab-label", copy.scrollTop);
