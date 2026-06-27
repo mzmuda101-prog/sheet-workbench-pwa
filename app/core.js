@@ -270,6 +270,11 @@ function flipRows(mutate) {
 
   // Przebieg 2 (zapis): ustaw stany startowe (transition: none). Animujemy tylko
   // wiersze w paśmie viewportu i nie więcej niż cap (gradientowy bezpiecznik).
+  // Wjazd nowych wierszy (entering) musi być WIDOCZNY: po selektywnym filtrze
+  // większość wierszy w widoku to świeże wjazdy z dołu, a nie movers — gdy ich
+  // ruch to ledwie 6px, oko rejestruje animację tylko na kilku moverach, które
+  // przejechały duży dystans. Większy zjazd + kaskada (niżej) rozwiązują to.
+  const ENTER_OFFSET = 18; // px — czytelny wjazd (było 6 → ginęło obok moverów)
   const movers = [];
   const entering = [];
   for (const { tr, top, prev } of measured) {
@@ -278,8 +283,8 @@ function flipRows(mutate) {
       if (!inBand(top)) continue; // nowy/wjeżdżający z daleka, ale ląduje poza widokiem
       tr.style.transition = "none";
       tr.style.opacity = "0";
-      tr.style.transform = "translateY(6px)";
-      entering.push(tr);
+      tr.style.transform = `translateY(${ENTER_OFFSET}px)`;
+      entering.push({ tr, top });
       continue;
     }
     const dy = prev - top;
@@ -287,28 +292,44 @@ function flipRows(mutate) {
     if (!inBand(top) && !inBand(prev)) continue; // ruch w całości poza widokiem → snap
     tr.style.transition = "none";
     tr.style.transform = `translateY(${dy}px)`;
-    movers.push(tr);
+    movers.push({ tr, top });
   }
   if (!movers.length && !entering.length) return;
 
+  // Kaskada góra→dół: wiersze bliżej szczytu widoku ruszają pierwsze, kolejne z
+  // małym opóźnieniem. Dzięki temu animacja „przelatuje" przez CAŁY widoczny
+  // zakres (movers + entering czytane jako jeden ruch), zamiast wyglądać jak
+  // skok kilku wierszy. Stagger ma dodawać czytelności, nie spowalniać — krok
+  // mały i z sufitem; na słabszych urządzeniach zerowany (mniej pracy kompozytora).
+  const lowPower = (navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4;
+  const staggerStep = lowPower ? 0 : 14; // ms na wiersz w kolejności od góry
+  const maxStagger = 168;                // sufit całej kaskady (≈12 wierszy)
+  const delayFor = new Map();
+  [...movers, ...entering]
+    .sort((a, b) => a.top - b.top)
+    .forEach((entry, i) => delayFor.set(entry.tr, Math.min(i * staggerStep, maxStagger)));
+
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
-      movers.forEach((tr) => {
-        tr.style.transition = "transform 380ms cubic-bezier(0.22, 1, 0.36, 1)";
+      movers.forEach(({ tr }) => {
+        const d = delayFor.get(tr) || 0;
+        tr.style.transition = `transform 380ms cubic-bezier(0.22, 1, 0.36, 1) ${d}ms`;
         tr.style.transform = "";
       });
-      entering.forEach((tr) => {
-        tr.style.transition = "transform 320ms cubic-bezier(0.22, 1, 0.36, 1), opacity 280ms ease";
+      entering.forEach(({ tr }) => {
+        const d = delayFor.get(tr) || 0;
+        tr.style.transition = `transform 340ms cubic-bezier(0.22, 1, 0.36, 1) ${d}ms, opacity 300ms ease ${d}ms`;
         tr.style.opacity = "";
         tr.style.transform = "";
       });
     })
   );
   // Sprzątanie inline styli po animacji, żeby nie kolidowały z kolejnym renderem.
+  // Margines uwzględnia maksymalny stagger + czas trwania najdłuższego przejścia.
   setTimeout(() => {
-    movers.forEach((tr) => { tr.style.transition = ""; tr.style.transform = ""; });
-    entering.forEach((tr) => { tr.style.transition = ""; tr.style.transform = ""; tr.style.opacity = ""; });
-  }, 460);
+    movers.forEach(({ tr }) => { tr.style.transition = ""; tr.style.transform = ""; });
+    entering.forEach(({ tr }) => { tr.style.transition = ""; tr.style.transform = ""; tr.style.opacity = ""; });
+  }, maxStagger + 420);
 }
 
 let workbook = null;
