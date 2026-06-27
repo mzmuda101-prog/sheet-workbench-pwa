@@ -2286,7 +2286,57 @@ details.panel[open] > summary {
   font-size: 12px;
 }
 
+.btn.btn-xs {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+.btn.danger { color: var(--danger, #c0392b); }
+
 .btn.icon-only { padding: 8px; flex-shrink: 0; }
+
+/* ===================================================
+   KOLUMNY WYLICZANE (#panel-derived-columns)
+   =================================================== */
+.dc-subhead {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  opacity: .65;
+  margin: 12px 0 4px;
+}
+.dc-msg { min-height: 14px; font-size: 11.5px; margin: 2px 0; }
+.dc-msg.ok { color: var(--success, #2e7d32); }
+.dc-msg.bad { color: var(--danger, #c0392b); }
+.dc-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.dc-empty { font-size: 12px; opacity: .6; padding: 6px 0; }
+.dc-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: var(--r-md, 8px);
+  background: var(--surface-2, rgba(127,127,127,.08));
+}
+.dc-item-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.dc-item-name { font-weight: 600; font-size: 12.5px; }
+.dc-item-expr {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  opacity: .75;
+  word-break: break-word;
+}
+.dc-item-badge {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--r-full, 999px);
+}
+.dc-item-badge.bad { background: rgba(192,57,43,.16); color: var(--danger, #c0392b); }
+.dc-item-badge.warn { background: rgba(214,158,46,.18); color: #b7791f; }
+.dc-item-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
 .filter-badge {
   background: rgba(255,255,255,.28);

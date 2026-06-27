@@ -120,6 +120,35 @@ const I18N = {
     validationCheckLabel: "Sprawdź",
     validationClearLabel: "Wyczyść",
     validationShowOnlyLabel: "Pokaż w tabeli tylko niezgodne wiersze",
+    derivedPanelTitle: "Kolumny wyliczane",
+    derivedHintText: "Twórz wirtualne kolumny z wyrażeń odwołujących się do innych kolumn przez [Nazwa] (np. [Kwota]*1,23). Funkcją WYSZUKAJ dociągniesz wartość z innego arkusza po kluczu. Kolumny są tylko w widoku — plik zostaje nietknięty.",
+    derivedFormulaHead: "Kolumna z wyrażenia",
+    derivedNameLabel: "Nazwa kolumny",
+    derivedExprLabel: "Wyrażenie",
+    derivedAdd: "Dodaj kolumnę",
+    derivedUpdate: "Zaktualizuj kolumnę",
+    derivedJoinHead: "Dołącz kolumnę z arkusza (WYSZUKAJ)",
+    derivedJoinNameLabel: "Nazwa nowej kolumny (opcjonalnie)",
+    derivedJoinKeyLabel: "Klucz w tym arkuszu",
+    derivedJoinSheetLabel: "Arkusz źródłowy",
+    derivedJoinSrcKeyLabel: "Kolumna-klucz w nim",
+    derivedJoinSrcRetLabel: "Kolumna do dociągnięcia",
+    derivedJoinAdd: "Dołącz kolumnę",
+    derivedRecalc: "Przelicz",
+    derivedClearAll: "Usuń wszystkie",
+    derivedEmpty: "Brak kolumn wyliczanych. Dodaj wyrażenie albo dołącz kolumnę z innego arkusza.",
+    derivedDefaultName: "Kolumna",
+    derivedEdit: "Edytuj",
+    derivedRemove: "Usuń",
+    derivedNa: "#N/D",
+    derivedErr: "#BŁĄD",
+    derivedNeedExpr: "Wpisz wyrażenie kolumny.",
+    derivedBadSyntax: "Błąd składni wyrażenia.",
+    derivedSyntaxOk: "Składnia OK",
+    derivedSyntaxBad: "Błąd składni",
+    derivedBadgeSyntax: "błąd składni",
+    derivedBadgeErrRows: "{n} bez wyniku",
+    derivedJoinNeedAll: "Uzupełnij klucz, arkusz i obie kolumny.",
     noFileToSave: "Brak pliku do zapisu",
     xlsmConfirm: "Plik .xlsm moze utracic makra. Kontynuowac zapis?",
     fileSaved: "Zapisano plik",
@@ -616,6 +645,35 @@ const I18N = {
     validationCheckLabel: "Check",
     validationClearLabel: "Clear",
     validationShowOnlyLabel: "Show only non-matching rows in the table",
+    derivedPanelTitle: "Calculated columns",
+    derivedHintText: "Build virtual columns from expressions that reference other columns via [Name] (e.g. [Amount]*1.23). Use LOOKUP to pull a value from another sheet by key. Columns live in the view only — the file stays untouched.",
+    derivedFormulaHead: "Column from an expression",
+    derivedNameLabel: "Column name",
+    derivedExprLabel: "Expression",
+    derivedAdd: "Add column",
+    derivedUpdate: "Update column",
+    derivedJoinHead: "Pull a column from a sheet (LOOKUP)",
+    derivedJoinNameLabel: "New column name (optional)",
+    derivedJoinKeyLabel: "Key in this sheet",
+    derivedJoinSheetLabel: "Source sheet",
+    derivedJoinSrcKeyLabel: "Its key column",
+    derivedJoinSrcRetLabel: "Column to pull",
+    derivedJoinAdd: "Pull column",
+    derivedRecalc: "Recalculate",
+    derivedClearAll: "Remove all",
+    derivedEmpty: "No calculated columns yet. Add an expression or pull a column from another sheet.",
+    derivedDefaultName: "Column",
+    derivedEdit: "Edit",
+    derivedRemove: "Remove",
+    derivedNa: "#N/A",
+    derivedErr: "#ERR",
+    derivedNeedExpr: "Enter a column expression.",
+    derivedBadSyntax: "Expression syntax error.",
+    derivedSyntaxOk: "Syntax OK",
+    derivedSyntaxBad: "Syntax error",
+    derivedBadgeSyntax: "syntax error",
+    derivedBadgeErrRows: "{n} unmatched",
+    derivedJoinNeedAll: "Fill in the key, sheet and both columns.",
     noFileToSave: "No file to save",
     xlsmConfirm: ".xlsm files may lose macros. Continue saving?",
     fileSaved: "File saved",
@@ -1946,6 +2004,21 @@ function applyStaticTranslations() {
   setText("#validationCheckBtn", t("validationCheckLabel"));
   setText("#validationClearBtn", t("validationClearLabel"));
   setText("#validationShowOnlyLabel", t("validationShowOnlyLabel"));
+  setText("#derivedPanelTitle", t("derivedPanelTitle"));
+  setText("#derivedHint", t("derivedHintText"));
+  setText("#derivedFormulaHead", t("derivedFormulaHead"));
+  setText("#derivedNameLabel", t("derivedNameLabel"));
+  setText("#derivedExprLabel", t("derivedExprLabel"));
+  setText("#dcAddBtn", t("derivedAdd"));
+  setText("#derivedJoinHead", t("derivedJoinHead"));
+  setText("#derivedJoinNameLabel", t("derivedJoinNameLabel"));
+  setText("#derivedJoinKeyLabel", t("derivedJoinKeyLabel"));
+  setText("#derivedJoinSheetLabel", t("derivedJoinSheetLabel"));
+  setText("#derivedJoinSrcKeyLabel", t("derivedJoinSrcKeyLabel"));
+  setText("#derivedJoinSrcRetLabel", t("derivedJoinSrcRetLabel"));
+  setText("#dcJoinBtn", t("derivedJoinAdd"));
+  setText("#dcRecalcBtn", t("derivedRecalc"));
+  setText("#dcClearAllBtn", t("derivedClearAll"));
   setText("#resetSortBtn", copy.resetSort);
   setText("#loadingText", t("loadingGeneric"));
   setText("#scrollTopFab .fab-label", copy.scrollTop);

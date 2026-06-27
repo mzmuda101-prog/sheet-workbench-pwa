@@ -1519,6 +1519,12 @@ loadBtn.addEventListener("click", () => {
       currentFormulaEntries = collectFormulaEntries(sheet, data, headerRow);
       if (!canUseLongView()) tableViewMode = "wide";
       viewRows = baseRows.slice();
+      // Kolumny wyliczane (#6/#7): świeży arkusz → wyzeruj licznik i przelicz wirtualne
+      // kolumny PRZED populacją selectów, żeby od razu były widoczne w sort/filtr/picker.
+      if (typeof dcResetForNewSheet === "function") {
+        dcResetForNewSheet();
+        applyDerivedColumns({ silent: true });
+      }
       filtersCommitted = false;
       multiSortState = [];
       sortState = { col: "", dir: "asc" };

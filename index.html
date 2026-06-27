@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260627-05" />
+    <link rel="stylesheet" href="styles/app.css?v=20260627-06" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -817,6 +817,69 @@
 
           <section class="sidebar-group" id="group-analyze">
             <div class="sidebar-group-head"><span class="sidebar-group-title" id="group-analyze-title">Agregacje i formuły</span></div>
+          <details class="panel" id="panel-derived-columns">
+            <summary data-hint-pl="Dodaj wirtualną kolumnę z wyrażenia ([Kwota]*1,23, [do]-[od]) albo dociągnij dane z innego arkusza (zamiennik VLOOKUP). Kolumna działa w sortowaniu, filtrach i eksporcie — i NIE zmienia pliku." data-hint-en="Add a virtual column from an expression ([Amount]*1.23, [to]-[from]) or pull data from another sheet (a VLOOKUP replacement). It works in sort, filters and export — and never changes the file." data-hint-duration="6" data-hint-touch="on" data-hint-fade="1" data-hint-class="smaller">
+              <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 7h16" />
+                <path d="M4 12h10" />
+                <path d="M4 17h7" />
+                <path d="M17 14v6" />
+                <path d="M14 17h6" />
+              </svg>
+              <span class="panel-title" id="derivedPanelTitle">Kolumny wyliczane</span>
+              <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </summary>
+            <div class="panel-body">
+              <div class="panel-hint" id="derivedHint">Twórz wirtualne kolumny z wyrażeń odwołujących się do innych kolumn przez [Nazwa] (np. [Kwota]*1,23). Funkcją WYSZUKAJ dociągniesz wartość z innego arkusza po kluczu. Kolumny są tylko w widoku — plik zostaje nietknięty.</div>
+
+              <div class="dc-subhead" id="derivedFormulaHead">Kolumna z wyrażenia</div>
+              <div class="field">
+                <label for="dcName" id="derivedNameLabel">Nazwa kolumny</label>
+                <input type="text" id="dcName" placeholder="Brutto" />
+              </div>
+              <div class="field">
+                <label for="dcExpr" id="derivedExprLabel">Wyrażenie</label>
+                <textarea id="dcExpr" rows="2" placeholder="[Kwota]*1,23"></textarea>
+              </div>
+              <div class="dc-msg" id="dcFormulaMsg"></div>
+              <div class="btn-row">
+                <button class="btn btn-sm" id="dcAddBtn" type="button">Dodaj kolumnę</button>
+              </div>
+
+              <div class="dc-subhead" id="derivedJoinHead">Dołącz kolumnę z arkusza (WYSZUKAJ)</div>
+              <div class="field">
+                <label for="dcJoinName" id="derivedJoinNameLabel">Nazwa nowej kolumny (opcjonalnie)</label>
+                <input type="text" id="dcJoinName" placeholder="np. Cena z cennika" />
+              </div>
+              <div class="field">
+                <label for="dcJoinKeyCol" id="derivedJoinKeyLabel">Klucz w tym arkuszu</label>
+                <select id="dcJoinKeyCol"></select>
+              </div>
+              <div class="field">
+                <label for="dcJoinSheet" id="derivedJoinSheetLabel">Arkusz źródłowy</label>
+                <select id="dcJoinSheet"></select>
+              </div>
+              <div class="field">
+                <label for="dcJoinSheetKeyCol" id="derivedJoinSrcKeyLabel">Kolumna-klucz w nim</label>
+                <select id="dcJoinSheetKeyCol"></select>
+              </div>
+              <div class="field">
+                <label for="dcJoinSheetRetCol" id="derivedJoinSrcRetLabel">Kolumna do dociągnięcia</label>
+                <select id="dcJoinSheetRetCol"></select>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-sm" id="dcJoinBtn" type="button">Dołącz kolumnę</button>
+              </div>
+
+              <div class="dc-list" id="dcList"></div>
+              <div class="btn-row">
+                <button class="btn btn-sm ghost hidden" id="dcRecalcBtn" type="button">Przelicz</button>
+                <button class="btn btn-sm ghost danger hidden" id="dcClearAllBtn" type="button">Usuń wszystkie</button>
+              </div>
+            </div>
+          </details>
           <details class="panel" id="panel-aggregation-workbench">
             <summary data-hint-pl="Grupuj wiersze po wybranych kolumnach i licz sumy, średnie, mediany i więcej — /| jak tabela przestawna, bez Excela." data-hint-en="Group rows by selected columns and calculate sums, averages, medians and more — /| like a pivot table, without Excel." data-hint-duration="5" data-hint-touch="on" data-hint-fade="1" data-hint-class="smaller">
               <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1203,18 +1266,19 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260627-05"></script>
-    <script defer src="app/language.js?v=20260627-05"></script>
-    <script defer src="app/cursor-hint.js?v=20260627-05"></script>
-    <script defer src="app/analysis.js?v=20260627-05"></script>
-    <script defer src="app/workbook.js?v=20260627-05"></script>
-    <script defer src="app/xlsx-patch.js?v=20260627-05"></script>
-    <script defer src="app/table.js?v=20260627-05"></script>
-    <script defer src="app/conditional-formatting.js?v=20260627-05"></script>
-    <script defer src="app/formulas.js?v=20260627-05"></script>
-    <script defer src="app/edit-tools.js?v=20260627-05"></script>
-    <script defer src="app/ui-controls.js?v=20260627-05"></script>
-    <script defer src="app/scroll-diagnostics.js?v=20260627-05"></script>
-    <script defer src="app/bootstrap.js?v=20260627-05"></script>
+    <script defer src="app/core.js?v=20260627-06"></script>
+    <script defer src="app/language.js?v=20260627-06"></script>
+    <script defer src="app/cursor-hint.js?v=20260627-06"></script>
+    <script defer src="app/analysis.js?v=20260627-06"></script>
+    <script defer src="app/workbook.js?v=20260627-06"></script>
+    <script defer src="app/xlsx-patch.js?v=20260627-06"></script>
+    <script defer src="app/table.js?v=20260627-06"></script>
+    <script defer src="app/conditional-formatting.js?v=20260627-06"></script>
+    <script defer src="app/derived-columns.js?v=20260627-06"></script>
+    <script defer src="app/formulas.js?v=20260627-06"></script>
+    <script defer src="app/edit-tools.js?v=20260627-06"></script>
+    <script defer src="app/ui-controls.js?v=20260627-06"></script>
+    <script defer src="app/scroll-diagnostics.js?v=20260627-06"></script>
+    <script defer src="app/bootstrap.js?v=20260627-06"></script>
   </body>
 </html>
