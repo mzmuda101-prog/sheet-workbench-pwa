@@ -1540,6 +1540,14 @@ loadBtn.addEventListener("click", () => {
       resetValidationUi(); // nowy arkusz → zacznij walidację od zera (nie filtruj po starej regule)
       populateValidationColumns();
       withSceneTransition(() => {
+        // Zwiń wysoki panel „Plik i arkusz" W TYM SAMYM przebiegu co render tabeli.
+        // Wcześniej robił to setTimeout(…,100) PO paint → otwarty sidebar skakał o ~400px
+        // (panel jest wysoki), dając duży layout shift (CLS ~0.5 na mobile), zwłaszcza gdy
+        // analiza trwała >0,5s i skok wypadał poza oknem wykluczenia po inpucie. Teraz collapse
+        // jest częścią tej samej mutacji DOM: fallback = jeden layout (brak skoku), View
+        // Transitions = płynny morf transformem (nie liczy się do CLS).
+        const panelFileSheet = document.getElementById("panel-file-sheet");
+        if (panelFileSheet) panelFileSheet.removeAttribute("open");
         renderActiveTable();
         renderInsights();
         renderKpiExtractor();
@@ -1560,10 +1568,6 @@ loadBtn.addEventListener("click", () => {
       }
       toast(t("sheetLoaded"), "success");
       log(`Wczytano arkusz: ${sheetName}`, "success");
-      setTimeout(() => {
-        const panelFileSheet = document.getElementById("panel-file-sheet");
-        if (panelFileSheet) panelFileSheet.removeAttribute("open");
-      }, 100);
     } finally {
       setLoading(false);
     }

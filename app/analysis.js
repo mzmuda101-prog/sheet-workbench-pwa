@@ -18,8 +18,8 @@ const ANALYSIS_PANELS = {
   sections:    { panelId: "panel-sheet-inspector",      fn: () => renderSections(),              dirty: true },
   columns:     { panelId: "panel-sheet-inspector",      fn: () => renderColumnProfiles(),        dirty: true },
   repeating:   { panelId: "panel-sheet-inspector",      fn: () => renderRepeatingBlocks(),       dirty: true },
-  duration:    { panelId: "panel-sheet-inspector",      fn: () => renderDurationAnalysis(),      dirty: true },
-  aggregation: { panelId: "panel-aggregation-workbench", fn: () => renderAggregationWorkbench(),  dirty: true },
+  duration:    { panelId: "panel-sheet-inspector",      fn: () => renderDurationAnalysis(),      dirty: true, heavy: true },
+  aggregation: { panelId: "panel-aggregation-workbench", fn: () => renderAggregationWorkbench(),  dirty: true, heavy: true },
   monthly:     { panelId: "panel-monthly-summary",      fn: () => renderMonthlySummary(),        dirty: true },
 };
 let forcingAnalysisRender = false; // true = renderuj mimo zwiniętego panelu (prewarm / rozwinięcie)
@@ -49,6 +49,12 @@ function runAnalysisPrewarm(deadline) {
     for (const key of Object.keys(ANALYSIS_PANELS)) {
       const meta = ANALYSIS_PANELS[key];
       if (!meta.dirty) continue;
+      // Ciężkich analiz (duration/aggregation) NIE liczymy w tle dla zwiniętych paneli:
+      // potrafią same w sobie zająć >1s (duration robi inference z wielokrotnym buildRows),
+      // tworząc długie zadanie tuż po wczytaniu pliku — to dominował koszt startu na mobile.
+      // Zostają „dirty" i policzą się leniwie przy pierwszym otwarciu panelu
+      // (renderDirtyAnalysesForPanel), gdzie użytkownik świadomie czeka na ten widok.
+      if (meta.heavy) continue;
       // Budżet czasu bezczynności: jeśli się kończy, dokończ w następnej turze,
       // żeby nie konkurować z przewijaniem/dotykiem na słabszym urządzeniu.
       if (deadline && typeof deadline.timeRemaining === "function" && deadline.timeRemaining() < 4) {
