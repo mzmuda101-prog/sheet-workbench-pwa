@@ -82,13 +82,25 @@ function scheduleAnalysisPrewarm() {
   analysisPrewarmHandle = window.setTimeout(start, lowPower ? 600 : 120);
 }
 
-// Rozwinięcie panelu — dorenderuj jego (ewentualnie brudne) analizy natychmiast.
+// Rozwinięcie panelu — dorenderuj TYLKO te analizy, które są „brudne" (pominięte gdy
+// panel był zwinięty albo nieaktualne po filtrze/edycji). Bez sprawdzania `dirty` ciężkie
+// analizy (duration ~1,9s) przeliczały się przy KAŻDYM otwarciu, blokując animację
+// rozsuwania panelu. Zwraca true, jeśli faktycznie coś policzono (są brudne panele) —
+// wołający może wtedy odroczyć render, by nie zacinać animacji otwarcia.
+function panelHasDirtyAnalyses(panelId) {
+  for (const key of Object.keys(ANALYSIS_PANELS)) {
+    const meta = ANALYSIS_PANELS[key];
+    if (meta.panelId === panelId && meta.dirty) return true;
+  }
+  return false;
+}
+
 function renderDirtyAnalysesForPanel(panelId) {
   forcingAnalysisRender = true;
   try {
     for (const key of Object.keys(ANALYSIS_PANELS)) {
       const meta = ANALYSIS_PANELS[key];
-      if (meta.panelId !== panelId) continue;
+      if (meta.panelId !== panelId || !meta.dirty) continue;
       try { meta.fn(); } catch (_) {}
       meta.dirty = false;
     }

@@ -13,8 +13,15 @@ document.querySelectorAll("details.panel").forEach((det) => {
   det.addEventListener("toggle", () => {
     // Rozwinięcie panelu → dorenderuj jego analizy, które były pominięte gdy był
     // zwinięty (leniwe renderowanie analiz, perf na słabszych urządzeniach).
-    if (det.open && typeof renderDirtyAnalysesForPanel === "function") {
-      renderDirtyAnalysesForPanel(det.id);
+    // Ciężkie analizy (duration ~1,9s) ODRACZAMY do następnej klatki: najpierw niech
+    // panel płynnie się rozsunie i pojawi (paint), potem liczymy — inaczej synchroniczne
+    // liczenie w handlerze zacina animację otwarcia. Re-otwarcia bez brudnych analiz
+    // pomijają to całkowicie (renderDirtyAnalysesForPanel liczy tylko brudne).
+    if (det.open && typeof renderDirtyAnalysesForPanel === "function"
+        && typeof panelHasDirtyAnalyses === "function" && panelHasDirtyAnalyses(det.id)) {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (det.open) renderDirtyAnalysesForPanel(det.id);
+      }));
     }
     if (!isSidebarOpen()) return;
     requestAnimationFrame(() => syncSidebarHandle()); // [EN] :has() width changes — no resize event; keep handle aligned

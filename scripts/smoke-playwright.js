@@ -92,7 +92,7 @@ async function run() {
   await serviceWorkerPage.goto(APP_URL, { waitUntil: "load" });
   const serviceWorker = await serviceWorkerPage.evaluate(async () => {
     if (!("serviceWorker" in navigator)) return { supported: false };
-    const registration = await navigator.serviceWorker.register("sw.js?v=20260627-08");
+    const registration = await navigator.serviceWorker.register("sw.js?v=20260628-01");
     await navigator.serviceWorker.ready;
     return {
       supported: true,
