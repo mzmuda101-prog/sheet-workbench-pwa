@@ -2928,6 +2928,30 @@ input.cell-editor {
   font-size: 13px;
 }
 .cell-suggest.hidden { display: none; }
+
+/* Ghost completion w edytorze: dopełnienie najlepszego dopasowania, przygaszone
+   (zielony z palety). Nakładka 1:1 z inputem (ten sam border/padding/font/zoom),
+   pionowo wyśrodkowana jak tekst inputu; nie przechwytuje zdarzeń. */
+.cell-suggest-ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  border: 2px solid transparent;            /* równa offset tekstu z inputem (border:2px) */
+  padding: 0 calc(11px * var(--table-zoom));
+  font: inherit;
+  font-size: calc(12.5px * var(--table-zoom));
+  white-space: pre;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 6;                               /* nad inputem (z-index:5), ale klikalność wyłączona */
+}
+.cell-suggest-ghost.hidden { display: none; }
+.cell-suggest-ghost-text {
+  color: var(--accent);
+  opacity: .5;
+}
 .cell-suggest-item {
   padding: 8px 12px;
   border-radius: 6px;
