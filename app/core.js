@@ -48,6 +48,10 @@ const fileNameEl = document.getElementById("fileName");
 const fileNameTextEl = document.getElementById("fileNameText");
 const sheetSelect = document.getElementById("sheetSelect");
 const sheetTabsEl = document.getElementById("sheetTabs");
+const sheetPickerFabEl = document.getElementById("sheetPickerFab");
+const sheetPickerFabNameEl = document.getElementById("sheetPickerFabName");
+const sheetPickerOverlayEl = document.getElementById("sheetPickerOverlay");
+const sheetPickerListEl = document.getElementById("sheetPickerList");
 const headerRowEl = document.getElementById("headerRow");
 const autoHeaderRowEl = document.getElementById("autoHeaderRow");
 const displayModeEl = document.getElementById("displayMode");
@@ -504,7 +508,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260629-01";
+const APP_BUILD_VERSION = "20260629-02";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

@@ -759,6 +759,137 @@ body.splashing {
    Stoi nad przyciskiem „Do góry", by oba mogły być widoczne naraz. */
 .clear-sel-fab { bottom: 72px; }
 
+/* ── Sheet picker FAB (mobile) ────────────────────────── */
+.sheet-picker-fab {
+  display: none; /* pokazywany tylko na pointer:coarse przez JS */
+  position: absolute;
+  left: 12px;
+  bottom: 16px;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px 0 10px;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 80%, transparent) 0%, color-mix(in srgb, var(--panel) 92%, transparent) 100%);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  z-index: 6;
+  box-shadow: 0 4px 16px rgba(18,30,23,.14), inset 0 1px 0 rgba(255,255,255,.5);
+  white-space: nowrap;
+  max-width: 160px;
+  transition: background var(--t), border-color var(--t), box-shadow var(--t);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.sheet-picker-fab.hidden { display: none !important; }
+@media (pointer: coarse) {
+  .sheet-picker-fab:not(.hidden) { display: inline-flex; }
+}
+.sheet-picker-fab:active { box-shadow: 0 2px 8px rgba(18,30,23,.10); }
+.spf-icon { flex-shrink: 0; opacity: .8; }
+.spf-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 110px;
+}
+[data-theme="dark"] .sheet-picker-fab {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 85%, transparent) 0%, color-mix(in srgb, var(--panel) 95%, transparent) 100%);
+}
+
+/* ── Sheet picker bottom-sheet ────────────────────────── */
+.sheet-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0,0,0,.32);
+  display: flex;
+  align-items: flex-end;
+  justify-content: stretch;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s;
+}
+.sheet-picker-overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+.sheet-picker-overlay.hidden { display: none; }
+.sheet-picker-sheet {
+  width: 100%;
+  background: var(--panel);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  backdrop-filter: blur(16px) saturate(1.3);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding: 8px 0 max(env(safe-area-inset-bottom, 0px), 16px);
+  transform: translateY(30px);
+  transition: transform .22s cubic-bezier(.22,1,.36,1);
+  max-height: 60vh;
+  overflow-y: auto;
+  box-shadow: 0 -8px 40px rgba(0,0,0,.18);
+}
+.sheet-picker-overlay.open .sheet-picker-sheet {
+  transform: translateY(0);
+}
+.sheet-picker-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 0 auto 12px;
+}
+.sheet-picker-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-muted, var(--muted));
+  padding: 0 18px 10px;
+}
+.sheet-picker-list { display: flex; flex-direction: column; }
+.sheet-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  font-size: 15px;
+  color: var(--ink);
+  cursor: pointer;
+  border: none;
+  background: none;
+  text-align: left;
+  width: 100%;
+  transition: background .1s;
+}
+.sheet-picker-item:active { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.sheet-picker-item[aria-selected="true"] {
+  color: var(--accent);
+  font-weight: 600;
+}
+.sheet-picker-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+}
+.sheet-picker-item[aria-selected="true"] .sheet-picker-item-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Na desktopie schowaj sheet-tabs na touch i vice versa */
+@media (pointer: fine) {
+  .sheet-picker-fab { display: none !important; }
+}
+@media (pointer: coarse) {
+  .sheet-tabs { display: none !important; }
+}
+
 /* „Plumknięcie" — lekki pop pojawienia (zapożyczony feel z handle Schowaj/Wysuń).
    Skalujemy NIEZALEŻNĄ właściwością `scale:`, żeby nie nadpisać `transform`
    pozycjonującego handle (translateY/translateX). Stosowane: handle (mocniej,

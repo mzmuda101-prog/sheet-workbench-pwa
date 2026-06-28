@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260629-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260629-02" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1163,6 +1163,14 @@
             </div>
             <div class="sheet-tabs hidden" id="sheetTabs" role="tablist" aria-label="Arkusze"></div>
             <div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div>
+            <button class="sheet-picker-fab hidden" id="sheetPickerFab" type="button" aria-label="Przełącz arkusz" aria-haspopup="dialog">
+              <svg class="spf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                <polyline points="2 17 12 22 22 17"></polyline>
+                <polyline points="2 12 12 17 22 12"></polyline>
+              </svg>
+              <span class="spf-name" id="sheetPickerFabName"></span>
+            </button>
             <button class="clear-sel-fab" id="clearSelectionFab" type="button" aria-label="Odznacz zaznaczenie" data-hint data-hint-pl="Odznacz zaznaczenie i fokus (zamiennik Esc — przydatny na tablecie)" data-hint-en="Clear selection and focus (Esc alternative — handy on tablets)" data-hint-delay="0.8" data-hint-touch="on">
               <span class="fab-arrow" aria-hidden="true">✕</span>
               <span class="fab-label">Odznacz</span>
@@ -1175,6 +1183,15 @@
         </main>
       </div>
       <button class="sidebar-scrim hidden" id="sidebarScrim" type="button" aria-label="Zamknij panel filtrów"></button>
+    </div>
+
+    <!-- Sheet picker (mobile bottom-sheet) -->
+    <div class="sheet-picker-overlay hidden" id="sheetPickerOverlay" role="dialog" aria-modal="true" aria-label="Wybierz arkusz">
+      <div class="sheet-picker-sheet" id="sheetPickerSheet">
+        <div class="sheet-picker-handle" aria-hidden="true"></div>
+        <div class="sheet-picker-title">Arkusze</div>
+        <div class="sheet-picker-list" id="sheetPickerList" role="listbox"></div>
+      </div>
     </div>
 
     <!-- Column picker modal -->
@@ -1285,19 +1302,19 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260629-01"></script>
-    <script defer src="app/language.js?v=20260629-01"></script>
-    <script defer src="app/cursor-hint.js?v=20260629-01"></script>
-    <script defer src="app/analysis.js?v=20260629-01"></script>
-    <script defer src="app/workbook.js?v=20260629-01"></script>
-    <script defer src="app/xlsx-patch.js?v=20260629-01"></script>
-    <script defer src="app/table.js?v=20260629-01"></script>
-    <script defer src="app/conditional-formatting.js?v=20260629-01"></script>
-    <script defer src="app/data-validation.js?v=20260629-01"></script>
-    <script defer src="app/derived-columns.js?v=20260629-01"></script>
-    <script defer src="app/formulas.js?v=20260629-01"></script>
-    <script defer src="app/edit-tools.js?v=20260629-01"></script>
-    <script defer src="app/ui-controls.js?v=20260629-01"></script>
+    <script defer src="app/core.js?v=20260629-02"></script>
+    <script defer src="app/language.js?v=20260629-02"></script>
+    <script defer src="app/cursor-hint.js?v=20260629-02"></script>
+    <script defer src="app/analysis.js?v=20260629-02"></script>
+    <script defer src="app/workbook.js?v=20260629-02"></script>
+    <script defer src="app/xlsx-patch.js?v=20260629-02"></script>
+    <script defer src="app/table.js?v=20260629-02"></script>
+    <script defer src="app/conditional-formatting.js?v=20260629-02"></script>
+    <script defer src="app/data-validation.js?v=20260629-02"></script>
+    <script defer src="app/derived-columns.js?v=20260629-02"></script>
+    <script defer src="app/formulas.js?v=20260629-02"></script>
+    <script defer src="app/edit-tools.js?v=20260629-02"></script>
+    <script defer src="app/ui-controls.js?v=20260629-02"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — te same reguły aktywacji co wewnątrz modułu. -->
@@ -1313,11 +1330,11 @@
         }
         if (!on) return;
         var s = document.createElement("script");
-        s.src = "app/scroll-diagnostics.js?v=20260629-01";
+        s.src = "app/scroll-diagnostics.js?v=20260629-02";
         s.defer = true;
         document.head.appendChild(s);
       })();
     </script>
-    <script defer src="app/bootstrap.js?v=20260629-01"></script>
+    <script defer src="app/bootstrap.js?v=20260629-02"></script>
   </body>
 </html>

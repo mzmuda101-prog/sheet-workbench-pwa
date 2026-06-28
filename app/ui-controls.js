@@ -1052,34 +1052,104 @@ function populateValidationColumns() {
 
 // ── Zakładki arkuszy ─────────────────────────────────────────────────────────
 function buildSheetTabs() {
-  if (!sheetTabsEl) return;
-  sheetTabsEl.replaceChildren();
   const names = workbook ? workbook.SheetNames : [];
-  if (names.length < 2) { sheetTabsEl.classList.add("hidden"); return; }
-  names.forEach((name) => {
-    const tab = document.createElement("button");
-    tab.type = "button";
-    tab.role = "tab";
-    tab.className = "sheet-tab";
-    tab.textContent = name;
-    tab.dataset.sheet = name;
-    tab.setAttribute("aria-selected", name === currentSheetName ? "true" : "false");
-    tab.addEventListener("click", () => {
+  const multi = names.length >= 2;
+
+  // Desktop: pasek zakładek
+  if (sheetTabsEl) {
+    sheetTabsEl.replaceChildren();
+    if (multi) {
+      names.forEach((name) => {
+        const tab = document.createElement("button");
+        tab.type = "button";
+        tab.role = "tab";
+        tab.className = "sheet-tab";
+        tab.textContent = name;
+        tab.dataset.sheet = name;
+        tab.setAttribute("aria-selected", name === currentSheetName ? "true" : "false");
+        tab.addEventListener("click", () => {
+          if (sheetSelect.value === name && currentSheetName === name) return;
+          sheetSelect.value = name;
+          loadBtn.click();
+        });
+        sheetTabsEl.appendChild(tab);
+      });
+    }
+    sheetTabsEl.classList.toggle("hidden", !multi);
+  }
+
+  // Mobile: FAB pill
+  if (sheetPickerFabEl) {
+    sheetPickerFabEl.classList.toggle("hidden", !multi);
+    if (sheetPickerFabNameEl) sheetPickerFabNameEl.textContent = currentSheetName || "";
+  }
+
+  // Mobile: lista w bottom-sheet
+  buildSheetPickerList(names);
+}
+
+function buildSheetPickerList(names) {
+  if (!sheetPickerListEl) return;
+  sheetPickerListEl.replaceChildren();
+  (names || []).forEach((name) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "sheet-picker-item";
+    btn.setAttribute("aria-selected", name === currentSheetName ? "true" : "false");
+    btn.setAttribute("role", "option");
+    const dot = document.createElement("span");
+    dot.className = "sheet-picker-item-dot";
+    dot.setAttribute("aria-hidden", "true");
+    btn.appendChild(dot);
+    btn.appendChild(document.createTextNode(name));
+    btn.addEventListener("click", () => {
+      closeSheetPicker();
       if (sheetSelect.value === name && currentSheetName === name) return;
       sheetSelect.value = name;
       loadBtn.click();
     });
-    sheetTabsEl.appendChild(tab);
+    sheetPickerListEl.appendChild(btn);
   });
-  sheetTabsEl.classList.toggle("hidden", names.length < 2);
+}
+
+function openSheetPicker() {
+  if (!sheetPickerOverlayEl) return;
+  sheetPickerOverlayEl.classList.remove("hidden");
+  requestAnimationFrame(() => sheetPickerOverlayEl.classList.add("open"));
+}
+
+function closeSheetPicker() {
+  if (!sheetPickerOverlayEl) return;
+  sheetPickerOverlayEl.classList.remove("open");
+  sheetPickerOverlayEl.addEventListener("transitionend", () => {
+    sheetPickerOverlayEl.classList.add("hidden");
+  }, { once: true });
 }
 
 function updateSheetTabActive(name) {
-  if (!sheetTabsEl) return;
-  sheetTabsEl.querySelectorAll(".sheet-tab").forEach((tab) => {
-    const active = tab.dataset.sheet === name;
-    tab.setAttribute("aria-selected", active ? "true" : "false");
-    if (active) tab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  // Desktop tabs
+  if (sheetTabsEl) {
+    sheetTabsEl.querySelectorAll(".sheet-tab").forEach((tab) => {
+      const active = tab.dataset.sheet === name;
+      tab.setAttribute("aria-selected", active ? "true" : "false");
+      if (active) tab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    });
+  }
+  // Mobile FAB label
+  if (sheetPickerFabNameEl) sheetPickerFabNameEl.textContent = name;
+  // Mobile picker items
+  if (sheetPickerListEl) {
+    sheetPickerListEl.querySelectorAll(".sheet-picker-item").forEach((item) => {
+      item.setAttribute("aria-selected", item.textContent.trim() === name ? "true" : "false");
+    });
+  }
+}
+
+// Listenery sheet picker
+if (sheetPickerFabEl) sheetPickerFabEl.addEventListener("click", openSheetPicker);
+if (sheetPickerOverlayEl) {
+  sheetPickerOverlayEl.addEventListener("click", (e) => {
+    if (e.target === sheetPickerOverlayEl) closeSheetPicker();
   });
 }
 
