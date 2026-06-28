@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260628-02" />
+    <link rel="stylesheet" href="styles/app.css?v=20260628-03" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1266,18 +1266,19 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260628-02"></script>
-    <script defer src="app/language.js?v=20260628-02"></script>
-    <script defer src="app/cursor-hint.js?v=20260628-02"></script>
-    <script defer src="app/analysis.js?v=20260628-02"></script>
-    <script defer src="app/workbook.js?v=20260628-02"></script>
-    <script defer src="app/xlsx-patch.js?v=20260628-02"></script>
-    <script defer src="app/table.js?v=20260628-02"></script>
-    <script defer src="app/conditional-formatting.js?v=20260628-02"></script>
-    <script defer src="app/derived-columns.js?v=20260628-02"></script>
-    <script defer src="app/formulas.js?v=20260628-02"></script>
-    <script defer src="app/edit-tools.js?v=20260628-02"></script>
-    <script defer src="app/ui-controls.js?v=20260628-02"></script>
+    <script defer src="app/core.js?v=20260628-03"></script>
+    <script defer src="app/language.js?v=20260628-03"></script>
+    <script defer src="app/cursor-hint.js?v=20260628-03"></script>
+    <script defer src="app/analysis.js?v=20260628-03"></script>
+    <script defer src="app/workbook.js?v=20260628-03"></script>
+    <script defer src="app/xlsx-patch.js?v=20260628-03"></script>
+    <script defer src="app/table.js?v=20260628-03"></script>
+    <script defer src="app/conditional-formatting.js?v=20260628-03"></script>
+    <script defer src="app/data-validation.js?v=20260628-03"></script>
+    <script defer src="app/derived-columns.js?v=20260628-03"></script>
+    <script defer src="app/formulas.js?v=20260628-03"></script>
+    <script defer src="app/edit-tools.js?v=20260628-03"></script>
+    <script defer src="app/ui-controls.js?v=20260628-03"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — te same reguły aktywacji co wewnątrz modułu. -->
@@ -1293,11 +1294,11 @@
         }
         if (!on) return;
         var s = document.createElement("script");
-        s.src = "app/scroll-diagnostics.js?v=20260628-02";
+        s.src = "app/scroll-diagnostics.js?v=20260628-03";
         s.defer = true;
         document.head.appendChild(s);
       })();
     </script>
-    <script defer src="app/bootstrap.js?v=20260628-02"></script>
+    <script defer src="app/bootstrap.js?v=20260628-03"></script>
   </body>
 </html>

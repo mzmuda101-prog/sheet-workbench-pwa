@@ -677,6 +677,9 @@ async function handleFile(file, fileHandle = null) {
     currentStyleIndexMap = await buildStyleIndexMap(originalFileBytes, workbook);
     // Wczytaj reguły formatowania warunkowego + dxf (ewaluowane leniwie przy renderze).
     await buildConditionalFormatting(originalFileBytes, workbook);
+    // Wczytaj reguły Data Validation (listy/słowniki jak w Excelu) — type="list".
+    // Konsumowane przez openCellEditor: dropdown + tryb (blokuj/ostrzegaj/podpowiadaj).
+    if (typeof buildDataValidations === "function") await buildDataValidations(originalFileBytes, workbook);
     sheetSelect.replaceChildren();
     workbook.SheetNames.forEach((s) => {
       const opt = document.createElement("option");
@@ -2527,8 +2530,33 @@ function openCellEditor(td, options = {}) {
   // Wartość wyjściowa — do wykrycia, czy user faktycznie coś zmienił.
   // Start pisaniem (initialChar) traktujemy od razu jako zmianę.
   const baseValue = initialChar != null ? null : input.value;
+
+  // Data Validation (lista jak w Excelu): jeśli komórka ma regułę type="list",
+  // podłącz <datalist> pod edytor (podpowiedzi) i zapamiętaj tryb rygoru, który
+  // egzekwujemy przy commit (stop=blokuj, warning=ostrzeż, info=cicho przepuść).
+  let dvRule = null;
+  try {
+    if (typeof getCellDataValidation === "function") {
+      dvRule = getCellDataValidation(currentSheetName, row.rowIndex0, currentStartCol + colIndex0);
+    }
+  } catch { dvRule = null; }
+  let dvDatalist = null;
+  if (dvRule && dvRule.values.length) {
+    document.getElementById("cellEditorDatalist")?.remove(); // sprzątnij ewentualny resztkowy
+    dvDatalist = document.createElement("datalist");
+    dvDatalist.id = "cellEditorDatalist";
+    dvRule.values.forEach((v) => {
+      const opt = document.createElement("option");
+      opt.value = v;
+      dvDatalist.appendChild(opt);
+    });
+    input.setAttribute("list", "cellEditorDatalist");
+    input.classList.add("cell-editor-has-list");
+  }
+
   td.classList.add("cell-editing");
   td.appendChild(input);
+  if (dvDatalist) td.appendChild(dvDatalist);
   activeCellEditor = { td, input };
 
   let finished = false;
@@ -2536,6 +2564,7 @@ function openCellEditor(td, options = {}) {
     if (finished) return;
     finished = true;
     input.remove();
+    if (dvDatalist) dvDatalist.remove();
     td.classList.remove("cell-editing");
     activeCellEditor = null;
   };
@@ -2558,6 +2587,19 @@ function openCellEditor(td, options = {}) {
       toast(t("formulaEditBlocked"), "warning");
       input.focus();
       return;
+    }
+    // Egzekwuj regułę Data Validation (lista). stop=blokuj commit, warning=ostrzeż
+    // ale przepuść, info=cicho. Porównanie bez wielkości liter (jak w Excelu).
+    if (dvRule) {
+      const candidate = parsed ? parsed.value : null;
+      const str = candidate == null ? "" : String(candidate).trim();
+      let ok;
+      if (str === "") ok = dvRule.allowBlank;
+      else { const norm = str.toLowerCase(); ok = dvRule.values.some((v) => String(v).trim().toLowerCase() === norm); }
+      if (!ok) {
+        if (dvRule.mode === "stop") { toast(t("dvRejected"), "warning"); input.focus(); return; }
+        if (dvRule.mode === "warning") toast(t("dvWarning"), "warning");
+      }
     }
     updateSheetCell(row.rowIndex0, colIndex0, parsed);
     const newVal = parsed ? parsed.value : null;
