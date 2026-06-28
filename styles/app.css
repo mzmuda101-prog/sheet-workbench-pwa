@@ -2795,6 +2795,20 @@ thead th {
     background: var(--surface);
   }
 }
+/* Safari (desktop i mobile): position:sticky + backdrop-filter + poziomy scroll = smearing.
+   Bug w silniku WebKit — blur przeliczany co klatkę zamiast przez osobną warstwę kompozytora.
+   Zastępujemy solidnym tłem — efekt frosted glass i tak ledwo widoczny na tle tabeli. */
+html.browser-safari .table-wrap.freeze-first-col tbody td:first-child,
+html.browser-safari .table-wrap.freeze-first-col tbody td:nth-child(2) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--surface);
+}
+html.browser-safari .table-wrap.freeze-headers thead th {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: var(--surface);
+}
 .table-wrap.freeze-first-col tbody td:first-child { left: 0; }
 .table-wrap.freeze-first-col tbody td:nth-child(2) {
   left: var(--row-head-w, 44px);
