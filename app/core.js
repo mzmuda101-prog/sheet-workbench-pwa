@@ -15,6 +15,13 @@ const IS_LOW_POWER = (() => {
 })();
 document.documentElement.classList.toggle("low-power", IS_LOW_POWER);
 
+// Safari: sticky + backdrop-filter podczas poziomego scrollu = smearing (znany bug).
+// Wykrywamy raz i dodajemy klasę — CSS zdejmuje blur ze sticky komórek tabeli.
+const IS_SAFARI = (() => {
+  try { return /^((?!chrome|android).)*safari/i.test(navigator.userAgent); } catch { return false; }
+})();
+document.documentElement.classList.toggle("browser-safari", IS_SAFARI);
+
 const rootEl = document.documentElement;
 const appShellEl = document.querySelector(".app");
 const logEl = document.getElementById("log");
@@ -40,6 +47,7 @@ const dropZone = document.getElementById("dropZone");
 const fileNameEl = document.getElementById("fileName");
 const fileNameTextEl = document.getElementById("fileNameText");
 const sheetSelect = document.getElementById("sheetSelect");
+const sheetTabsEl = document.getElementById("sheetTabs");
 const headerRowEl = document.getElementById("headerRow");
 const autoHeaderRowEl = document.getElementById("autoHeaderRow");
 const displayModeEl = document.getElementById("displayMode");
@@ -496,7 +504,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260628-04";
+const APP_BUILD_VERSION = "20260628-06";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

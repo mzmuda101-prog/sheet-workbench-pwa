@@ -685,8 +685,9 @@ async function handleFile(file, fileHandle = null) {
       const opt = document.createElement("option");
       opt.value = s;
       opt.textContent = s;
-    sheetSelect.appendChild(opt);
-  });
+      sheetSelect.appendChild(opt);
+    });
+    buildSheetTabs();
     currentWorkbookStats = collectWorkbookStats(workbook, file.name);
     currentSheetStats = null;
     currentKpiEntries = [];
@@ -1023,6 +1024,11 @@ const validationSummaryEl = document.getElementById("validationSummary");
 const validationResultsEl = document.getElementById("validationResults");
 const validationShowOnlyWrapEl = document.getElementById("validationShowOnlyWrap");
 const validationShowOnlyEl = document.getElementById("validationShowOnly");
+const dvManualModeEl = document.getElementById("dvManualMode");
+const dvManualSetBtn = document.getElementById("dvManualSetBtn");
+const dvManualClearBtn = document.getElementById("dvManualClearBtn");
+const dvManualStatusEl = document.getElementById("dvManualStatus");
+const dvManualActiveListEl = document.getElementById("dvManualActiveList");
 
 function populateValidationColumns() {
   if (!validationColumnEl) return;
@@ -1044,12 +1050,99 @@ function populateValidationColumns() {
   if (prevDict && validationDictColumnEl && validationDictColumnEl.querySelector(`option[value="${prevDict}"]`)) validationDictColumnEl.value = prevDict;
 }
 
+// ── Zakładki arkuszy ─────────────────────────────────────────────────────────
+function buildSheetTabs() {
+  if (!sheetTabsEl) return;
+  sheetTabsEl.replaceChildren();
+  const names = workbook ? workbook.SheetNames : [];
+  if (names.length < 2) { sheetTabsEl.classList.add("hidden"); return; }
+  names.forEach((name) => {
+    const tab = document.createElement("button");
+    tab.type = "button";
+    tab.role = "tab";
+    tab.className = "sheet-tab";
+    tab.textContent = name;
+    tab.dataset.sheet = name;
+    tab.setAttribute("aria-selected", name === currentSheetName ? "true" : "false");
+    tab.addEventListener("click", () => {
+      if (sheetSelect.value === name && currentSheetName === name) return;
+      sheetSelect.value = name;
+      loadBtn.click();
+    });
+    sheetTabsEl.appendChild(tab);
+  });
+  sheetTabsEl.classList.toggle("hidden", names.length < 2);
+}
+
+function updateSheetTabActive(name) {
+  if (!sheetTabsEl) return;
+  sheetTabsEl.querySelectorAll(".sheet-tab").forEach((tab) => {
+    const active = tab.dataset.sheet === name;
+    tab.setAttribute("aria-selected", active ? "true" : "false");
+    if (active) tab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  });
+}
+
 function resetValidationUi() {
   validationState = { colIdx: -1, allowed: null, ignoreEmpty: true, caseInsensitive: true, showOnly: false };
   if (validationSummaryEl) { validationSummaryEl.textContent = ""; validationSummaryEl.className = "validation-summary"; }
   if (validationResultsEl) validationResultsEl.replaceChildren();
   if (validationShowOnlyEl) validationShowOnlyEl.checked = false;
   if (validationShowOnlyWrapEl) validationShowOnlyWrapEl.classList.add("hidden");
+}
+
+// ── Faza 2 — ręczna reguła DV dla edytora komórki ───────────────────────────
+function renderDvManualActiveList() {
+  if (!dvManualActiveListEl) return;
+  dvManualActiveListEl.replaceChildren();
+  if (typeof addManualDvRule !== "function" || !currentSheetName) { dvManualActiveListEl.classList.add("hidden"); return; }
+  // Odczytaj ręczne reguły z dvRulesBySheet (ekspozycja przez window.getDvManualRules).
+  const rules = typeof getDvManualRules === "function" ? getDvManualRules(currentSheetName) : [];
+  if (!rules.length) { dvManualActiveListEl.classList.add("hidden"); return; }
+  dvManualActiveListEl.classList.remove("hidden");
+  const modeLabel = { stop: "Blokuj", warning: "Ostrzeżenie", info: "Podpowiedź" };
+  rules.forEach(({ colIdx, colName, mode }) => {
+    const chip = document.createElement("div");
+    chip.className = "dv-manual-rule-chip";
+    chip.innerHTML = `<span>${colName}</span><span class="chip-mode">${modeLabel[mode] || mode}</span>`;
+    const rm = document.createElement("button");
+    rm.type = "button";
+    rm.textContent = "✕";
+    rm.title = "Usuń regułę";
+    rm.addEventListener("click", () => {
+      if (typeof removeManualDvRule === "function") removeManualDvRule(currentSheetName, colIdx);
+      renderDvManualActiveList();
+    });
+    chip.appendChild(rm);
+    dvManualActiveListEl.appendChild(chip);
+  });
+}
+
+function applyDvManualRule() {
+  if (typeof addManualDvRule !== "function") { toast("Brak modułu data-validation.js", "error"); return; }
+  if (!currentSheetName) { toast(t("chooseFileFirst"), "warning"); return; }
+  if (!currentHeaders.length) { toast(t("loadSheetToPickColumns"), "info"); return; }
+  const colIdx = Number(validationColumnEl ? validationColumnEl.value : -1);
+  if (!Number.isInteger(colIdx) || colIdx < 0) { toast("Wybierz kolumnę docelową", "warning"); return; }
+  const caseInsensitive = validationCaseEl ? validationCaseEl.checked : true;
+  const allowed = buildValidationAllowedSet(caseInsensitive);
+  if (!allowed.size) { toast("Lista dozwolonych wartości jest pusta", "warning"); return; }
+  const values = Array.from(allowed);
+  const mode = dvManualModeEl ? dvManualModeEl.value : "warning";
+  const colName = exportColLabel(currentHeaders[colIdx], colIdx);
+  const ok = addManualDvRule(currentSheetName, values, colIdx, currentStartCol, mode, colName);
+  if (ok) {
+    if (dvManualStatusEl) dvManualStatusEl.textContent = `✓ Reguła ustawiona dla „${colName}" (${values.length} wartości, tryb: ${mode})`;
+    renderDvManualActiveList();
+    toast(`Reguła edytora ustawiona dla „${colName}"`, "success");
+  }
+}
+
+function clearDvManualRules() {
+  if (typeof removeManualDvRule !== "function") return;
+  removeManualDvRule(currentSheetName, -1);
+  if (dvManualStatusEl) dvManualStatusEl.textContent = "Ręczne reguły usunięte.";
+  renderDvManualActiveList();
 }
 
 function buildValidationAllowedSet(caseInsensitive) {
@@ -1173,6 +1266,8 @@ if (validationSourceEl) {
 }
 if (validationCheckBtn) validationCheckBtn.addEventListener("click", runValidation);
 if (validationClearBtn) validationClearBtn.addEventListener("click", clearValidation);
+if (dvManualSetBtn) dvManualSetBtn.addEventListener("click", applyDvManualRule);
+if (dvManualClearBtn) dvManualClearBtn.addEventListener("click", clearDvManualRules);
 if (validationShowOnlyEl) {
   validationShowOnlyEl.addEventListener("change", () => {
     validationState.showOnly = validationShowOnlyEl.checked;
@@ -1504,6 +1599,7 @@ loadBtn.addEventListener("click", () => {
         aggregationWorkbenchState.customHeaderRow = headerRow;
       }
       currentSheetName = sheetName;
+      updateSheetTabActive(sheetName);
       const data = buildRows(sheet, headerRow, workbook);
       currentHeaders = data.headers;
       currentStartCol = data.startCol || 0;

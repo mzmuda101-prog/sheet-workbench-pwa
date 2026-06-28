@@ -13,7 +13,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260628-04" />
+    <link rel="stylesheet" href="styles/app.css?v=20260628-06" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -811,6 +811,24 @@
                 <label for="validationShowOnly" id="validationShowOnlyLabel">Pokaż w tabeli tylko niezgodne wiersze</label>
               </div>
               <div class="validation-results" id="validationResults"></div>
+
+              <hr class="panel-divider" />
+              <div class="panel-subhead" id="dvManualHead">Reguła edytora komórki</div>
+              <div class="panel-hint" id="dvManualHint">Ustaw regułę z powyższej listy bezpośrednio w edytorze komórki — ta sama kolumna docelowa i te same wartości. Wybierz tryb i kliknij „Ustaw".</div>
+              <div class="field">
+                <label for="dvManualMode" id="dvManualModeLabel">Poziom rygoru</label>
+                <select id="dvManualMode">
+                  <option value="warning" id="dvManualModeWarning">Ostrzeżenie (można wpisać inne)</option>
+                  <option value="stop" id="dvManualModeStop">Blokuj (tylko z listy)</option>
+                  <option value="info" id="dvManualModeInfo">Podpowiedź (tylko dropdown)</option>
+                </select>
+              </div>
+              <div class="dv-manual-rules hidden" id="dvManualActiveList"></div>
+              <div class="btn-row">
+                <button class="btn btn-sm" id="dvManualSetBtn" type="button">Ustaw regułę</button>
+                <button class="btn btn-sm ghost" id="dvManualClearBtn" type="button">Usuń reguły</button>
+              </div>
+              <div class="dv-manual-status" id="dvManualStatus"></div>
             </div>
           </details>
           </section>
@@ -1143,6 +1161,7 @@
             <div class="table-scrollbar hidden" id="tableScrollbar" aria-hidden="true">
               <div class="table-scrollbar-inner" id="tableScrollbarInner"></div>
             </div>
+            <div class="sheet-tabs hidden" id="sheetTabs" role="tablist" aria-label="Arkusze"></div>
             <div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div>
             <button class="clear-sel-fab" id="clearSelectionFab" type="button" aria-label="Odznacz zaznaczenie" data-hint data-hint-pl="Odznacz zaznaczenie i fokus (zamiennik Esc — przydatny na tablecie)" data-hint-en="Clear selection and focus (Esc alternative — handy on tablets)" data-hint-delay="0.8" data-hint-touch="on">
               <span class="fab-arrow" aria-hidden="true">✕</span>
@@ -1266,19 +1285,19 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260628-04"></script>
-    <script defer src="app/language.js?v=20260628-04"></script>
-    <script defer src="app/cursor-hint.js?v=20260628-04"></script>
-    <script defer src="app/analysis.js?v=20260628-04"></script>
-    <script defer src="app/workbook.js?v=20260628-04"></script>
-    <script defer src="app/xlsx-patch.js?v=20260628-04"></script>
-    <script defer src="app/table.js?v=20260628-04"></script>
-    <script defer src="app/conditional-formatting.js?v=20260628-04"></script>
-    <script defer src="app/data-validation.js?v=20260628-04"></script>
-    <script defer src="app/derived-columns.js?v=20260628-04"></script>
-    <script defer src="app/formulas.js?v=20260628-04"></script>
-    <script defer src="app/edit-tools.js?v=20260628-04"></script>
-    <script defer src="app/ui-controls.js?v=20260628-04"></script>
+    <script defer src="app/core.js?v=20260628-06"></script>
+    <script defer src="app/language.js?v=20260628-06"></script>
+    <script defer src="app/cursor-hint.js?v=20260628-06"></script>
+    <script defer src="app/analysis.js?v=20260628-06"></script>
+    <script defer src="app/workbook.js?v=20260628-06"></script>
+    <script defer src="app/xlsx-patch.js?v=20260628-06"></script>
+    <script defer src="app/table.js?v=20260628-06"></script>
+    <script defer src="app/conditional-formatting.js?v=20260628-06"></script>
+    <script defer src="app/data-validation.js?v=20260628-06"></script>
+    <script defer src="app/derived-columns.js?v=20260628-06"></script>
+    <script defer src="app/formulas.js?v=20260628-06"></script>
+    <script defer src="app/edit-tools.js?v=20260628-06"></script>
+    <script defer src="app/ui-controls.js?v=20260628-06"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — te same reguły aktywacji co wewnątrz modułu. -->
@@ -1294,11 +1313,11 @@
         }
         if (!on) return;
         var s = document.createElement("script");
-        s.src = "app/scroll-diagnostics.js?v=20260628-04";
+        s.src = "app/scroll-diagnostics.js?v=20260628-06";
         s.defer = true;
         document.head.appendChild(s);
       })();
     </script>
-    <script defer src="app/bootstrap.js?v=20260628-04"></script>
+    <script defer src="app/bootstrap.js?v=20260628-06"></script>
   </body>
 </html>

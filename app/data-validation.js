@@ -179,3 +179,52 @@ async function buildDataValidations(bytes, wb) {
     dvRulesBySheet = null;
   }
 }
+
+// FAZA 2 — dodaj ręczną regułę DV dla bieżącego arkusza.
+// values: string[] dozwolonych wartości (już odczytane przez wywołującego).
+// colIdx: 0-bazowany indeks kolumny w currentHeaders (mapowany na absolutny kolumny arkusza).
+// mode: "stop"|"warning"|"info".
+// startColOffset: currentStartCol z ui-controls (przesunięcie kolumn w arkuszu).
+// Zwraca true jeśli dodano, false jeśli nie ma aktywnego arkusza.
+function addManualDvRule(sheetName, values, colIdx, startColOffset, mode, colName) {
+  if (!sheetName || !values || !values.length) return false;
+  const absCol = colIdx + (startColOffset || 0);
+  const rule = {
+    type: "list",
+    ranges: [{ s: { r: 0, c: absCol }, e: { r: 1048575, c: absCol } }],
+    mode: mode || "warning",
+    allowBlank: true,
+    formula1Raw: "__manual__",
+    _values: values.slice(),
+    _manual: true,
+    _colName: colName || "",
+  };
+  if (!dvRulesBySheet) dvRulesBySheet = new Map();
+  if (!dvRulesBySheet.has(sheetName)) dvRulesBySheet.set(sheetName, []);
+  const arr = dvRulesBySheet.get(sheetName);
+  // Usuń poprzednią ręczną regułę dla tej samej kolumny (replace).
+  const kept = arr.filter((r) => !(r._manual && r.ranges[0]?.s.c === absCol));
+  kept.push(rule);
+  dvRulesBySheet.set(sheetName, kept);
+  return true;
+}
+
+// Zwróć listę ręcznych reguł dla arkusza jako { colIdx, colName(?), mode }[].
+// colName jest ustawiany przez wywołującego lub brak.
+function getDvManualRules(sheetName) {
+  if (!dvRulesBySheet || !dvRulesBySheet.has(sheetName)) return [];
+  return dvRulesBySheet.get(sheetName)
+    .filter((r) => r._manual)
+    .map((r) => ({ colIdx: r.ranges[0]?.s.c ?? -1, colName: r._colName || `kol.${(r.ranges[0]?.s.c ?? 0) + 1}`, mode: r.mode }));
+}
+
+// Usuń ręczne reguły DV dla danego arkusza i kolumny (lub wszystkie jeśli absCol=-1).
+function removeManualDvRule(sheetName, absCol) {
+  if (!dvRulesBySheet || !dvRulesBySheet.has(sheetName)) return;
+  const arr = dvRulesBySheet.get(sheetName);
+  const filtered = absCol === -1
+    ? arr.filter((r) => !r._manual)
+    : arr.filter((r) => !(r._manual && r.ranges[0]?.s.c === absCol));
+  if (filtered.length) dvRulesBySheet.set(sheetName, filtered);
+  else dvRulesBySheet.delete(sheetName);
+}
