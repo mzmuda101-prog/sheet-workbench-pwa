@@ -183,6 +183,7 @@ const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)
 
 // Morf całej sceny (wczytanie arkusza, tryb wide↔long): cross-fade root.
 let sceneTransitionInFlight = false;
+let activeSceneTransition = null;
 function withSceneTransition(mutate) {
   if (
     prefersReducedMotion ||
@@ -195,11 +196,43 @@ function withSceneTransition(mutate) {
   sceneTransitionInFlight = true;
   document.documentElement.classList.add("vt-scene");
   const vt = document.startViewTransition(() => mutate());
-  vt.finished.finally(() => {
+  activeSceneTransition = vt;
+  // skipTransition() odrzuca także vt.ready — bez tego catcha to unhandled rejection.
+  if (vt.ready) vt.ready.catch(() => {});
+  const cleanup = () => {
+    if (activeSceneTransition === vt) activeSceneTransition = null;
     sceneTransitionInFlight = false;
     document.documentElement.classList.remove("vt-scene");
-  });
+  };
+  // .catch przed .finally: gdy skipTransition() dobija animację, vt.finished
+  // ODRZUCA się („Transition was skipped") — bez tego leci unhandled rejection.
+  vt.finished.catch(() => {}).finally(cleanup);
+  // Bezpiecznik: gdyby .finished nigdy się nie rozwiązało (iOS usypia webview
+  // standalone W TRAKCIE animacji → zamrożona nakładka ::view-transition łapie
+  // dotyk i „nic nie działa" aż do ubicia procesu). Watchdog domyka stan; po
+  // wznowieniu z tła timer odpala i czyści zawieszenie.
+  setTimeout(() => {
+    if (activeSceneTransition === vt) {
+      try { vt.skipTransition(); } catch (_) {}
+      cleanup();
+    }
+  }, 1500);
 }
+
+// Gdy aplikacja schodzi w tło — NATYCHMIAST domknij animację sceny (skipTransition
+// dobija do stanu końcowego i zdejmuje nakładkę View Transitions), żeby po
+// wznowieniu nie zostać z zamrożonym, nieklikalnym widokiem (iPad PWA standalone).
+function abortSceneTransitionForBackground() {
+  if (!activeSceneTransition) return;
+  try { activeSceneTransition.skipTransition(); } catch (_) {}
+  activeSceneTransition = null;
+  sceneTransitionInFlight = false;
+  document.documentElement.classList.remove("vt-scene");
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") abortSceneTransitionForBackground();
+});
+window.addEventListener("pagehide", abortSceneTransitionForBackground);
 
 // Sygnał „następny render tabeli ma użyć FLIP" — ustawiany przy sortowaniu,
 // resecie sortowania i filtrowaniu (wszystko, co przestawia/odsłania wiersze).

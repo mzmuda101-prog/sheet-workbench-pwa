@@ -2148,6 +2148,19 @@ window.addEventListener("resize", () => {
   syncSidebarHandle();
 });
 
+// Powrót PWA z tła (tablet) / przywrócenie z bfcache: innerHeight mógł się zmienić
+// (pasek przeglądarki na iOS, obrót), a panel tabeli trzymał STARĄ wysokość →
+// „skurczona" przestrzeń robocza. Przelicz layout na wznowieniu (idempotentne, rAF).
+function resyncViewportOnResume() {
+  if (typeof syncTableViewportHeight === "function") syncTableViewportHeight();
+  syncHorizontalScrollbar();
+  syncSidebarHandle();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") resyncViewportOnResume();
+});
+window.addEventListener("pageshow", resyncViewportOnResume);
+
 if (quickSearchBtn) {
   quickSearchBtn.addEventListener("click", commitQuickSearch);
 }
@@ -2497,56 +2510,6 @@ function createCellSuggestions(input, values, onPick) {
   box.setAttribute("role", "listbox");
   document.body.appendChild(box);
 
-  // Ghost completion: dopełnienie najlepszego dopasowania pokazane PRZYGASZONE
-  // (zielony z palety) tuż za kursorem — jak podpowiedź w pasku adresu. Akceptacja
-  // strzałką w prawo / End na końcu tekstu. Nakładka nad inputem (pointer-events:none):
-  // część „wpisana" niewidoczna (rezerwuje miejsce), część-dopełnienie zielona.
-  const ghost = document.createElement("div");
-  ghost.className = "cell-suggest-ghost hidden";
-  ghost.setAttribute("aria-hidden", "true");
-  const ghostLine = document.createElement("span");
-  const ghostTyped = document.createElement("span");
-  ghostTyped.style.visibility = "hidden";
-  const ghostComp = document.createElement("span");
-  ghostComp.className = "cell-suggest-ghost-text";
-  ghostLine.append(ghostTyped, ghostComp);
-  ghost.appendChild(ghostLine);
-  if (input.parentElement) input.parentElement.appendChild(ghost);
-
-  const updateGhost = () => {
-    const typed = input.value;
-    const atEnd = input.selectionStart === typed.length && input.selectionEnd === typed.length;
-    let comp = "";
-    if (typed && atEnd) {
-      const lc = typed.toLowerCase();
-      const match = values.find((v) => { const lv = String(v).toLowerCase(); return lv.startsWith(lc) && lv !== lc; });
-      if (match) comp = match.slice(typed.length); // zachowaj oryginalną wielkość liter dopełnienia
-    }
-    if (comp) {
-      ghostTyped.textContent = typed;
-      ghostComp.textContent = comp;
-      ghost.classList.remove("hidden");
-    } else {
-      ghost.classList.add("hidden");
-    }
-  };
-  const acceptGhost = () => {
-    if (ghost.classList.contains("hidden")) return false;
-    input.value = ghostTyped.textContent + ghostComp.textContent;
-    input.setSelectionRange(input.value.length, input.value.length);
-    render();
-    return true;
-  };
-  const onGhostKeydown = (e) => {
-    if ((e.key === "ArrowRight" || e.key === "End") && input.selectionStart === input.value.length) {
-      if (acceptGhost()) e.preventDefault();
-    }
-  };
-  const onGhostKeyup = () => updateGhost();
-  input.addEventListener("keydown", onGhostKeydown);
-  input.addEventListener("keyup", onGhostKeyup);
-  input.addEventListener("click", onGhostKeyup);
-
   let interacting = false;
   let interactTimer = null;
   const startInteract = () => { interacting = true; if (interactTimer) { clearTimeout(interactTimer); interactTimer = null; } };
@@ -2569,7 +2532,24 @@ function createCellSuggestions(input, values, onPick) {
     const el = document.createElement("div");
     el.className = "cell-suggest-item";
     el.setAttribute("role", "option");
-    el.textContent = v;
+    // Część już wpisana (prefiks) = mocny tekst; reszta „jeszcze nie wpisana" =
+    // przygaszona zieleń z palety. Gdy nic nie wpisano → cała pozycja przygaszona.
+    const q = input.value.trim();
+    const sv = String(v);
+    if (q && sv.toLowerCase().startsWith(q.toLowerCase())) {
+      const typed = document.createElement("span");
+      typed.className = "cell-suggest-typed";
+      typed.textContent = sv.slice(0, q.length);
+      const rest = document.createElement("span");
+      rest.className = "cell-suggest-rest";
+      rest.textContent = sv.slice(q.length);
+      el.append(typed, rest);
+    } else {
+      const rest = document.createElement("span");
+      rest.className = "cell-suggest-rest";
+      rest.textContent = sv;
+      el.appendChild(rest);
+    }
     // mysz/pen: pointerdown preventDefault => input nie traci focusu; wybór na click
     el.addEventListener("pointerdown", (e) => { startInteract(); if (e.pointerType !== "touch") e.preventDefault(); });
     el.addEventListener("pointerup", endInteract);
@@ -2598,13 +2578,10 @@ function createCellSuggestions(input, values, onPick) {
     if (!items.length && !exact) items = values.slice();
     items = items.slice(0, 50);
     box.replaceChildren();
-    if (!items.length) { box.classList.add("hidden"); }
-    else {
-      items.forEach((v) => box.appendChild(makeItem(v)));
-      box.classList.remove("hidden");
-      position();
-    }
-    updateGhost();
+    if (!items.length) { box.classList.add("hidden"); return; }
+    items.forEach((v) => box.appendChild(makeItem(v)));
+    box.classList.remove("hidden");
+    position();
   };
 
   const onInput = () => render();
@@ -2620,13 +2597,9 @@ function createCellSuggestions(input, values, onPick) {
     destroy() {
       if (interactTimer) clearTimeout(interactTimer);
       input.removeEventListener("input", onInput);
-      input.removeEventListener("keydown", onGhostKeydown);
-      input.removeEventListener("keyup", onGhostKeyup);
-      input.removeEventListener("click", onGhostKeyup);
       (tableWrapEl || window).removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
       box.remove();
-      ghost.remove();
     },
   };
 }

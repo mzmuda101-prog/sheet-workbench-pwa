@@ -18,6 +18,7 @@ const APP_ASSETS = [
   "./app/xlsx-patch.js?v=20260628-03",
   "./app/table.js?v=20260628-03",
   "./app/conditional-formatting.js?v=20260628-03",
+  "./app/data-validation.js?v=20260628-03",
   "./app/derived-columns.js?v=20260628-03",
   "./app/formulas.js?v=20260628-03",
   "./app/edit-tools.js?v=20260628-03",
