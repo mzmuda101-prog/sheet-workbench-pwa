@@ -738,8 +738,15 @@ if ("serviceWorker" in navigator) {
     });
   }
 
+  // Czy strona była JUŻ kontrolowana przez SW w chwili startu. Jeśli tak, to
+  // późniejszy controllerchange = wymiana SW = AKTUALIZACJA → przeładuj. Jeśli nie
+  // (pierwsze wejście), controllerchange pochodzi z clients.claim() świeżo
+  // zainstalowanego SW — to NIE jest aktualizacja, więc NIE przeładowujemy
+  // (inaczej każde pierwsze otwarcie robi zbędny pełny reload/mignięcie).
+  const hadControllerAtStart = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (refreshingForUpdate) return;
+    if (!hadControllerAtStart) return; // pierwsze przejęcie (claim), nie aktualizacja
     refreshingForUpdate = true;
     window.location.reload();
   });
