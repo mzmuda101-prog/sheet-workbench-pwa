@@ -2910,6 +2910,41 @@ input.cell-editor {
   box-shadow: 0 2px 8px rgba(0,0,0,.18);
 }
 
+/* Własny dropdown podpowiedzi Data Validation (zastępuje natywny <datalist>,
+   bo ten kradnie focus na dotyku). Pozycjonowany w JS (position:fixed). */
+.cell-suggest {
+  position: fixed;
+  z-index: 120;
+  max-height: 240px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  background: var(--surface, #fff);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 8px;
+  box-shadow: 0 6px 22px rgba(0,0,0,.20);
+  padding: 4px;
+  font-size: 13px;
+}
+.cell-suggest.hidden { display: none; }
+.cell-suggest-item {
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.cell-suggest-item:hover {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+/* Większe cele dotykowe na tabletach/telefonach */
+@media (pointer: coarse) {
+  .cell-suggest-item { padding: 12px 14px; }
+  .cell-suggest { font-size: 15px; }
+}
+
 /* ######################################################################################################################### */
 /* Zaznaczony wiersz */
 /* ######################################################################################################################### */

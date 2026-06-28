@@ -2138,6 +2138,7 @@ tbodyEl.addEventListener("touchend", () => {
   const td = cellTapTd;
   cellTapTd = null;
   if (!td || cellTapMoved) return;
+  if (activeCellEditor) return; // podczas edycji nie pokazuj tooltipa (kolidowałby z dropdownem)
   showCellTooltip(td, true);
 }, { passive: true });
 
@@ -2484,6 +2485,95 @@ function getRowByKey(rowKey) {
   return currentDisplayModel.rows.find((r) => getRowSelectionKey(r) === rowKey) || null;
 }
 
+// Własny dropdown podpowiedzi pod edytorem komórki (Data Validation list).
+// Powód istnienia: natywny <datalist> na dotyku kradnie focus z inputa → nasz
+// blur zatwierdzał po jednej literze i zamykał edytor. Tu wybór pozycji NIE
+// odbiera focusu (pointerdown/touch z flagą „interacting"), więc swobodne
+// wpisywanie w trybie podpowiadaj/ostrzegaj jest płynne; tap autouzupełnia.
+// Rozróżnia tap od przewijania (jak siatka), żeby scroll listy nie wybierał.
+function createCellSuggestions(input, values, onPick) {
+  const box = document.createElement("div");
+  box.className = "cell-suggest hidden";
+  box.setAttribute("role", "listbox");
+  document.body.appendChild(box);
+
+  let interacting = false;
+  let interactTimer = null;
+  const startInteract = () => { interacting = true; if (interactTimer) { clearTimeout(interactTimer); interactTimer = null; } };
+  const endInteract = () => { if (interactTimer) clearTimeout(interactTimer); interactTimer = setTimeout(() => { interacting = false; }, 250); };
+
+  const position = () => {
+    const r = input.getBoundingClientRect();
+    box.style.left = `${Math.round(r.left)}px`;
+    box.style.top = `${Math.round(r.bottom + 2)}px`;
+    box.style.minWidth = `${Math.round(r.width)}px`;
+  };
+
+  const choose = (v) => {
+    interacting = false;
+    if (typeof onPick === "function") onPick(v);
+  };
+
+  let touchStartY = 0, touchMoved = false;
+  const makeItem = (v) => {
+    const el = document.createElement("div");
+    el.className = "cell-suggest-item";
+    el.setAttribute("role", "option");
+    el.textContent = v;
+    // mysz/pen: pointerdown preventDefault => input nie traci focusu; wybór na click
+    el.addEventListener("pointerdown", (e) => { startInteract(); if (e.pointerType !== "touch") e.preventDefault(); });
+    el.addEventListener("pointerup", endInteract);
+    el.addEventListener("click", () => choose(v));
+    // dotyk: odróżnij tap od scrolla; tap (bez ruchu) wybiera bez gubienia focusu
+    el.addEventListener("touchstart", (e) => { startInteract(); touchMoved = false; touchStartY = e.touches[0] ? e.touches[0].clientY : 0; }, { passive: true });
+    el.addEventListener("touchmove", (e) => { const y = e.touches[0] ? e.touches[0].clientY : 0; if (Math.abs(y - touchStartY) > 8) touchMoved = true; }, { passive: true });
+    el.addEventListener("touchend", (e) => { if (!touchMoved) { e.preventDefault(); choose(v); } else { endInteract(); } }, { passive: false });
+    return el;
+  };
+
+  const render = () => {
+    const q = input.value.trim().toLowerCase();
+    const starts = [], has = [];
+    let exact = false;
+    for (const v of values) {
+      const lv = String(v).toLowerCase();
+      if (lv === q && q) { exact = true; continue; } // dokładnie wpisana wartość z listy → ukryj
+      if (!q || lv.startsWith(q)) starts.push(v);
+      else if (lv.includes(q)) has.push(v);
+    }
+    let items = starts.concat(has);
+    // Brak dopasowań do tego, co wpisano (np. wartość SPOZA listy lub literówka),
+    // a nie jest to dokładne trafienie → pokaż CAŁĄ listę (wtedy podpowiedź jest
+    // najpotrzebniejsza: user widzi z czego wybierać). Dokładne trafienie → nic.
+    if (!items.length && !exact) items = values.slice();
+    items = items.slice(0, 50);
+    box.replaceChildren();
+    if (!items.length) { box.classList.add("hidden"); return; }
+    items.forEach((v) => box.appendChild(makeItem(v)));
+    box.classList.remove("hidden");
+    position();
+  };
+
+  const onInput = () => render();
+  const onScroll = () => { if (!box.classList.contains("hidden")) position(); };
+  input.addEventListener("input", onInput);
+  (tableWrapEl || window).addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll, { passive: true });
+
+  render();
+
+  return {
+    isInteracting: () => interacting,
+    destroy() {
+      if (interactTimer) clearTimeout(interactTimer);
+      input.removeEventListener("input", onInput);
+      (tableWrapEl || window).removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      box.remove();
+    },
+  };
+}
+
 function formatDateForEdit(d) {
   const pad = (n) => String(n).padStart(2, "0");
   const base = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -2532,39 +2622,33 @@ function openCellEditor(td, options = {}) {
   const baseValue = initialChar != null ? null : input.value;
 
   // Data Validation (lista jak w Excelu): jeśli komórka ma regułę type="list",
-  // podłącz <datalist> pod edytor (podpowiedzi) i zapamiętaj tryb rygoru, który
-  // egzekwujemy przy commit (stop=blokuj, warning=ostrzeż, info=cicho przepuść).
+  // pokaż WŁASNY dropdown podpowiedzi (nie natywny <datalist> — ten na dotyku
+  // kradnie focus z inputa, przez co blur zatwierdzał już po jednej literze).
+  // Tryb rygoru egzekwujemy w commit (stop=blokuj, warning=ostrzeż, info=cicho).
   let dvRule = null;
   try {
     if (typeof getCellDataValidation === "function") {
       dvRule = getCellDataValidation(currentSheetName, row.rowIndex0, currentStartCol + colIndex0);
     }
   } catch { dvRule = null; }
-  let dvDatalist = null;
-  if (dvRule && dvRule.values.length) {
-    document.getElementById("cellEditorDatalist")?.remove(); // sprzątnij ewentualny resztkowy
-    dvDatalist = document.createElement("datalist");
-    dvDatalist.id = "cellEditorDatalist";
-    dvRule.values.forEach((v) => {
-      const opt = document.createElement("option");
-      opt.value = v;
-      dvDatalist.appendChild(opt);
-    });
-    input.setAttribute("list", "cellEditorDatalist");
-    input.classList.add("cell-editor-has-list");
-  }
 
   td.classList.add("cell-editing");
   td.appendChild(input);
-  if (dvDatalist) td.appendChild(dvDatalist);
   activeCellEditor = { td, input };
+
+  // Własny popup podpowiedzi (poniżej). Tapnięcie pozycji NIE odbiera focusu
+  // inputowi → blur nie zamyka edytora; tap autouzupełnia i zatwierdza.
+  const dvSuggest = (dvRule && dvRule.values.length)
+    ? createCellSuggestions(input, dvRule.values, (v) => { input.value = v; commit(null); })
+    : null;
+  if (dvSuggest) input.classList.add("cell-editor-has-list");
 
   let finished = false;
   const close = () => {
     if (finished) return;
     finished = true;
+    if (dvSuggest) dvSuggest.destroy();
     input.remove();
-    if (dvDatalist) dvDatalist.remove();
     td.classList.remove("cell-editing");
     activeCellEditor = null;
   };
@@ -2652,7 +2736,12 @@ function openCellEditor(td, options = {}) {
       td.textContent = prevText;
     }
   });
-  input.addEventListener("blur", () => commit(null));
+  input.addEventListener("blur", () => {
+    // Tapnięcie/przewijanie listy podpowiedzi nie może zamykać edytora (na dotyku
+    // input chwilowo traci focus) — w trakcie interakcji z popupem pomijamy commit.
+    if (dvSuggest && dvSuggest.isInteracting()) return;
+    commit(null);
+  });
 
   input.focus();
   if (initialChar != null) {
