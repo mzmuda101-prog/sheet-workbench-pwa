@@ -2183,6 +2183,8 @@ const heroNarrowMQ = typeof matchMedia === "function" ? matchMedia("(max-width: 
 let heroScrollLast = 0;
 let heroAnimating = false;       // true w trakcie animacji zwijania — nie reaguj wtedy na scroll
 let heroAnimTimer = null;
+let heroSyncRaf = null;          // pętla rAF goniąca wysokość panelu tabeli w trakcie animacji
+let heroUserCollapsed = false;   // user JAWNIE zwinął uchwytem → nie rozwijaj auto przy górze
 const HERO_COLLAPSE_AFTER = 48;  // zwijaj dopiero po zejściu poniżej tylu px
 const HERO_EXPAND_AT_TOP = 6;    // rozwijaj dopiero przy samej górze widoku
 
@@ -2195,6 +2197,16 @@ function measureHeroHeight() {
   if (h) document.documentElement.style.setProperty("--hero-h", `${Math.round(h)}px`);
 }
 
+// Płynność na telefonie: panel tabeli ma wysokość z CSS var liczonego po `rect.top`
+// hero. Bez tego var aktualizuje się dopiero na `transitionend` → tabela „skacze"
+// na końcu animacji. Tu gonimy ją co klatkę, żeby rosła RAZEM ze zwijaniem hero.
+function heroSyncLoop() {
+  if (typeof readTableViewportHeight === "function") readTableViewportHeight();
+  heroSyncRaf = requestAnimationFrame(heroSyncLoop);
+}
+function startHeroSyncLoop() { if (heroSyncRaf == null) heroSyncRaf = requestAnimationFrame(heroSyncLoop); }
+function stopHeroSyncLoop() { if (heroSyncRaf != null) { cancelAnimationFrame(heroSyncRaf); heroSyncRaf = null; } }
+
 function setHeroCollapsed(on) {
   if (!heroEl) return;
   if (!heroIsNarrow()) on = false; // desktop zawsze rozwinięty
@@ -2202,13 +2214,17 @@ function setHeroCollapsed(on) {
   if (was === !!on) return;
   if (on) measureHeroHeight(); // zmierz PRZED zwinięciem
   document.body.classList.toggle("hero-collapsed", !!on);
+  document.body.classList.add("hero-animating"); // włącz will-change (zdjęte po animacji)
   // Strażnik anty-oscylacji: w trakcie animacji ignoruj scroll wywołany reflowem.
   // Na końcu (lub po fallbacku, gdy brak transition) przelicz wysokość panelu tabeli.
   heroAnimating = true;
+  startHeroSyncLoop();
   clearTimeout(heroAnimTimer);
   heroAnimTimer = setTimeout(() => {
     heroAnimating = false;
-    if (typeof syncTableViewportHeight === "function") syncTableViewportHeight();
+    stopHeroSyncLoop();
+    document.body.classList.remove("hero-animating");
+    if (typeof readTableViewportHeight === "function") readTableViewportHeight();
     heroScrollLast = tableWrapEl ? tableWrapEl.scrollTop : heroScrollLast; // świeży punkt odniesienia
   }, 340);
 }
@@ -2219,8 +2235,8 @@ function handleHeroScroll(scrollTop) {
   const collapsed = document.body.classList.contains("hero-collapsed");
   if (!collapsed && y > heroScrollLast + 4 && y > HERO_COLLAPSE_AFTER) {
     setHeroCollapsed(true);                 // scroll w dół poza próg → zwiń
-  } else if (collapsed && y <= HERO_EXPAND_AT_TOP) {
-    setHeroCollapsed(false);                // dotarcie do samej góry → rozwiń
+  } else if (collapsed && y <= HERO_EXPAND_AT_TOP && !heroUserCollapsed) {
+    setHeroCollapsed(false);                // dotarcie do góry → rozwiń (chyba że user jawnie zwinął)
   }
   heroScrollLast = y;
 }
@@ -2239,15 +2255,19 @@ if (heroEl) {
       if (dragStartY == null) return;
       const dy = e.clientY - dragStartY;
       if (Math.abs(dy) > 6) dragMoved = true;
-      if (dy > 18) { setHeroCollapsed(false); dragStartY = e.clientY; }       // w dół → rozwiń
-      else if (dy < -18) { setHeroCollapsed(true); dragStartY = e.clientY; }  // w górę → zwiń
+      if (dy > 18) { heroUserCollapsed = false; setHeroCollapsed(false); dragStartY = e.clientY; }       // w dół → rozwiń (auto wraca)
+      else if (dy < -18) { heroUserCollapsed = true; setHeroCollapsed(true); dragStartY = e.clientY; }   // w górę → zwiń (jawne, przykleja)
     });
     const endDrag = () => { dragStartY = null; };
     heroGripEl.addEventListener("pointerup", endDrag);
     heroGripEl.addEventListener("pointercancel", endDrag);
     heroGripEl.addEventListener("click", () => {
       if (dragMoved) { dragMoved = false; return; } // to było przeciągnięcie, nie tap
-      setHeroCollapsed(!document.body.classList.contains("hero-collapsed"));
+      const willCollapse = !document.body.classList.contains("hero-collapsed");
+      // Jawny tap usera: zwinięcie „przykleja się" (nie rozwijaj auto przy górze);
+      // jawne rozwinięcie przywraca tryb automatyczny.
+      heroUserCollapsed = willCollapse;
+      setHeroCollapsed(willCollapse);
       replayPop(heroGripEl, "btn-pop");
     });
   }
@@ -2258,7 +2278,7 @@ if (heroEl) {
     }
   });
   window.addEventListener("resize", () => {
-    if (!heroIsNarrow()) setHeroCollapsed(false); // wejście w desktop → rozwiń
+    if (!heroIsNarrow()) { heroUserCollapsed = false; setHeroCollapsed(false); } // desktop → rozwiń + reset intencji
     if (!document.body.classList.contains("hero-collapsed")) measureHeroHeight();
   });
 }

@@ -303,6 +303,9 @@ body.splashing {
     border-width: 0;
     pointer-events: none;
   }
+  /* Podpowiedź dla kompozytora TYLKO w trakcie animacji (zdejmowane po niej w JS),
+     żeby nie trzymać warstwy bez potrzeby. */
+  body.hero-animating .hero { will-change: max-height; }
 
   /* Cienki uchwyt-„pigułka" (drawer handle) — tap toggluje, czytelny affordance */
   .hero-grip {
