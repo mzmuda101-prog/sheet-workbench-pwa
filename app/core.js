@@ -521,7 +521,82 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260629-07";
+const APP_BUILD_VERSION = "20260629-08";
+
+// Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
+let _viewRefreshRaf = 0;
+const _viewRefreshPending = { table: false, analyses: false, formula: false, filterBadge: false };
+
+function flushViewRefresh() {
+  const p = { ..._viewRefreshPending };
+  Object.keys(_viewRefreshPending).forEach((k) => { _viewRefreshPending[k] = false; });
+  if (p.table && typeof renderActiveTable === "function") renderActiveTable();
+  if (p.analyses) {
+    if (typeof renderInsights === "function") renderInsights();
+    if (typeof renderKpiExtractor === "function") renderKpiExtractor();
+    if (typeof renderSheetInspectorSummary === "function") renderSheetInspectorSummary();
+    if (typeof renderColumnProfiles === "function") renderColumnProfiles();
+    if (typeof renderSections === "function") renderSections();
+    if (typeof renderRepeatingBlocks === "function") renderRepeatingBlocks();
+    if (typeof renderDurationAnalysis === "function") renderDurationAnalysis();
+    if (typeof renderAggregationWorkbench === "function") renderAggregationWorkbench();
+  }
+  if (p.formula && typeof renderFormulaWorkbench === "function") renderFormulaWorkbench();
+  if (p.filterBadge && typeof updateFilterBadge === "function") updateFilterBadge();
+}
+
+function scheduleViewRefresh(opts = {}) {
+  const o = opts === true ? { table: true, analyses: true, formula: true } : opts;
+  if (o.table || o.all) _viewRefreshPending.table = true;
+  if (o.analyses || o.all) _viewRefreshPending.analyses = true;
+  if (o.formula || o.all) _viewRefreshPending.formula = true;
+  if (o.filterBadge) _viewRefreshPending.filterBadge = true;
+  if (o.sync || o.immediate) { flushViewRefresh(); return; }
+  if (_viewRefreshRaf) return;
+  _viewRefreshRaf = requestAnimationFrame(() => {
+    _viewRefreshRaf = 0;
+    flushViewRefresh();
+  });
+}
+
+// Leniwe cursor-hint (~29KB parse) — idle lub pierwsza interakcja z data-hint.
+let _cursorHintPromise = null;
+function ensureCursorHint() {
+  if (window.MateuszCursorHint) return Promise.resolve(window.MateuszCursorHint);
+  if (_cursorHintPromise) return _cursorHintPromise;
+  _cursorHintPromise = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `app/cursor-hint.js?v=${APP_BUILD_VERSION}`;
+    s.async = false;
+    s.onload = () => resolve(window.MateuszCursorHint);
+    s.onerror = () => { _cursorHintPromise = null; reject(new Error("cursor-hint")); };
+    document.head.appendChild(s);
+  });
+  return _cursorHintPromise;
+}
+
+function initCursorHintsWhenReady() {
+  if (window.__cursorHintsInited) return;
+  if (!window.MateuszCursorHint || typeof t !== "function") return;
+  window.MateuszCursorHint.initCursorHints({ fallbackHint: t("hintDefault") });
+  window.__cursorHintsInited = true;
+}
+
+function scheduleCursorHintInit() {
+  const boot = () => ensureCursorHint().then(initCursorHintsWhenReady).catch(() => {});
+  const ric = window.requestIdleCallback;
+  if (ric) ric(() => boot(), { timeout: 2500 });
+  else window.setTimeout(boot, 400);
+  const early = (e) => {
+    const el = e.target && e.target.closest && e.target.closest("[data-hint], [data-hint-pl], [data-hint-en]");
+    if (!el) return;
+    document.removeEventListener("pointerover", early, true);
+    document.removeEventListener("focusin", early, true);
+    boot();
+  };
+  document.addEventListener("pointerover", early, true);
+  document.addEventListener("focusin", early, true);
+}
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

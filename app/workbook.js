@@ -1065,15 +1065,7 @@ function renderSortPresets() {
 function applyCurrentSort() {
   applyFilters();
   sortRows();
-  renderActiveTable();
-  renderInsights();
-  renderSheetInspectorSummary();
-  renderColumnProfiles();
-  renderSections();
-  renderRepeatingBlocks();
-  renderDurationAnalysis();
-  renderAggregationWorkbench();
-  renderFormulaWorkbench();
+  scheduleViewRefresh({ table: true, analyses: true, formula: true });
 }
 
 // Zbiera „surowe" pozytywne (nie-zanegowane) szukane frazy z drzewa zapytania.

@@ -16,6 +16,7 @@
     "test:stress": "node scripts/test-runner.mjs",
     "test:stress:file": "node scripts/test-runner.mjs",
     "gen:stress": "node scripts/gen-stress-test.js",
+    "build": "node scripts/build-release.mjs",
     "release": "node scripts/bump-version.js"
   },
   "repository": {
@@ -31,6 +32,7 @@
   },
   "homepage": "https://github.com/mzmuda101-prog/excel-workbench-pwa#readme",
   "devDependencies": {
+    "esbuild": "^0.28.1",
     "playwright": "^1.60.0"
   }
 }

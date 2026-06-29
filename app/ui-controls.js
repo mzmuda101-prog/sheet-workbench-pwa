@@ -711,12 +711,7 @@ async function handleFile(file, fileHandle = null) {
     dropZone.classList.add("has-file");
     setDirtyState(false);
     setStatus(t("statusFileLoaded"));
-    renderInsights();
-    renderKpiExtractor();
-    renderColumnProfiles();
-    renderSections();
-    renderRepeatingBlocks();
-    renderDurationAnalysis();
+    scheduleViewRefresh({ analyses: true });
     populateSortColumnSelect();
     populateEditColumnSelect();
     renderSortPresets();
@@ -1717,16 +1712,7 @@ loadBtn.addEventListener("click", () => {
         // Transitions = płynny morf transformem (nie liczy się do CLS).
         const panelFileSheet = document.getElementById("panel-file-sheet");
         if (panelFileSheet) panelFileSheet.removeAttribute("open");
-        renderActiveTable();
-        renderInsights();
-        renderKpiExtractor();
-        renderSheetInspectorSummary();
-        renderColumnProfiles();
-        renderSections();
-        renderRepeatingBlocks();
-        renderDurationAnalysis();
-        renderAggregationWorkbench();
-        renderFormulaWorkbench();
+        scheduleViewRefresh({ table: true, analyses: true, formula: true, sync: true });
       });
       setDirtyState(false);
       if ((currentSheetStats?.trimmedColumns || 0) > 0) {
@@ -1753,16 +1739,7 @@ applyFilterBtn.addEventListener("click", () => {
   filtersCommitted = true;
   applyFilters();
   sortRows();
-  renderActiveTable();
-  renderInsights();
-  renderKpiExtractor();
-  renderSheetInspectorSummary();
-  renderColumnProfiles();
-  renderSections();
-  renderRepeatingBlocks();
-  renderDurationAnalysis();
-  renderAggregationWorkbench();
-  updateFilterBadge();
+  scheduleViewRefresh({ table: true, analyses: true, filterBadge: true });
   toast(t("filtersApplied"), "info");
 });
 
@@ -1807,15 +1784,7 @@ function applyQuickSearch() {
   // wszystkie wiersze (bez przestawiania) → bez FLIP-a.
   if (quickSearchHighlightMode) animateMatchPulseNextRender = true;
   else if (!quickSearchCellsMode) flipNextRender = true;
-  renderActiveTable();
-  renderInsights();
-  renderSheetInspectorSummary();
-  renderColumnProfiles();
-  renderSections();
-  renderRepeatingBlocks();
-  renderDurationAnalysis();
-  renderAggregationWorkbench();
-  updateFilterBadge();
+  scheduleViewRefresh({ table: true, analyses: true, filterBadge: true });
   if (quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden")) {
     quickSearchPopupEl.classList.add("hidden");
   }
@@ -2443,13 +2412,7 @@ resetFiltersBtn.addEventListener("click", () => {
   resetFilterInputs();
   viewRows = baseRows.slice();
   sortRows();
-  renderActiveTable();
-  renderInsights();
-  renderColumnProfiles();
-  renderSections();
-  renderRepeatingBlocks();
-  renderDurationAnalysis();
-  renderAggregationWorkbench();
+  scheduleViewRefresh({ table: true, analyses: true });
   toast(t("filtersReset"), "info");
 });
 

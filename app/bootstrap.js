@@ -1,10 +1,6 @@
 // App bootstrap: event wiring, initial render, and runtime startup.
 
-if (window.MateuszCursorHint) {
-  window.MateuszCursorHint.initCursorHints({
-    fallbackHint: t("hintDefault"),
-  });
-}
+scheduleCursorHintInit();
 
 panelToggle.addEventListener("click", toggleSidebar);
 if (panelHandle) panelHandle.addEventListener("click", toggleSidebar);
@@ -66,10 +62,7 @@ if (durationAnalysisSummaryEl) {
       tableViewMode = tableViewMode === "long" ? "wide" : "long";
       manualColumnWidths = {};
       withSceneTransition(() => {
-        renderActiveTable();
-        renderSheetInspectorSummary();
-        renderDurationAnalysis();
-        renderAggregationWorkbench();
+        scheduleViewRefresh({ table: true, analyses: true, sync: true });
       });
       toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
       return;
@@ -92,8 +85,7 @@ if (durationAnalysisSummaryEl) {
       const next = parseInt(control.value || "14", 10);
       durationAnalysisState.showCount = Number.isFinite(next) && next > 0 ? next : 14;
     }
-    renderDurationAnalysis();
-    renderAggregationWorkbench();
+    scheduleViewRefresh({ analyses: true });
   });
 }
 if (durationAnalysisListEl) {
@@ -107,17 +99,7 @@ if (durationAnalysisListEl) {
     filtersCommitted = true;
     applyFilters();
     sortRows();
-    renderActiveTable();
-    renderInsights();
-    renderKpiExtractor();
-    renderSheetInspectorSummary();
-    renderColumnProfiles();
-    renderSections();
-    renderRepeatingBlocks();
-    renderDurationAnalysis();
-    renderAggregationWorkbench();
-    renderFormulaWorkbench();
-    updateFilterBadge();
+    scheduleViewRefresh({ table: true, analyses: true, formula: true, filterBadge: true });
     toast(t("filteredFor", { value: entity }), "info");
   });
 }
@@ -272,17 +254,7 @@ if (aggregationWorkbenchListEl) {
     filtersCommitted = true;
     applyFilters();
     sortRows();
-    renderActiveTable();
-    renderInsights();
-    renderKpiExtractor();
-    renderSheetInspectorSummary();
-    renderColumnProfiles();
-    renderSections();
-    renderRepeatingBlocks();
-    renderDurationAnalysis();
-    renderAggregationWorkbench();
-    renderFormulaWorkbench();
-    updateFilterBadge();
+    scheduleViewRefresh({ table: true, analyses: true, formula: true, filterBadge: true });
     toast(t("filteredFor", { value }), "info");
   });
 }
@@ -314,10 +286,7 @@ if (sheetInspectorSummaryEl) {
       tableViewMode = tableViewMode === "long" ? "wide" : "long";
       manualColumnWidths = {};
       withSceneTransition(() => {
-        renderActiveTable();
-        renderSheetInspectorSummary();
-        renderDurationAnalysis();
-        renderAggregationWorkbench();
+        scheduleViewRefresh({ table: true, analyses: true, sync: true });
       });
       toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
       return;
@@ -350,9 +319,7 @@ if (wideLongToggleEl) {
     tableViewMode = tableViewMode === "long" ? "wide" : "long";
     manualColumnWidths = {};
     withSceneTransition(() => {
-      renderActiveTable();
-      renderDurationAnalysis();
-      renderAggregationWorkbench();
+      scheduleViewRefresh({ table: true, analyses: true, sync: true });
     });
     toast(tableViewMode === "long" ? t("wideLongOn") : t("wideLongOff"), "info");
   });
@@ -666,15 +633,7 @@ syncSidebarHandle();
 // Bez wczytanego arkusza panele analiz zostają „brudne" — dorenderują się przy
 // otwarciu <details> (renderDirtyAnalysesForPanel) lub po loadBtn. Oszczędza boot.
 if (currentHeaders.length) {
-  renderInsights();
-  renderKpiExtractor();
-  renderSheetInspectorSummary();
-  renderColumnProfiles();
-  renderSections();
-  renderRepeatingBlocks();
-  renderDurationAnalysis();
-  renderAggregationWorkbench();
-  renderFormulaWorkbench();
+  scheduleViewRefresh({ analyses: true, formula: true });
 }
 populateSortColumnSelect();
 populateEditColumnSelect();

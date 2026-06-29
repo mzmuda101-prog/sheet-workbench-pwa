@@ -1,7 +1,6 @@
 # Plan optymalizacji performance — czerwiec 2026
 
-> **Status: DO AKCEPTACJI** — propozycja po audycie z 29.06.2026.  
-> Nic z poniższego nie jest jeszcze „zatwierdzonym backlogiem” poza quick wins, które wdrażamy osobno w małych commitach.
+> **Status: W TRAKCIE** — Faza 1 domknięta (#7–#8). Faza 2 częściowo wdrożona (scheduleViewRefresh, lazy analysis-heavy).
 
 ## Zasady
 
@@ -59,7 +58,7 @@ flowchart TD
     D --> D2[progressive load]
 ```
 
-### Faza 1 — Quick wins (niskie ryzyko) — **w trakcie / częściowo**
+### Faza 1 — Quick wins (niskie ryzyko) — **zamknięta** (poza #9 odłożonym)
 
 | # | Zmiana | Efekt | Status |
 |---|--------|-------|--------|
@@ -69,17 +68,17 @@ flowchart TD
 | 4 | Cache `computeColumnWidths` (bezpieczny klucz) | Szybszy re-render gdy zmienia się tylko wysokość wierszy itp. | **Wdrożone** |
 | 5 | Pominąć render analiz na boot bez arkusza | Lżejszy start | **Wdrożone** |
 | 6 | `content-visibility` na panelach sidebara | Płynniejszy scroll sidebara | **Wdrożone** |
-| 7 | Minifikacja CSS/JS w release (`esbuild`) | −20–35% transferu | **Do akceptacji** |
-| 8 | Leniwy `cursor-hint.js` | −29 KB parse przy starcie | **Do akceptacji** (ryzyko opóźnienia pierwszego hintu) |
-| 9 | SW: shell vs heavy cache (XLSX, video osobno) | Lżejsza pierwsza instalacja PWA | **Do akceptacji** |
+| 7 | Minifikacja CSS/JS w release (`esbuild`) | −20–35% transferu | **Wdrożone** (`npm run build` → `dist/`) |
+| 8 | Leniwy `cursor-hint.js` | −29 KB parse przy starcie | **Wdrożone** (idle + pierwsza interakcja z `data-hint`) |
+| 9 | SW: shell vs heavy cache (XLSX, video osobno) | Lżejsza pierwsza instalacja PWA | **Odłożone** (decyzja: tylko pierwsza instalacja) |
 
-### Faza 2 — Architektura refresh (średnie ryzyko)
+### Faza 2 — Architektura refresh (średnie ryzyko) — **częściowo wdrożone**
 
-- Jedna `scheduleViewRefresh({ table, analyses })` zamiast 9× `render*()` w każdym handlerze.
-- Split `language.js` → dynamiczny import aktywnego locale (~50% mniej parse).
-- Dynamiczny import ciężkich części `analysis.js` przy pierwszym otwarciu panelu.
+- ✅ `scheduleViewRefresh({ table, analyses, formula })` — coalescing kaskad renderów (rAF; `sync: true` w `withSceneTransition`).
+- ✅ Leniwy `analysis-heavy.js` (~45 KB) — render duration + aggregation przy pierwszym użyciu panelu (logika agregacji współdzielona z tabelą/monthly zostaje w `analysis.js`).
+- ⏸ Split `language.js` → dynamiczny import locale — **odłożone do akceptacji**.
 
-**Szacowany czas:** 2–3 dni. **Wymaga akceptacji.**
+**Pozostało z Fazy 2:** split i18n (gdy zaakceptujesz).
 
 ### Faza 3 — Tabela (wyższy nakład, duży zysk)
 
@@ -103,7 +102,7 @@ flowchart TD
 
 1. **Render tabeli** — `replaceChildren()` + inline style per komórka (`applyCellStyle`).
 2. **Parsowanie** — `buildRows` O(wiersze × kolumny) na main thread; `maxRows` chroni tylko widok.
-3. **Kaskada renderów** — po „Filtruj” synchronicznie wołane jest wiele `render*()` (częściowo łagodzone przez `deferAnalysis`).
+3. **Kaskada renderów** — po „Filtruj” wiele `render*()` (łagodzone przez `deferAnalysis` + `scheduleViewRefresh`).
 4. **Rozmiar bootu** — monolity JS, oba języki, brak minify, video `preload="auto"`.
 
 ## Metryki do śledzenia
@@ -124,4 +123,4 @@ Istniejące narzędzia: `scripts/save-stress-playwright.js`, `scripts/gen-stress
 
 ---
 
-*Ostatnia aktualizacja planu: 2026-06-29. Quick wins wdrażane w osobnym commicie po tej notatce.*
+*Ostatnia aktualizacja planu: 2026-06-29 (build 20260629-08).*

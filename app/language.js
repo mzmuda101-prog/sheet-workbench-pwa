@@ -2215,15 +2215,7 @@ function applyLanguage(lang) {
   renderSortPresets();
   // Dynamiczne panele budują DOM w JS, więc muszą się przerenderować,
   // żeby ich etykiety przełączyły język na żywo (nie tylko statyczny tekst).
-  renderInsights();
-  renderKpiExtractor();
-  renderSheetInspectorSummary();
-  renderColumnProfiles();
-  renderSections();
-  renderRepeatingBlocks();
-  renderDurationAnalysis();
-  renderAggregationWorkbench();
-  renderFormulaWorkbench();
+  scheduleViewRefresh({ analyses: true, formula: true, sync: true });
   updateCellStats();
   updateToolbarToggleLabel();
   updateLangSwitchIndicator();

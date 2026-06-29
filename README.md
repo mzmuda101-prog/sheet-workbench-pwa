@@ -112,9 +112,11 @@ Then open `http://127.0.0.1:8001/`.
 
 ## Deploy
 
-This is a static app with no build step.
+Dev: serwuj repo root (`npm run serve` lub `python3 -m http.server`).
 
-For Vercel: set framework to `Other`, leave build command empty, set output directory to the repo root.
+Produkcja z minifikacją: `npm run build` → serwuj katalog `dist/` (Vercel: build command `npm run build`, output `dist`).
+
+Bez buildu nadal działa serwowanie źródeł z root (jak dotąd).
 
 ## Install as PWA
 
