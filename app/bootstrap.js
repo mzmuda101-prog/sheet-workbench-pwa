@@ -26,6 +26,11 @@ document.querySelectorAll("details.panel").forEach((det) => {
         if (det.open) renderDirtyAnalysesForPanel(det.id);
       }));
     }
+    // Formula Workbench nie jest w ANALYSIS_PANELS — pierwszy raz pokaż pusty stan po otwarciu.
+    if (det.open && det.id === "panel-formula-workbench" && typeof renderFormulaWorkbench === "function"
+        && formulaWorkbenchSummaryEl && !formulaWorkbenchSummaryEl.childElementCount) {
+      renderFormulaWorkbench();
+    }
     if (!isSidebarOpen()) return;
     requestAnimationFrame(() => syncSidebarHandle()); // [EN] :has() width changes — no resize event; keep handle aligned
     window.setTimeout(() => syncSidebarHandle(), 260);
@@ -374,15 +379,19 @@ if (wrapCellsEl) {
   });
 }
 if (rowHeightAllEl) {
+  let _rowHeightRenderTid;
   rowHeightAllEl.addEventListener("input", () => {
     applyRowHeightAllPreference();
-    renderActiveTable();
+    clearTimeout(_rowHeightRenderTid);
+    _rowHeightRenderTid = setTimeout(renderActiveTable, 200); // debounce — pełny render tylko po pauzie wpisywania
   });
 }
 if (colWidthAllEl) {
+  let _colWidthRenderTid;
   colWidthAllEl.addEventListener("input", () => {
     applyColWidthAllPreference();
-    renderActiveTable();
+    clearTimeout(_colWidthRenderTid);
+    _colWidthRenderTid = setTimeout(renderActiveTable, 200);
   });
 }
 if (freezeFirstColEl) {
@@ -654,15 +663,19 @@ syncQuickSearchInputs();
 // przyciskiem w pustym stanie — sidebar nie jest potrzebny od pierwszej klatki.
 setSidebarOpen(window.matchMedia("(min-width: 769px)").matches);
 syncSidebarHandle();
-renderInsights();
-renderKpiExtractor();
-renderSheetInspectorSummary();
-renderColumnProfiles();
-renderSections();
-renderRepeatingBlocks();
-renderDurationAnalysis();
-renderAggregationWorkbench();
-renderFormulaWorkbench();
+// Bez wczytanego arkusza panele analiz zostają „brudne" — dorenderują się przy
+// otwarciu <details> (renderDirtyAnalysesForPanel) lub po loadBtn. Oszczędza boot.
+if (currentHeaders.length) {
+  renderInsights();
+  renderKpiExtractor();
+  renderSheetInspectorSummary();
+  renderColumnProfiles();
+  renderSections();
+  renderRepeatingBlocks();
+  renderDurationAnalysis();
+  renderAggregationWorkbench();
+  renderFormulaWorkbench();
+}
 populateSortColumnSelect();
 populateEditColumnSelect();
 renderSortPresets();

@@ -1213,7 +1213,36 @@ function computeHeaderMergeLayout(colCount) {
   return { anchors, covered };
 }
 
+// Cache szerokości kolumn — unikamy kosztownego canvas.measureText przy re-renderze,
+// gdy zmienia się tylko wysokość wierszy, fokus, zamrożenie nagłówków itp.
+let _colWidthCacheKey = "";
+let _colWidthCacheVal = null;
+function invalidateColumnWidthCache() { _colWidthCacheKey = ""; _colWidthCacheVal = null; }
+function columnWidthCacheKey(headers, rows, useExcelLayout) {
+  const zoom = (typeof zoomLevelEl !== "undefined" && parseFloat(zoomLevelEl.value)) || 1;
+  const manualKeys = Object.keys(manualColumnWidths).sort().map((k) => `${k}:${manualColumnWidths[k]}`).join(",");
+  const sampleN = Math.min(rows.length, 300);
+  let rowSig = String(rows.length);
+  for (let r = 0; r < sampleN; r += 25) { // rzadka próbka — wystarczy do invalidacji po filtrze
+    const row = rows[r];
+    if (!row) continue;
+    rowSig += `|${r}:`;
+    const lim = Math.min(headers.length, 12);
+    for (let c = 0; c < lim; c++) rowSig += `${String(getDisplayValue(row, c)).length},`;
+  }
+  return [
+    headers.join("\x00"), rowSig, useExcelLayout ? 1 : 0,
+    manualColWidthAll, manualKeys,
+    cellStyleShowFonts ? 1 : 0, cellStyleSmartWidths ? 1 : 0,
+    zoom, currentSheetName || "",
+    useExcelLayout && currentSheetColWidths ? currentSheetColWidths.length : 0,
+  ].join("\x1e");
+}
+
 function computeColumnWidths(headers, rows, useExcelLayout) {
+  const cacheKey = columnWidthCacheKey(headers, rows, useExcelLayout);
+  if (cacheKey === _colWidthCacheKey && _colWidthCacheVal) return _colWidthCacheVal;
+
   const widths = headers.map(() => 0);
   const min = 80;
   const max = 520;
@@ -1221,11 +1250,14 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
   // Globalna szerokość kolumn (pole „Szerokość kolumn (px)") ma pierwszeństwo nad
   // auto-dopasowaniem i Wymiarami z Excela; ręczne przeciągnięcie pojedynczej kolumny dalej wygrywa.
   if (manualColWidthAll > 0) {
-    return widths.map((_, i) => Math.max(40, Math.min(900, manualColumnWidths[i] || manualColWidthAll)));
+    const out = widths.map((_, i) => Math.max(40, Math.min(900, manualColumnWidths[i] || manualColWidthAll)));
+    _colWidthCacheKey = cacheKey;
+    _colWidthCacheVal = out;
+    return out;
   }
 
   if (useExcelLayout && Array.isArray(currentSheetColWidths) && currentSheetColWidths.length) {
-    return widths.map((_, i) => {
+    const out = widths.map((_, i) => {
       const manual = manualColumnWidths[i];
       if (manual) return Math.max(min, Math.min(max, manual));
       // Wierność wymiarom z pliku: NIE podnosimy do min=80 (toPixelWidth ma już podłogę 40px),
@@ -1234,6 +1266,9 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
       if (fromSheet) return Math.min(max, fromSheet);
       return 140;
     });
+    _colWidthCacheKey = cacheKey;
+    _colWidthCacheVal = out;
+    return out;
   }
 
   const canvas = document.createElement("canvas");
@@ -1284,7 +1319,7 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
   // z wyższym limitem szerokości.
   const pct = cellStyleSmartWidths ? 0.9 : 1.0;
   const maxW = cellStyleSmartWidths ? max : 900;
-  return widths.map((base, i) => {
+  const out = widths.map((base, i) => {
     const manual = manualColumnWidths[i];
     if (manual) return Math.max(min, Math.min(900, manual));
     const colSamples = samples[i].sort((a, b) => a - b);
@@ -1293,6 +1328,9 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
     const raw = Math.max(base, pVal) * 1.02 + padding; // +2% zapasu na różnice renderowania
     return Math.max(min, Math.min(maxW, Math.ceil(raw)));
   });
+  _colWidthCacheKey = cacheKey;
+  _colWidthCacheVal = out;
+  return out;
 }
 
 function renderTable(modelOrHeaders, maybeRows) {
@@ -1386,6 +1424,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     const h = headers[i];
     const th = document.createElement("th");
     th.setAttribute("scope", "col");
+    th.dataset.sortHeader = h; // sort przez delegację na theadEl (bez N listenerów przy każdym renderze)
     th.textContent = h;
     if (currentHeaderStyles[i]) applyCellStyle(th, currentHeaderStyles[i]);
 
@@ -1397,19 +1436,6 @@ function renderTable(modelOrHeaders, maybeRows) {
         if (merge.ref) th.title = `Scalona komórka: ${merge.ref}`;
       }
     }
-
-    th.addEventListener("click", () => {
-      if (sortState.col === h) {
-        setPrimarySort(h, sortState.dir === "asc" ? "desc" : "asc");
-      } else {
-        setPrimarySort(h, "asc");
-      }
-      if (model.mode === "wide") {
-        sortRows();
-      }
-      updateSortControls();
-      renderActiveTable();
-    });
 
     const primarySort = multiSortState[0];
     if (primarySort && primarySort.col === h) {
@@ -1621,4 +1647,21 @@ function buildRows(sheet, headerRow, wb) {
       effectiveRange: XLSX.utils.encode_range(range),
     },
   };
+}
+
+// Sort nagłówków: jeden listener na thead (przetrwa replaceChildren w renderTable).
+if (theadEl && !theadEl.dataset.sortClickBound) {
+  theadEl.dataset.sortClickBound = "1";
+  theadEl.addEventListener("click", (e) => {
+    if (e.target.closest(".col-resizer")) return;
+    const th = e.target.closest("th[data-sort-header]");
+    if (!th) return;
+    const h = th.dataset.sortHeader;
+    if (!h) return;
+    if (sortState.col === h) setPrimarySort(h, sortState.dir === "asc" ? "desc" : "asc");
+    else setPrimarySort(h, "asc");
+    if (tableViewMode !== "long") sortRows();
+    updateSortControls();
+    renderActiveTable();
+  });
 }

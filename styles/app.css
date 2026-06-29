@@ -991,6 +991,12 @@ body.splashing {
   transition: transform var(--t-slow), opacity var(--t), width var(--t-slow);
 }
 
+/* [EN] Skip paint/layout for collapsed panels off-screen while scrolling sidebar */
+.sidebar .panel {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 52px;
+}
+
 /* [EN] Pre-warm: jednorazowe wymuszenie rasteryzacji panelu po starcie (w bezczynności),
    żeby PIERWSZE otwarcie nie zacinało się na malowaniu dziesiątek paneli/SVG.
    Panel jest na ekranie (transform:none), ale opacity ~0 i POD treścią (z-index:-1)
