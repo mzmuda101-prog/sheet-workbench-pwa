@@ -2285,19 +2285,26 @@ if (heroEl) {
   });
 }
 
+// Komórki z podpowiedzią pełnej wartości: td + th (nagłówki kolumn i wiersza przewodniego).
+function getTooltipCell(target) {
+  if (!target || target.closest(".col-resizer")) return null;
+  const cell = target.closest("td, th");
+  if (!cell || cell.classList.contains("corner-cell")) return null;
+  if (cell.classList.contains("row-head") && cell.closest("tbody")) return null; // numery wierszy — zwykle krótkie
+  return cell;
+}
+
 // pointerenter/leave tylko przy myszy — iPad syntetyzuje hover podczas scrolla,
 // showCellTooltip robi reflow i zabija momentum (H3).
 if (!window.matchMedia || window.matchMedia("(pointer: fine)").matches) {
-  tbodyEl.addEventListener("pointerenter", (e) => {
-    const td = e.target.closest("td");
-    if (!td || td.classList.contains("row-head")) return;
-    showCellTooltip(td);
+  tableEl.addEventListener("pointerenter", (e) => {
+    const cell = getTooltipCell(e.target);
+    if (cell) showCellTooltip(cell);
   }, true);
 
-  tbodyEl.addEventListener("pointerleave", (e) => {
-    const td = e.target.closest("td");
-    if (!td) return;
-    hideCellTooltip();
+  tableEl.addEventListener("pointerleave", (e) => {
+    const cell = getTooltipCell(e.target);
+    if (cell) hideCellTooltip();
   }, true);
 }
 
@@ -2308,30 +2315,30 @@ if (!window.matchMedia || window.matchMedia("(pointer: fine)").matches) {
 // KAŻDEGO machnięcia i na każdej komórce z przyciętym tekstem (daty/nazwy). Na iOS to
 // „hamowało" scroll pod palcem. Teraz: touchmove > próg = to przewijanie, nie tap → cisza.
 // Wszystkie listenery passive → nigdy nie blokują natywnego przewijania.
-let cellTapTd = null, cellTapX = 0, cellTapY = 0, cellTapMoved = false;
-tbodyEl.addEventListener("touchstart", (e) => {
-  const td = e.target.closest("td");
-  if (!td || td.classList.contains("row-head")) { cellTapTd = null; return; }
-  cellTapTd = td;
+let cellTapCell = null, cellTapX = 0, cellTapY = 0, cellTapMoved = false;
+tableEl.addEventListener("touchstart", (e) => {
+  const cell = getTooltipCell(e.target);
+  if (!cell) { cellTapCell = null; return; }
+  cellTapCell = cell;
   cellTapMoved = false;
   const t = e.touches[0];
   cellTapX = t ? t.clientX : 0;
   cellTapY = t ? t.clientY : 0;
 }, { passive: true });
-tbodyEl.addEventListener("touchmove", (e) => {
-  if (!cellTapTd || cellTapMoved) return;
+tableEl.addEventListener("touchmove", (e) => {
+  if (!cellTapCell || cellTapMoved) return;
   const t = e.touches[0];
   if (!t) return;
   if (Math.abs(t.clientX - cellTapX) > 8 || Math.abs(t.clientY - cellTapY) > 8) {
     cellTapMoved = true; // ruch = przewijanie, nie tapnięcie → nie pokazuj podpowiedzi
   }
 }, { passive: true });
-tbodyEl.addEventListener("touchend", () => {
-  const td = cellTapTd;
-  cellTapTd = null;
-  if (!td || cellTapMoved) return;
+tableEl.addEventListener("touchend", () => {
+  const cell = cellTapCell;
+  cellTapCell = null;
+  if (!cell || cellTapMoved) return;
   if (activeCellEditor) return; // podczas edycji nie pokazuj tooltipa (kolidowałby z dropdownem)
-  showCellTooltip(td, true);
+  showCellTooltip(cell, true);
 }, { passive: true });
 
 window.addEventListener("resize", () => {

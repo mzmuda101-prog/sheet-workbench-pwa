@@ -2997,6 +2997,8 @@ thead .guide-row th {
   height: calc(var(--guide-row-height) * var(--table-zoom));
   padding: calc(6px * var(--table-zoom)) calc(10px * var(--table-zoom));
   position: relative;
+  overflow: hidden; /* [EN] Match body cells — ellipsis + tooltip for long column letters */
+  text-overflow: ellipsis;
 }
 
 .corner-cell {

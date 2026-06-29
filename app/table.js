@@ -1402,7 +1402,9 @@ function renderTable(modelOrHeaders, maybeRows) {
     const th = document.createElement("th");
     th.className = "guide-cell";
     th.setAttribute("scope", "col");
-    th.textContent = Array.isArray(model.guideLabels) && model.guideLabels[i] ? model.guideLabels[i] : XLSX.utils.encode_col(i + currentStartCol);
+    const guideLabel = Array.isArray(model.guideLabels) && model.guideLabels[i] ? model.guideLabels[i] : XLSX.utils.encode_col(i + currentStartCol);
+    th.textContent = guideLabel;
+    th.dataset.fullText = guideLabel; // [EN] Full label for truncated header tooltip
     const resizer = document.createElement("div");
     resizer.className = "col-resizer";
     resizer.dataset.colIndex = String(i);
@@ -1416,7 +1418,9 @@ function renderTable(modelOrHeaders, maybeRows) {
   const rowHead = document.createElement("th");
   rowHead.className = "row-head";
   rowHead.setAttribute("scope", "row");
-  rowHead.textContent = model.headerRowLabel || String(currentHeaderRow);
+  const headerRowLabel = model.headerRowLabel || String(currentHeaderRow);
+  rowHead.textContent = headerRowLabel;
+  rowHead.dataset.fullText = headerRowLabel; // [EN] Full label for truncated header tooltip
   headRow.appendChild(rowHead);
   const headerMergeLayout = model.mode === "wide" ? computeHeaderMergeLayout(headers.length) : null;
   for (let i = 0; i < headers.length; i++) {
@@ -1426,6 +1430,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     th.setAttribute("scope", "col");
     th.dataset.sortHeader = h; // sort przez delegację na theadEl (bez N listenerów przy każdym renderze)
     th.textContent = h;
+    th.dataset.fullText = h; // [EN] Header text without sort arrow — for truncated tooltip
     if (currentHeaderStyles[i]) applyCellStyle(th, currentHeaderStyles[i]);
 
     if (headerMergeLayout) {
