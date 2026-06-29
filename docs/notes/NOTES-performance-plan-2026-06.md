@@ -118,7 +118,7 @@ Istniejące narzędzia: `scripts/save-stress-playwright.js`, `scripts/gen-stress
 
 ## Odrzucone / odłożone na później
 
-- `ios-momentum.js` — plik istnieje, nie jest podłączony; decyzja: integracja **lub** usunięcie (osobny ticket).
+- `ios-momentum.js` — wcześniejsza próba naprawy (nie wyszła); **nie podłączać** bez nowych dowodów. Zostaje `scroll-diagnostics.js` + `ipad-scroll-debug.js` (`?scrolldebug`).
 - Zamiana inline stylów na klasy CSS — duży refactor, Faza 3+.
 - Szablony paneli z JS zamiast 91 KB HTML — duży refactor UX/DOM.
 

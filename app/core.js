@@ -22,6 +22,19 @@ const IS_SAFARI = (() => {
 })();
 document.documentElement.classList.toggle("browser-safari", IS_SAFARI);
 
+// iPadOS 13+ podaje często „MacIntel" + dotyk — osobna klasa pod poprawki scrolla
+// (słaby native fling na overflow:auto; telefon zostaje bez zmian).
+const IS_IPAD = (() => {
+  try {
+    const ua = navigator.userAgent || "";
+    return /iPad/.test(ua) ||
+      (navigator.platform === "MacIntel" && (navigator.maxTouchPoints || 0) > 1);
+  } catch (_) {
+    return false;
+  }
+})();
+document.documentElement.classList.toggle("device-ipad", IS_IPAD);
+
 const rootEl = document.documentElement;
 const appShellEl = document.querySelector(".app");
 const logEl = document.getElementById("log");
@@ -508,7 +521,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260629-05";
+const APP_BUILD_VERSION = "20260629-06";
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";

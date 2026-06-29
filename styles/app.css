@@ -2842,6 +2842,15 @@ details.panel[open] > summary {
   height: 0;
 }
 
+/* iPad: WebKit słabo rozpędza wewnętrzny overflow:auto (finger rec: ~66px vs ~1k px tel.).
+   Zdejmujemy will-change/contain — hamują compositor; touch scrolling przywraca fling. */
+html.device-ipad .table-wrap {
+  will-change: auto;
+  overscroll-behavior: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-x pan-y;
+}
+
 /* ── iPad/iOS „shutter" przy przewijaniu palcem ──
    PRAWDZIWA przyczyna (zweryfikowana): komórki siatki mają `user-select: auto`,
    więc w Safari na iOS przeciągnięcie palcem PO TEKŚCIE komórki uruchamia

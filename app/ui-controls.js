@@ -2086,15 +2086,36 @@ if (tableWrapEl && tableScrollbarEl) {
   // (pionowe gesty bywały ignorowane, tabela „dryfowała" po puszczeniu, przeszkadzał resize).
   // Zostawiamy w pełni natywne przewijanie 2D z momentum przeglądarki.
 
+  let tableScrollFxRaf = 0;
+  let tableTouchActive = false;
+  let tableMomentumUntil = 0;
+  const markTableTouchStart = () => { tableTouchActive = true; };
+  const markTableTouchEnd = () => {
+    tableTouchActive = false;
+    tableMomentumUntil = performance.now() + 900; // okno natywnego flingu po puszczeniu
+  };
+  const inTableMomentumPhase = () =>
+    tableTouchActive || performance.now() < tableMomentumUntil;
+
+  tableWrapEl.addEventListener("touchstart", markTableTouchStart, { passive: true });
+  tableWrapEl.addEventListener("touchend", markTableTouchEnd, { passive: true });
+  tableWrapEl.addEventListener("touchcancel", markTableTouchEnd, { passive: true });
+
   tableWrapEl.addEventListener("scroll", () => {
-    hideCellTooltip();
-    updateScrollTopFab();
-    handleHeroScroll(tableWrapEl.scrollTop); // auto-chowanie nagłówka (mobile)
-    if (syncingHorizontalScroll) return;
-    syncingHorizontalScroll = true;
-    tableScrollbarEl.scrollLeft = tableWrapEl.scrollLeft;
-    requestAnimationFrame(() => {
-      syncingHorizontalScroll = false;
+    if (tableScrollFxRaf) return;
+    tableScrollFxRaf = requestAnimationFrame(() => {
+      tableScrollFxRaf = 0;
+      hideCellTooltip();
+      updateScrollTopFab();
+      handleHeroScroll(tableWrapEl.scrollTop); // auto-chowanie nagłówka (mobile)
+      if (syncingHorizontalScroll) return;
+      // Na iPadzie zapis scrollLeft na sąsiednim pasku w trakcie flingu zabija rozpęd.
+      if (typeof IS_IPAD !== "undefined" && IS_IPAD && inTableMomentumPhase()) return;
+      syncingHorizontalScroll = true;
+      tableScrollbarEl.scrollLeft = tableWrapEl.scrollLeft;
+      requestAnimationFrame(() => {
+        syncingHorizontalScroll = false;
+      });
     });
   }, { passive: true });
 
@@ -2295,17 +2316,21 @@ if (heroEl) {
   });
 }
 
-tbodyEl.addEventListener("pointerenter", (e) => {
-  const td = e.target.closest("td");
-  if (!td || td.classList.contains("row-head")) return;
-  showCellTooltip(td);
-}, true);
+// pointerenter/leave tylko przy myszy — iPad syntetyzuje hover podczas scrolla,
+// showCellTooltip robi reflow i zabija momentum (H3).
+if (!window.matchMedia || window.matchMedia("(pointer: fine)").matches) {
+  tbodyEl.addEventListener("pointerenter", (e) => {
+    const td = e.target.closest("td");
+    if (!td || td.classList.contains("row-head")) return;
+    showCellTooltip(td);
+  }, true);
 
-tbodyEl.addEventListener("pointerleave", (e) => {
-  const td = e.target.closest("td");
-  if (!td) return;
-  hideCellTooltip();
-}, true);
+  tbodyEl.addEventListener("pointerleave", (e) => {
+    const td = e.target.closest("td");
+    if (!td) return;
+    hideCellTooltip();
+  }, true);
+}
 
 // Podpowiedź wartości komórki pokazujemy DOPIERO na tapnięcie (touchend bez ruchu),
 // a NIE na touchstart. Wcześniej każdy start gestu przewijania odpalał showCellTooltip,
