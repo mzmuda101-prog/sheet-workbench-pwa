@@ -1,6 +1,6 @@
 # Plan optymalizacji performance — czerwiec 2026
 
-> **Status: W TRAKCIE** — Faza 1 domknięta (#7–#8). Faza 2 częściowo wdrożona (scheduleViewRefresh, lazy analysis-heavy).
+> **Status: BACKLOG NIEPIORYTETOWY** — Faza 1 zamknięta (#7–#8). Faza 2 wdrożona w zakresie refresh + lazy analysis-heavy. **Fazy 3–4 i i18n split — nie priorytet** (decyzja 2026-06-29, patrz niżej).
 
 ## Zasady
 
@@ -26,14 +26,14 @@
 | Asset | ~KB | Ładowanie |
 |-------|-----|-----------|
 | `lib/xlsx-js-style.bundle.min.js` | 425 | Leniwie |
-| `app/analysis.js` | 160 | Eager |
+| `app/analysis.js` | ~117 (+ ~45 lazy) | Eager (+ `analysis-heavy.js` leniwie) |
 | `app/ui-controls.js` | 126 | Eager |
 | `styles/app.css` | 120 | Eager |
 | `app/language.js` | 101 | Eager (PL+EN) |
 | `index.html` | 91 | Eager |
 | `mateusz-intro.mp4` | 496 | Video (preload) |
 
-Eager JS przy starcie: ~750 KB (bez XLSX). Brak bundlera/minify w repo.
+Eager JS przy starcie: ~750 KB (bez XLSX). Release: `npm run build` → minifikowany `dist/` (~−39% transferu).
 
 ---
 
@@ -72,29 +72,44 @@ flowchart TD
 | 8 | Leniwy `cursor-hint.js` | −29 KB parse przy starcie | **Wdrożone** (idle + pierwsza interakcja z `data-hint`) |
 | 9 | SW: shell vs heavy cache (XLSX, video osobno) | Lżejsza pierwsza instalacja PWA | **Odłożone** (decyzja: tylko pierwsza instalacja) |
 
-### Faza 2 — Architektura refresh (średnie ryzyko) — **częściowo wdrożone**
+### Faza 2 — Architektura refresh — **zamknięta w obecnym zakresie**
 
 - ✅ `scheduleViewRefresh({ table, analyses, formula })` — coalescing kaskad renderów (rAF; `sync: true` w `withSceneTransition`).
 - ✅ Leniwy `analysis-heavy.js` (~45 KB) — render duration + aggregation przy pierwszym użyciu panelu (logika agregacji współdzielona z tabelą/monthly zostaje w `analysis.js`).
-- ⏸ Split `language.js` → dynamiczny import locale — **odłożone do akceptacji**.
+- ⏸ Split `language.js` → dynamiczny import locale — **nie priorytet** (decyzja 2026-06-29).
 
-**Pozostało z Fazy 2:** split i18n (gdy zaakceptujesz).
+### Faza 3 — Tabela — **nie priorytet** (decyzja 2026-06-29)
 
-### Faza 3 — Tabela (wyższy nakład, duży zysk)
+- Pełny rebuild DOM przy każdym filtrze/sorcie — wąskie gardło runtime przy **dużym** `maxRows`, nie przy samym scrollu.
+- `content-visibility: auto` na `<tr>` — etap pośredni, umiarkowany zysk.
+- **Virtual scroll** — duży zysk tylko przy bardzo dużych widokach; ryzyko regresji FLIP/focus/fling na iPadzie.
 
-- Pełny rebuild DOM przy każdym filtrze/sorcie — główne wąskie gardło runtime.
-- `content-visibility: auto` na `<tr>` poza viewportem (etap pośredni).
-- **Virtual scroll** — render tylko widocznych wierszy + spacer.
+**Wrócić do rozważenia gdy:** odczuwalny lag po „Filtruj”/sort na dużym arkuszu (stress-test / realne pliki). Fix scrolla iPada (2026-06) **nie zastępuje** tej fazy — to osobna warstwa (render vs natywne przewijanie).
 
-**Szacowany czas:** ~1 tydzień. **Wymaga akceptacji + testów Playwright/stress.**
+**Szacowany czas:** ~1 tydzień. Wymaga testów Playwright/stress.
 
-### Faza 4 — Parsowanie (największy zysk na dużych plikach)
+### Faza 4 — Parsowanie — **nie priorytet** (decyzja 2026-06-29)
 
-- `buildRows()` synchronicznie na main thread — blokuje UI przy dużych arkuszach.
+- `buildRows()` synchronicznie na main thread — blokuje UI przy **bardzo dużych** arkuszach (10k+ wierszy).
 - Web Worker + opcjonalny progressive load (chunki + progress bar).
 - Tryb „szybki podgląd” bez pełnych stylów przy pierwszym wczytaniu.
 
-**Szacowany czas:** 1–2 tygodnie. **Wymaga akceptacji.**
+**Wrócić do rozważenia gdy:** regularnie wczytujesz duże pliki i boot/wczytanie jest realnym bólem. Przy typowych arkuszach (<3k wierszy) ROI słabe vs nakład (Worker, serializacja, dwa ścieżki testów).
+
+**Szacowany czas:** 1–2 tygodnie.
+
+---
+
+## Decyzje produktowe (2026-06-29)
+
+| Temat | Werdykt | Uzasadnienie (skrót) |
+|--------|---------|----------------------|
+| **Faza 3 — tabela / virtual scroll** | Nie priorytet | Scroll na iPadzie OK po fixie; Faza 3 dotyczy kosztu renderu przy filtrze/sorcie, nie przewijania. |
+| **Faza 4 — Worker `buildRows`** | Nie priorytet | Duży refactor; sens tylko przy codziennym wczytywaniu bardzo dużych plików. |
+| **i18n split (`language.js`)** | Nie priorytet | ~50 KB parse mniej, ale już zrobiono hint + analysis-heavy + minify; koszt utrzymania/async i18n. |
+| **#9 SW split cache** | Odłożone wcześniej | Dotyczy głównie pierwszej instalacji PWA, nie runtime po cache. |
+
+**Priorytet na teraz:** utrzymanie obecnych optymalizacji, obserwacja metryk; bez nowych faz architektonicznych bez konkretnego triggera (lag filtra, duże pliki, wolny boot po pomiarach).
 
 ---
 
@@ -103,7 +118,7 @@ flowchart TD
 1. **Render tabeli** — `replaceChildren()` + inline style per komórka (`applyCellStyle`).
 2. **Parsowanie** — `buildRows` O(wiersze × kolumny) na main thread; `maxRows` chroni tylko widok.
 3. **Kaskada renderów** — po „Filtruj” wiele `render*()` (łagodzone przez `deferAnalysis` + `scheduleViewRefresh`).
-4. **Rozmiar bootu** — monolity JS, oba języki, brak minify, video `preload="auto"`.
+4. **Rozmiar bootu** — częściowo łagodzone (lazy hint, analysis-heavy, minify w `dist/`); pełny i18n split nadal opcjonalny.
 
 ## Metryki do śledzenia
 
@@ -117,10 +132,13 @@ Istniejące narzędzia: `scripts/save-stress-playwright.js`, `scripts/gen-stress
 
 ## Odrzucone / odłożone na później
 
+- **Faza 3 (virtual scroll, `content-visibility` na `<tr>`)** — nie priorytet; trigger: lag filtra/sortu na dużym widoku.
+- **Faza 4 (Web Worker `buildRows`, progressive load)** — nie priorytet; trigger: codzienne bardzo duże pliki.
+- **i18n split (`language.js`)** — nie priorytet; trigger: wolny boot po pomiarach mimo obecnych optymalizacji.
 - `ios-momentum.js` — wcześniejsza próba naprawy (nie wyszła); **nie podłączać** bez nowych dowodów. Zostaje `scroll-diagnostics.js` + `ipad-scroll-debug.js` (`?scrolldebug`).
-- Zamiana inline stylów na klasy CSS — duży refactor, Faza 3+.
+- Zamiana inline stylów na klasy CSS — duży refactor, ewentualnie przy Fazie 3.
 - Szablony paneli z JS zamiast 91 KB HTML — duży refactor UX/DOM.
 
 ---
 
-*Ostatnia aktualizacja planu: 2026-06-29 (build 20260629-08).*
+*Ostatnia aktualizacja planu: 2026-06-29 (decyzje backlogu: Fazy 3–4 + i18n nie priorytet).*
