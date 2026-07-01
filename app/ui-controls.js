@@ -1792,82 +1792,98 @@ function applyQuickSearch() {
 
 // ── Szybkie szukanie: zakres „wszystkie arkusze" + live-podgląd wyników ──
 // JEDNA logika dla OBU wariantów paska (inline #quickSearchWrap oraz wyskakujące
-// okno #quickSearchPopup ze skrótu Cmd/Ctrl+Shift+F). Każdy pasek to „kontekst"
-// (input + select trybu + przełącznik + lista wyników + element-kotwica), a stan
-// zakresu (bieżący ↔ wszystkie arkusze) jest WSPÓLNY i synchronizowany między nimi.
-// Dzięki temu zmiana zachowania robi się w jednym miejscu i nie rozjeżdża między pasami.
+// okno #quickSearchPopup ze skrótu Cmd/Ctrl+Shift+F). Live-podgląd używa tej samej
+// semantyki co filtr: wybrane kolumny (filter1), parseQueryTerms + dopasowanie wiersza
+// przy operatorach, cellMatchesTerm bez operatorów. Zakres arkuszy wspólny (qsAllSheetsScope).
 let qsAllSheetsScope = false;
 const qsContexts = [];
+let qsSheetCtxCache = null; // [EN] per-render cache — buildRows on foreign sheets is costly
 
-// Porównanie liczbowo/datowe na surowej komórce (raw=cell.v, display=cell.w/v) — odbicie
-// cellSatisfiesComparison, ale bez obiektu-wiersza (live-podgląd skanuje surowe komórki,
-// też z innych arkuszy). Reużywa globalnych parseCellNumber/parseDateFlexible/compareWithOp.
-function qsCellSatisfiesComparison(raw, display, cmp) {
-  if (cmp.kind === "date") {
-    const ds = String(display);
-    const looksDate = raw instanceof Date || /\d[-/.]\d/.test(ds) || (/\d/.test(ds) && /[a-ząćęłńóśźż]/i.test(ds));
-    if (!looksDate) return false;
-    const d = parseDateFlexible(raw != null ? raw : display);
-    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return false;
-    return compareWithOp(cmp.op, comparisonDayValue(d), cmp.value);
-  }
-  if (raw instanceof Date) return false;
-  const n = parseCellNumber(raw, display);
-  if (n == null || !Number.isFinite(n)) return false;
-  return compareWithOp(cmp.op, n, cmp.value);
-}
+function qsBeginSheetCtxCache() { qsSheetCtxCache = new Map(); }
+function qsEndSheetCtxCache() { qsSheetCtxCache = null; }
 
-// Pojedynczy term (z opcjonalnym „!") wobec komórki: porównanie >>/<< albo tekst zawiera/=.
-function qsTermMatchesCell(raw, display, term, exact) {
-  let t = term.trim();
-  if (!t) return true;
-  let neg = false;
-  if (t.startsWith("!") && t.length > 1) { neg = true; t = t.slice(1).trim(); }
-  const cmp = parseComparisonTerm(t);
-  let ok;
-  if (cmp) ok = qsCellSatisfiesComparison(raw, display, cmp);
-  else {
-    const hay = display.toLowerCase();
-    ok = exact ? hay === t : hay.includes(t);
-  }
-  return neg ? !ok : ok;
-}
-
-// Operator-świadome dopasowanie KOMÓRKI: OR (||) grup AND (&&), z „!" i porównaniami.
-// Gdy operatory wyłączone — zwykłe zawiera/dokładnie (jak dawniej). Składnia spójna z
-// silnikiem filtra, tyle że oceniana per komórka (preview), więc międzykolumnowe && nie
-// „połączy" dwóch komórek — ale porównania (główny przypadek operatorów) działają wiernie.
-function qsCellMatches(raw, display, q, exact, operators) {
-  if (!operators) {
-    const hay = display.toLowerCase();
-    return exact ? hay === q : hay.includes(q);
-  }
-  return q.split("||").some((part) => {
-    const terms = part.split("&&").map((s) => s.trim()).filter(Boolean);
-    if (!terms.length) return false;
-    return terms.every((term) => qsTermMatchesCell(raw, display, term, exact));
-  });
-}
-
-// Skan surowych komórek arkusza. `q` jest już .trim().toLowerCase(). Gdy `operators`,
-// dopasowanie honoruje operatory wyszukiwania (>>/<</&&/||/!).
-function qsScanSheet(sheetName, q, exact, perSheet, operators) {
-  const sheet = workbook && workbook.Sheets ? workbook.Sheets[sheetName] : null;
-  const res = { count: 0, hits: [] };
-  if (!sheet) return res;
-  for (const addr in sheet) {
-    if (addr.charCodeAt(0) === 33) continue; // klucze meta („!ref", „!merges"…)
-    const cell = sheet[addr];
-    if (!cell) continue;
-    const cellVal = cell.v; // surowa wartość (liczba/Data) — do porównań
-    const display = cell.w != null ? String(cell.w) : (cell.v != null ? String(cell.v) : "");
-    if (display === "") continue;
-    if (qsCellMatches(cellVal, display, q, exact, operators)) {
-      res.count += 1;
-      if (res.hits.length < perSheet) res.hits.push({ addr, text: display });
+// [EN] Reuse baseRows on current sheet; one buildRows per foreign sheet per live render
+function qsSheetContext(sheetName) {
+  if (!qsSheetCtxCache) qsBeginSheetCtxCache();
+  if (qsSheetCtxCache.has(sheetName)) return qsSheetCtxCache.get(sheetName);
+  let ctx = null;
+  if (sheetName === currentSheetName && currentHeaders.length) {
+    ctx = { headers: currentHeaders, rows: baseRows, startCol: currentStartCol };
+  } else {
+    const sheet = workbook && workbook.Sheets ? workbook.Sheets[sheetName] : null;
+    if (sheet) {
+      const data = buildRows(sheet, currentHeaderRow, workbook);
+      ctx = { headers: data.headers, rows: data.rows, startCol: data.startCol || 0 };
     }
   }
+  qsSheetCtxCache.set(sheetName, ctx);
+  return ctx;
+}
+
+function qsMakeCriterion(mode, indexes, operators, query) {
+  return { query, mode, indexes, operatorsEnabled: operators, negated: false, emptyMode: "all" };
+}
+
+// [EN] First matching column in selected set — same cellMatchesTerm as applyFilters
+function qsFirstMatchingCol(row, q, mode, indexes) {
+  for (const i of indexes) {
+    if (i >= row.values.length) continue;
+    if (String(getDisplayValue(row, i)).trim() === "") continue;
+    if (cellMatchesTerm(row, i, q, mode)) return i;
+  }
+  return -1;
+}
+
+function qsRowMatchesOperators(row, q, criterion) {
+  const parsed = parseQueryTerms(q, true);
+  if (!parsed.groups.length) return false;
+  return parsed.groups.some((group) => group.every((term) => rowMatchesParsedTerm(row, term, criterion)));
+}
+
+function qsEvidenceCol(row, q, criterion, operators) {
+  if (operators) {
+    const cols = collectMatchingCellsForRow(row, [criterion], null);
+    if (cols.size) return Array.from(cols)[0];
+    return criterion.indexes.find((i) => i < row.values.length) ?? -1;
+  }
+  return qsFirstMatchingCol(row, q, criterion.mode, criterion.indexes);
+}
+
+// Skan wierszy arkusza (nie surowych komórek): te same kolumny, parser i semantyka co filtr.
+// `q` jest już .trim().toLowerCase(); `count` = liczba pasujących WIERSZY.
+function qsScanSheet(sheetName, q, exact, perSheet, operators) {
+  const res = { count: 0, hits: [] };
+  const ctx = qsSheetContext(sheetName);
+  if (!ctx || !ctx.headers.length) return res;
+  const mode = exact ? "equals" : "contains";
+  const indexes = resolveIndexes(ctx.headers, columnSelections.filter1);
+  if (!indexes.length) return res;
+  const criterion = qsMakeCriterion(mode, indexes, operators, q);
+
+  for (const row of ctx.rows) {
+    const matched = operators
+      ? qsRowMatchesOperators(row, q, criterion)
+      : qsFirstMatchingCol(row, q, mode, indexes) >= 0;
+    if (!matched) continue;
+    res.count += 1;
+    if (res.hits.length >= perSheet) continue;
+    const colIdx = qsEvidenceCol(row, q, criterion, operators);
+    if (colIdx < 0 || colIdx >= row.values.length) continue;
+    const display = getDisplayValue(row, colIdx);
+    if (String(display).trim() === "") continue;
+    res.hits.push({
+      addr: XLSX.utils.encode_cell({ r: row.rowIndex0, c: ctx.startCol + colIdx }),
+      text: String(display),
+    });
+  }
   return res;
+}
+
+function refreshQsLivePreview() {
+  qsContexts.forEach((c) => {
+    if (!c.inputEl || (c.inputEl.value || "").trim().length < 2) return;
+    renderQsLive(c);
+  });
 }
 
 // Kolejność arkuszy do skanu: bieżący zawsze pierwszy; reszta tylko gdy zakres=wszystkie.
@@ -1949,10 +1965,15 @@ function renderQsLive(ctx) {
   const PER_SHEET = 8;
   const groups = [];
   let total = 0;
+  qsBeginSheetCtxCache();
+  try {
   for (const name of qsSheetOrder()) {
     const r = qsScanSheet(name, q, exact, PER_SHEET, operators);
     if (r.count > 0) { groups.push({ sheet: name, count: r.count, hits: r.hits }); total += r.count; }
     if (groups.length >= 8) break; // ochrona długości listy
+  }
+  } finally {
+    qsEndSheetCtxCache();
   }
   ctx.liveEl.replaceChildren();
   if (!total) {
@@ -2491,9 +2512,11 @@ applyPickBtn.addEventListener("click", () => {
   } else {
     columnSelections[activePickerKey] = new Set(checked);
   }
+  const pickerKey = activePickerKey;
   updateColumnSummary();
   updateFilterBadge();
   closeColumnPicker();
+  if (pickerKey === "filter1") refreshQsLivePreview();
 });
 
 if (addSortRuleBtn) {

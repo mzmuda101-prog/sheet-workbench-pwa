@@ -21,7 +21,11 @@ output
 *.sqlite
 *.db
 *.xlsx
+!docs/samples/
+!docs/samples/**
 *.xlsm
+*.xls
+!docs/samples/**
 *.csv
 *.tsv
 *.pem
