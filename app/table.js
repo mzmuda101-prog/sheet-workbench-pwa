@@ -1654,6 +1654,90 @@ function buildRows(sheet, headerRow, wb) {
   };
 }
 
+const BUILD_ROWS_WORKER_MIN_ROWS = 2500; // [EN] Worker only for large sheets — sync path stays default
+let buildRowsWorker = null;
+let buildRowsWorkerJobId = 0;
+
+function estimateBuildRowsRows(sheet, headerRow) {
+  if (!sheet || !sheet["!ref"]) return 0;
+  try {
+    const range = XLSX.utils.decode_range(sheet["!ref"]);
+    return Math.max(0, range.e.r - Math.max(1, headerRow || 1) + 1);
+  } catch {
+    return 0;
+  }
+}
+
+function collectBuildRowsWorkerOptions() {
+  const styleMap = currentStyleIndexMap && currentSheetName ? currentStyleIndexMap.get(currentSheetName) : null;
+  return {
+    styleIndexEntries: styleMap ? Array.from(styleMap.entries()) : null,
+    displayMode: displayModeEl ? displayModeEl.value : "values",
+    locale: (typeof I18N !== "undefined" && I18N[currentLang]) ? I18N[currentLang].locale : "pl-PL",
+    lang: typeof currentLang !== "undefined" ? currentLang : "pl",
+  };
+}
+
+function getBuildRowsWorker() {
+  if (buildRowsWorker) return buildRowsWorker;
+  if (typeof Worker === "undefined") return null;
+  try {
+    const v = typeof APP_BUILD_VERSION !== "undefined" ? APP_BUILD_VERSION : "1";
+    buildRowsWorker = new Worker(`app/build-rows-worker.js?v=${encodeURIComponent(v)}`);
+    buildRowsWorker.addEventListener("error", () => {
+      try { buildRowsWorker.terminate(); } catch (_) { /* noop */ }
+      buildRowsWorker = null;
+    });
+    return buildRowsWorker;
+  } catch {
+    return null;
+  }
+}
+
+function buildRowsViaWorker(sheet, headerRow, wb) {
+  const worker = getBuildRowsWorker();
+  if (!worker) return Promise.reject(new Error("worker unavailable"));
+  const id = ++buildRowsWorkerJobId;
+  return new Promise((resolve, reject) => {
+    const onMessage = (event) => {
+      const msg = event.data || {};
+      if (msg.id !== id) return;
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+      if (msg.ok) resolve(msg.result);
+      else reject(new Error(msg.error || "buildRows worker failed"));
+    };
+    const onError = () => {
+      worker.removeEventListener("message", onMessage);
+      worker.removeEventListener("error", onError);
+      reject(new Error("buildRows worker error"));
+    };
+    worker.addEventListener("message", onMessage);
+    worker.addEventListener("error", onError);
+    worker.postMessage({
+      type: "buildRows",
+      id,
+      sheet,
+      headerRow,
+      workbook: wb,
+      options: collectBuildRowsWorkerOptions(),
+    });
+  });
+}
+
+async function buildRowsAsync(sheet, headerRow, wb) {
+  const needsSyncRecalc = recalcDateFormulas && displayModeEl && displayModeEl.value !== "formulas";
+  const rowEst = estimateBuildRowsRows(sheet, headerRow);
+  if (needsSyncRecalc || rowEst < BUILD_ROWS_WORKER_MIN_ROWS) {
+    return buildRows(sheet, headerRow, wb); // [EN] Sync path — no extra rAF frame (was causing visible “loading” beat)
+  }
+  try {
+    return await buildRowsViaWorker(sheet, headerRow, wb);
+  } catch (_) {
+    return buildRows(sheet, headerRow, wb);
+  }
+}
+
 // Sort nagłówków: jeden listener na thead (przetrwa replaceChildren w renderTable).
 if (theadEl && !theadEl.dataset.sortClickBound) {
   theadEl.dataset.sortClickBound = "1";

@@ -1648,7 +1648,7 @@ loadBtn.addEventListener("click", () => {
     return;
   }
   setLoading(true, t("loadingSheet"));
-  setTimeout(() => {
+  setTimeout(async () => {
     try {
       const sheetName = sheetSelect.value;
       const sheet = workbook.Sheets[sheetName];
@@ -1665,7 +1665,7 @@ loadBtn.addEventListener("click", () => {
       }
       currentSheetName = sheetName;
       updateSheetTabActive(sheetName);
-      const data = buildRows(sheet, headerRow, workbook);
+      const data = await buildRowsAsync(sheet, headerRow, workbook);
       currentHeaders = data.headers;
       currentStartCol = data.startCol || 0;
       currentMerges = Array.isArray(data.merges) ? data.merges : [];

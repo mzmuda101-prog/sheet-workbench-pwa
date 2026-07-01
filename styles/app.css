@@ -3431,6 +3431,18 @@ tbody td.cell-selected {
 }
 
 
+/* [EN] Lazy paint off-screen rows — Chrome/large views win; WebKit feeling unchanged in practice */
+#dataTable tbody tr {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 34px;
+}
+html.low-power #dataTable tbody tr {
+  content-visibility: visible;
+}
+@media print {
+  #dataTable tbody tr { content-visibility: visible; }
+}
+
 tbody tr { transition: background var(--t-fast); }
 tbody tr:hover td { background: rgba(47,111,92,.04); }
 [data-theme="dark"] tbody tr:hover td { background: rgba(77,184,143,.05); }

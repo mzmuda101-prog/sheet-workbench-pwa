@@ -1,36 +1,44 @@
-const CACHE_VERSION = "20260629-08";
+const CACHE_VERSION = "20260701-01";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
+const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
+const ASSET_V = "20260701-01";
 
-const APP_ASSETS = [
+const SHELL_ASSETS = [
   "./",
   "./index.html",
   "./manifest.json",
-  "./styles/app.css?v=20260629-08",
+  `./styles/app.css?v=${ASSET_V}`,
   "./assets/fonts/space-grotesk-latin.woff2",
   "./assets/fonts/space-grotesk-latin-ext.woff2",
-  "./lib/xlsx-js-style.bundle.min.js",
-  "./lib/jszip.min.js",
-  "./app/core.js?v=20260629-08",
-  "./app/language.js?v=20260629-08",
-  "./app/analysis.js?v=20260629-08",
-  "./app/workbook.js?v=20260629-08",
-  "./app/xlsx-patch.js?v=20260629-08",
-  "./app/table.js?v=20260629-08",
-  "./app/conditional-formatting.js?v=20260629-08",
-  "./app/data-validation.js?v=20260629-08",
-  "./app/derived-columns.js?v=20260629-08",
-  "./app/formulas.js?v=20260629-08",
-  "./app/edit-tools.js?v=20260629-08",
-  "./app/ui-controls.js?v=20260629-08",
-  "./app/scroll-diagnostics.js?v=20260629-08",
-  "./app/bootstrap.js?v=20260629-08",
+  `./app/core.js?v=${ASSET_V}`,
+  `./app/language.js?v=${ASSET_V}`,
+  `./app/analysis.js?v=${ASSET_V}`,
+  `./app/workbook.js?v=${ASSET_V}`,
+  `./app/xlsx-patch.js?v=${ASSET_V}`,
+  `./app/table.js?v=${ASSET_V}`,
+  `./app/conditional-formatting.js?v=${ASSET_V}`,
+  `./app/data-validation.js?v=${ASSET_V}`,
+  `./app/derived-columns.js?v=${ASSET_V}`,
+  `./app/formulas.js?v=${ASSET_V}`,
+  `./app/edit-tools.js?v=${ASSET_V}`,
+  `./app/ui-controls.js?v=${ASSET_V}`,
+  `./app/scroll-diagnostics.js?v=${ASSET_V}`,
+  `./app/build-rows-core.js?v=${ASSET_V}`,
+  `./app/build-rows-worker.js?v=${ASSET_V}`,
+  `./app/bootstrap.js?v=${ASSET_V}`,
   "./assets/images/favicon.png?v=20260610-05",
   "./assets/images/apple-touch-icon.png?v=20260429-01",
   "./assets/images/icon-512.png",
   "./assets/images/logo-mateusz-transparent.webp",
   "./assets/images/logo-mateusz-orange.webp",
   "./assets/images/logo-refresh.webp",
+];
+
+// [EN] Large libs + media — separate bucket; still precached so offline stays intact after install
+const HEAVY_ASSETS = [
+  "./lib/xlsx-js-style.bundle.min.js",
+  "./lib/jszip.min.js",
   "./assets/media/mateusz-intro.mp4",
 ];
 
@@ -38,12 +46,22 @@ function isStaticAsset(url) {
   return /\.(?:css|js|png|svg|jpg|jpeg|gif|webp|ico|woff2?|mp4)$/i.test(url.pathname);
 }
 
+function isHeavyAsset(url) {
+  return /\/lib\/(?:xlsx-js-style\.bundle\.min|jszip)\.min\.js$/i.test(url.pathname)
+    || /\/assets\/media\/mateusz-intro\.mp4$/i.test(url.pathname);
+}
+
+function cacheNameForUrl(url) {
+  if (isHeavyAsset(url)) return HEAVY_CACHE;
+  return RUNTIME_CACHE;
+}
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches
-      .open(APP_CACHE)
-      .then((cache) => cache.addAll(APP_ASSETS))
-      .catch(() => {})
+    Promise.all([
+      caches.open(APP_CACHE).then((cache) => cache.addAll(SHELL_ASSETS)),
+      caches.open(HEAVY_CACHE).then((cache) => cache.addAll(HEAVY_ASSETS)),
+    ]).catch(() => {})
   );
 });
 
@@ -52,7 +70,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== APP_CACHE && key !== RUNTIME_CACHE)
+          .filter((key) => key !== APP_CACHE && key !== HEAVY_CACHE && key !== RUNTIME_CACHE)
           .map((key) => caches.delete(key))
       )
     )
@@ -96,7 +114,8 @@ self.addEventListener("fetch", (event) => {
           .then((response) => {
             if (response && response.ok) {
               const copy = response.clone();
-              caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+              const bucket = isHeavyAsset(reqUrl) ? HEAVY_CACHE : cacheNameForUrl(reqUrl);
+              caches.open(bucket).then((cache) => cache.put(request, copy)).catch(() => {});
             }
             return response;
           })
