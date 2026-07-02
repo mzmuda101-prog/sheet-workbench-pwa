@@ -4,6 +4,7 @@
   "description": "Local, offline-first workbook workbench for exploring, filtering, restructuring, and lightly editing Excel files in the browser.",
   "private": true,
   "scripts": {
+    "dev": "python3 -m http.server 3000 --bind 127.0.0.1",
     "serve": "python3 -m http.server 7821",
     "check:i18n": "node scripts/check-i18n.js",
     "test": "node scripts/check-i18n.js && node scripts/smoke-playwright.js && node scripts/save-stress-playwright.js && node scripts/save-roundtrip-playwright.js && node scripts/monthly-summary-playwright.js && node scripts/export-playwright.js && node scripts/validation-playwright.js && node scripts/derived-columns-playwright.js",
