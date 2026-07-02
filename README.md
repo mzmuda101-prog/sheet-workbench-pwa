@@ -98,7 +98,7 @@ The app ships with a service worker and works fully offline after the first succ
 
 ## How It Is Built
 
-Excel Workbench PWA is built with vanilla JavaScript — no framework, no build step, no bundler. The core XLSX parsing library (`xlsx-js-style`) is bundled locally so the app can work fully offline without relying on a CDN.
+Excel Workbench PWA is built with vanilla JavaScript — no framework, no build step, no bundler. The core XLSX parsing library (SheetJS CE 0.20.3, `lib/xlsx.full.min.js`) is bundled locally so the app can work fully offline without relying on a CDN.
 
 The codebase is split into focused modules (file IO, analysis engine, UI controls, language, table rendering, formula workbench) and shares a single global state with clearly defined boundaries. Playwright smoke tests cover core UI flows.
 

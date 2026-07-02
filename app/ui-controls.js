@@ -725,7 +725,9 @@ async function handleFile(file, fileHandle = null) {
   }
 }
 
-// Przykładowy arkusz procesowy/SLA generowany lokalnie w pamięci (xlsx-js-style).
+// Przykładowy arkusz procesowy/SLA generowany lokalnie w pamięci (SheetJS CE).
+// [EN] Note: CE ignores cell .s styles on write (Pro feature) — sample opens fine,
+// but header/status colors are no longer embedded since the CVE-driven lib swap.
 // Pokazuje: powtarzalne bloki (od/do/Długość ×3) → Wide-to-Long, analizę czasu,
 // agregacje, filtry dat oraz KPI (wiersze podsumowania nad nagłówkiem).
 // Lekki (kilkanaście wierszy) — generacja jest natychmiastowa, nic nie jest wysyłane.
@@ -1169,7 +1171,13 @@ function renderDvManualActiveList() {
   rules.forEach(({ colIdx, colName, mode }) => {
     const chip = document.createElement("div");
     chip.className = "dv-manual-rule-chip";
-    chip.innerHTML = `<span>${colName}</span><span class="chip-mode">${modeLabel[mode] || mode}</span>`;
+    // [EN] Safe DOM creation — colName comes from user XLSX headers, innerHTML would be XSS
+    const nameSpan = document.createElement("span");
+    nameSpan.textContent = colName;
+    const modeSpan = document.createElement("span");
+    modeSpan.className = "chip-mode";
+    modeSpan.textContent = modeLabel[mode] || mode;
+    chip.append(nameSpan, modeSpan);
     const rm = document.createElement("button");
     rm.type = "button";
     rm.textContent = "✕";

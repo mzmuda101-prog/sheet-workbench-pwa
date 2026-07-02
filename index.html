@@ -3,6 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- [EN] CSP — offline-first app, everything locks to 'self'. data:/blob: images
+         (SVG w CSS, eksporty), worker-src dla build-rows-worker, media-src dla intro. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
     <meta id="pageDescription" name="description" content="Lokalne przeglądanie, filtrowanie i analiza arkuszy Excel" />
     <title>Sheet Workbench</title>
     <meta name="application-name" content="Sheet Workbench" />
@@ -1298,7 +1301,7 @@
       </div>
     </div>
 
-    <!-- Ciężkie biblioteki xlsx-js-style (~416K) + JSZip (~96K) NIE są ładowane tu na starcie.
+    <!-- Ciężkie biblioteki SheetJS CE 0.20.3 (~930K) + JSZip (~96K) NIE są ładowane tu na starcie.
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
@@ -1316,37 +1319,8 @@
     <script defer src="app/ui-controls.js?v=20260701-01"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
-         flaga jest włączona — te same reguły aktywacji co wewnątrz modułu. -->
-    <script>
-      (function () {
-        function loadScript(src) {
-          var s = document.createElement("script");
-          s.src = src;
-          s.defer = true;
-          document.head.appendChild(s);
-        }
-        var v = "20260629-06";
-        try {
-          if (/(\?|&)scrolltest\b/.test(location.search) ||
-              /scrolltest/.test(location.hash) ||
-              localStorage.getItem("scrolltest") === "1") {
-            loadScript("app/scroll-diagnostics.js?v=" + v);
-          }
-          if (/(\?|&)scrolldebug\b/.test(location.search) ||
-              /scrolldebug/.test(location.hash) ||
-              localStorage.getItem("scrolldebug") === "1") {
-            loadScript("app/ipad-scroll-debug.js?v=" + v);
-          }
-        } catch (e) {
-          if (/scrolltest/.test(location.search + location.hash)) {
-            loadScript("app/scroll-diagnostics.js?v=" + v);
-          }
-          if (/scrolldebug/.test(location.search + location.hash)) {
-            loadScript("app/ipad-scroll-debug.js?v=" + v);
-          }
-        }
-      })();
-    </script>
+         flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
+    <script defer src="app/debug-loaders.js?v=20260701-01"></script>
     <script defer src="app/bootstrap.js?v=20260701-01"></script>
   </body>
 </html>

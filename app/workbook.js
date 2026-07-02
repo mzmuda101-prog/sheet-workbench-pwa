@@ -10,7 +10,9 @@ function isXlsxAvailable(showFeedback = false) {
   return available;
 }
 
-// Leniwe doładowanie CIĘŻKICH bibliotek (xlsx-js-style ~416K + JSZip ~96K).
+// Leniwe doładowanie CIĘŻKICH bibliotek (SheetJS CE 0.20.3 ~930K + JSZip ~96K).
+// [EN] SheetJS CE 0.20.3 replaces xlsx-js-style (SheetJS 0.18.5 fork) — fixes
+// CVE-2023-30533 (prototype pollution) i CVE-2024-22363 (ReDoS) przy parsowaniu plików.
 // NIE są ładowane przy starcie (zob. index.html) — apka bootuje bez ~512K JS.
 // Dogrywamy je dopiero przy pierwszym wczytaniu/zapisie pliku. Po dograniu
 // (i zacache'owaniu przez SW) kolejne wywołania zwracają od razu true.
@@ -30,7 +32,7 @@ async function ensureXlsxLibs(showFeedback = false) {
   if (window.XLSX && window.JSZip) return true;
   if (!_xlsxLibsPromise) {
     _xlsxLibsPromise = Promise.all([
-      window.XLSX ? null : _loadScriptOnce("lib/xlsx-js-style.bundle.min.js"),
+      window.XLSX ? null : _loadScriptOnce("lib/xlsx.full.min.js"),
       window.JSZip ? null : _loadScriptOnce("lib/jszip.min.js"),
     ]).catch((e) => {
       _xlsxLibsPromise = null; // pozwól spróbować ponownie przy następnej akcji

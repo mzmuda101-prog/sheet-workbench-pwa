@@ -1,5 +1,5 @@
 // [EN] Dedicated worker — importScripts xlsx + shared buildRowsCore
-importScripts("../lib/xlsx-js-style.bundle.min.js", "build-rows-core.js");
+importScripts("../lib/xlsx.full.min.js", "build-rows-core.js");
 
 self.onmessage = (event) => {
   const msg = event.data || {};

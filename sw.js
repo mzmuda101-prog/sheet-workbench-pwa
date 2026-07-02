@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260701-01";
+const CACHE_VERSION = "20260703-01";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -24,6 +24,7 @@ const SHELL_ASSETS = [
   `./app/edit-tools.js?v=${ASSET_V}`,
   `./app/ui-controls.js?v=${ASSET_V}`,
   `./app/scroll-diagnostics.js?v=${ASSET_V}`,
+  `./app/debug-loaders.js?v=${ASSET_V}`,
   `./app/build-rows-core.js?v=${ASSET_V}`,
   `./app/build-rows-worker.js?v=${ASSET_V}`,
   `./app/bootstrap.js?v=${ASSET_V}`,
@@ -37,7 +38,7 @@ const SHELL_ASSETS = [
 
 // [EN] Large libs + media — separate bucket; still precached so offline stays intact after install
 const HEAVY_ASSETS = [
-  "./lib/xlsx-js-style.bundle.min.js",
+  "./lib/xlsx.full.min.js",
   "./lib/jszip.min.js",
   "./assets/media/mateusz-intro.mp4",
 ];
@@ -47,7 +48,7 @@ function isStaticAsset(url) {
 }
 
 function isHeavyAsset(url) {
-  return /\/lib\/(?:xlsx-js-style\.bundle\.min|jszip)\.min\.js$/i.test(url.pathname)
+  return /\/lib\/(?:xlsx\.full\.min|jszip\.min)\.js$/i.test(url.pathname)
     || /\/assets\/media\/mateusz-intro\.mp4$/i.test(url.pathname);
 }
 
