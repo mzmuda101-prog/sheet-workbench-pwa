@@ -7,10 +7,18 @@
 // (np. SUBTOTAL(9,Dane[Kwota])) i formatowanie tabel. Zamiast przepisywać plik
 // od zera, rozpakowujemy oryginalny ZIP (JSZip), nanosimy edycje na XML arkusza
 // i pakujemy z powrotem — reszta pliku zostaje nietknięta.
+//
+// WAŻNE (2026-07): patch dotyka WYŁĄCZNIE wnętrza <sheetData> metodą stringową.
+// Pełny DOMParser+XMLSerializer na całym worksheet (4MB+, emoji w formułach)
+// psuł plik przy drugim zapisie (UTF-16 surogaty w UTF-8, znikające puste <c/>).
+// Sekcje dataValidations / extLst / mergeCells pozostają bajt-identyczne.
 // =====================================================================
 
 const SPREADSHEETML_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const OOXML_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+// Regex komórki w sheetData — oba warianty: <c …></c> oraz samozamykające <c …/>.
+const CELL_BLOCK_RE = /<c r="([A-Z]+\d+)"([^>]*)>([\s\S]*?)<\/c>|<c r="([A-Z]+\d+)"([^/>]*)\/>/g;
 
 // Date -> numer seryjny Excela (system 1900, dni od 1899-12-30). Używa komponentów
 // lokalnych daty (tak jak SheetJS zwraca Date przy cellDates), niezależnie od strefy.
@@ -30,11 +38,16 @@ function escapeXmlText(s) {
     .replace(/>/g, "&gt;");
 }
 
-// Usuwa znaki niedozwolone w XML 1.0 (tab/LF/CR zostają). Bez tego string z
-// kontrolnym znakiem (np. wklejka z PDF, albo zdekodowane z pliku _x0007_)
-// wpisany do <t> daje niepoprawny XML i Excel odmawia otwarcia pliku.
+// Usuwa znaki niedozwolone w XML 1.0 (tab/LF/CR zostają). Lone UTF-16 surrogates
+// (bug XMLSerializer przy emoji) też wyrzucamy — inaczej Excel odmawia otwarcia.
 function sanitizeXmlText(s) {
-  return String(s).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "");
+  return String(s)
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
+    .replace(/[\uD800-\uDFFF]/g, "");
+}
+
+function escapeFormulaXml(text) {
+  return escapeXmlText(text);
 }
 
 // Mapa: nazwa arkusza -> ścieżka w ZIP (xl/worksheets/sheetN.xml).
@@ -66,168 +79,204 @@ async function resolveSheetPaths(zip) {
   return map;
 }
 
-function findRowElement(sheetData, rowNum) {
-  const rows = sheetData.getElementsByTagName("row");
-  for (let i = 0; i < rows.length; i++) {
-    if (parseInt(rows[i].getAttribute("r"), 10) === rowNum) return rows[i];
-  }
-  return null;
+// Wycina <sheetData>…</sheetData> bez ruszania reszty arkusza (dataValidations, extLst…).
+function splitSheetData(xml) {
+  const open = xml.indexOf("<sheetData");
+  if (open < 0) return null;
+  const openEnd = xml.indexOf(">", open);
+  if (openEnd < 0) return null;
+  const close = xml.indexOf("</sheetData>", openEnd);
+  if (close < 0) return null;
+  return {
+    before: xml.slice(0, openEnd + 1),
+    inner: xml.slice(openEnd + 1, close),
+    after: xml.slice(close),
+  };
 }
 
-// Wstawia <row> w sheetData zachowując rosnącą kolejność r.
-function insertRowInOrder(doc, sheetData, rowNum) {
-  const row = doc.createElementNS(SPREADSHEETML_NS, "row");
-  row.setAttribute("r", String(rowNum));
-  const rows = sheetData.getElementsByTagName("row");
-  let ref = null;
-  for (let i = 0; i < rows.length; i++) {
-    if (parseInt(rows[i].getAttribute("r"), 10) > rowNum) { ref = rows[i]; break; }
+// Indeks komórek w sheetData (ref → metadane bloku XML).
+function indexCells(inner) {
+  const map = new Map();
+  CELL_BLOCK_RE.lastIndex = 0;
+  let m;
+  while ((m = CELL_BLOCK_RE.exec(inner))) {
+    if (m[1]) {
+      map.set(m[1], {
+        ref: m[1], attrs: m[2], inner: m[3], full: m[0],
+        start: m.index, end: m.index + m[0].length, selfClose: false,
+      });
+    } else {
+      map.set(m[4], {
+        ref: m[4], attrs: m[5], inner: "", full: m[0],
+        start: m.index, end: m.index + m[0].length, selfClose: true,
+      });
+    }
   }
-  sheetData.insertBefore(row, ref);
-  return row;
+  return map;
 }
 
-// Wstawia <c> w wierszu zachowując rosnącą kolejność kolumn.
-function insertCellInOrder(doc, rowEl, cellRef, colIndex0) {
-  const c = doc.createElementNS(SPREADSHEETML_NS, "c");
-  c.setAttribute("r", cellRef);
-  const cells = rowEl.getElementsByTagName("c");
-  let ref = null;
-  for (let i = 0; i < cells.length; i++) {
-    const otherCol = XLSX.utils.decode_cell(cells[i].getAttribute("r")).c;
-    if (otherCol > colIndex0) { ref = cells[i]; break; }
-  }
-  rowEl.insertBefore(c, ref);
-  return c;
+function sharedFormulaInInner(inner) {
+  const m = inner.match(/<f t="shared"([^>/]*)(?:\/>|>([\s\S]*?)<\/f>)/);
+  if (!m) return null;
+  const siM = m[1].match(/\bsi="(\d+)"/);
+  if (!siM) return null;
+  return { si: siM[1], text: m[2] || "", fullF: m[0] };
 }
 
-// Nanosi wartość/typ na element <c>, zachowując atrybut stylu (s) i usuwając
-// starą wartość/formułę.
-function applyValueToCell(doc, cEl, payload) {
-  // usuń dotychczasowe dzieci (v, f, is) i atrybut typu
-  Array.from(cEl.childNodes).forEach((n) => cEl.removeChild(n));
-  cEl.removeAttribute("t");
+function replaceSharedFormulaInInner(inner, formulaText) {
+  const re = /<f t="shared"[^>]*(?:\/>|>[\s\S]*?<\/f>)/;
+  if (!formulaText) return inner.replace(re, "");
+  return inner.replace(re, `<f>${escapeFormulaXml(formulaText)}</f>`);
+}
 
+// FORMUŁY DZIELONE — od-dziel grupy dotknięte edycją (stringowo, bez serializera).
+function unshareTouchedGroupsString(inner, cells, formulaMap, cellMap) {
+  const groups = {};
+  cellMap.forEach((cell, ref) => {
+    const info = sharedFormulaInInner(cell.inner);
+    if (!info) return;
+    (groups[info.si] = groups[info.si] || []).push({ ref, cell, text: info.text });
+  });
+
+  const replacements = [];
+  Object.keys(groups).forEach((si) => {
+    const members = groups[si];
+    const touched = members.some((m) => Object.prototype.hasOwnProperty.call(cells, m.ref));
+    if (!touched) return;
+    members.forEach((m) => {
+      const text = m.text || (formulaMap && formulaMap[m.ref]) || "";
+      const newInner = replaceSharedFormulaInInner(m.cell.inner, text);
+      if (newInner === m.cell.inner) return;
+      const newFull = m.cell.selfClose
+        ? `<c r="${m.ref}"${m.cell.attrs}>${newInner}</c>`
+        : `<c r="${m.ref}"${m.cell.attrs}>${newInner}</c>`;
+      replacements.push({ start: m.cell.start, len: m.cell.full.length, text: newFull });
+    });
+  });
+
+  replacements.sort((a, b) => b.start - a.start);
+  let out = inner;
+  replacements.forEach((r) => {
+    out = out.slice(0, r.start) + r.text + out.slice(r.start + r.len);
+  });
+  return out;
+}
+
+function normalizeCellAttrs(attrs, payload) {
+  let a = String(attrs || "").replace(/\s*\bt="[^"]*"/g, "").trim();
+  if (payload && payload.t === "s") a = (a ? a + " " : "") + 't="inlineStr"';
+  return a ? " " + a : "";
+}
+
+function buildCellXml(ref, payload, attrs) {
+  const attrStr = normalizeCellAttrs(attrs, payload);
   if (payload.t === "s") {
-    // tekst jako inline string — nie ruszamy sharedStrings
-    cEl.setAttribute("t", "inlineStr");
-    const is = doc.createElementNS(SPREADSHEETML_NS, "is");
-    const tEl = doc.createElementNS(SPREADSHEETML_NS, "t");
-    tEl.setAttribute("xml:space", "preserve");
-    tEl.appendChild(doc.createTextNode(sanitizeXmlText(payload.v)));
-    is.appendChild(tEl);
-    cEl.appendChild(is);
-    return;
+    const t = escapeXmlText(sanitizeXmlText(payload.v));
+    return `<c r="${ref}"${attrStr}><is><t xml:space="preserve">${t}</t></is></c>`;
   }
-
-  // liczba lub data → wartość numeryczna (format wyświetlania pochodzi ze stylu .s)
   let num;
   if (payload.t === "d" && payload.v instanceof Date) num = dateToExcelSerial(payload.v);
   else num = Number(payload.v);
-  const vEl = doc.createElementNS(SPREADSHEETML_NS, "v");
-  vEl.appendChild(doc.createTextNode(String(num)));
-  cEl.appendChild(vEl);
+  return `<c r="${ref}"${attrStr}><v>${num}</v></c>`;
 }
 
-// FORMUŁY DZIELONE (shared formulas) — newralgiczne dla zapisu metodą ZIP-patch.
-// W .xlsx jedna komórka („wzorzec") trzyma `<f t="shared" ref="B2:B4" si="0">A2*10</f>`,
-// a pozostałe komórki grupy mają tylko PUSTĄ referencję `<f t="shared" si="0"/>` bez treści.
-// Gdy edytujemy wzorzec na statyczną wartość, applyValueToCell usuwa jego `<f>` — i grupa
-// zostaje OSIEROCONA: zależne komórki wskazują si=0, którego już nikt nie definiuje →
-// Excel zgłasza „plik uszkodzony, naprawić". To była przyczyna nawrotów korupcji zapisu.
-//
-// Rozwiązanie: zanim naniesiemy edycje, „od-dzielamy" (de-share) KAŻDĄ grupę dotkniętą
-// edycją — wzorzec zachowuje swoją treść, a każda zależna dostaje WŁASNĄ, samodzielną
-// formułę (rozwiniętą przez SheetJS, np. „A3*10+B2"; przekazaną w formulaMap). Excel czyta
-// zwykłe formuły bez problemu (i sam je z powrotem „dzieli" przy własnym zapisie).
-// Nietknięte grupy zostają bez zmian (zero zbędnego churnu w wielkich arkuszach).
-function sharedFormulaOf(cEl) {
-  const fs = cEl.getElementsByTagName("f");
-  const f = fs.length ? fs[0] : null;
-  if (!f || f.getAttribute("t") !== "shared") return null;
-  const si = f.getAttribute("si");
-  if (si === null) return null;
-  return { f, si, text: f.textContent || "" };
+function colIndex0(ref) {
+  return XLSX.utils.decode_cell(ref).c;
 }
 
-function unshareTouchedGroups(sheetData, cells, formulaMap) {
-  // grupuj komórki shared po si
-  const groups = {};
-  Array.from(sheetData.getElementsByTagName("c")).forEach((cEl) => {
-    const info = sharedFormulaOf(cEl);
-    if (!info) return;
-    const ref = cEl.getAttribute("r");
-    (groups[info.si] = groups[info.si] || []).push({ ref, f: info.f, text: info.text });
-  });
-
-  Object.keys(groups).forEach((si) => {
-    const members = groups[si];
-    // dotknięta = którakolwiek komórka grupy jest w edycjach (wzorzec LUB zależna)
-    const touched = members.some((m) => Object.prototype.hasOwnProperty.call(cells, m.ref));
-    if (!touched) return;
-
-    members.forEach((m) => {
-      // treść formuły: wzorzec ma własną; zależna bierze rozwiniętą z formulaMap
-      const text = m.text || (formulaMap && formulaMap[m.ref]) || "";
-      m.f.removeAttribute("t");
-      m.f.removeAttribute("ref");
-      m.f.removeAttribute("si");
-      while (m.f.firstChild) m.f.removeChild(m.f.firstChild);
-      if (text) {
-        m.f.appendChild(m.f.ownerDocument.createTextNode(text));
-      } else if (m.f.parentNode) {
-        // brak formuły do odtworzenia → usuń <f>, zostaw zbuforowaną wartość <v> (statyczna,
-        // bezpieczna — żadnego osierocenia, w najgorszym razie utrata żywej formuły)
-        m.f.parentNode.removeChild(m.f);
-      }
-    });
-  });
+function rowNum(ref) {
+  return XLSX.utils.decode_cell(ref).r + 1;
 }
 
-// Nanosi wszystkie edycje na jeden arkusz (string XML -> string XML).
-function patchSheetXml(xml, cells, formulaMap) {
-  const doc = new DOMParser().parseFromString(xml, "application/xml");
-  const sheetData = doc.getElementsByTagName("sheetData")[0];
-  if (!sheetData) return xml;
+// Wstawia nową komórkę w istniejącym wierszu (zachowuje rosnącą kolejność kolumn).
+function insertCellInRow(rowInner, ref, cellXml) {
+  const targetCol = colIndex0(ref);
+  const cellRe = /<c r="([A-Z]+\d+)"[^>]*(?:\/>|>[\s\S]*?<\/c>)/g;
+  let m;
+  while ((m = cellRe.exec(rowInner))) {
+    if (colIndex0(m[1]) > targetCol) {
+      return rowInner.slice(0, m.index) + cellXml + rowInner.slice(m.index);
+    }
+  }
+  return rowInner + cellXml;
+}
 
-  // Rozdziel formuły dzielone dotknięte edycją (zanim usuniemy wzorce — patrz wyżej).
-  unshareTouchedGroups(sheetData, cells, formulaMap);
+// Wstawia nowy wiersz z jedną komórką w sheetData (rosnące r).
+function insertRowWithCell(inner, ref, cellXml) {
+  const rNum = rowNum(ref);
+  const rowRe = /<row r="(\d+)"[^>]*>/g;
+  let insertAt = inner.length;
+  let m;
+  while ((m = rowRe.exec(inner))) {
+    if (parseInt(m[1], 10) > rNum) {
+      insertAt = m.index;
+      break;
+    }
+  }
+  const rowXml = `<row r="${rNum}">${cellXml}</row>`;
+  return inner.slice(0, insertAt) + rowXml + inner.slice(insertAt);
+}
 
-  // mapa istniejących komórek ref -> <c>
-  const cellIndex = {};
-  Array.from(sheetData.getElementsByTagName("c")).forEach((c) => {
-    const r = c.getAttribute("r");
-    if (r) cellIndex[r] = c;
-  });
+function insertNewCell(inner, ref, cellXml) {
+  const rNum = rowNum(ref);
+  const rowRe = new RegExp(`<row r="${rNum}"([^>]*)>([\\s\\S]*?)<\\/row>`);
+  const m = inner.match(rowRe);
+  if (m) {
+    const newRowInner = insertCellInRow(m[2], ref, cellXml);
+    const newRow = `<row r="${rNum}"${m[1]}>${newRowInner}</row>`;
+    return inner.slice(0, m.index) + newRow + inner.slice(m.index + m[0].length);
+  }
+  return insertRowWithCell(inner, ref, cellXml);
+}
+
+function patchSheetDataInner(inner, cells, formulaMap) {
+  if (!cells || Object.keys(cells).length === 0) return inner;
+
+  let cellMap = indexCells(inner);
+  inner = unshareTouchedGroupsString(inner, cells, formulaMap, cellMap);
+  cellMap = indexCells(inner);
+
+  const replacements = [];
+  const inserts = [];
 
   Object.keys(cells).forEach((ref) => {
     const payload = cells[ref];
-    let cEl = cellIndex[ref];
+    if (payload === undefined) return;
 
-    if (payload === undefined) return; // brak realnej edycji — pomiń (defensywnie)
-
+    const existing = cellMap.get(ref);
     if (payload === null) {
-      // usunięcie wartości
-      if (cEl && cEl.parentNode) cEl.parentNode.removeChild(cEl);
+      if (existing) replacements.push({ start: existing.start, len: existing.full.length, text: "" });
       return;
     }
 
-    if (!cEl) {
-      const { r: rowIdx0, c: colIdx0 } = XLSX.utils.decode_cell(ref);
-      const rowNum = rowIdx0 + 1;
-      let rowEl = findRowElement(sheetData, rowNum);
-      if (!rowEl) rowEl = insertRowInOrder(doc, sheetData, rowNum);
-      cEl = insertCellInOrder(doc, rowEl, ref, colIdx0);
+    const cellXml = buildCellXml(ref, payload, existing ? existing.attrs : "");
+    if (existing) {
+      replacements.push({ start: existing.start, len: existing.full.length, text: cellXml });
+    } else {
+      inserts.push({ ref, cellXml });
     }
-    applyValueToCell(doc, cEl, payload);
   });
 
-  let out = new XMLSerializer().serializeToString(doc);
-  // zachowaj deklarację XML, jeśli oryginał ją miał (serializer ją pomija)
-  if (/^\s*<\?xml/.test(xml) && !/^\s*<\?xml/.test(out)) {
-    out = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + out;
-  }
+  replacements.sort((a, b) => b.start - a.start);
+  let out = inner;
+  replacements.forEach((r) => {
+    out = out.slice(0, r.start) + r.text + out.slice(r.start + r.len);
+  });
+
+  inserts.forEach(({ ref, cellXml }) => {
+    out = insertNewCell(out, ref, cellXml);
+  });
+
   return out;
+}
+
+// Nanosi edycje na arkusz — poza <sheetData> XML jest bajt-identyczny z oryginałem.
+function patchSheetXml(xml, cells, formulaMap) {
+  const parts = splitSheetData(xml);
+  if (!parts) return xml;
+  const patchedInner = patchSheetDataInner(parts.inner, cells, formulaMap);
+  if (patchedInner === parts.inner) return xml;
+  return parts.before + patchedInner + parts.after;
 }
 
 // Wymusza pełne przeliczenie formuł przy otwarciu (Excel pokaże aktualne wyniki
@@ -246,16 +295,9 @@ async function forceRecalcOnLoad(zip) {
     }
     zip.file("xl/workbook.xml", xml);
   }
-  // Brak <calcPr> → nie wstawiamy (kolejność elementów w workbook.xml jest ścisła);
-  // Excel w trybie automatycznym i tak przeliczy zależne formuły przy otwarciu.
 }
 
 // Usuwa calcChain.xml WRAZ z jego wpisami w [Content_Types].xml i workbook.xml.rels.
-// Po edycji wartości komórek calcChain bywa NIESPÓJNY (np. edytowaliśmy komórkę z formułą
-// na statyczną wartość → calcChain wciąż ją wskazuje jako formułę → Excel: „plik uszkodzony,
-// naprawić"). Bezpiecznie jest go w całości usunąć — Excel odbuduje go sam przy otwarciu.
-// KLUCZOWE: trzeba usunąć też Override w Content_Types i Relationship w rels, inaczej
-// brakujący part psuje plik.
 async function dropCalcChain(zip) {
   if (!zip.file("xl/calcChain.xml")) return;
   zip.remove("xl/calcChain.xml");
@@ -275,9 +317,6 @@ async function dropCalcChain(zip) {
   }
 }
 
-// Główna funkcja: oryginalne bajty + edycje -> nowe bajty XLSX (zachowany plik).
-// formulaMaps[sheetName][ref] = rozwinięta formuła (z SheetJS) — używane do odtworzenia
-// samodzielnych formuł przy „od-dzielaniu" grup shared (patrz unshareTouchedGroups).
 async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
   if (typeof JSZip === "undefined") throw new Error("JSZip niedostępny");
   const zip = await JSZip.loadAsync(originalBytes);
@@ -296,8 +335,20 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
 
   if (touched) {
     await forceRecalcOnLoad(zip);
-    await dropCalcChain(zip); // spójność: po edycji wartości calcChain bywa osierocony
+    await dropCalcChain(zip);
   }
 
   return zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
+}
+
+// Eksport do testów Node/Playwright (poza przeglądarką).
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    patchSheetXml,
+    patchSheetDataInner,
+    splitSheetData,
+    indexCells,
+    sanitizeXmlText,
+    buildCellXml,
+  };
 }

@@ -89,6 +89,15 @@ async function run() {
       return bytes;
     }
 
+    // UTF-8 sheet: bajty ED A0–BF 80–BF = wstawione surogaty UTF-16 (Excel odmawia otwarcia).
+    function hasUtf16SurrogateBytes(arr) {
+      for (let i = 0; i < arr.length - 2; i++) {
+        if (arr[i] === 0xed && arr[i + 1] >= 0xa0 && arr[i + 1] <= 0xbf && arr[i + 2] >= 0x80) return true;
+      }
+      return false;
+    }
+    function sheetHasShieldEmoji(xml) { return xml.includes("🛡") || xml.includes("\uD83D\uDEE1"); }
+
     // ── walidator "excelo-podobny" ──
     function normalizePath(base, target) {
       const stack = [];
@@ -278,6 +287,62 @@ async function run() {
       ],
       calcChainCells: [],
     }), [{ Plan: { B1: { v: 100, t: "n" } }, Suma: { A2: { v: 999, t: "n" } } }]));
+
+    // 12. DRUGI zapis (round-trip ×2): emoji w NIEEDYTOWANEJ formule musi przetrwać bez
+    // surogatów UTF-16 (regresja: Obieg terenów — XMLSerializer psuł 🛡️ przy 2. patchu).
+    {
+      const shield = "\uD83D\uDEE1\uFE0F"; // 🛡️
+      const emojiFormula = `IF(A1>0,"ok${shield}","")`;
+      const orig = await mk({
+        sheets: [sheet(
+          `<dimension ref="A1:F66"/>` +
+          `<dataValidations count="1"><dataValidation type="list" sqref="F66:F100" errorStyle="information"><formula1>"Jan,Ola"</formula1></dataValidation></dataValidations>` +
+          `<sheetData>` +
+          `<row r="1"><c r="A1"><v>1</v></c><c r="E1" t="str"><f>${emojiFormula.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</f><v>ok ${shield}</v></c></row>` +
+          `<row r="66"><c r="F66" s="13" t="s"><v>0</v></c><c r="G66"><v>1</v></c><c r="H66" s="17"/>` +
+          `<c r="I66" t="str"><f>${emojiFormula.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</f><v>x</v></c></row>` +
+          `</sheetData>`
+        )],
+        sst: ["Jan"], withCalcChain: false,
+      });
+      const cycle1 = await buildPatchedXlsx(orig, { Dane: { F212: { v: "Anna Nowak", t: "s" } } }, buildFormulaMaps(orig));
+      const cycle2 = await buildPatchedXlsx(cycle1, { Dane: { F66: { v: "Gr8 G. Choiński", t: "s" } } }, buildFormulaMaps(cycle1));
+      const probs = await validate(cycle2);
+      const sxBytes = await (await JSZip.loadAsync(cycle2)).file("xl/worksheets/sheet1.xml").async("uint8array");
+      const outSx = new TextDecoder().decode(sxBytes);
+      if (hasUtf16SurrogateBytes(sxBytes)) probs.push("utf16-surrogate-in-xml");
+      if (!/<c r="H66"[^>]*\/>/.test(outSx)) probs.push("empty-cell-H66-lost");
+      const origSx = await (await JSZip.loadAsync(orig)).file("xl/worksheets/sheet1.xml").async("string");
+      const origDv = origSx.slice(origSx.indexOf("<dataValidations"), origSx.indexOf("</dataValidations>") + 18);
+      const outDv = outSx.slice(outSx.indexOf("<dataValidations"), outSx.indexOf("</dataValidations>") + 18);
+      if (origDv !== outDv) probs.push("dataValidations-changed");
+      if (!outSx.includes("F66") || !/Gr8 G\. Choiński/.test(outSx)) probs.push("F66-edit-missing");
+      R["double-save-emoji-dv"] = probs;
+    }
+
+    // 13. Trzeci cykl zapisu na już raz patchowanym pliku (symulacja _edited → _edited_v2).
+    {
+      const shield = "\uD83D\uDEE1\uFE0F";
+      const fXml = `IF(A1&gt;0,"x${shield}","")`;
+      const orig = await mk({
+        sheets: [sheet(`<dimension ref="E1:E3"/><sheetData>` +
+          `<row r="1"><c r="E1" t="str"><f ca="1">${fXml}</f><v>1 ${shield}</v></c></row>` +
+          `<row r="2"><c r="E2" t="str"><f ca="1">${fXml}</f><v>2 ${shield}</v></c></row>` +
+          `<row r="3"><c r="E3" t="str"><f ca="1">${fXml}</f><v>3 ${shield}</v></c></row></sheetData>`)],
+        withCalcChain: false,
+      });
+      const bytes = await appRoundTrip(orig, [
+        { Dane: { A10: { v: "valid1", t: "s" } } },
+        { Dane: { A11: { v: "valid2", t: "s" } } },
+        { Dane: { A12: { v: "invalid typo", t: "s" } } },
+      ]);
+      const probs = await validate(bytes);
+      const sxBytes = await (await JSZip.loadAsync(bytes)).file("xl/worksheets/sheet1.xml").async("uint8array");
+      const outSx = new TextDecoder().decode(sxBytes);
+      if (hasUtf16SurrogateBytes(sxBytes)) probs.push("utf16-surrogate-after-3-cycles");
+      if (!sheetHasShieldEmoji(outSx)) probs.push("emoji-lost-in-formula");
+      R["triple-save-emoji-preserved"] = probs;
+    }
 
     return R;
   });
