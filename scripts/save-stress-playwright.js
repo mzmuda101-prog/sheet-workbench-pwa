@@ -73,13 +73,17 @@ async function run() {
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<sst ${NS} count="3" uniqueCount="3"><si><t>Nazwa</t></si><si><t>Kwota</t></si><si><t>Razem</t></si></sst>`);
     // Arkusz: nagłówki (shared strings), wiersz z liczbą, komórka z FORMUŁĄ (C2) + tabela
+    // + nietknięta formuła z emoji (E2) — regresja CESU-8 przy zip.file(string).
+    const shield = "\uD83D\uDEE1\uFE0F";
+    const emojiF = `IF(B2&gt;0,"ok${shield}","")`;
     z.file("xl/worksheets/sheet1.xml",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<worksheet ${NS} xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-      `<dimension ref="A1:C2"/>` +
+      `<dimension ref="A1:E2"/>` +
       `<sheetData>` +
       `<row r="1"><c r="A1" t="s"><v>0</v></c><c r="B1" t="s"><v>1</v></c><c r="C1" t="s"><v>2</v></c></row>` +
-      `<row r="2"><c r="A2" t="s"><v>0</v></c><c r="B2"><v>10</v></c><c r="C2"><f>B2*2</f><v>20</v></c></row>` +
+      `<row r="2"><c r="A2" t="s"><v>0</v></c><c r="B2"><v>10</v></c><c r="C2"><f>B2*2</f><v>20</v></c>` +
+      `<c r="E2" t="str"><f ca="1">${emojiF}</f><v>ok ${shield}</v></c></row>` +
       `</sheetData>` +
       `<tableParts count="1"><tablePart r:id="rId1"/></tableParts>` +
       `</worksheet>`);
@@ -132,6 +136,22 @@ async function run() {
     ok("wszystkie XML poprawne", malformed.length === 0);
 
     const sx = await zp.file("xl/worksheets/sheet1.xml").async("string");
+    const zOrig = await JSZip.loadAsync(origBytes);
+    const sxBytes = await zp.file("xl/worksheets/sheet1.xml").async("uint8array");
+    const origSxBytes = await zOrig.file("xl/worksheets/sheet1.xml").async("uint8array");
+    const hasCesu = (arr) => {
+      for (let i = 0; i < arr.length - 2; i++) {
+        if (arr[i] === 0xed && arr[i + 1] >= 0xa0 && arr[i + 1] <= 0xbf && arr[i + 2] >= 0x80) return true;
+      }
+      return false;
+    };
+    const countShield = (arr) => {
+      let n = 0;
+      for (let i = 0; i < arr.length - 3; i++) {
+        if (arr[i] === 0xf0 && arr[i + 1] === 0x9f && arr[i + 2] === 0x9b && arr[i + 3] === 0xa1) n++;
+      }
+      return n;
+    };
     const cellOf = (ref) => { const i = sx.indexOf(`<c r="${ref}"`); return i < 0 ? "" : sx.slice(i, sx.indexOf("</c>", i) + 4); };
     const c2 = cellOf("C2");
     ok("C2: formuła usunięta", c2 && !c2.includes("<f"));
@@ -139,11 +159,13 @@ async function run() {
     ok("B2: inlineStr + escape", /t="inlineStr"/.test(cellOf("B2")) && cellOf("B2").includes("&amp;") && cellOf("B2").includes("&lt;znaki&gt;"));
     ok("D5: nowa komórka dodana", cellOf("D5").includes("<v>7</v>"));
     ok("A2: komórka usunięta", !sx.includes('<c r="A2"'));
+    ok("E2: emoji w nietkniętej formule", cellOf("E2").includes("<f") && (sx.includes("🛡") || sx.includes("\uD83D\uDEE1")));
+    ok("brak CESU-8/surogatów w sheet XML", !hasCesu(sxBytes));
+    ok("UTF-8 🛡 nie spadło po zapisie", countShield(sxBytes) >= countShield(origSxBytes) && countShield(origSxBytes) >= 1);
     ok("tabela zachowana", !!zp.file("xl/tables/table1.xml"));
     ok("styles zachowane", !!zp.file("xl/styles.xml"));
     // liczba arkuszy nie zmieniona (zapis nie dodaje/usuwa arkuszy)
     const sheetParts = (zip) => Object.keys(zip.files).filter((n) => /xl\/worksheets\/sheet\d+\.xml$/i.test(n)).length;
-    const zOrig = await JSZip.loadAsync(origBytes);
     ok("liczba arkuszy zachowana", sheetParts(zp) === sheetParts(zOrig));
     const wbXml = await zp.file("xl/workbook.xml").async("string");
     ok("workbook.xml: liczba <sheet> bez zmian", (wbXml.match(/<sheet\b/g) || []).length === 1);

@@ -89,7 +89,8 @@ async function run() {
       return bytes;
     }
 
-    // UTF-8 sheet: bajty ED A0–BF 80–BF = wstawione surogaty UTF-16 (Excel odmawia otwarcia).
+    // UTF-8 sheet: bajty ED A0–BF 80–BF = CESU-8 / wstawione surogaty UTF-16
+    // (Excel: „odzyskaj zawartość"). Lepsze niż osascript — ten dialog i tak mija „open OK".
     function hasUtf16SurrogateBytes(arr) {
       for (let i = 0; i < arr.length - 2; i++) {
         if (arr[i] === 0xed && arr[i + 1] >= 0xa0 && arr[i + 1] <= 0xbf && arr[i + 2] >= 0x80) return true;
@@ -97,6 +98,13 @@ async function run() {
       return false;
     }
     function sheetHasShieldEmoji(xml) { return xml.includes("🛡") || xml.includes("\uD83D\uDEE1"); }
+    function countProperShieldUtf8(arr) {
+      let n = 0;
+      for (let i = 0; i < arr.length - 3; i++) {
+        if (arr[i] === 0xf0 && arr[i + 1] === 0x9f && arr[i + 2] === 0x9b && arr[i + 3] === 0xa1) n++;
+      }
+      return n;
+    }
 
     // ── walidator "excelo-podobny" ──
     function normalizePath(base, target) {
@@ -127,10 +135,12 @@ async function run() {
           if (!zp.file(resolved)) problems.push(`rel-dangling:${nm}->${t}`);
         });
       }
-      // arkusze: osierocone shared si, kolejność wierszy/kolumn, duplikaty
+      // arkusze: osierocone shared si, kolejność wierszy/kolumn, duplikaty + CESU-8
       for (const nm in text) {
         if (!/xl\/worksheets\/sheet\d+\.xml$/i.test(nm)) continue;
         const sx = text[nm];
+        const sxBytes = await zp.file(nm).async("uint8array");
+        if (hasUtf16SurrogateBytes(sxBytes)) problems.push(`cesu8-or-surrogate:${nm}`);
         const masters = new Set(), deps = new Set();
         [...sx.matchAll(/<f\b([^>]*?)\/?>/g)].forEach(m => {
           const a = m[1];
@@ -311,6 +321,9 @@ async function run() {
       const sxBytes = await (await JSZip.loadAsync(cycle2)).file("xl/worksheets/sheet1.xml").async("uint8array");
       const outSx = new TextDecoder().decode(sxBytes);
       if (hasUtf16SurrogateBytes(sxBytes)) probs.push("utf16-surrogate-in-xml");
+      // Po 2× zapisie liczba poprawnych UTF-8 🛡 nie może spaść (regresja JSZip CESU-8).
+      const origBytesSheet = await (await JSZip.loadAsync(orig)).file("xl/worksheets/sheet1.xml").async("uint8array");
+      if (countProperShieldUtf8(sxBytes) < countProperShieldUtf8(origBytesSheet)) probs.push("proper-utf8-shield-count-dropped");
       if (!/<c r="H66"[^>]*\/>/.test(outSx)) probs.push("empty-cell-H66-lost");
       const origSx = await (await JSZip.loadAsync(orig)).file("xl/worksheets/sheet1.xml").async("string");
       const origDv = origSx.slice(origSx.indexOf("<dataValidations"), origSx.indexOf("</dataValidations>") + 18);

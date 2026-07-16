@@ -11,6 +11,7 @@ const sandbox = {
   exports: {},
   DOMParser: null,
   JSZip: null,
+  TextEncoder,
   XLSX: { utils: { decode_cell: (ref) => {
     const m = ref.match(/^([A-Z]+)(\d+)$/);
     let c = 0;
@@ -18,8 +19,8 @@ const sandbox = {
     return { r: parseInt(m[2], 10) - 1, c: c - 1 };
   } } },
 };
-vm.runInNewContext(patchSrc + "\nmodule.exports = { patchSheetXml, splitSheetData, indexCells };", sandbox);
-const { patchSheetXml, splitSheetData } = sandbox.module.exports;
+vm.runInNewContext(patchSrc + "\nmodule.exports = { patchSheetXml, splitSheetData, indexCells, zipWriteUtf8Xml };", sandbox);
+const { patchSheetXml, splitSheetData, zipWriteUtf8Xml } = sandbox.module.exports;
 
 const shield = "🛡️";
 const fEsc = `IF(A1&gt;0,"ok${shield}","")`;
@@ -78,4 +79,31 @@ console.log("✅ xlsx-patch-unit OK (double save, emoji, H66, dataValidations)")
     process.exit(1);
   }
   console.log("✅ xlsx-patch-unit OK (self-closing H edit preserves I)");
+}
+
+// Regresja 2026-07-16: zipWriteUtf8Xml musi pisać bajty TextEncoder (nie JS string → JSZip CESU-8).
+{
+  const shield = "🛡️";
+  const xml = `<?xml version="1.0"?><worksheet><sheetData><c r="E1"><f>IF(1,"ok${shield}","")</f></c></sheetData></worksheet>`;
+  const fake = { stored: null, file(_p, data) { this.stored = data; } };
+  zipWriteUtf8Xml(fake, "xl/worksheets/sheet1.xml", xml);
+  const fails3 = [];
+  if (!(fake.stored instanceof Uint8Array)) fails3.push("zipWriteUtf8Xml did not store Uint8Array");
+  else {
+    const arr = fake.stored;
+    let cesu = false, proper = 0;
+    for (let i = 0; i < arr.length - 2; i++) {
+      if (arr[i] === 0xed && arr[i + 1] >= 0xa0 && arr[i + 1] <= 0xbf && arr[i + 2] >= 0x80) cesu = true;
+    }
+    for (let i = 0; i < arr.length - 3; i++) {
+      if (arr[i] === 0xf0 && arr[i + 1] === 0x9f && arr[i + 2] === 0x9b && arr[i + 3] === 0xa1) proper++;
+    }
+    if (cesu) fails3.push("CESU-8/surrogate bytes in TextEncoder output");
+    if (proper < 1) fails3.push("missing proper UTF-8 shield bytes");
+  }
+  if (fails3.length) {
+    console.error("❌ xlsx-patch-unit FAIL (zipWriteUtf8Xml):", fails3.join("; "));
+    process.exit(1);
+  }
+  console.log("✅ xlsx-patch-unit OK (zipWriteUtf8Xml TextEncoder, no CESU-8)");
 }
