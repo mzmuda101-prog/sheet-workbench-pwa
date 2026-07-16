@@ -578,9 +578,43 @@ function evalSheetCF(sheetName) {
   return map;
 }
 
-// Parsuje xl/tables/*.xml → currentTables: nazwa/displayName(lower) -> { columns: {kol(lower): absColIndex} }.
+// Parsuje xl/tables/*.xml → currentTables: nazwa/displayName(lower) ->
+// { columns: {kol(lower): absColIndex}, ref, sheetName, totalsRowShown }.
+// sheetName potrzebny m.in. do DV list ze structured ref (Tabela[Kolumna]).
 async function parseTables(zip) {
   const tables = {};
+  const wbXml = await zip.file("xl/workbook.xml")?.async("string");
+  const relsXml = await zip.file("xl/_rels/workbook.xml.rels")?.async("string");
+  const pathToSheetName = {};
+  if (wbXml && relsXml) {
+    const ridToPath = cfSheetPathsFromRels(relsXml);
+    const sheetRe = /<sheet\b[^>]*?name="([^"]+)"[^>]*?r:id="([^"]+)"[^>]*?\/?>/g;
+    let sm;
+    while ((sm = sheetRe.exec(wbXml))) {
+      const name = decodeXmlEntities(sm[1]);
+      const path = ridToPath.get(sm[2]);
+      if (!path) continue;
+      pathToSheetName[path] = name;
+      pathToSheetName[path.replace(/^xl\//, "")] = name;
+    }
+  }
+  const tableToSheet = {};
+  const relFiles = Object.keys(zip.files).filter((f) => /xl\/worksheets\/_rels\/sheet\d+\.xml\.rels$/i.test(f));
+  for (const rf of relFiles) {
+    const sheetFile = rf.replace("/_rels/", "/").replace(/\.rels$/i, "");
+    const sheetName = pathToSheetName[sheetFile] || pathToSheetName[sheetFile.replace(/^xl\//, "")];
+    if (!sheetName) continue;
+    let rxml;
+    try { rxml = await zip.file(rf).async("string"); } catch { continue; }
+    const tRe = /Target="([^"]*tables\/table\d+\.xml)"/gi;
+    let tm;
+    while ((tm = tRe.exec(rxml))) {
+      let tpath = tm[1].replace(/\\/g, "/");
+      if (tpath.startsWith("../")) tpath = "xl/" + tpath.replace(/^\.\.\//, "");
+      else if (!tpath.startsWith("xl/")) tpath = "xl/tables/" + tpath.split("/").pop();
+      tableToSheet[tpath] = sheetName;
+    }
+  }
   const files = Object.keys(zip.files).filter((f) => /xl\/tables\/table\d+\.xml$/i.test(f));
   for (const f of files) {
     let xml;
@@ -593,7 +627,12 @@ async function parseTables(zip) {
     let cm, idx = 0;
     const colRe = /<tableColumn\b[^>]*\bname="([^"]+)"/g;
     while ((cm = colRe.exec(xml))) { cols[decodeXmlEntities(cm[1]).toLowerCase()] = startCol + idx; idx++; }
-    const meta = { columns: cols };
+    const meta = {
+      columns: cols,
+      ref: refM[1],
+      sheetName: tableToSheet[f] || null,
+      totalsRowShown: /\btotalsRowShown="1"/.test(xml),
+    };
     const nameM = xml.match(/<table\b[^>]*\bname="([^"]+)"/);
     const dispM = xml.match(/\bdisplayName="([^"]+)"/);
     if (nameM) tables[decodeXmlEntities(nameM[1]).toLowerCase()] = meta;

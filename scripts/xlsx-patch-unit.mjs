@@ -54,3 +54,28 @@ if (fails.length) {
   process.exit(1);
 }
 console.log("✅ xlsx-patch-unit OK (double save, emoji, H66, dataValidations)");
+
+// Regresja 2026-07-16: edycja pustej samozamykającej H (przed formułą I) nie może
+// zostawić <c r="H.." s="17"/><v>…</v></c> ani skasować I.
+{
+  const rowXml =
+    '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' +
+    '<row r="125">' +
+    '<c r="F125" s="13" t="s"><v>152</v></c>' +
+    '<c r="G125" s="16"><v>46212</v></c>' +
+    '<c r="H125" s="17"/>' +
+    '<c r="I125" s="8" t="str"><f ca="1">IF(1,"ok","")</f><v>ok</v></c>' +
+    '<c r="J125" s="13"/>' +
+    "</row></sheetData></worksheet>";
+  const patched = patchSheetXml(rowXml, { H125: { v: 46219, t: "n" } });
+  const fails2 = [];
+  if (/<c r="H125"[^>]*\/>\s*<v>/.test(patched)) fails2.push("selfclose+v orphan after H125");
+  if (!/<c r="H125"[^>]*>\s*<v>46219<\/v>\s*<\/c>/.test(patched)) fails2.push("H125 date not written cleanly");
+  if (!/<c r="I125"[^>]*>/.test(patched)) fails2.push("I125 formula cell deleted");
+  if (!patched.includes('IF(1,"ok","")')) fails2.push("I125 formula text lost");
+  if (fails2.length) {
+    console.error("❌ xlsx-patch-unit FAIL (selfclose-H-edit):", fails2.join("; "));
+    process.exit(1);
+  }
+  console.log("✅ xlsx-patch-unit OK (self-closing H edit preserves I)");
+}

@@ -18,7 +18,10 @@ const SPREADSHEETML_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/m
 const OOXML_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 // Regex komórki w sheetData — oba warianty: <c …></c> oraz samozamykające <c …/>.
-const CELL_BLOCK_RE = /<c r="([A-Z]+\d+)"([^>]*)>([\s\S]*?)<\/c>|<c r="([A-Z]+\d+)"([^/>]*)\/>/g;
+// WAŻNE: w wariancie otwartym attrs = [^>/]* (NIE [^>]*). Inaczej <c r="H1" s="17"/>
+// jest mylone z otwarciem (attrs kończy się na "/"), a ([\s\S]*?)</c> połyka NASTĘPNĄ
+// komórkę — przy edycji H powstaje <c r="H1" s="17"/><v>…</v></c> (Excel: uszkodzony).
+const CELL_BLOCK_RE = /<c r="([A-Z]+\d+)"([^>/]*)>([\s\S]*?)<\/c>|<c r="([A-Z]+\d+)"([^/>]*)\/>/g;
 
 // Date -> numer seryjny Excela (system 1900, dni od 1899-12-30). Używa komponentów
 // lokalnych daty (tak jak SheetJS zwraca Date przy cellDates), niezależnie od strefy.
@@ -147,9 +150,7 @@ function unshareTouchedGroupsString(inner, cells, formulaMap, cellMap) {
       const text = m.text || (formulaMap && formulaMap[m.ref]) || "";
       const newInner = replaceSharedFormulaInInner(m.cell.inner, text);
       if (newInner === m.cell.inner) return;
-      const newFull = m.cell.selfClose
-        ? `<c r="${m.ref}"${m.cell.attrs}>${newInner}</c>`
-        : `<c r="${m.ref}"${m.cell.attrs}>${newInner}</c>`;
+      const newFull = `<c r="${m.ref}"${m.cell.attrs}>${newInner}</c>`;
       replacements.push({ start: m.cell.start, len: m.cell.full.length, text: newFull });
     });
   });
@@ -163,7 +164,8 @@ function unshareTouchedGroupsString(inner, cells, formulaMap, cellMap) {
 }
 
 function normalizeCellAttrs(attrs, payload) {
-  let a = String(attrs || "").replace(/\s*\bt="[^"]*"/g, "").trim();
+  // [EN] Strip stray "/" left if a self-closing cell was ever mis-parsed as open.
+  let a = String(attrs || "").replace(/\/\s*$/g, "").replace(/\s*\bt="[^"]*"/g, "").trim();
   if (payload && payload.t === "s") a = (a ? a + " " : "") + 't="inlineStr"';
   return a ? " " + a : "";
 }
@@ -293,7 +295,7 @@ async function forceRecalcOnLoad(zip) {
     } else {
       xml = xml.replace(/<calcPr\b/, '<calcPr fullCalcOnLoad="1"');
     }
-    zip.file("xl/workbook.xml", xml);
+    zipWriteUtf8Xml(zip, "xl/workbook.xml", xml);
   }
 }
 
@@ -317,6 +319,16 @@ async function dropCalcChain(zip) {
   }
 }
 
+// Zapis XML arkusza jako bajty UTF-8 (TextEncoder), NIE jako JS string do JSZip.
+// JSZip przy zip.file(path, string) potrafi zapisać emoji jako CESU-8 (ed a0 bd…),
+// a Excel wtedy żąda „odzyskania skoroszytu". TextEncoder → poprawne f0 9f ….
+function zipWriteUtf8Xml(zip, path, xmlString) {
+  const bytes = typeof TextEncoder !== "undefined"
+    ? new TextEncoder().encode(String(xmlString))
+    : xmlString;
+  zip.file(path, bytes);
+}
+
 async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
   if (typeof JSZip === "undefined") throw new Error("JSZip niedostępny");
   const zip = await JSZip.loadAsync(originalBytes);
@@ -329,7 +341,8 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
     const path = sheetPaths[sheetName];
     if (!path || !zip.file(path)) continue;
     const xml = await zip.file(path).async("string");
-    zip.file(path, patchSheetXml(xml, cells, (formulaMaps && formulaMaps[sheetName]) || null));
+    const patched = patchSheetXml(xml, cells, (formulaMaps && formulaMaps[sheetName]) || null);
+    zipWriteUtf8Xml(zip, path, patched);
     touched = true;
   }
 
@@ -350,5 +363,6 @@ if (typeof module !== "undefined" && module.exports) {
     indexCells,
     sanitizeXmlText,
     buildCellXml,
+    zipWriteUtf8Xml,
   };
 }

@@ -8,10 +8,11 @@
      • lista inline:   "Jan,Ola,Ewa"
      • zakres:         Słownik!$A$2:$A$50  (także z INNEGO arkusza tego pliku)
      • nazwany zakres: Imiona  (z workbook.xml <definedNames> → wb.Workbook.Names)
+     • kolumna tabeli: Tabela3[Kolumna]  (structured ref → A1 przez currentTables)
    Cross-sheet listy Excel trzyma w rozszerzeniu <x14:dataValidation> (xm:f/xm:sqref),
    więc parsujemy oba warianty. Wartości rozwiązywane LENIWIE (przy pierwszej edycji
    komórki) i cache'owane na regule. Reużywa globalnych: cfSheetPathsFromRels,
-   decodeXmlEntities, XLSX, JSZip, workbook. ───────────────────────────────── */
+   decodeXmlEntities, XLSX, JSZip, workbook, currentTables. ───────────────── */
 
 let dvRulesBySheet = null; // Map<sheetName, Array<rule>>  (null = brak reguł)
 let dvNameRefs = null;     // Map<definedName, refString>
@@ -71,6 +72,45 @@ function parseSheetDataValidations(sheetXml) {
   return out;
 }
 
+// Rozwiń structured ref Excel (Tabela[Kolumna] / Tabela[[#Data],[Kolumna]]) → "Arkusz!A2:A145".
+// Bez tego decode_range traktuje "Tabela3[…]" jak śmieciowy adres A1 i lista DV jest pusta.
+function dvResolveStructuredToA1(ref) {
+  const s = String(ref || "").trim();
+  if (s.indexOf("[") < 0) return null;
+  const m = s.match(/^([A-Za-z_À-ɏ][\w.À-ɏ]*)\[(.*)\]$/);
+  if (!m) return null;
+  const tables = typeof currentTables !== "undefined" ? currentTables : null;
+  const t = tables && tables[m[1].toLowerCase()];
+  if (!t || !t.ref || !t.sheetName || !t.columns) return null;
+  let inner = String(m[2] || "").trim();
+  let colName = inner;
+  let mode = "data"; // data = bez nagłówka (domyślne Table[Col] w Excelu)
+  const fancy = inner.match(/^\[#(All|Data|Headers)\]\s*,\s*\[([^\]]+)\]$/i);
+  if (fancy) {
+    mode = fancy[1].toLowerCase();
+    colName = fancy[2].trim();
+  } else if (/^\[.+\]$/.test(inner)) {
+    colName = inner.slice(1, -1).trim();
+  }
+  const c = t.columns[colName.toLowerCase()];
+  if (c == null) return null;
+  let full;
+  try { full = XLSX.utils.decode_range(t.ref); } catch { return null; }
+  let r0 = full.s.r;
+  let r1 = full.e.r;
+  if (mode === "headers") {
+    r1 = r0;
+  } else {
+    if (mode !== "all") r0 = full.s.r + 1; // pomiń wiersz nagłówka tabeli
+    if (t.totalsRowShown) r1 = full.e.r - 1;
+  }
+  if (r1 < r0) return null;
+  const a1 = XLSX.utils.encode_range({ s: { r: r0, c }, e: { r: r1, c } });
+  const sn = String(t.sheetName);
+  const quoted = /[\s'!]/.test(sn) ? `'${sn.replace(/'/g, "''")}'` : sn;
+  return `${quoted}!${a1}`;
+}
+
 // Odczytaj wartości z zakresu (np. "Słownik!$A$2:$A$50" lub "$A$1:$A$9").
 // Sheet w refie może wskazywać inny arkusz tego samego pliku.
 function dvReadRangeValues(ref, defaultSheet) {
@@ -108,13 +148,19 @@ function dvResolveValues(rule, defaultSheet) {
   if (rule._values) return rule._values;
   let raw = [];
   const f = String(rule.formula1Raw || "").trim();
-  if (f) {
+  if (f && f !== "#N/A" && f !== "#REF!") {
     if (f.startsWith('"') && f.endsWith('"')) {
       raw = f.slice(1, -1).split(",").map((s) => s.trim()).filter((s) => s !== "");
     } else if (dvNameRefs && dvNameRefs.has(f)) {
-      raw = dvReadRangeValues(dvNameRefs.get(f), defaultSheet);
+      let resolved = dvNameRefs.get(f);
+      const expanded = dvResolveStructuredToA1(resolved);
+      if (expanded) resolved = expanded;
+      raw = dvReadRangeValues(resolved, defaultSheet);
     } else {
-      raw = dvReadRangeValues(f, defaultSheet);
+      let resolved = f;
+      const expanded = dvResolveStructuredToA1(f);
+      if (expanded) resolved = expanded;
+      raw = dvReadRangeValues(resolved, defaultSheet);
     }
   }
   const seen = new Set();
