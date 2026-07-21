@@ -504,11 +504,13 @@ document.addEventListener("keydown", (e) => {
       }
     }
     if (e.key === "Enter") {
-      const onLiveItem = e.target && e.target.closest && e.target.closest(".qs-live-item");
-      if (onLiveItem) return; // natywny klik pozycji listy
-      const onOtherBtn = e.target && e.target.closest && e.target.closest("button")
-        && e.target.id !== "quickSearchPopupBtn";
-      if (onOtherBtn) return; // Kolumny itd. — zostaw natywne działanie
+      // Checkbox/przycisk/live-hit: własna aktywacja (tablet + klawiatura bez myszy).
+      if (typeof qsEnterShouldActivateControl === "function" && qsEnterShouldActivateControl(e.target)) {
+        if (typeof qsActivateFocusedControl === "function" && qsActivateFocusedControl(e.target)) {
+          e.preventDefault();
+        }
+        return;
+      }
       e.preventDefault();
       if (typeof commitQuickSearch === "function") commitQuickSearch();
       return;

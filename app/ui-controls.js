@@ -2494,17 +2494,41 @@ if (quickSearchModeEl) {
 }
 
 // Enter uruchamia szukanie z DOWOLNEGO elementu szybkiego szukania (pole, selecty
-// trybu/akcji, checkbox operatorów) — nie tylko z pola tekstowego. Wcześniej Enter
-// wisiał na samym input; po kliknięciu innego elementu fokus przechodził na niego
-// i Enter „przepadał". Dotyczyło OBU wariantów: paska pod przyciskiem (#quickSearchWrap)
-// i okna ze skrótu Cmd+Shift+F (#quickSearchPopup). Wyjątek: przyciski (Kolumny/Szukaj)
-// zachowują natywne działanie (klik), żeby Enter na „Kolumny" otwierał picker.
+// trybu/akcji) — nie tylko z pola tekstowego. Wyjątek: fokus na kontroli, którą
+// Enter/aktywacja ma obsłużyć natywnie (przycisk, checkbox, radio, live-hit) —
+// ważne na tablecie z klawiaturą bez touchpada (Tab → Enter).
+function qsEnterShouldActivateControl(target) {
+  if (!target || typeof target.closest !== "function") return false;
+  if (target.closest(".qs-live-item")) return true;
+  if (target.closest("button")) return true;
+  if (target.closest('input[type="checkbox"], input[type="radio"]')) return true;
+  const label = target.closest("label");
+  if (label && label.querySelector('input[type="checkbox"], input[type="radio"]')) return true;
+  return false;
+}
+
+// [EN] Checkbox/radio: Enter nie przełącza natywnie (robi to Space) — klikamy sami.
+// Przyciski: false → zostaw natywny Enter.
+function qsActivateFocusedControl(target) {
+  if (!target || typeof target.closest !== "function") return false;
+  const input = target.closest('input[type="checkbox"], input[type="radio"]')
+    || target.closest("label")?.querySelector('input[type="checkbox"], input[type="radio"]');
+  if (!input || input.disabled) return false;
+  input.click();
+  return true;
+}
+
 function attachQuickSearchEnter(container, handler) {
   if (!container) return;
   container.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
-    if (e.target.closest && e.target.closest("button")) return; // przyciski robią swoje
+    if (qsEnterShouldActivateControl(e.target)) {
+      if (qsActivateFocusedControl(e.target)) e.preventDefault();
+      e.stopPropagation(); // nie dubluj z document keydown (bootstrap)
+      return;
+    }
     e.preventDefault();
+    e.stopPropagation();
     handler();
   });
 }
