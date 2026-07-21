@@ -664,7 +664,7 @@ async function handleFile(file, fileHandle = null) {
   if (!(await ensureXlsxLibs(true))) return; // dogrywa xlsx/jszip przy pierwszym użyciu
   try {
     const sizeHint = file.size > 0 ? ` (${formatFileSize(file.size)})` : "";
-    setLoading(true, t("loadingFile") + sizeHint);
+    setLoading(true, t("loadingFile") + sizeHint, { mode: "file" });
     const data = await file.arrayBuffer();
     originalFileBytes = new Uint8Array(data); // do zapisu metodą ZIP-patch (zachowanie pliku)
     pendingEdits = {}; // świeży plik → brak naniesionych edycji
@@ -1655,7 +1655,7 @@ loadBtn.addEventListener("click", () => {
     log("Najpierw wybierz plik.", "warn");
     return;
   }
-  setLoading(true, t("loadingSheet"));
+  setLoading(true, t("loadingSheet"), { mode: "skeleton" });
   setTimeout(async () => {
     try {
       const sheetName = sheetSelect.value;
@@ -2027,6 +2027,29 @@ function renderQsLive(ctx) {
   ctx.liveEl.classList.remove("hidden");
 }
 
+// [EN] Arrow ↑/↓ through live hits; returns true when focus moved (caller prevents default)
+function navigateQsLiveResults(dir, preferredCtx) {
+  const openCtx = preferredCtx
+    || qsContexts.find((c) => c.liveEl && !c.liveEl.classList.contains("hidden"))
+    || null;
+  if (!openCtx || !openCtx.liveEl) return false;
+  const items = Array.from(openCtx.liveEl.querySelectorAll(".qs-live-item"));
+  if (!items.length) return false;
+  const active = document.activeElement;
+  let idx = items.indexOf(active);
+  if (idx < 0) {
+    // Z inputa: ↓ = pierwszy, ↑ = ostatni.
+    idx = dir > 0 ? -1 : items.length;
+  } else if (dir < 0 && idx === 0 && openCtx.inputEl) {
+    openCtx.inputEl.focus();
+    return true;
+  }
+  const nextIdx = idx + dir;
+  if (nextIdx < 0 || nextIdx >= items.length) return true; // zjedz event, zostań na krańcu
+  items[nextIdx].focus();
+  return true;
+}
+
 // Podpina identyczne zachowanie (przełącznik zakresu + live-podgląd) do jednego paska.
 function wireQuickSearchScope(ctx) {
   if (!ctx.inputEl && !ctx.toggleEl) return;
@@ -2050,6 +2073,12 @@ function wireQuickSearchScope(ctx) {
     });
     ctx.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Escape") hideQsLive(ctx);
+      // Strzałki ↓/↑ z pola → nawigacja po live-podglądzie (Enter na pozycji = wybór).
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (navigateQsLiveResults(e.key === "ArrowDown" ? 1 : -1, ctx)) {
+          e.preventDefault();
+        }
+      }
     });
   }
   if (ctx.modeEl) ctx.modeEl.addEventListener("change", () => renderQsLive(ctx));
@@ -2422,14 +2451,14 @@ function attachQuickSearchEnter(container, handler) {
   });
 }
 attachQuickSearchEnter(quickSearchWrap, commitQuickSearch);   // pasek pod przyciskiem (z zakresem)
-attachQuickSearchEnter(quickSearchPopupEl, applyQuickSearch); // okno ze skrótu Cmd+Shift+F
+attachQuickSearchEnter(quickSearchPopupEl, commitQuickSearch); // okno ze skrótu Cmd+Shift+F
 if (quickSearchPopupModeEl) {
   quickSearchPopupModeEl.addEventListener("change", () => {
     applyQuickSearchMode(getNormalizedSelectValue(quickSearchPopupModeEl));
   });
 }
 if (quickSearchPopupBtn) {
-  quickSearchPopupBtn.addEventListener("click", applyQuickSearch);
+  quickSearchPopupBtn.addEventListener("click", commitQuickSearch); // Enter / Szukaj = ten sam commit (zakres arkuszy)
 }
 if (quickSearchPopupColumnsBtn) {
   quickSearchPopupColumnsBtn.addEventListener("click", () => {

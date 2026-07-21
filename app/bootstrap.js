@@ -489,6 +489,45 @@ if (autoHeaderRowEl) {
 
 document.addEventListener("keydown", (e) => {
   const meta = e.ctrlKey || e.metaKey;
+  const popupOpen = typeof isQuickSearchPopupOpen === "function"
+    ? isQuickSearchPopupOpen()
+    : !!(quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden"));
+
+  // Popup szybkiego szukania ma priorytet: Enter = Szukaj (niezależnie od fokusu),
+  // strzałki ↓/↑ = live wyniki, Esc obsługiwane niżej. Bez tego Enter na „luźnym"
+  // fokusie otwierał edytor komórki zamiast szukać.
+  if (popupOpen && !meta && !e.altKey) {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      if (typeof navigateQsLiveResults === "function" && navigateQsLiveResults(e.key === "ArrowDown" ? 1 : -1)) {
+        e.preventDefault();
+        return;
+      }
+    }
+    if (e.key === "Enter") {
+      const onLiveItem = e.target && e.target.closest && e.target.closest(".qs-live-item");
+      if (onLiveItem) return; // natywny klik pozycji listy
+      const onOtherBtn = e.target && e.target.closest && e.target.closest("button")
+        && e.target.id !== "quickSearchPopupBtn";
+      if (onOtherBtn) return; // Kolumny itd. — zostaw natywne działanie
+      e.preventDefault();
+      if (typeof commitQuickSearch === "function") commitQuickSearch();
+      return;
+    }
+  }
+
+  // `/` — szybkie otwarcie popup szukania (gdy nie piszesz w polu/edytorze
+  // i nie masz aktywnej komórki — wtedy `/` ma iść do edytora jak inny znak).
+  if (!popupOpen && !meta && !e.altKey && e.key === "/" && !shouldIgnoreTableArrowNavigation() && !focusedCellState) {
+    if (currentHeaders.length && quickSearchPopupEl && quickSearchPopupInput) {
+      e.preventDefault();
+      quickSearchPopupInput.value = searchQueryEl.value || "";
+      quickSearchPopupEl.classList.remove("hidden");
+      quickSearchPopupInput.focus();
+      quickSearchPopupInput.select();
+      return;
+    }
+  }
+
   if (!meta && !e.altKey && !shouldIgnoreTableArrowNavigation()) {
     let handled = false;
     if (e.shiftKey) {
@@ -572,6 +611,7 @@ document.addEventListener("keydown", (e) => {
       quickSearchPopupInput.value = searchQueryEl.value || "";
       quickSearchPopupEl.classList.remove("hidden");
       quickSearchPopupInput.focus();
+      quickSearchPopupInput.select();
     } else if (!currentHeaders.length) {
       toast(t("loadSheetToSearch"), "info");
     }

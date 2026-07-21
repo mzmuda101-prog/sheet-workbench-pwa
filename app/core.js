@@ -163,6 +163,10 @@ const networkBadgeEl = document.getElementById("networkBadge");
 const heroRightEl = document.getElementById("heroRight");
 const loadingOverlayEl = document.getElementById("loadingOverlay");
 const loadingTextEl = document.getElementById("loadingText");
+const tableSkeletonEl = document.getElementById("tableSkeleton");
+let _loadingToken = 0;
+let _loadingShowTimer = 0;
+let _loadingMode = "overlay"; // [EN] overlay | skeleton | file — soft UI per workload
 const toastContainerEl = document.getElementById("toastContainer");
 const cellTooltipEl = document.getElementById("cellTooltip");
 const quickSearchPopupEl = document.getElementById("quickSearchPopup");
@@ -521,7 +525,7 @@ let aggregationWorkbenchState = {
   measureFilterValue: "",
   resultSearch: "",
 };
-const APP_BUILD_VERSION = "20260716-02";
+const APP_BUILD_VERSION = "20260721-02";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -636,9 +640,77 @@ function toast(msg, type = "info") {
   }, 2800);
 }
 
-function setLoading(isLoading, text) {
-  loadingTextEl.textContent = text || t("loadingGeneric");
-  loadingOverlayEl.classList.toggle("hidden", !isLoading);
+function isQuickSearchPopupOpen() {
+  return !!(quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden"));
+}
+
+// [EN] Hide skeleton/overlay; restore table or empty state without waiting for rAF render
+function hideLoadingUI() {
+  if (loadingOverlayEl) {
+    loadingOverlayEl.classList.add("hidden");
+    loadingOverlayEl.classList.remove("is-skeleton", "is-file");
+  }
+  const skeletonWasOn = tableSkeletonEl && !tableSkeletonEl.classList.contains("hidden");
+  if (tableSkeletonEl) {
+    tableSkeletonEl.classList.add("hidden");
+    tableSkeletonEl.setAttribute("aria-hidden", "true");
+  }
+  if (document.body) document.body.removeAttribute("aria-busy");
+  if (!skeletonWasOn) return;
+  // Przywróć widok po skeletone — renderTable i tak dociągnie treść w następnym rAF.
+  if (typeof currentHeaders !== "undefined" && currentHeaders.length && typeof showTable === "function") {
+    showTable();
+  } else if (emptyStateEl) {
+    emptyStateEl.classList.remove("hidden");
+    if (tableWrapEl) tableWrapEl.classList.add("hidden");
+    if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
+  }
+}
+
+function revealLoadingUI(mode) {
+  if (!loadingOverlayEl) return;
+  loadingOverlayEl.classList.remove("hidden", "is-skeleton", "is-file");
+  if (mode === "skeleton" && tableSkeletonEl) {
+    loadingOverlayEl.classList.add("is-skeleton");
+    if (emptyStateEl) emptyStateEl.classList.add("hidden");
+    if (tableWrapEl) tableWrapEl.classList.add("hidden");
+    if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
+    tableSkeletonEl.classList.remove("hidden");
+    tableSkeletonEl.setAttribute("aria-hidden", "false");
+  } else if (mode === "file") {
+    loadingOverlayEl.classList.add("is-file");
+    if (tableSkeletonEl) {
+      tableSkeletonEl.classList.add("hidden");
+      tableSkeletonEl.setAttribute("aria-hidden", "true");
+    }
+  } else if (tableSkeletonEl) {
+    tableSkeletonEl.classList.add("hidden");
+    tableSkeletonEl.setAttribute("aria-hidden", "true");
+  }
+  if (document.body) document.body.setAttribute("aria-busy", "true");
+}
+
+// Smart loading: delay show (~90ms) żeby szybkie operacje nie migały UI;
+// mode "skeleton" = kości w miejscu tabeli (tańsze niż pełny blur), "file" = miękki overlay.
+function setLoading(isLoading, text, options = {}) {
+  if (loadingTextEl) loadingTextEl.textContent = text || t("loadingGeneric");
+  if (isLoading) {
+    _loadingToken += 1;
+    const token = _loadingToken;
+    _loadingMode = options.mode || "overlay";
+    if (document.body) document.body.setAttribute("aria-busy", "true");
+    window.clearTimeout(_loadingShowTimer);
+    const delay = options.delay != null ? options.delay : 90;
+    _loadingShowTimer = window.setTimeout(() => {
+      if (token !== _loadingToken) return;
+      revealLoadingUI(_loadingMode);
+    }, delay);
+  } else {
+    _loadingToken += 1;
+    window.clearTimeout(_loadingShowTimer);
+    _loadingShowTimer = 0;
+    hideLoadingUI();
+  }
 }
 
 function setStatus(msg) {

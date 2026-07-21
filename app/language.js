@@ -59,6 +59,7 @@ const I18N = {
     loadingFile: "Wczytywanie pliku...",
     loadingSheet: "Budowanie tabeli...",
     loadingGeneric: "Wczytywanie...",
+    skeletonAria: "Ładowanie tabeli",
     statusFileLoaded: "Plik wczytany",
     fileLoaded: "Plik wczytany",
     guideChooseSheet: "Wybierz arkusz i kliknij „Wczytaj arkusz”",
@@ -587,6 +588,7 @@ const I18N = {
     loadingFile: "Loading file...",
     loadingSheet: "Building table...",
     loadingGeneric: "Loading...",
+    skeletonAria: "Loading table",
     statusFileLoaded: "File loaded",
     fileLoaded: "File loaded",
     guideChooseSheet: "Pick a sheet and click “Load sheet”",
@@ -1248,6 +1250,9 @@ const STATIC_TRANSLATIONS = {
     editCancel: "anuluj edycję (przywróć poprzednią wartość)",
     clearCellSelection: "Odznacz wszystko (zaznaczenie i fokus)",
     quickSearch: "Szybkie szukanie",
+    quickSearchSlash: "Szybkie szukanie (bez aktywnej komórki / poza polem)",
+    quickSearchEnter: "w oknie szukania = Szukaj (zawsze, gdy popup otwarty)",
+    quickSearchArrows: "w szukaniu = nawigacja po podglądzie wyników",
     columns: "Kolumny",
     theme: "Motyw",
     closeModalPanel: "Zamknij modal / panel",
@@ -1303,7 +1308,7 @@ const STATIC_TRANSLATIONS = {
     searchInTable: "Szukaj w tabeli",
     quickSearchPopupPlaceholder: "np. faktura...",
     quickSearchPopupModeAria: "Tryb szybkiego szukania w oknie",
-    quickSearchHint: "Enter – zastosuj, Esc – zamknij",
+    quickSearchHint: "Enter – zastosuj · ↓↑ – wyniki · Esc – zamknij · / – otwórz",
     dateBetween: "Między",
     dateBefore: "DO",
     dateAfter: "OD",
@@ -1455,6 +1460,9 @@ const STATIC_TRANSLATIONS = {
     editCancel: "cancel editing (restore the previous value)",
     clearCellSelection: "Clear selected cell",
     quickSearch: "Quick search",
+    quickSearchSlash: "Quick search (no active cell / outside a field)",
+    quickSearchEnter: "in search dialog = Search (whenever the popup is open)",
+    quickSearchArrows: "in search = navigate live result preview",
     columns: "Columns",
     theme: "Theme",
     closeModalPanel: "Close modal / panel",
@@ -1510,7 +1518,7 @@ const STATIC_TRANSLATIONS = {
     searchInTable: "Search in table",
     quickSearchPopupPlaceholder: "e.g. invoice...",
     quickSearchPopupModeAria: "Quick search mode in dialog",
-    quickSearchHint: "Enter - apply, Esc - close",
+    quickSearchHint: "Enter – apply · ↓↑ – results · Esc – close · / – open",
     dateBetween: "Between",
     dateBefore: "Before",
     dateAfter: "After",
@@ -1989,6 +1997,7 @@ function applyStaticTranslations() {
   setText(".quick-search-popup-label", copy.searchInTable);
   setAttr("#quickSearchPopupInput", "placeholder", copy.quickSearchPopupPlaceholder);
   setText(".quick-search-popup-hint", copy.quickSearchHint);
+  setAttr("#tableSkeleton", "aria-label", t("skeletonAria"));
   setAttr("#quickSearch", "placeholder", copy.quickSearchPlaceholder);
   setText("#exportCsvBtn", copy.exportCsv);
   setText("#exportModalTitle", t("exportModalTitle"));

@@ -2822,6 +2822,71 @@ details.panel[open] > summary {
 }
 
 /* ===================================================
+   TABLE SKELETON (smart loading)
+   Stałe kości w HTML — zero pętli JS. Shimmer tylko CSS
+   (transform), wyłączany na low-power / reduced-motion.
+   =================================================== */
+.table-skeleton {
+  flex: 1;
+  min-height: 280px;
+  margin-top: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--panel) 92%, var(--field));
+}
+.table-skeleton.hidden { display: none; }
+.sk-row {
+  display: grid;
+  grid-template-columns: 1.1fr 1.4fr 0.9fr 1.2fr 1fr;
+  gap: 10px;
+  align-items: center;
+}
+.sk-row-head { margin-bottom: 4px; }
+.sk-bone {
+  display: block;
+  height: 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--border) 70%, var(--field));
+  position: relative;
+  overflow: hidden;
+}
+.sk-row-head .sk-bone { height: 14px; opacity: 0.95; }
+.sk-row:nth-child(3) .sk-bone:nth-child(2),
+.sk-row:nth-child(5) .sk-bone:nth-child(4),
+.sk-row:nth-child(7) .sk-bone:nth-child(1) { width: 72%; }
+.sk-row:nth-child(4) .sk-bone:nth-child(3),
+.sk-row:nth-child(6) .sk-bone:nth-child(5),
+.sk-row:nth-child(8) .sk-bone:nth-child(2) { width: 58%; }
+.sk-bone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-120%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--panel) 55%, transparent) 45%,
+    transparent 100%
+  );
+  animation: skShimmer 1.15s ease-in-out infinite;
+}
+@keyframes skShimmer {
+  100% { transform: translateX(120%); }
+}
+html.low-power .sk-bone::after {
+  animation: none;
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-bone::after { animation: none; display: none; }
+}
+
+/* ===================================================
    TABLE
    =================================================== */
 .table-wrap {
@@ -3377,7 +3442,10 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   cursor: pointer;
   font-size: 13px;
 }
-.qs-live-item:hover, .qs-live-item:focus-visible { background: var(--surface-hover, rgba(127, 127, 127, 0.12)); }
+.qs-live-item:hover, .qs-live-item:focus, .qs-live-item:focus-visible { background: var(--surface-hover, rgba(127, 127, 127, 0.12)); outline: none; }
+.qs-live-item:focus, .qs-live-item:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
 .qs-live-addr { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--accent); flex: 0 0 auto; }
 .qs-live-text { opacity: 0.9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qs-live-more { font-size: 12px; opacity: 0.65; padding: 4px 8px; }
@@ -3896,6 +3964,44 @@ kbd {
   align-items: center;
   justify-content: center;
   z-index: 200;
+}
+
+/* Skeleton mode: prawie przezroczysty — widać kości tabeli, blokuje tylko kliknięcia.
+   Bez blur (tańsze na mobile / low-power). */
+.loading-overlay.is-skeleton {
+  background: rgba(10, 14, 10, 0.08);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 16px 28px;
+}
+.loading-overlay.is-skeleton .loading-box {
+  flex-direction: row;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: var(--r-full);
+}
+.loading-overlay.is-skeleton .spinner {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+.loading-overlay.is-skeleton .loading-text {
+  font-size: 12.5px;
+}
+
+/* File parse: lżejszy blur niż pełny default (mniej janku przy dużych plikach). */
+.loading-overlay.is-file {
+  background: rgba(10, 14, 10, 0.42);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+html.low-power .loading-overlay,
+html.low-power .loading-overlay.is-file {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* Quick search popup (Ctrl/Cmd+Shift+F) */
