@@ -1922,6 +1922,59 @@ function qsSyncToggles() {
   qsContexts.forEach((c) => { if (c.toggleEl) c.toggleEl.setAttribute("aria-pressed", String(qsAllSheetsScope)); });
 }
 
+// [EN] Typed/rest label greying — shared by DV cell-suggest + qs-live (DOM spans, no innerHTML).
+// Prefiks jak w DV; gdy brak prefiksu → pierwsze wystąpienie (contains / live search).
+function appendTypedRestLabel(parent, text, query) {
+  if (!parent) return;
+  const sv = String(text ?? "");
+  const q = String(query ?? "").trim();
+  if (q) {
+    const lower = sv.toLowerCase();
+    const qLower = q.toLowerCase();
+    let idx = lower.startsWith(qLower) ? 0 : lower.indexOf(qLower);
+    if (idx >= 0) {
+      if (idx > 0) {
+        const before = document.createElement("span");
+        before.className = "cell-suggest-rest";
+        before.textContent = sv.slice(0, idx);
+        parent.appendChild(before);
+      }
+      const typed = document.createElement("span");
+      typed.className = "cell-suggest-typed";
+      typed.textContent = sv.slice(idx, idx + q.length);
+      parent.appendChild(typed);
+      if (idx + q.length < sv.length) {
+        const rest = document.createElement("span");
+        rest.className = "cell-suggest-rest";
+        rest.textContent = sv.slice(idx + q.length);
+        parent.appendChild(rest);
+      }
+      return;
+    }
+  }
+  const rest = document.createElement("span");
+  rest.className = "cell-suggest-rest";
+  rest.textContent = sv;
+  parent.appendChild(rest);
+}
+
+// [EN] For operator queries highlight first meaningful term (&& / || / ! / {})
+function qsLiveHighlightNeedle(query, operatorsEnabled) {
+  const q = String(query || "").trim();
+  if (!q || !operatorsEnabled) return q;
+  const parts = q.split(/\s*(?:&&|\|\|)\s*/);
+  for (const part of parts) {
+    let term = String(part || "").trim();
+    if (!term) continue;
+    if (term.startsWith("{") && term.endsWith("}")) term = term.slice(1, -1).trim();
+    if (term.startsWith("!")) term = term.slice(1).trim();
+    if (!term) continue;
+    if (/^(?:>>|<<|>>=|=<<|>=|<=|>|<|=)/.test(term)) continue;
+    return term;
+  }
+  return q;
+}
+
 // Stosuje szukanie przez applyQuickSearch (respektuje tryb/akcję/kolumny/operatory
 // AKTYWNEGO paska), skacząc najpierw do wskazanego arkusza, jeśli różni się od bieżącego.
 // Ustawiamy wartość w OBU polach, bo applyQuickSearch czyta z aktywnego paska.
@@ -2011,7 +2064,12 @@ function renderQsLive(ctx) {
       addr.textContent = h.addr;
       const text = document.createElement("span");
       text.className = "qs-live-text";
-      text.textContent = h.text.length > 80 ? `${h.text.slice(0, 80)}…` : h.text;
+      // [EN] Same typed/rest greying as DV cell-suggest — needle = query (or 1st operator term)
+      const needle = qsLiveHighlightNeedle(value, operators);
+      const raw = String(h.text ?? "");
+      const truncated = raw.length > 80;
+      appendTypedRestLabel(text, truncated ? raw.slice(0, 80) : raw, needle);
+      if (truncated) text.appendChild(document.createTextNode("…"));
       item.append(addr, text);
       item.addEventListener("click", () => qsApplyOnSheet(g.sheet, value));
       frag.appendChild(item);
@@ -2785,24 +2843,8 @@ function createCellSuggestions(input, values, onPick) {
     const el = document.createElement("div");
     el.className = "cell-suggest-item";
     el.setAttribute("role", "option");
-    // Część już wpisana (prefiks) = mocny tekst; reszta „jeszcze nie wpisana" =
-    // przygaszona zieleń z palety. Gdy nic nie wpisano → cała pozycja przygaszona.
-    const q = input.value.trim();
-    const sv = String(v);
-    if (q && sv.toLowerCase().startsWith(q.toLowerCase())) {
-      const typed = document.createElement("span");
-      typed.className = "cell-suggest-typed";
-      typed.textContent = sv.slice(0, q.length);
-      const rest = document.createElement("span");
-      rest.className = "cell-suggest-rest";
-      rest.textContent = sv.slice(q.length);
-      el.append(typed, rest);
-    } else {
-      const rest = document.createElement("span");
-      rest.className = "cell-suggest-rest";
-      rest.textContent = sv;
-      el.appendChild(rest);
-    }
+    // Część już wpisana = mocny tekst; reszta „jeszcze nie" = przygaszona zieleń (appendTypedRestLabel).
+    appendTypedRestLabel(el, String(v), input.value.trim());
     // mysz/pen: pointerdown preventDefault => input nie traci focusu; wybór na click
     el.addEventListener("pointerdown", (e) => { startInteract(); if (e.pointerType !== "touch") e.preventDefault(); });
     el.addEventListener("pointerup", endInteract);
