@@ -16,7 +16,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260909-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260910-03" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1281,6 +1281,31 @@
       </div>
     </div>
 
+    <!-- Save-as filename modal (fallback bez File System Access API) -->
+    <div class="modal hidden" id="saveAsModal" role="dialog" aria-modal="true" aria-labelledby="saveAsModalTitle">
+      <div class="modal-content">
+        <div class="modal-head">
+          <div class="modal-title" id="saveAsModalTitle">Zapisz jako</div>
+          <button class="modal-close" id="closeSaveAsModal" type="button" aria-label="Zamknij">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+        <form id="saveAsForm">
+          <label class="field" id="saveAsFieldLabel">
+            Nazwa pliku (xlsx lub xlsm)
+            <input id="saveAsNameInput" type="text" autocomplete="off" spellcheck="false" />
+          </label>
+          <div class="modal-actions">
+            <button class="btn ghost" id="cancelSaveAsModal" type="button">Anuluj</button>
+            <button class="btn" id="confirmSaveAsModal" type="submit">Zapisz</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Quick search popup (Ctrl/Cmd+Shift+F) -->
     <div class="quick-search-popup hidden" id="quickSearchPopup" role="dialog" aria-label="Szybkie szukanie">
       <div class="quick-search-popup-box">
@@ -1449,23 +1474,23 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260909-01"></script>
-    <script defer src="app/language.js?v=20260909-01"></script>
-    <script defer src="app/analysis.js?v=20260909-01"></script>
-    <script defer src="app/workbook.js?v=20260909-01"></script>
-    <script defer src="app/xlsx-patch.js?v=20260909-01"></script>
-    <script defer src="app/table.js?v=20260909-01"></script>
-    <script defer src="app/conditional-formatting.js?v=20260909-01"></script>
-    <script defer src="app/data-validation.js?v=20260909-01"></script>
-    <script defer src="app/derived-columns.js?v=20260909-01"></script>
-    <script defer src="app/formulas.js?v=20260909-01"></script>
-    <script defer src="app/edit-tools.js?v=20260909-01"></script>
-    <script defer src="app/ui-controls.js?v=20260909-01"></script>
-    <script defer src="app/transcribe.js?v=20260909-01"></script>
+    <script defer src="app/core.js?v=20260910-03"></script>
+    <script defer src="app/language.js?v=20260910-03"></script>
+    <script defer src="app/analysis.js?v=20260910-03"></script>
+    <script defer src="app/workbook.js?v=20260910-03"></script>
+    <script defer src="app/xlsx-patch.js?v=20260910-03"></script>
+    <script defer src="app/table.js?v=20260910-03"></script>
+    <script defer src="app/conditional-formatting.js?v=20260910-03"></script>
+    <script defer src="app/data-validation.js?v=20260910-03"></script>
+    <script defer src="app/derived-columns.js?v=20260910-03"></script>
+    <script defer src="app/formulas.js?v=20260910-03"></script>
+    <script defer src="app/edit-tools.js?v=20260910-03"></script>
+    <script defer src="app/ui-controls.js?v=20260910-03"></script>
+    <script defer src="app/transcribe.js?v=20260910-03"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260909-01"></script>
-    <script defer src="app/bootstrap.js?v=20260909-01"></script>
+    <script defer src="app/debug-loaders.js?v=20260910-03"></script>
+    <script defer src="app/bootstrap.js?v=20260910-03"></script>
   </body>
 </html>

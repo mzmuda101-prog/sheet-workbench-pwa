@@ -1,8 +1,12 @@
-const CACHE_VERSION = "20260909-01";
+const CACHE_VERSION = "20260910-03";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
-const ASSET_V = "20260721-03";
+// Spięte z CACHE_VERSION (nie osobna stała) — inaczej npm run release bumpuje tylko
+// CACHE_VERSION i literalne ?v= w index.html, a ASSET_V zostaje w tyle: precache
+// instalacyjny celuje wtedy w URL-e, których strona już nie prosi (cache miss na
+// starcie, offline-first dla JS/CSS realnie nie działa do pierwszego online-visit).
+const ASSET_V = CACHE_VERSION;
 
 const SHELL_ASSETS = [
   "./",
@@ -31,6 +35,7 @@ const SHELL_ASSETS = [
   `./app/bootstrap.js?v=${ASSET_V}`,
   "./assets/images/favicon.png?v=20260610-05",
   "./assets/images/apple-touch-icon.png?v=20260429-01",
+  "./assets/images/icon-192.png",
   "./assets/images/icon-512.png",
   "./assets/images/logo-mateusz-transparent.webp",
   "./assets/images/logo-mateusz-orange.webp",

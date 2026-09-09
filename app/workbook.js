@@ -479,7 +479,12 @@ function parseDateFlexible(value) {
     }
   }
 
-  v = v.replace(/T.*$/, "");
+  // UWAGA: dawniej /T.*$/ (bez kotwiczenia do cyfry) obcinał WSZYSTKO od pierwszej
+  // wielkiej litery "T" w stringu — więc zwykły tekst typu "Teren C-03" albo
+  // "Total 5" tracił resztę treści i mylnie przechodził dalej jako data (przez
+  // pustą resztę i domyślny rok silnika JS). Kotwiczymy sufiks czasu ISO do cyfry
+  // bezpośrednio przed "T" (np. "2026-01-01T10:30:00" → "2026-01-01").
+  v = v.replace(/(\d)T\d.*$/, "$1");
   v = v.replace(/\s+\d{1,2}:\d{2}(:\d{2})?.*$/, "");
   const normalized = v.replace(/[.\/]/g, "-");
 

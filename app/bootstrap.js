@@ -673,6 +673,21 @@ document.addEventListener("keydown", (e) => {
       return;
     }
   }
+  // Ctrl/⌘+C / Ctrl/⌘+V — kopiuj/wklej zaznaczony zakres komórek (TSV, kompatybilne
+  // z Excelem/Arkuszami). Tylko gdy komórka ma fokus i nie jesteśmy w polu tekstowym
+  // (inaczej normalne kopiowanie/wklejanie tekstu przestałoby działać wszędzie indziej).
+  if (meta && !e.altKey && !e.shiftKey && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
+    if (e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      copySelectionToClipboard();
+      return;
+    }
+    if (e.key.toLowerCase() === "v") {
+      e.preventDefault();
+      pasteClipboardToSelection();
+      return;
+    }
+  }
   // Shift+Spacja — przełącznik poziomu zaznaczenia: cały wiersz ↔ sama komórka.
   // Jedyne wejście w tryb komórki bez myszy (Shift+klik wymaga wskaźnika), a przy
   // okazji zgodne z arkuszami, gdzie Shift+Space zaznacza wiersz. MUSI stać przed

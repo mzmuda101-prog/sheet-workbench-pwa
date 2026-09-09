@@ -681,6 +681,22 @@ function formatFileSize(bytes) {
   return `${bytes} B`;
 }
 
+// Zamienia surowy błąd XLSX.read/arrayBuffer na komunikat, który user może
+// sam zdiagnozować (zamiast jednego ogólnego "nie udało się wczytać" na wszystko).
+function describeFileLoadError(err, file) {
+  const msg = (err && err.message) || String(err || "");
+  const lower = msg.toLowerCase();
+  const ext = ((file && file.name) || "").toLowerCase().split(".").pop();
+
+  if (file && file.size === 0) return t("fileLoadFailedEmpty");
+  if (lower.includes("password") || lower.includes("encrypt")) return t("fileLoadFailedPassword");
+  if (ext === "xls" || lower.includes("cfb") || lower.includes("ole compound")) return t("fileLoadFailedOldFormat");
+  if (lower.includes("zip") || lower.includes("central directory") || lower.includes("corrupt") || lower.includes("end of data")) {
+    return t("fileLoadFailedCorrupt");
+  }
+  return msg ? t("fileLoadFailedDetail", { detail: msg }) : t("fileLoadFailed");
+}
+
 async function handleFile(file, fileHandle = null) {
   if (!file) return;
   if (!(await ensureXlsxLibs(true))) return; // dogrywa xlsx/jszip przy pierwszym użyciu
@@ -742,8 +758,8 @@ async function handleFile(file, fileHandle = null) {
     toast(t("fileLoaded"), "success");
     log(`Wczytano plik: ${file.name}`, "success");
   } catch (err) {
-    toast(t("fileLoadFailed"), "error");
-    log("Blad przy wczytywaniu pliku.", "error");
+    toast(describeFileLoadError(err, file), "error");
+    log(`Blad przy wczytywaniu pliku "${file.name}": ${(err && err.message) || err}`, "error");
   } finally {
     setLoading(false);
   }
@@ -1022,10 +1038,35 @@ function openExportModal() {
   });
   ensureKeyboardReachable(exportColumnListEl);
   exportModalEl.classList.remove("hidden");
+  const firstFocusable = getExportModalFocusables()[0];
+  if (firstFocusable) firstFocusable.focus();
 }
 
 function closeExportModal() {
   if (exportModalEl) exportModalEl.classList.add("hidden");
+}
+
+function getExportModalFocusables() {
+  const modalContent = exportModalEl.querySelector(".modal-content");
+  if (!modalContent) return [];
+  return Array.from(modalContent.querySelectorAll("button, input:not([type=hidden]), [tabindex]:not([tabindex^='-'])"));
+}
+
+function handleExportModalKeydown(e) {
+  if (exportModalEl.classList.contains("hidden")) return;
+  if (e.key === "Tab") {
+    const focusables = getExportModalFocusables();
+    if (focusables.length === 0) return;
+    const idx = focusables.indexOf(document.activeElement);
+    if (idx === -1) return;
+    if (e.shiftKey && idx === 0) {
+      e.preventDefault();
+      focusables[focusables.length - 1].focus();
+    } else if (!e.shiftKey && idx === focusables.length - 1) {
+      e.preventDefault();
+      focusables[0].focus();
+    }
+  }
 }
 
 // ── Walidacja listą referencyjną (data validation) ──
@@ -1499,6 +1540,9 @@ async function tryDownloadFallback(ext) {
 
 // "Zapisz": nadpisz oryginał w miejscu (FSA). Przy braku uchwytu — picker zapisu;
 // bez FSA — fallback do "Zapisz jako…" (pobranie).
+// Ostrzeżenie o nadpisaniu w miejscu pokazujemy raz na uchwyt pliku w tej sesji
+// (nie przy każdym Ctrl/⌘+S) — śledzimy to przez saveInPlaceConfirmedHandle.
+let saveInPlaceConfirmedHandle = null;
 async function saveWorkbook() {
   if (!isXlsxAvailable(true)) return;
   if (!workbook) {
@@ -1509,10 +1553,10 @@ async function saveWorkbook() {
   if (currentFileHandle) {
     const handleName = currentFileHandle.name || currentFileName || "";
     const ext = handleName.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
-    // Ostrzeżenie przy KAŻDYM nadpisaniu w miejscu — to jedyna nieodwracalna operacja.
-    // Docelowo (gdy testy round-tripu będą pewniejsze) można to poluzować np. do
-    // jednorazowego potwierdzenia per plik/sesja.
-    if (!window.confirm(t("saveInPlaceWarn"))) return;
+    if (currentFileHandle !== saveInPlaceConfirmedHandle) {
+      if (!window.confirm(t("saveInPlaceWarn"))) return;
+      saveInPlaceConfirmedHandle = currentFileHandle;
+    }
     if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
     try {
       if (!(await ensureWritePermission(currentFileHandle))) {
@@ -1538,6 +1582,79 @@ async function saveWorkbook() {
   saveWorkbookAs();
 }
 
+// Modal nazwy pliku dla fallbacku "Zapisz jako…" bez FSA (zamiast window.prompt,
+// który łamie dark mode i wygląda obco na iPadzie, gdzie reszta appki ma dedykowany UX).
+const saveAsModalEl = document.getElementById("saveAsModal");
+const saveAsFormEl = document.getElementById("saveAsForm");
+const saveAsNameInputEl = document.getElementById("saveAsNameInput");
+let saveAsResolve = null;
+
+function closeSaveAsModal(result) {
+  if (!saveAsModalEl) return;
+  saveAsModalEl.classList.add("hidden");
+  if (saveAsResolve) {
+    const resolve = saveAsResolve;
+    saveAsResolve = null;
+    resolve(result);
+  }
+}
+
+function getSaveAsModalFocusables() {
+  const modalContent = saveAsModalEl.querySelector(".modal-content");
+  if (!modalContent) return [];
+  return Array.from(modalContent.querySelectorAll("button, input:not([type=hidden]), [tabindex]:not([tabindex^='-'])"));
+}
+
+function handleSaveAsModalKeydown(e) {
+  if (saveAsModalEl.classList.contains("hidden")) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    closeSaveAsModal(null);
+    return;
+  }
+  if (e.key === "Tab") {
+    const focusables = getSaveAsModalFocusables();
+    if (focusables.length === 0) return;
+    const idx = focusables.indexOf(document.activeElement);
+    if (idx === -1) return;
+    if (e.shiftKey && idx === 0) {
+      e.preventDefault();
+      focusables[focusables.length - 1].focus();
+    } else if (!e.shiftKey && idx === focusables.length - 1) {
+      e.preventDefault();
+      focusables[0].focus();
+    }
+  }
+}
+
+function promptSaveAsName(defaultName) {
+  if (!saveAsModalEl || !saveAsNameInputEl) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    saveAsResolve = resolve;
+    saveAsNameInputEl.value = defaultName || "";
+    saveAsModalEl.classList.remove("hidden");
+    requestAnimationFrame(() => {
+      saveAsNameInputEl.focus();
+      saveAsNameInputEl.select();
+    });
+  });
+}
+
+if (saveAsModalEl) {
+  saveAsModalEl.addEventListener("click", (e) => { if (e.target === saveAsModalEl) closeSaveAsModal(null); });
+  saveAsModalEl.addEventListener("keydown", handleSaveAsModalKeydown);
+  const closeSaveAsModalBtn = document.getElementById("closeSaveAsModal");
+  const cancelSaveAsModalBtn = document.getElementById("cancelSaveAsModal");
+  if (closeSaveAsModalBtn) closeSaveAsModalBtn.addEventListener("click", () => closeSaveAsModal(null));
+  if (cancelSaveAsModalBtn) cancelSaveAsModalBtn.addEventListener("click", () => closeSaveAsModal(null));
+  if (saveAsFormEl) {
+    saveAsFormEl.addEventListener("submit", (e) => {
+      e.preventDefault();
+      closeSaveAsModal(saveAsNameInputEl.value);
+    });
+  }
+}
+
 // "Zapisz jako…": z FSA otwiera picker (i zapamiętuje uchwyt); bez FSA — pobranie kopii.
 async function saveWorkbookAs() {
   if (!isXlsxAvailable(true)) return;
@@ -1560,6 +1677,7 @@ async function saveWorkbookAs() {
       if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
       await writeWorkbookToHandle(handle, ext);
       currentFileHandle = handle;
+      saveInPlaceConfirmedHandle = handle; // user świadomie wybrał tę lokalizację — kolejny Ctrl/⌘+S nie pyta ponownie
       setDirtyState(false);
       toast(t("fileSaved"), "success");
       log(`Zapisano plik: ${handle.name || base}`, "success");
@@ -1571,8 +1689,8 @@ async function saveWorkbookAs() {
     return;
   }
 
-  // Fallback bez FSA: zapytaj o nazwę i pobierz kopię.
-  const nameRaw = window.prompt(t("saveAsPrompt"), `${base}_edited.xlsx`);
+  // Fallback bez FSA: zapytaj o nazwę (własny modal, nie window.prompt) i pobierz kopię.
+  const nameRaw = await promptSaveAsName(`${base}_edited.xlsx`);
   if (!nameRaw) return;
   let name = nameRaw.trim();
   if (!name) return;
@@ -2938,6 +3056,7 @@ if (exportModalEl) {
     runPrintExport(cols);
   });
   exportModalEl.addEventListener("click", (e) => { if (e.target === exportModalEl) closeExportModal(); });
+  exportModalEl.addEventListener("keydown", handleExportModalKeydown);
 }
 if (resetSortBtn) {
   resetSortBtn.addEventListener("click", () => {

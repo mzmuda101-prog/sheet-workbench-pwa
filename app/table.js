@@ -466,6 +466,121 @@ function hasActiveCellRange() {
   return !!rect && !(rect.rowCount === 1 && rect.colCount === 1);
 }
 
+// ── Kopiuj/wklej zakresu komórek (Ctrl/⌘+C / Ctrl/⌘+V) ──
+// Serializacja do TSV (tabulator między kolumnami, nowa linia między wierszami) —
+// to format, którego używają Excel/Arkusze Google przy kopiowaniu zakresów, więc
+// wklejanie działa też do/z zewnętrznych arkuszy, nie tylko wewnątrz tej appki.
+
+// getSelectionRectangle() zwraca null, gdy jest tylko fokus (bez zakresu) —
+// do kopiowania traktujemy wtedy pojedynczą skupioną komórkę jako zakres 1×1.
+function rangeCellsToCopy() {
+  const rect = getSelectionRectangle();
+  if (rect) return rect;
+  if (!focusedCellState || !currentDisplayModel?.rows?.length) return null;
+  const model = currentDisplayModel;
+  const rowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
+  if (rowIdx < 0) return null;
+  return {
+    model,
+    rowStart: rowIdx,
+    rowEnd: rowIdx,
+    colMin: focusedCellState.colIndex0,
+    colMax: focusedCellState.colIndex0,
+    rowKeys: new Set([focusedCellState.rowKey]),
+    rowCount: 1,
+    colCount: 1,
+  };
+}
+
+function serializeRangeToTsv(rect) {
+  const lines = [];
+  for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
+    const row = rect.model.rows[r];
+    const cells = [];
+    for (let c = rect.colMin; c <= rect.colMax; c++) {
+      const v = row ? getDisplayValue(row, c) : "";
+      // Tabulator/nowa linia wewnątrz komórki zepsułby siatkę TSV po wklejeniu —
+      // zamieniamy na spację (zgubienie takiego formatowania jest tu akceptowalne).
+      cells.push(String(v ?? "").replace(/\t/g, " ").replace(/\r?\n/g, " "));
+    }
+    lines.push(cells.join("\t"));
+  }
+  return lines.join("\n");
+}
+
+async function copySelectionToClipboard() {
+  const rect = rangeCellsToCopy();
+  if (!rect) return;
+  const tsv = serializeRangeToTsv(rect);
+  try {
+    await navigator.clipboard.writeText(tsv);
+    toast(t("cellsCopied", { count: rect.rowCount * rect.colCount }), "success");
+  } catch {
+    toast(t("clipboardUnavailable"), "warning");
+  }
+}
+
+function parseTsvClipboard(text) {
+  const normalized = String(text ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  // Kopiowanie z Excela/Arkuszy zwykle dokleja jedną pustą linię na końcu —
+  // bez tego cięcia wklejenie dorzucałoby dodatkowy pusty wiersz pod spodem.
+  const trimmed = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
+  return trimmed.split("\n").map((line) => line.split("\t"));
+}
+
+async function pasteClipboardToSelection() {
+  if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") {
+    toast(t("editWideOnly"), "info");
+    return;
+  }
+  if (!focusedCellState) return;
+  const model = currentDisplayModel;
+  const anchorRowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
+  if (anchorRowIdx < 0) return;
+
+  let text;
+  try {
+    text = await navigator.clipboard.readText();
+  } catch {
+    toast(t("clipboardUnavailable"), "warning");
+    return;
+  }
+  if (!text) return;
+  const grid = parseTsvClipboard(text);
+  if (!grid.length || !grid[0].length) return;
+
+  const startCol = focusedCellState.colIndex0;
+  let changed = 0;
+  let skippedFormula = 0;
+
+  grid.forEach((cells, rOff) => {
+    const row = model.rows[anchorRowIdx + rOff];
+    if (!row || row.isLongViewRow || row.isSubheader) return; // poza tabelą / wiersz nieedytowalny
+    cells.forEach((raw, cOff) => {
+      const col = startCol + cOff;
+      if (col >= model.headers.length) return; // poza ostatnią kolumną — przycinamy w ciszy
+      const parsed = parseInputValue(raw);
+      if (parsed && parsed.type === "formula") { skippedFormula += 1; return; }
+      updateSheetCell(row.rowIndex0, col, parsed);
+      const newVal = parsed ? parsed.value : null;
+      if (Array.isArray(row.values)) row.values[col] = newVal;
+      if (Array.isArray(row.rawValues)) row.rawValues[col] = newVal;
+      if (Array.isArray(row.display)) row.display[col] = newVal == null ? "" : toDisplay(newVal);
+      changed += 1;
+    });
+  });
+
+  if (changed > 0) {
+    setDirtyState(true);
+    renderActiveTable();
+    toast(t("cellsPasted", { count: changed }), "success");
+    log(`Wklejono ${changed} komorek ze schowka`, "success");
+  } else {
+    toast(t("editToolNoChange"), "info");
+  }
+  if (skippedFormula > 0) toast(t("pasteSkippedFormulas", { count: skippedFormula }), "warning");
+}
+
 // Podświetla prostokąt zaznaczenia: wypełnienie + obwódkę całego zakresu
 // (klasy krawędziowe na komórkach brzegowych — jak w Arkuszach Google).
 function syncRangeHighlightInDom() {
