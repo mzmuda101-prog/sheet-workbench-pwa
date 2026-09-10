@@ -1397,6 +1397,24 @@ function openTranscribe() {
   } else {
     trDone = new Set(savedDone);
     savedDone.forEach((key, i) => { if (savedSigs[i]) trDoneSigs.set(key, savedSigs[i]); });
+    // Zapis mógł powstać w wersji sprzed odcisków treści (albo pojedynczy klucz je zgubił).
+    // Skoro fingerprint arkusza się zgadza (same/soft), pozycje są wciąż te same — możemy
+    // bezpiecznie DOPISAĆ brakujący odcisk od razu, zamiast czekać aż ktoś ręcznie tknie
+    // wiersz. Inaczej te konkretne ✓ zostałyby bez odcisku w nieskończoność i przy KOLEJNEJ
+    // realnej zmianie pliku znów wpadłyby w gałąź „nie da się zweryfikować".
+    if (trDone.size) {
+      const missing = new Set();
+      trDone.forEach((key) => { if (!trDoneSigs.has(key)) missing.add(key); });
+      if (missing.size) {
+        for (const row of trRows) {
+          const key = trKeyOf(row);
+          if (!missing.has(key)) continue;
+          trDoneSigs.set(key, trRowSig(row));
+          missing.delete(key);
+          if (!missing.size) break;
+        }
+      }
+    }
     if (level === "soft") {
       trChangeInfo = { level: "soft", rows: trFingerprint.rows, savedDone: savedDone.length, savedAt: saved?.ts || 0 };
     }
