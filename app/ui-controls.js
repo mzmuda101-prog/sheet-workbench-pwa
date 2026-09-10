@@ -3549,3 +3549,53 @@ function setReadingMode(enabled) {
   }
   syncSidebarHandle();
 }
+
+/* ============================================================================
+   KLAWIATURA EKRANOWA — trzymaj aktywne pole w widoku (dotyk).
+   ----------------------------------------------------------------------------
+   PO CO: na telefonie/tablecie klawiatura ekranowa wjeżdża od dołu i potrafi
+   zasłonić pole, w którym właśnie piszemy (np. filtr daty nisko w panelu).
+   `visualViewport` mówi, jaki fragment strony jest realnie widoczny nad
+   klawiaturą — jeśli aktywne pole wpada pod nią (albo nad górną krawędź),
+   dosuwamy je do środka widoku.
+
+   ZAKRES: WYŁĄCZNIE dotyk (pointer: coarse). Na desktopie `visualViewport`
+   też istnieje, ale klawiatury ekranowej nie ma — bramka na coarse gwarantuje,
+   że fokus myszą NIGDY nie wywoła nieoczekiwanego przewijania. No-op tam, gdzie
+   API nie ma (starsze WebKile). Nie koliduje z scrollIntoView nawigacji po
+   komórkach — tamto reaguje na ruch po siatce, to na otwarcie klawiatury.
+   ============================================================================ */
+(function () {
+  var vv = window.visualViewport;
+  if (!vv) return;
+  var coarse = window.matchMedia && window.matchMedia("(pointer: coarse)");
+  function isTouch() { return coarse ? coarse.matches : ("ontouchstart" in window); }
+
+  function isTypeable(el) {
+    if (!el) return false;
+    var tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+  }
+
+  function keepFocusedVisible() {
+    if (!isTouch()) return;
+    var el = document.activeElement;
+    if (!isTypeable(el)) return;
+    var r = el.getBoundingClientRect();
+    var top = vv.offsetTop;
+    var bottom = vv.offsetTop + vv.height; // dolna krawędź obszaru NAD klawiaturą
+    var margin = 16;
+    if (r.bottom > bottom - margin || r.top < top + margin) {
+      try { el.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (_) {
+        el.scrollIntoView(); // fallback bez opcji
+      }
+    }
+  }
+
+  // resize visualViewport = klawiatura wjechała/wyjechała → skoryguj po ułożeniu.
+  vv.addEventListener("resize", function () { setTimeout(keepFocusedVisible, 60); });
+  // focus w polu: layout klawiatury dojeżdża z opóźnieniem, więc korekta po chwili.
+  document.addEventListener("focusin", function (e) {
+    if (isTypeable(e.target)) setTimeout(keepFocusedVisible, 300);
+  });
+})();

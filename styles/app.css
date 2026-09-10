@@ -5300,3 +5300,30 @@ body.tr-active .toast-container {
   margin: 2px auto 0;
 }
 .tr-inherit-btn:disabled { opacity: .3; }
+
+/* =========================================================================
+   CELE DOTYKOWE — min. ~44px WYŁĄCZNIE na dotyku (pointer: coarse).
+   Bramka na coarse jest kluczowa: na desktopie/tablecie z myszą (pointer: fine)
+   gęstość UI zostaje BEZ ZMIAN — nie rozpychamy nagłówka ani przycisków.
+   Rośnie tylko wysokość docelowa palca; szerokości header-toggli zostawiamy
+   auto, żeby nie rozjechać wąskiego paska na telefonie. Wyższy hero jest OK —
+   measureHeroHeight() przemierza po fontach/load i dopasowuje --hero-h.
+   ========================================================================= */
+@media (pointer: coarse) {
+  /* Główne przyciski akcji (Zastosuj, Zapisz, Wczytaj, Wybierz, Usuń…) */
+  .btn { min-height: 44px; }
+
+  /* Ikonowe przyciski nagłówka — pełne 44×44 (mają swobodne otoczenie flex). */
+  .theme-toggle,
+  .app-update-btn,
+  .panel-toggle,
+  .logo-badge { min-height: 44px; min-width: 44px; }
+
+  /* Mikroprzełącznik języka PL/EN — podnosimy tylko wysokość trafienia,
+     szerokość auto (inaczej para 2×44px niepotrzebnie rozpycha pasek). */
+  .lang-button { min-height: 40px; }
+
+  /* Szybkie chipy zakresu dni — sekundarne, inline: umiarkowany wzrost
+     (nie pełne 44px, bo balonowałyby i łamały zawijanie), ale wygodniejsze. */
+  .chip { min-height: 34px; padding-top: 7px; padding-bottom: 7px; }
+}

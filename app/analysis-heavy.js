@@ -993,6 +993,7 @@ function renderAggregationWorkbench() {
 
   const resultSearchInput = document.createElement("input");
   resultSearchInput.type = "text";
+  resultSearchInput.setAttribute("enterkeyhint", "search"); // klawiatura ekranowa: klawisz „Szukaj"
   resultSearchInput.className = "aggregation-result-search";
   resultSearchInput.placeholder = searchOps ? t("aggregationSearchPlaceholderOps") : t("aggregationSearchPlaceholder");
   resultSearchInput.title = t("aggregationSearch");

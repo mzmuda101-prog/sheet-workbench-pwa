@@ -2,7 +2,9 @@
 <html lang="pl" data-theme="light">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- viewport-fit=cover: bez tego env(safe-area-inset-*) w CSS zwraca 0 na urządzeniach
+         z notchem/paskiem Home (iPhone/iPad) → cały nasz safe-area padding byłby martwy. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <!-- [EN] CSP — offline-first app, everything locks to 'self'. data:/blob: images
          (SVG w CSS, eksporty), worker-src dla build-rows-worker, media-src dla intro. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; media-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
@@ -16,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260910-04" />
+    <link rel="stylesheet" href="styles/app.css?v=20260911-01" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -184,7 +186,7 @@
                 <div class="filter-block-title" id="filter1BlockTitle">Filtr 1</div>
                 <label class="field">
                   Szukaj
-                  <input id="searchQuery" type="text" placeholder="np. faktura" />
+                  <input id="searchQuery" type="text" enterkeyhint="search" placeholder="np. faktura" />
                 </label>
                 <div class="row">
                   <label class="field">
@@ -243,7 +245,7 @@
                 </div>
                 <label class="field">
                   Szukaj
-                  <input id="searchQuery2" type="text" placeholder="np. klient" />
+                  <input id="searchQuery2" type="text" enterkeyhint="search" placeholder="np. klient" />
                 </label>
                 <div class="row">
                   <label class="field">
@@ -1474,23 +1476,23 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260910-04"></script>
-    <script defer src="app/language.js?v=20260910-04"></script>
-    <script defer src="app/analysis.js?v=20260910-04"></script>
-    <script defer src="app/workbook.js?v=20260910-04"></script>
-    <script defer src="app/xlsx-patch.js?v=20260910-04"></script>
-    <script defer src="app/table.js?v=20260910-04"></script>
-    <script defer src="app/conditional-formatting.js?v=20260910-04"></script>
-    <script defer src="app/data-validation.js?v=20260910-04"></script>
-    <script defer src="app/derived-columns.js?v=20260910-04"></script>
-    <script defer src="app/formulas.js?v=20260910-04"></script>
-    <script defer src="app/edit-tools.js?v=20260910-04"></script>
-    <script defer src="app/ui-controls.js?v=20260910-04"></script>
-    <script defer src="app/transcribe.js?v=20260910-04"></script>
+    <script defer src="app/core.js?v=20260911-01"></script>
+    <script defer src="app/language.js?v=20260911-01"></script>
+    <script defer src="app/analysis.js?v=20260911-01"></script>
+    <script defer src="app/workbook.js?v=20260911-01"></script>
+    <script defer src="app/xlsx-patch.js?v=20260911-01"></script>
+    <script defer src="app/table.js?v=20260911-01"></script>
+    <script defer src="app/conditional-formatting.js?v=20260911-01"></script>
+    <script defer src="app/data-validation.js?v=20260911-01"></script>
+    <script defer src="app/derived-columns.js?v=20260911-01"></script>
+    <script defer src="app/formulas.js?v=20260911-01"></script>
+    <script defer src="app/edit-tools.js?v=20260911-01"></script>
+    <script defer src="app/ui-controls.js?v=20260911-01"></script>
+    <script defer src="app/transcribe.js?v=20260911-01"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260910-04"></script>
-    <script defer src="app/bootstrap.js?v=20260910-04"></script>
+    <script defer src="app/debug-loaders.js?v=20260911-01"></script>
+    <script defer src="app/bootstrap.js?v=20260911-01"></script>
   </body>
 </html>
