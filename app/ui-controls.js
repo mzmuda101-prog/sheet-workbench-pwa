@@ -3088,6 +3088,10 @@ tbodyEl.addEventListener("mousedown", (e) => {
   if (e.shiftKey) e.preventDefault();
 });
 
+// DOTYK: „tap-to-edit" — powtórny tap w już zaznaczoną komórkę wchodzi w edycję.
+// Cache media-query (pointer: coarse), bo sprawdzamy je przy każdym tapnięciu.
+const cellTapCoarseMQ = typeof matchMedia === "function" ? matchMedia("(pointer: coarse)") : null;
+
 tbodyEl.addEventListener("click", (e) => {
   const td = e.target.closest("td");
   if (!td || td.classList.contains("row-head")) return;
@@ -3111,10 +3115,21 @@ tbodyEl.addEventListener("click", (e) => {
     giveGridDomFocus();
     return;
   }
+  // DOTYK: zapamiętaj, czy komórka BYŁA już zaznaczona PRZED tym tapnięciem —
+  // liczymy przed setFocusedCell, które zaraz nadpisze stan. Pierwszy tap tylko
+  // zaznacza; drugi tap w tę samą komórkę = wejście w edycję (jak w mobilnych
+  // arkuszach) — bez klawiatury i bez kapryśnego dwutapu.
+  const tapToEdit = cellTapCoarseMQ && cellTapCoarseMQ.matches && !activeCellEditor &&
+    focusedCellState && focusedCellState.rowKey === rowKey && focusedCellState.colIndex0 === colIndex0;
   // Zwykły klik zawsze wraca na poziom wiersza — patrz model gestów w core.js.
   setSelectionKind("row", { repaint: false });
   setFocusedCell(rowKey, colIndex0, { scroll: false });
   giveGridDomFocus();
+  // Desktop (mysz) zostaje przy dblclick. openCellEditor sam pilnuje trybu „wide"
+  // i wierszy specjalnych oraz jest idempotentny (guard na activeCellEditor), więc
+  // nie kłóci się z dblclick (dwutap: 1. tap zaznacza, 2. tap już tu otwiera edytor,
+  // późniejszy dblclick trafia w guard).
+  if (tapToEdit) openCellEditor(td);
 });
 
 // --- Edycja komórki (inline input) ---------------------------------------
