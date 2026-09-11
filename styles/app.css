@@ -3364,6 +3364,31 @@ input.cell-editor {
 .cell-suggest-item:hover {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
+/* Dokładne trafienie z listy Data Validation — potwierdzenie „wpisane poprawnie
+   i kompletnie" (te same tony co toast.success, nie nowe znaczenie koloru). */
+.cell-suggest-item-exact {
+  background: var(--success-bg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cell-suggest-item-exact:hover {
+  background: color-mix(in srgb, var(--success) 22%, var(--success-bg));
+}
+.cell-suggest-check {
+  color: var(--success);
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+/* Dopasowanie tylko bez rozróżniania wielkości liter (np. wpisano "k.nowak",
+   na liście "K.Nowak") — ✓ przygaszony tą samą konwencją co .cell-suggest-rest
+   (opacity .55), subtelny sygnał że wielkość liter różni się od słownika. */
+.cell-suggest-check-ci { opacity: .55; }
+/* Podświetlenie z nawigacji strzałkami ↑↓ — pierścień, nie tło, żeby dało się
+   złożyć z .cell-suggest-item-exact bez gubienia zielonego tła. */
+.cell-suggest-item-active {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
 /* Większe cele dotykowe na tabletach/telefonach */
 @media (pointer: coarse) {
   .cell-suggest-item { padding: 12px 14px; }

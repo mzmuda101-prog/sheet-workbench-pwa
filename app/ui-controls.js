@@ -3173,10 +3173,25 @@ function createCellSuggestions(input, values, onPick) {
   };
 
   let touchStartY = 0, touchMoved = false;
-  const makeItem = (v) => {
+  let itemSeq = 0;
+  const makeItem = (v, opts = {}) => {
     const el = document.createElement("div");
-    el.className = "cell-suggest-item";
+    el.className = opts.exact ? "cell-suggest-item cell-suggest-item-exact" : "cell-suggest-item";
+    el.id = `cell-suggest-item-${++itemSeq}`;
     el.setAttribute("role", "option");
+    if (opts.exact) {
+      el.setAttribute("aria-selected", "true");
+      const check = document.createElement("span");
+      // Wielkość liter zgadza się dokładnie → pełny ✓; dopasowanie tylko bez
+      // rozróżniania wielkości liter (np. wpisano "k.nowak", na liście "K.Nowak")
+      // → przygaszony ✓ (ta sama konwencja opacity co .cell-suggest-rest niżej) —
+      // wciąż poprawne i zaakceptowane przy zapisie (walidacja DV jest case-insensitive),
+      // ale subtelny sygnał że wielkość liter różni się od tego co jest w słowniku.
+      check.className = opts.caseExact ? "cell-suggest-check" : "cell-suggest-check cell-suggest-check-ci";
+      check.textContent = "✓";
+      check.setAttribute("aria-hidden", "true");
+      el.appendChild(check);
+    }
     // Część już wpisana = mocny tekst; reszta „jeszcze nie" = przygaszona zieleń (appendTypedRestLabel).
     appendTypedRestLabel(el, String(v), input.value.trim());
     // mysz/pen: pointerdown preventDefault => input nie traci focusu; wybór na click
@@ -3190,31 +3205,91 @@ function createCellSuggestions(input, values, onPick) {
     return el;
   };
 
+  // Wartości aktualnie pokazane w liście, W TEJ SAMEJ KOLEJNOŚCI co dzieci .box
+  // (dokładne trafienie, jeśli jest, zawsze pierwsze) — używane przez nawigację
+  // strzałkami do zmapowania podświetlonego indeksu na wartość do wyboru.
+  let currentValues = [];
+  let highlightedIndex = -1;
+
+  const applyHighlight = () => {
+    const els = Array.from(box.children);
+    els.forEach((el, i) => el.classList.toggle("cell-suggest-item-active", i === highlightedIndex));
+    input.removeAttribute("aria-activedescendant");
+    if (highlightedIndex >= 0 && els[highlightedIndex]) {
+      els[highlightedIndex].scrollIntoView({ block: "nearest" });
+      input.setAttribute("aria-activedescendant", els[highlightedIndex].id);
+    }
+  };
+
   const render = () => {
-    const q = input.value.trim().toLowerCase();
+    const typed = input.value.trim();
+    const q = typed.toLowerCase();
     const starts = [], has = [];
-    let exact = false;
+    let exactValue = null;
+    let exactCaseMatch = false;
     for (const v of values) {
-      const lv = String(v).toLowerCase();
-      if (lv === q && q) { exact = true; continue; } // dokładnie wpisana wartość z listy → ukryj
+      const raw = String(v);
+      const lv = raw.toLowerCase();
+      if (lv === q && q) {
+        if (exactValue == null) { exactValue = v; exactCaseMatch = raw.trim() === typed; }
+        continue;
+      }
       if (!q || lv.startsWith(q)) starts.push(v);
       else if (lv.includes(q)) has.push(v);
     }
-    let items = starts.concat(has);
-    // Brak dopasowań do tego, co wpisano (np. wartość SPOZA listy lub literówka),
+    let rest = starts.concat(has);
+    // Brak JAKIEGOKOLWIEK dopasowania (np. wartość SPOZA listy lub literówka),
     // a nie jest to dokładne trafienie → pokaż CAŁĄ listę (wtedy podpowiedź jest
-    // najpotrzebniejsza: user widzi z czego wybierać). Dokładne trafienie → nic.
-    if (!items.length && !exact) items = values.slice();
-    items = items.slice(0, 50);
+    // najpotrzebniejsza: user widzi z czego wybierać).
+    if (!rest.length && exactValue == null) rest = values.slice();
+    rest = rest.slice(0, exactValue != null ? 49 : 50);
+
     box.replaceChildren();
-    if (!items.length) { box.classList.add("hidden"); return; }
-    items.forEach((v) => box.appendChild(makeItem(v)));
+    currentValues = [];
+    highlightedIndex = -1; // lista się zmieniła (nowy znak wpisany) → zdejmij starą podpowiedź klawiaturową
+    input.removeAttribute("aria-activedescendant");
+    // Dokładnie wpisana wartość z listy → osobna pozycja z ✓ na górze zamiast
+    // całkiem chowanego dropdownu: potwierdza „to jest poprawne i kompletne",
+    // przydatne przy szybkim wpisywaniu żeby nie gubić ostatniej litery.
+    // Inne dopasowania (np. dłuższa wartość zaczynająca się tak samo) zostają
+    // widoczne pod spodem — nic nie znika, tylko dochodzi potwierdzenie.
+    if (exactValue != null) {
+      box.appendChild(makeItem(exactValue, { exact: true, caseExact: exactCaseMatch }));
+      currentValues.push(exactValue);
+    }
+    rest.forEach((v) => { box.appendChild(makeItem(v)); currentValues.push(v); });
+    if (exactValue == null && !rest.length) { box.classList.add("hidden"); return; }
     box.classList.remove("hidden");
     position();
   };
 
+  // Nawigacja ↑↓ po podpowiedziach — TYLKO gołe strzałki, bez modyfikatorów.
+  // Shift+strzałki są już zajęte (przejście edycji do sąsiedniej komórki, patrz
+  // openCellEditor), a same ↑↓ w jednowierszowym <input> i tak nic sensownego
+  // domyślnie nie robią, więc to bezpieczne miejsce do przejęcia. Enter wybiera
+  // podświetloną pozycję TYLKO gdy faktycznie coś jest podświetlone (strzałką) —
+  // bez nawigacji Enter zatwierdza wpisany tekst jak dotychczas (bez zmian).
+  const onKeydown = (e) => {
+    if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (box.classList.contains("hidden") || !currentValues.length) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      highlightedIndex = highlightedIndex < 0 ? 0 : (highlightedIndex + 1) % currentValues.length;
+      applyHighlight();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      highlightedIndex = highlightedIndex < 0 ? currentValues.length - 1 : (highlightedIndex - 1 + currentValues.length) % currentValues.length;
+      applyHighlight();
+    } else if (e.key === "Enter" && highlightedIndex >= 0) {
+      e.preventDefault();
+      e.stopImmediatePropagation(); // nie pozwól zewnętrznemu handlerowi commit() też zadziałać na Enter
+      choose(currentValues[highlightedIndex]);
+    }
+  };
+
   const onInput = () => render();
   const onScroll = () => { if (!box.classList.contains("hidden")) position(); };
+  input.addEventListener("keydown", onKeydown);
   input.addEventListener("input", onInput);
   (tableWrapEl || window).addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll, { passive: true });
@@ -3225,6 +3300,7 @@ function createCellSuggestions(input, values, onPick) {
     isInteracting: () => interacting,
     destroy() {
       if (interactTimer) clearTimeout(interactTimer);
+      input.removeEventListener("keydown", onKeydown);
       input.removeEventListener("input", onInput);
       (tableWrapEl || window).removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
