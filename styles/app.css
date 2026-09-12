@@ -5207,6 +5207,7 @@ body.tr-active { overflow: hidden; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.tr-store-import { flex-shrink: 0; color: var(--accent); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
 .tr-store-del { flex-shrink: 0; }
 .tr-store-empty { font-size: 12px; color: var(--muted); padding: 6px 0; }
 .tr-undo.hidden { display: none; }

@@ -1149,7 +1149,20 @@ function trRenderStoreList() {
     del.setAttribute("aria-label", `${t("trStoreDelete")}: ${parts[0] || key}`);
     del.addEventListener("click", () => trDeleteScope(key));
 
-    item.append(main, del);
+    item.append(main);
+    // Import ma sens tylko dla INNEGO pliku (nie bieżącego) i tylko gdy ten zapis ma
+    // odciski treści — bez nich nie da się bezpiecznie dopasować wierszy.
+    const hasSigs = Array.isArray(rec?.doneSig) && rec.doneSig.some(Boolean);
+    if (key !== trScope && hasSigs) {
+      const imp = document.createElement("button");
+      imp.type = "button";
+      imp.className = "btn btn-xs ghost tr-store-import";
+      imp.textContent = t("trStoreImportBtn");
+      imp.setAttribute("aria-label", `${t("trStoreImportAria")}: ${parts[0] || key}`);
+      imp.addEventListener("click", () => trImportFromScope(key));
+      item.append(imp);
+    }
+    item.append(del);
     trStoreListEl.appendChild(item);
   });
 }
@@ -1161,6 +1174,33 @@ function trWithoutPersist(fn) {
   const before = trBulkMode;
   trBulkMode = true;
   try { fn(); } finally { trBulkMode = before; }
+}
+
+// Import zaznaczeń Z INNEGO zapamiętanego pliku do BIEŻĄCEGO — po treści wiersza,
+// nigdy po pozycji. To dokładnie ten sam silnik, co przy „ten sam plik, ale zmieniony"
+// (trRemapDone), tylko odpalony ręcznie i między RÓŻNYMI nazwami plików: np. gdy wczoraj
+// spisałeś 150 wierszy w „Obieg.xlsx", a dziś wczytałeś nowszą wersję zapisaną pod inną
+// nazwą — bez importu apka widziałaby to jako zupełnie nowy, pusty plik.
+// Addytywne i nieniszczące: tylko DOKŁADA dopasowane ✓ do już zaznaczonych, źródłowy
+// zapis zostaje nietknięty (można go potem osobno usunąć przyciskiem ✕).
+function trImportFromScope(key) {
+  const store = trLoadStore();
+  const rec = store.scopes?.[key];
+  if (!rec) return;
+  const savedDone = Array.isArray(rec.done) ? rec.done : [];
+  const savedSigs = Array.isArray(rec.doneSig) ? rec.doneSig : [];
+  const sourceName = key.split("::")[0] || key;
+  const remap = trRemapDone(savedDone, savedSigs);
+  if (!remap.moved) {
+    toast(t("trImportNone"), "warning");
+    return;
+  }
+  remap.keys.forEach((k) => trDone.add(k));
+  trRebuildOrder(trCurrentKey());
+  trRenderCard();
+  trRenderProgressPanel();
+  trPersist();
+  toast(t("trImportDone", { moved: remap.moved, all: savedDone.length, lost: remap.lost, name: sourceName }), "success");
 }
 
 function trDeleteScope(key) {
