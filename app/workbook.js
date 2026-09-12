@@ -643,12 +643,33 @@ function combinePrimaryAndEmptyMatch(primaryMatched, emptyMatched, negated, hasP
   return true;
 }
 
+// Cache jednego skompilowanego wzorca regex — w jednym przebiegu filtra/podświetlania
+// ten sam wzorzec trafia tu setki/tysiące razy (raz na komórkę), więc kompilacja
+// za każdym razem byłaby marnotrawstwem. Zawsze case-insensitive ("i"), spójnie
+// z resztą wyszukiwania w apce, które nie rozróżnia wielkości liter.
+let _searchRegexSrc = null;
+let _searchRegexObj = null;
+function compileSearchRegex(pattern) {
+  if (_searchRegexSrc === pattern) return _searchRegexObj;
+  _searchRegexSrc = pattern;
+  try {
+    _searchRegexObj = new RegExp(pattern, "i");
+  } catch (e) {
+    _searchRegexObj = null; // niepoprawny wzorzec → nic nie pasuje, zamiast wywalać filtr
+  }
+  return _searchRegexObj;
+}
+
 // Czy pojedyncza komórka (row, kolumna i) dopasowuje zapytanie q w danym trybie.
 // Wyłuskane z rowMatchesSingleTerm, by współdzielić tę samą logikę kandydatów
 // (m.in. warianty dat dd-mm-yy / dd-mm-yyyy) z podświetlaniem pasujących komórek.
 function cellMatchesTerm(row, i, q, mode) {
   const values = row.values;
   if (i >= values.length) return false;
+  if (mode === "regex") {
+    const re = compileSearchRegex(q);
+    return re ? re.test(getDisplayValue(row, i)) : false;
+  }
   const display = getDisplayValue(row, i);
   const text = display.toLowerCase();
   const candidates = [text];
@@ -690,15 +711,23 @@ function operandLooksLikeDate(s) {
   if ((t.match(/[-/.]/g) || []).length >= 2) return true; // dwa separatory → dd-mm-yyyy itp.
   return false;                                            // np. „5.5" → liczba, nie data
 }
-// Zwraca { op:">"|">="|"<"|"<=", kind:"number"|"date", value:number } albo null.
+// Zwraca { op:">"|">="|"<"|"<=", kind:"number"|"date"|"length", value:number } albo null.
+// Prefiks „dl"/„len" przed operatorem (np. „dl>>10") zamienia porównanie liczby/daty
+// w porównanie DŁUGOŚCI tekstu komórki — bez nowego trybu w UI, tylko rozszerzenie
+// już istniejącej składni operatorów (>> << i warianty z „=").
 function parseComparisonTerm(q) {
-  const m = String(q).match(/^(>>=|=>>|<<=|=<<|>>|<<)\s*(.+)$/);
+  const m = String(q).match(/^(dl|len)?(>>=|=>>|<<=|=<<|>>|<<)\s*(.+)$/i);
   if (!m) return null;
-  const raw = m[1];
-  const operand = m[2].trim();
+  const lengthMode = !!m[1];
+  const raw = m[2];
+  const operand = m[3].trim();
   const op = (raw === ">>=" || raw === "=>>") ? ">="
            : (raw === "<<=" || raw === "=<<") ? "<="
            : (raw === ">>") ? ">" : "<";
+  if (lengthMode) {
+    const n = parseFloat(operand.replace(",", "."));
+    return Number.isFinite(n) ? { op, kind: "length", value: n } : null;
+  }
   if (operandLooksLikeDate(operand)) {
     const d = parseDateFlexible(operand);
     if (d instanceof Date && !Number.isNaN(d.getTime())) return { op, kind: "date", value: comparisonDayValue(d) };
@@ -714,6 +743,7 @@ function cellSatisfiesComparison(row, i, cmp) {
   if (i >= row.values.length) return false;
   const raw = row.values[i];
   const display = getDisplayValue(row, i);
+  if (cmp.kind === "length") return compareWithOp(cmp.op, String(display).trim().length, cmp.value);
   if (cmp.kind === "date") {
     // tylko komórki będące faktycznie datą — nie parsuj liczb jako numerów seryjnych.
     // Oprócz formatu z separatorem (23-05-26) dopuszczamy też daty słowne („01 sty 26",
@@ -737,6 +767,14 @@ function cellSatisfiesComparison(row, i, cmp) {
 function rowMatchesSingleTerm(row, term, criterion) {
   const q = term.trim().toLowerCase();
   if (!q) return true;
+  // Regex ma własną semantykę dopasowania (case-insensitive przez flagę "i" przy
+  // kompilacji) — operatory porównań (>>/<<) się tu nie stosują.
+  if (criterion.mode === "regex") {
+    for (const i of criterion.indexes) {
+      if (cellMatchesTerm(row, i, q, criterion.mode)) return true;
+    }
+    return false;
+  }
   const cmp = criterion.operatorsEnabled ? parseComparisonTerm(q) : null;
   for (const i of criterion.indexes) {
     if (cmp ? cellSatisfiesComparison(row, i, cmp) : cellMatchesTerm(row, i, q, criterion.mode)) return true;
@@ -1169,7 +1207,7 @@ function collectMatchingCellsForRow(row, criteria, dateFilter) {
     const parsed = parseQueryTerms(criterion.query, criterion.operatorsEnabled);
     const positiveTerms = gatherPositiveTermStrings(parsed);
     for (const q of positiveTerms) {
-      const cmp = criterion.operatorsEnabled ? parseComparisonTerm(q) : null;
+      const cmp = (criterion.mode !== "regex" && criterion.operatorsEnabled) ? parseComparisonTerm(q) : null;
       for (const i of criterion.indexes) {
         if (cmp ? cellSatisfiesComparison(row, i, cmp) : cellMatchesTerm(row, i, q, criterion.mode)) cols.add(i);
       }

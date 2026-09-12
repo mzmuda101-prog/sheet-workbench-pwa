@@ -3325,6 +3325,24 @@ function cellEditString(row, i) {
   return String(raw);
 }
 
+// Krótki wizualny pulse na komórce po zapisaniu edycji (zob. .cell-saved-pulse w CSS).
+// Reflow między usunięciem a dodaniem klasy pozwala animacji odpalić się ponownie,
+// gdy ta sama komórka jest edytowana kilka razy z rzędu.
+function flashCellSaved(td) {
+  td.classList.remove("cell-saved-pulse");
+  void td.offsetWidth;
+  td.classList.add("cell-saved-pulse");
+  td.addEventListener("animationend", () => td.classList.remove("cell-saved-pulse"), { once: true });
+}
+
+// Krótkie "shake" na inpucie edytora, gdy commit zostaje odrzucony (walidacja/formuła).
+function shakeCellEditor(input) {
+  input.classList.remove("input-shake");
+  void input.offsetWidth;
+  input.classList.add("input-shake");
+  input.addEventListener("animationend", () => input.classList.remove("input-shake"), { once: true });
+}
+
 function openCellEditor(td, options = {}) {
   if (activeCellEditor || !td || td.classList.contains("row-head")) return;
   if (!workbook || !currentDisplayModel) return;
@@ -3404,6 +3422,7 @@ function openCellEditor(td, options = {}) {
     const parsed = parseInputValue(input.value);
     if (parsed && parsed.type === "formula") {
       toast(t("formulaEditBlocked"), "warning");
+      shakeCellEditor(input);
       input.focus();
       return;
     }
@@ -3416,7 +3435,7 @@ function openCellEditor(td, options = {}) {
       if (str === "") ok = dvRule.allowBlank;
       else { const norm = str.toLowerCase(); ok = dvRule.values.some((v) => String(v).trim().toLowerCase() === norm); }
       if (!ok) {
-        if (dvRule.mode === "stop") { toast(t("dvRejected"), "warning"); input.focus(); return; }
+        if (dvRule.mode === "stop") { toast(t("dvRejected"), "warning"); shakeCellEditor(input); input.focus(); return; }
         if (dvRule.mode === "warning") toast(t("dvWarning"), "warning");
       }
     }
@@ -3430,6 +3449,7 @@ function openCellEditor(td, options = {}) {
     td.textContent = display;
     td.dataset.fullText = display;
     setDirtyState(true);
+    flashCellSaved(td);
     if (move) {
       setFocusedCell(rowKey, colIndex0, { scroll: false });
       moveFocusedCell(move.row || 0, move.col || 0);

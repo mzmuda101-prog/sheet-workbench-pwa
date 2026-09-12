@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260911-04" />
+    <link rel="stylesheet" href="styles/app.css?v=20260912-01" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -189,12 +189,13 @@
                   <input id="searchQuery" type="text" enterkeyhint="search" placeholder="np. faktura" />
                 </label>
                 <div class="row">
-                  <label class="field">
+                  <label class="field" data-hint data-hint-pl="Regex = wyrażenie regularne (np. „^FV-\d+$"), niewrażliwe na wielkość liter." data-hint-en="Regex = regular expression (e.g. „^INV-\d+$"), case-insensitive." data-hint-delay="1.1" data-hint-touch="on">
                     Tryb
                     <select id="filterMode">
                       <option value="contains">Zawiera</option>
                       <option value="starts_with">Zaczyna się</option>
                       <option value="equals">Równa się</option>
+                      <option value="regex">Regex</option>
                     </select>
                   </label>
                   <label class="field">
@@ -248,12 +249,13 @@
                   <input id="searchQuery2" type="text" enterkeyhint="search" placeholder="np. klient" />
                 </label>
                 <div class="row">
-                  <label class="field">
+                  <label class="field" data-hint data-hint-pl="Regex = wyrażenie regularne (np. „^FV-\d+$"), niewrażliwe na wielkość liter." data-hint-en="Regex = regular expression (e.g. „^INV-\d+$"), case-insensitive." data-hint-delay="1.1" data-hint-touch="on">
                     Tryb
                     <select id="filterMode2">
                       <option value="contains">Zawiera</option>
                       <option value="starts_with">Zaczyna się</option>
                       <option value="equals">Równa się</option>
+                      <option value="regex">Regex</option>
                     </select>
                   </label>
                   <label class="field">
@@ -1067,7 +1069,9 @@
               <div class="shortcut-row"><kbd>!</kbd> <span data-shortcut-text="searchOperatorNot">wykluczenie pojedynczego warunku</span></div>
               <div class="shortcut-row"><kbd>{&nbsp;}</kbd> <em class="shortcut-example" data-shortcut-text="searchOperatorBracket">nawiasy {} wymuszają kolejność, np. „{Kowalski || Nowak} && Faktura"</em></div>
               <div class="shortcut-row"><kbd>&gt;&gt;</kbd> <kbd>&lt;&lt;</kbd> <span><strong data-shortcut-text="searchCmpStrong">Porównania liczb i dat</strong> <span data-shortcut-text="searchCmpRest">— „&gt;&gt;" większe, „&lt;&lt;" mniejsze; dodaj „=" dla ≥/≤ (&gt;&gt;=, =&lt;&lt;)</span><br><em class="shortcut-example" data-shortcut-text="searchCmpExample">np. „&gt;&gt;1000", „=&lt;&lt;50", „&gt;&gt;2026-01-01" · zakres: „&gt;&gt;5 &amp;&amp; &lt;&lt;10"</em></span></div>
+              <div class="shortcut-row"><kbd>dl&gt;&gt;</kbd> <kbd>dl&lt;&lt;</kbd> <span><strong data-shortcut-text="searchLenStrong">Długość tekstu komórki</strong> <span data-shortcut-text="searchLenRest">— ten sam operator co wyżej, z prefiksem „dl" (lub „len")</span><br><em class="shortcut-example" data-shortcut-text="searchLenExample">np. „dl&gt;&gt;20" (dłuższe niż 20 znaków), „len&lt;&lt;=3"</em></span></div>
               <div class="shortcut-row"><kbd>info:</kbd><span data-shortcut-text="searchOperatorCombined">możesz łączyć operatory, np. „Kowalski && !Anulowana || Nowak"</span></div>
+              <div class="shortcut-row"><kbd data-shortcut-text="searchRegexKbd">Regex</kbd> <span data-shortcut-text="searchRegexRest">tryb „Regex" w polu „Tryb" filtra — dopasowanie wyrażeniem regularnym, niewrażliwe na wielkość liter</span><br><em class="shortcut-example" data-shortcut-text="searchRegexExample">np. „^FV-\d+$" dopasuje „FV-102", nie dopasuje „FV-102A"</em></div>
               <div class="shortcut-row"><kbd>gdzie:</kbd><span data-shortcut-text="searchOperatorWhere">działają w: filtrach, szybkim szukaniu oraz w szukajce wyników w Agregacjach (tam &gt;&gt; / &lt;&lt; porównuje WARTOŚĆ miary, np. „&gt;&gt;100") — wszędzie po włączeniu „Operatory wyszukiwania"</span></div>
             </div>
             <div class="shortcut-hint">
@@ -1476,23 +1480,23 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260911-04"></script>
-    <script defer src="app/language.js?v=20260911-04"></script>
-    <script defer src="app/analysis.js?v=20260911-04"></script>
-    <script defer src="app/workbook.js?v=20260911-04"></script>
-    <script defer src="app/xlsx-patch.js?v=20260911-04"></script>
-    <script defer src="app/table.js?v=20260911-04"></script>
-    <script defer src="app/conditional-formatting.js?v=20260911-04"></script>
-    <script defer src="app/data-validation.js?v=20260911-04"></script>
-    <script defer src="app/derived-columns.js?v=20260911-04"></script>
-    <script defer src="app/formulas.js?v=20260911-04"></script>
-    <script defer src="app/edit-tools.js?v=20260911-04"></script>
-    <script defer src="app/ui-controls.js?v=20260911-04"></script>
-    <script defer src="app/transcribe.js?v=20260911-04"></script>
+    <script defer src="app/core.js?v=20260912-01"></script>
+    <script defer src="app/language.js?v=20260912-01"></script>
+    <script defer src="app/analysis.js?v=20260912-01"></script>
+    <script defer src="app/workbook.js?v=20260912-01"></script>
+    <script defer src="app/xlsx-patch.js?v=20260912-01"></script>
+    <script defer src="app/table.js?v=20260912-01"></script>
+    <script defer src="app/conditional-formatting.js?v=20260912-01"></script>
+    <script defer src="app/data-validation.js?v=20260912-01"></script>
+    <script defer src="app/derived-columns.js?v=20260912-01"></script>
+    <script defer src="app/formulas.js?v=20260912-01"></script>
+    <script defer src="app/edit-tools.js?v=20260912-01"></script>
+    <script defer src="app/ui-controls.js?v=20260912-01"></script>
+    <script defer src="app/transcribe.js?v=20260912-01"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260911-04"></script>
-    <script defer src="app/bootstrap.js?v=20260911-04"></script>
+    <script defer src="app/debug-loaders.js?v=20260912-01"></script>
+    <script defer src="app/bootstrap.js?v=20260912-01"></script>
   </body>
 </html>

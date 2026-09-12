@@ -575,7 +575,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260911-04";
+const APP_BUILD_VERSION = "20260912-01";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -771,7 +771,14 @@ function setLoading(isLoading, text, options = {}) {
 }
 
 function setStatus(msg) {
+  // Animuj tylko gdy treść faktycznie się zmienia (np. licznik wierszy po filtrze) —
+  // powtórne wywołania z tym samym tekstem (częste przy re-renderach) nie mają migać.
+  const changed = statusEl.textContent !== msg;
   statusEl.textContent = msg;
+  if (!changed) return;
+  statusEl.classList.remove("status-updated");
+  void statusEl.offsetWidth;
+  statusEl.classList.add("status-updated");
 }
 
 function setDirtyState(isDirty) {
