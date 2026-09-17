@@ -3160,11 +3160,35 @@ function createCellSuggestions(input, values, onPick) {
   const startInteract = () => { interacting = true; if (interactTimer) { clearTimeout(interactTimer); interactTimer = null; } };
   const endInteract = () => { if (interactTimer) clearTimeout(interactTimer); interactTimer = setTimeout(() => { interacting = false; }, 250); };
 
+  // Pozycja liczona względem visualViewport, nie window — na dotyku klawiatura
+  // ekranowa zasłania dolną połowę layout viewportu, ale window.innerHeight tego
+  // nie widzi (stąd „ucieczka" listy pod klawiaturę, gdy input jest niski w panelu).
+  // Dodatkowo: flip nad input, gdy pod nim nie ma miejsca, i clamp w osi X, żeby
+  // lista nie wystawała za prawą/lewą krawędź ekranu telefonu.
   const position = () => {
     const r = input.getBoundingClientRect();
-    box.style.left = `${Math.round(r.left)}px`;
-    box.style.top = `${Math.round(r.bottom + 2)}px`;
+    const vv = window.visualViewport;
+    const viewTop = vv ? vv.offsetTop : 0;
+    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+    const viewRight = window.innerWidth;
+    const margin = 6;
     box.style.minWidth = `${Math.round(r.width)}px`;
+    box.style.maxWidth = `${Math.round(Math.max(120, viewRight - margin * 2))}px`;
+    const boxHeight = box.offsetHeight || 0;
+    const spaceBelow = viewBottom - r.bottom;
+    const spaceAbove = r.top - viewTop;
+    let top;
+    if (spaceBelow >= boxHeight + 2 || spaceBelow >= spaceAbove) {
+      top = Math.min(r.bottom + 2, viewBottom - margin - boxHeight);
+    } else {
+      top = Math.max(viewTop + margin, r.top - boxHeight - 2);
+    }
+    const boxWidth = box.offsetWidth || r.width;
+    let left = r.left;
+    if (left + boxWidth > viewRight - margin) left = viewRight - margin - boxWidth;
+    if (left < margin) left = margin;
+    box.style.left = `${Math.round(left)}px`;
+    box.style.top = `${Math.round(top)}px`;
   };
 
   const choose = (v) => {
@@ -3293,6 +3317,14 @@ function createCellSuggestions(input, values, onPick) {
   input.addEventListener("input", onInput);
   (tableWrapEl || window).addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onScroll, { passive: true });
+  // visualViewport (klawiatura ekranowa wjeżdża/wyjeżdża) NIE odpala zawsze
+  // window.resize na iOS — bez tego lista po otwarciu klawiatury zostawała
+  // pozycjonowana względem starej (wyższej) wysokości widoku i „uciekała" pod nią.
+  const vv = window.visualViewport;
+  if (vv) {
+    vv.addEventListener("resize", onScroll);
+    vv.addEventListener("scroll", onScroll);
+  }
 
   render();
 
@@ -3304,6 +3336,10 @@ function createCellSuggestions(input, values, onPick) {
       input.removeEventListener("input", onInput);
       (tableWrapEl || window).removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
+      if (vv) {
+        vv.removeEventListener("resize", onScroll);
+        vv.removeEventListener("scroll", onScroll);
+      }
       box.remove();
     },
   };
