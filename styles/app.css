@@ -2470,16 +2470,15 @@ details.panel[open] > summary {
 }
 
 /* iOS Safari zooms the whole page when a focused text field's font-size is
-   below 16px. Na iPhonie to właśnie ten mechanizm odpowiada za „samoczynne
-   przybliżenie" podczas wpisywania — na iPadzie mniej rzucał się w oczy przez
-   większy ekran, ale dotyczy każdego dotykowego Safari. Bramka na coarse, żeby
-   desktop (mysz) zachował dotychczasowe, gęściejsze rozmiary. */
+   below 16px — patrz pełna reguła (wszystkie dotknięte pola) na samym końcu
+   tego pliku. TU tylko .field, bo .quick-search / .quick-search-popup-row
+   mają swoje bazowe reguły NIŻEJ w tym pliku — przy tej samej specyficzności
+   wygrywałaby reguła późniejsza i cichcem nadpisywała ten fix z powrotem na
+   mały font (dokładnie to się działo, zanim to zauważono na nagraniu). */
 @media (pointer: coarse) {
   .field input:not([type="checkbox"]):not([type="radio"]),
   .field select,
-  .field textarea,
-  .quick-search input:not([type="checkbox"]),
-  .quick-search-popup-row input:not([type="checkbox"]) {
+  .field textarea {
     font-size: 16px;
   }
 }
@@ -5459,4 +5458,45 @@ body.tr-active .toast-container {
   /* Szybkie chipy zakresu dni — sekundarne, inline: umiarkowany wzrost
      (nie pełne 44px, bo balonowałyby i łamały zawijanie), ale wygodniejsze. */
   .chip { min-height: 34px; padding-top: 7px; padding-bottom: 7px; }
+}
+
+/* ===================================================
+   iOS SAFARI AUTO-ZOOM — OSTATECZNA REGUŁA (ZAWSZE NA KOŃCU PLIKU)
+   ===================================================
+   Poniżej 16px focused input/textarea Safari zoomuje całą stronę na dotyku
+   (widoczne np. przy #quickSearch — potwierdzone nagraniem z symulatora).
+   CELOWO na samym końcu app.css: przy identycznej specyficzności selektora
+   wygrywa reguła NIŻEJ w pliku, więc to jedyne miejsce, które gwarantuje
+   wygraną niezależnie od tego, gdzie ktoś w przyszłości doda kolejną regułę
+   dla tych samych selektorów. Nowe dotykowe pola tekstowe dopisuj TUTAJ,
+   nie przy ich komponencie. */
+@media (pointer: coarse) {
+  .field input:not([type="checkbox"]):not([type="radio"]),
+  .field select,
+  .field textarea,
+  .quick-search input:not([type="checkbox"]),
+  .quick-search-popup-row input:not([type="checkbox"]),
+  .modal-search,
+  .aggregation-result-search,
+  .aggregation-having-value,
+  .aggregation-measure-input,
+  .aggregation-measurefilter-value,
+  .aggregation-header-row input {
+    font-size: 16px;
+  }
+
+  /* Siatka bezpieczeństwa: apka ma sporo pojedynczych, jednorazowych klas na
+     polach tekstowych (dokładnie tak powstał powyższy problem — #quickSearch
+     istniał, ale nikt go tu nie dopisał). Selektor `input:not(...)` ma wyższą
+     specyficzność niż zwykła pojedyncza klasa (więcej :not() = więcej wag),
+     więc wygrywa z każdą component-owną regułą typu „.jakas-klasa { font-size:
+     13px }" niezależnie od kolejności w pliku — łapie też pola dodane w
+     przyszłości bez pamiętania o dopisaniu ich tutaj. Wyklucza kontrolki, w
+     których font-size i tak nie ma znaczenia (checkbox/radio/range/color/
+     file/przyciski) i input.cell-editor, który ma własną regułę skalowaną
+     z zoomem tabeli (patrz wyżej). */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not(.cell-editor),
+  textarea {
+    font-size: 16px;
+  }
 }
