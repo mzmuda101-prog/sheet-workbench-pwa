@@ -2660,6 +2660,99 @@ details.panel[open] > summary {
 
 .quick-row { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* ===================================================
+   TRYBY AUTO (smart filtry po stanie rekordu)
+   Kolory celowo BEZ nowych znaczeń: chip aktywny = ten sam zielony akcent,
+   co przy szybkich zakresach dat (to też filtr), stan „niedostępne" = neutralny.
+   =================================================== */
+.smart-status {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-2);
+  padding: 7px 9px;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+}
+.smart-status.warn {
+  border-color: color-mix(in srgb, #d69e2e 40%, var(--border));
+  background: color-mix(in srgb, #d69e2e 8%, var(--surface));
+}
+.smart-chips { gap: 6px; }
+.smart-chip[disabled] {
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none;
+}
+.smart-chip[disabled]:hover {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--ink-2);
+  transform: none;
+  box-shadow: none;
+}
+.smart-chip-clear {
+  margin-left: auto;
+  font-weight: 600;
+}
+.smart-chip-clear[disabled] { opacity: .4; cursor: default; }
+
+/* Pasek chipów w oknie szybkiego szukania — jeden rząd z przewijaniem w poziomie,
+   żeby na telefonie nie zjadał trzech linii wysokości okna. */
+.smart-chips-compact {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+  margin-top: 8px;
+}
+.smart-chips-compact::-webkit-scrollbar { display: none; }
+.smart-chips-compact .chip { flex: 0 0 auto; }
+/* Na wąskim ekranie pasek prawie zawsze wystaje poza okno — miękkie wygaszenie
+   prawej krawędzi mówi „jest tego więcej, przesuń palcem" bez dokładania strzałek. */
+@media (max-width: 768px) {
+  .smart-chips-compact {
+    -webkit-mask-image: linear-gradient(to right, #000 86%, transparent 100%);
+    mask-image: linear-gradient(to right, #000 86%, transparent 100%);
+  }
+}
+
+.smart-config { margin-top: 2px; }
+.smart-config > summary {
+  cursor: pointer;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 6px 2px;
+  list-style: none;
+}
+.smart-config > summary::-webkit-details-marker { display: none; }
+.smart-config > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform var(--t-fast);
+}
+.smart-config[open] > summary::before { transform: rotate(90deg); }
+.smart-config-body {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 2px;
+}
+.smart-hint {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-3, var(--ink-2));
+  opacity: .9;
+}
+@media (pointer: coarse) {
+  /* Chipy trybów auto to główny sposób obsługi tej funkcji na telefonie —
+     dostają więcej niż zwykłe chipy zakresu dat. */
+  .smart-chip, .smart-chip-clear { min-height: 40px; padding-left: 14px; padding-right: 14px; }
+}
+
 .sort-builder {
   display: grid;
   gap: 10px;
@@ -2804,6 +2897,24 @@ details.panel[open] > summary {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
   }
   .seg-group [role="radio"]:focus { outline: none; }
+}
+
+/* Na telefonie grupa segmentów akcji („Filtruj / Zaznacz / Podświetl pasujące /
+   Filtruj + podświetl") jest szersza niż okno szukania, a `overflow: hidden`
+   po prostu ucinał ostatnie opcje — na iPhonie nie dało się wybrać
+   „Filtruj + podświetl". Pozwalamy się jej zawinąć do drugiego rzędu
+   (wszystko pozostaje dotykalne) i podnosimy wysokość trafienia. */
+@media (max-width: 768px) and (pointer: coarse) {
+  .quick-search-popup .seg-group {
+    flex-wrap: wrap;
+    max-width: 100%;
+    border-radius: var(--r);
+  }
+  .quick-search-popup .seg-group [role="radio"] {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+  }
 }
 
 .qs-operators-toggle {
@@ -4671,6 +4782,19 @@ html.low-power .loading-overlay.is-file {
     width: 100%;
     flex-wrap: wrap;
     border-radius: var(--r);
+  }
+}
+
+/* Uchwyt panelu bocznego jest `position: fixed; top: 50%`, a na telefonie środek
+   ekranu wypada DOKŁADNIE na rzędzie przycisków nad tabelą — uchwyt zasłaniał
+   wtedy „Tryb szybkie szukanie"/„Spisywanie" i przechwytywał ich kliknięcia
+   (potwierdzone na iPhonie w symulatorze). Rezerwujemy więc szerokość uchwytu
+   po lewej stronie pasków z przyciskami — ale TYLKO gdy pasek jest rozwinięty
+   i tylko na wąskim dotyku (desktop i tablet z myszą zostają bez zmian). */
+@media (max-width: 768px) and (pointer: coarse) {
+  .table-panel:not(.toolbar-collapsed) .table-actions,
+  .table-panel:not(.toolbar-collapsed) .quick-search:not(.hidden) {
+    padding-left: 46px;
   }
 }
 

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260917-02";
+const CACHE_VERSION = "20260918-05";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -18,6 +18,7 @@ const SHELL_ASSETS = [
   `./app/core.js?v=${ASSET_V}`,
   `./app/language.js?v=${ASSET_V}`,
   `./app/analysis.js?v=${ASSET_V}`,
+  `./app/smart-filters.js?v=${ASSET_V}`,
   `./app/workbook.js?v=${ASSET_V}`,
   `./app/xlsx-patch.js?v=${ASSET_V}`,
   `./app/table.js?v=${ASSET_V}`,

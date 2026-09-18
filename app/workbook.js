@@ -1275,22 +1275,54 @@ function applyFilters() {
     negated: dateNegateEl.checked,
   };
   const onlyNonEmpty = onlyNonEmptyEl.checked;
+
+  // ── Tryby auto ──────────────────────────────────────────────────────────────
+  // Stan efektywny = chipy z panelu + tokeny „@wtoku / @ostatni / @dni>>30" wpisane
+  // wprost w pole szukania (te ostatnie wycinamy z zapytania, żeby parser termów
+  // ich nie zobaczył). Gdy arkusz nie ma powtarzalnych bloków, model jest null
+  // i cała ta warstwa jest przezroczysta.
+  const smartModel = typeof getSmartModel === "function" ? getSmartModel() : null;
+  const smartResolved = smartModel ? resolveEffectiveSmartState(criteria.map((c) => c.query)) : null;
+  if (smartResolved) {
+    smartResolved.queries.forEach((q, i) => { criteria[i].query = q; });
+  }
+  if (typeof smartBeginFilterPass === "function") smartBeginFilterPass(smartResolved ? smartResolved.state : null);
+  const smartActive = typeof smartFilterIsActive === "function" && smartFilterIsActive();
+  const smartScoped = smartActive && smartNeedsRecordScope();
   // Podświetlanie komórek: checkbox z filtra tekstowego LUB dat (zsynchronizowane),
   // ALBO tryby szybkiego szukania „Podświetl pasujące" (cells) / „Filtruj + podświetl" (filter-cells).
-  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked) || quickSearchCellsMode || quickSearchFilterCellsMode);
+  // Tryb auto sam z siebie włącza podświetlanie: inaczej w szerokim arkuszu nie widać,
+  // KTÓRY cykl sprawił, że wiersz przeszedł filtr.
+  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked) || quickSearchCellsMode || quickSearchFilterCellsMode || smartScoped);
 
   const rowPasses = (row) => {
-    if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;
     if (!rowMatchesDateFilter(row, dateFilter)) return false;
     // Walidacja listą: w trybie „pokaż tylko niezgodne" zostają wyłącznie naruszenia.
     if (validationState.showOnly && !rowIsValidationViolation(row)) return false;
+    if (!smartActive) return rowMatchesTextFilter(row, criteria, onlyNonEmpty);
+
+    const records = buildSmartRecords(row, smartModel);
+    if (!smartRowFlagsPass(records)) return false;
+    if (!smartScoped) {
+      if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;
+      smartRememberMatch(row, records.filter((rec) => rec.filled));
+      return true;
+    }
+    // Korelacja: tekst filtra sprawdzamy w obrębie KAŻDEGO pasującego rekordu osobno,
+    // więc „Kowalski + w toku" trafia tylko tam, gdzie Kowalski faktycznie nie skończył.
+    const candidates = records.filter((rec) => smartRecordPasses(row, rec, smartModel));
+    if (!candidates.length) return false;
+    const hits = candidates.filter((rec) => rowMatchesTextFilter(row, smartScopeCriteria(criteria, rec, smartModel), onlyNonEmpty));
+    if (!hits.length) return false;
+    smartRememberMatch(row, hits);
     return true;
   };
 
   matchedCellsByRow = new Map();
   const collectCells = (row) => {
     if (!highlightMatchedCells) return;
-    const cols = collectMatchingCellsForRow(row, criteria, dateFilter);
+    let cols = collectMatchingCellsForRow(row, criteria, dateFilter);
+    if (smartScoped) cols = smartRestrictMatchedCols(row, cols);
     if (cols.size) matchedCellsByRow.set(row.rowIndex0, cols);
   };
 

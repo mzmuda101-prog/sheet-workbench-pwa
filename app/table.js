@@ -52,6 +52,12 @@ function buildLongViewModelFromRows(rows, group = getActiveRepeatingGroup(), opt
     : firstBlock.headers.map((header) => parseRepeatedHeader(header)?.base || cleanSectionLabel(header) || header);
   const headers = [...prefixHeaders, t("longColBlockNum"), t("longColBlock"), ...repeatedHeaders];
   const nextRows = [];
+  const smartFilterHonored = options.smartFilter !== false
+    && typeof smartRecordAccepted === "function"
+    && typeof getActiveRepeatingGroup === "function"
+    && group === getActiveRepeatingGroup()
+    && typeof smartFilterIsActive === "function"
+    && smartFilterIsActive();
 
   rows.forEach((row) => {
     group.blocks.forEach((block, blockIndex) => {
@@ -66,6 +72,10 @@ function buildLongViewModelFromRows(rows, group = getActiveRepeatingGroup(), opt
         : blockValues.map((_, idx) => getDisplayValue(row, block.startIndex + idx));
       const hasMeaningfulValue = blockDisplay.some((value) => String(value ?? "").trim() !== "");
       if (!hasMeaningfulValue) return;
+      // Tryby auto: w widoku long pokazujemy TYLKO trafione cykle (to jest ten
+      // „pokaż mi wyłącznie tam, gdzie zaczął i nie skończył"). Dotyczy wyłącznie
+      // aktywnej grupy bloków — agregacja licząca na innym wierszu nagłówka zostaje bez zmian.
+      if (smartFilterHonored && !smartRecordAccepted(row, blockIndex)) return;
 
       const prefixValues = row.values.slice(0, prefixCount);
       const prefixDisplay = prefixValues.map((_, idx) => getDisplayValue(row, idx));

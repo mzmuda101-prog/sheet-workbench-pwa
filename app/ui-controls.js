@@ -118,6 +118,7 @@ function updateFilterBadge() {
   if (columnSelections.filter2.size) count += 1;
   if (columnSelections.date.size) count += 1;
   if (validationState.showOnly) count += 1;
+  if (typeof smartActiveCount === "function") count += smartActiveCount();
 
   filterBadgeEl.textContent = String(count);
   filterBadgeEl.classList.toggle("hidden", count === 0);
@@ -208,6 +209,7 @@ function resetFilterInputs() {
   filtersCommitted = false;
   matchedRowIndexes = new Set();
   quickSearchOperatorsEnabled = false;
+  if (typeof resetSmartFilterState === "function") resetSmartFilterState();
   if (quickSearchActionEl) quickSearchActionEl.value = "filter";
   if (quickSearchPopupActionEl) quickSearchPopupActionEl.value = "filter";
   if (quickSearchOperatorsEl) quickSearchOperatorsEl.checked = false;
@@ -735,6 +737,10 @@ async function handleFile(file, fileHandle = null) {
     currentColumnProfiles = [];
     currentSections = [];
     currentRepeatingBlocks = [];
+    if (typeof smartInvalidateModel === "function") {
+      smartInvalidateModel();
+      resetSmartFilterState();
+    }
     currentDisplayModel = null;
     tableViewMode = "wide";
     multiSortState = [];
@@ -772,64 +778,127 @@ async function handleFile(file, fileHandle = null) {
 // agregacje, filtry dat oraz KPI (wiersze podsumowania nad nagłówkiem).
 // Lekki (kilkanaście wierszy) — generacja jest natychmiastowa, nic nie jest wysyłane.
 function buildSampleWorkbookArrayBuffer() {
-  const owners = ["Anna Kowalska", "Jan Nowak", "Piotr Wiśniewski", "Maria Wójcik", "Tomasz Lewandowski"];
-  const statuses = ["Zamknięte", "W trakcie", "PRZETERMINOWANY"];
-  const base = new Date(2026, 0, 6);
+  // Przykładowy plik celowo naśladuje układ prawdziwych arkuszy obiegowych:
+  //   • wiersz tytułu + wiersz KPI (żeby autodetekcja nagłówka miała co pomijać),
+  //   • wiersz grupujący ze scalonymi etykietami „1 Cykl", „2 Cykl"… nad blokami,
+  //   • powtarzalny blok 4 kolumn: Imię i Nazwisko / od / do / Długość.
+  // Dzięki temu na przykładzie widać WSZYSTKO, co apka potrafi na takich plikach:
+  // wykrywanie bloków, Wide-to-Long, analizę czasu trwania i tryby auto
+  // (w toku / zakończone / bez startu / ostatni cykl).
+  const people = [
+    "Anna Kowalska", "Jan Nowak", "Piotr Wiśniewski", "Maria Wójcik", "Tomasz Lewandowski",
+    "Katarzyna Zielińska", "Michał Szymański", "Agnieszka Dąbrowska",
+  ];
+  const CYCLES = 4;
+  const BLOCK = ["Imię i Nazwisko", "od", "do", "Długość"];
+  const today = new Date();
   const addDays = (date, n) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
   const daysBetween = (a, b) => Math.round((b - a) / 86400000);
   // Daty zapisujemy jako stringi ISO (YYYY-MM-DD): ten build xlsx-js-style gubi
   // gołe obiekty Date przy zapisie, a parseDateFlexible aplikacji i tak parsuje ISO.
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  const headerRow = ["Teren", "Opiekun", "Status", "od", "do", "Długość", "od2", "do2", "Długość2", "od3", "do3", "Długość3"];
-  const rows = [];
-  let closed = 0, inProgress = 0, overdue = 0;
-
-  for (let i = 0; i < 16; i++) {
-    const teren = `Teren ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
-    const opiekun = owners[i % owners.length];
-    const status = statuses[i % 3];
-    if (status === "Zamknięte") closed += 1;
-    else if (status === "W trakcie") inProgress += 1;
-    else overdue += 1;
-
-    // Cykl 1 — zawsze zamknięty
-    const od1 = addDays(base, i * 6);
-    const do1 = addDays(od1, 9 + (i % 5) * 3);
-    // Cykl 2 — obecny dla ~2/3 wierszy
-    const hasC2 = i % 3 !== 2;
-    const od2 = hasC2 ? addDays(do1, 4) : null;
-    const do2 = hasC2 ? addDays(od2, 7 + (i % 4) * 2) : null;
-    // Cykl 3 — dla ~1/3 wierszy, część otwarta (brak "do" → liczone do dzisiaj)
-    const hasC3 = i % 3 === 0;
-    const startC3Base = hasC2 ? do2 : do1;
-    const od3 = hasC3 ? addDays(startC3Base, 5) : null;
-    const open3 = hasC3 && i % 2 === 0;
-    const do3 = hasC3 && !open3 ? addDays(od3, 11 + (i % 3) * 4) : null;
-
-    rows.push([
-      teren, opiekun, status,
-      iso(od1), iso(do1), daysBetween(od1, do1),
-      od2 ? iso(od2) : "", do2 ? iso(do2) : "", hasC2 ? daysBetween(od2, do2) : "",
-      od3 ? iso(od3) : "", do3 ? iso(do3) : "", (hasC3 && !open3) ? daysBetween(od3, do3) : "",
-    ]);
+  // Nagłówek: prefiks (Nr./Teren/Status) + CYCLES × blok. Powtórzenia dostają sufiks
+  // cyfrowy (od2, do2…), bo tak wyglądają realne pliki i tak je rozpoznaje parser nagłówków.
+  const prefixHeaders = ["Nr.", "Teren", "Status"];
+  const headerRow = prefixHeaders.slice();
+  for (let c = 0; c < CYCLES; c++) {
+    BLOCK.forEach((name) => headerRow.push(c === 0 ? name : `${name}${c + 1}`));
   }
+
+  // Wiersz z etykietami cykli — scalony nad każdym blokiem (jak w prawdziwych arkuszach).
+  const cycleRow = new Array(prefixHeaders.length).fill("");
+  for (let c = 0; c < CYCLES; c++) {
+    cycleRow.push(`${c + 1} Cykl`, "", "", "");
+  }
+
+  // Scenariusze stanów — każdy wiersz ma być czytelnym przykładem czegoś innego.
+  //   closed: ile cykli domkniętych, open: czy ostatni wisi otwarty,
+  //   orphan: „do" bez „od" (dziura w danych), openAgeDays: jak dawno zaczęty.
+  const plan = [
+    { closed: 3, open: true, openAgeDays: 96 },
+    { closed: 2, open: false },
+    { closed: 1, open: true, openAgeDays: 12 },
+    { closed: 4, open: false },
+    { closed: 0, open: false },                  // nic nie zaczęte
+    { closed: 2, open: true, openAgeDays: 47 },
+    { closed: 1, open: false, orphan: true },    // koniec bez początku
+    { closed: 3, open: false },
+    { closed: 0, open: true, openAgeDays: 201 }, // wisi najdłużej
+    { closed: 2, open: false },
+    { closed: 1, open: true, openAgeDays: 33 },
+    { closed: 4, open: false },
+    { closed: 2, open: true, openAgeDays: 7 },
+    { closed: 3, open: false, orphan: true },
+    { closed: 1, open: false },
+    { closed: 2, open: true, openAgeDays: 128 },
+    { closed: 0, open: false },
+    { closed: 3, open: true, openAgeDays: 21 },
+  ];
+
+  const rows = [];
+  let closedTotal = 0, openTotal = 0, untouchedTotal = 0;
+
+  plan.forEach((spec, i) => {
+    const teren = `Teren ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
+    const cells = [i + 1, teren, ""];
+    const closedCount = Math.min(spec.closed, spec.open ? CYCLES - 1 : CYCLES);
+    // Cykle zamknięte układamy chronologicznie wstecz od dziś, żeby „ostatni cykl"
+    // faktycznie był tym najświeższym.
+    let cursor = addDays(today, -(220 + (i * 3)));
+
+    for (let c = 0; c < CYCLES; c++) {
+      const isClosed = c < closedCount;
+      const isOpen = spec.open && c === closedCount;
+      const isOrphan = spec.orphan && c === closedCount + (spec.open ? 1 : 0);
+      const person = people[(i + c) % people.length];
+
+      if (isClosed) {
+        const from = cursor;
+        const to = addDays(from, 9 + ((i + c) % 6) * 7);
+        cursor = addDays(to, 3 + ((i + c) % 4));
+        cells.push(person, iso(from), iso(to), daysBetween(from, to));
+        closedTotal += 1;
+      } else if (isOpen) {
+        const from = addDays(today, -(spec.openAgeDays || 30));
+        cells.push(person, iso(from), "", "");
+        openTotal += 1;
+      } else if (isOrphan) {
+        // Celowa dziura w danych: jest data zwrotu, nie ma wydania.
+        cells.push(person, "", iso(addDays(today, -(15 + i))), "");
+      } else {
+        cells.push("", "", "", "");
+      }
+    }
+
+    const status = spec.open ? "W trakcie" : (closedCount ? "Zamknięte" : "Nie zaczęte");
+    if (!closedCount && !spec.open) untouchedTotal += 1;
+    cells[2] = status;
+    rows.push(cells);
+  });
 
   const aoa = [
     ["Raport: Obieg terenów 2026"],
-    ["Terenów łącznie", rows.length, "", "Zamknięte", closed, "", "W trakcie", inProgress, "", "Przeterminowane", overdue],
+    ["Terenów łącznie", rows.length, "", "Cykli zamkniętych", closedTotal, "", "Cykli w toku", openTotal, "", "Nie zaczętych", untouchedTotal],
     [],
+    cycleRow,
     headerRow,
     ...rows,
   ];
 
   const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
 
-  // Drobny pokaz nowych możliwości stylów (czytanych z pliku przez aplikację):
-  //  • wiersz nagłówka = zielony pasek z BIAŁYM POGRUBIONYM tekstem
-  //    (naraz: wypełnienie wiersza + pogrubienie + biały tekst na tle),
-  //  • kolumna „Status" = KOLORY CZCIONEK zależne od wartości.
-  const headerAoaRow = 3; // [tytuł, KPI, pusty, headerRow, ...dane]
+  // Scalenia etykiet cykli — dzięki nim wykrywanie bloków ma czytelne nazwy („1 Cykl").
+  const cycleRowIdx = 3;
+  const headerAoaRow = 4;
+  ws["!merges"] = [];
+  for (let c = 0; c < CYCLES; c++) {
+    const startCol = prefixHeaders.length + (c * BLOCK.length);
+    ws["!merges"].push({ s: { r: cycleRowIdx, c: startCol }, e: { r: cycleRowIdx, c: startCol + BLOCK.length - 1 } });
+  }
+
+  // Drobny pokaz stylów czytanych z pliku: zielony pasek nagłówka z białym pogrubieniem,
+  // etykiety cykli na jasnym tle i kolory czcionek w kolumnie „Status".
   for (let c = 0; c < headerRow.length; c++) {
     const ref = XLSX.utils.encode_cell({ r: headerAoaRow, c });
     if (ws[ref]) ws[ref].s = {
@@ -837,8 +906,14 @@ function buildSampleWorkbookArrayBuffer() {
       fill: { patternType: "solid", fgColor: { rgb: "FF2F6F5C" } },
       alignment: { horizontal: "center" },
     };
+    const cycleRef = XLSX.utils.encode_cell({ r: cycleRowIdx, c });
+    if (ws[cycleRef] && c >= prefixHeaders.length) ws[cycleRef].s = {
+      font: { bold: true, color: { rgb: "FF2F6F5C" } },
+      fill: { patternType: "solid", fgColor: { rgb: "FFE7F1EC" } },
+      alignment: { horizontal: "center" },
+    };
   }
-  const STATUS_COLOR = { "Zamknięte": "FF1E7B45", "W trakcie": "FFB7791F", "PRZETERMINOWANY": "FFC00000" };
+  const STATUS_COLOR = { "Zamknięte": "FF1E7B45", "W trakcie": "FFB7791F", "Nie zaczęte": "FFC00000" };
   rows.forEach((row, i) => {
     const color = STATUS_COLOR[row[2]];
     if (!color) return;
@@ -1833,6 +1908,11 @@ loadBtn.addEventListener("click", () => {
       currentColumnProfiles = []; // liczone leniwie z viewRows (ensureColumnProfilesFresh) — reaguje na filtr
       currentSections = detectSections(sheet, headerRow, data);
       currentRepeatingBlocks = detectRepeatingBlocks(sheet, headerRow, data);
+      // Nowy arkusz = nowy model bloków: zapomnij stare tryby auto i przelicz role kolumn.
+      if (typeof smartInvalidateModel === "function") {
+        smartInvalidateModel();
+        resetSmartFilterState();
+      }
       currentFormulaEntries = collectFormulaEntries(sheet, data, headerRow);
       if (!canUseLongView()) tableViewMode = "wide";
       viewRows = baseRows.slice();
@@ -2539,13 +2619,15 @@ function updateToolbarToggleLabel() {
   toolbarToggleEl.setAttribute("aria-expanded", String(!collapsed));
 }
 
-function setToolbarCollapsed(collapsed) {
+function setToolbarCollapsed(collapsed, { persist = true } = {}) {
   if (!tablePanelEl) return;
   tablePanelEl.classList.toggle("toolbar-collapsed", !!collapsed);
   updateToolbarToggleLabel();
-  try {
-    localStorage.setItem(TOOLBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
-  } catch (e) {}
+  if (persist) {
+    try {
+      localStorage.setItem(TOOLBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
+    } catch (e) {}
+  }
   syncTableViewportHeight();
 }
 
@@ -2555,7 +2637,17 @@ if (toolbarToggleEl) {
     setToolbarCollapsed(next);
     replayPop(toolbarToggleEl, "btn-pop");
   });
-  setToolbarCollapsed(localStorage.getItem(TOOLBAR_COLLAPSED_KEY) === "1");
+  // Na telefonie rozwinięty pasek zjada ~150px z ~800px ekranu — tabela dostaje
+  // wtedy mniej miejsca niż same przyciski. Przy PIERWSZYM wejściu z wąskiego
+  // dotyku startujemy więc zwinięci (bez zapisu — to tylko domyślna wartość,
+  // pierwszy świadomy klik użytkownika i tak ją nadpisze i zapamięta).
+  const storedToolbarCollapsed = (() => {
+    try { return localStorage.getItem(TOOLBAR_COLLAPSED_KEY); } catch (e) { return null; }
+  })();
+  const phoneFirstVisit = storedToolbarCollapsed === null
+    && typeof matchMedia === "function"
+    && matchMedia("(max-width: 768px) and (pointer: coarse)").matches;
+  setToolbarCollapsed(storedToolbarCollapsed === "1" || phoneFirstVisit, { persist: storedToolbarCollapsed !== null });
 }
 
 // ── Zwijany nagłówek (mobile): uchwyt tap/drag + auto-chowanie przy scrollu tabeli ──

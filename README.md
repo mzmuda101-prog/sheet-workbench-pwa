@@ -45,6 +45,20 @@ The goal is to build a workbench *around* Excel files: local-first, safe for sou
 - Empty / non-empty filtering per column
 - Negate any filter
 
+### Auto modes — filtering by record state
+For wide operational sheets where one row holds repeating column blocks (cycle 1, cycle 2, …),
+each block is really a separate record. Auto modes filter by the *state* of those records instead
+of cell text:
+- In progress (started, no end date), Finished, No start (end without a start), All closed, Nothing started
+- Narrow to the first or the last filled cycle — "the last area they took"
+- Cycles running longer than N days (open ones counted up to today)
+- Text and auto mode are correlated **within one cycle**: "Kowalska + in progress" means the cycle
+  where *she* has not finished, not "Kowalska anywhere AND anything open"
+- Same thing as tokens in any search box, including quick search: `@open`, `@closed`, `@nostart`,
+  `@last`, `@first`, `@days30`
+- Start / end / person columns are auto-detected from headers or data, and can be overridden per sheet
+- Wide-to-Long and the aggregation workbench honour the active modes — only matching cycles are listed
+
 ### Sorting and working views
 - Multi-column sort with priority order
 - Saved sort presets for quick switching between common working states

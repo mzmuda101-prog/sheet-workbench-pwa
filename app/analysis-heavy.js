@@ -678,6 +678,15 @@ function renderAggregationWorkbench() {
   });
   aggregationWorkbenchSummaryEl.appendChild(summaryGrid);
 
+  // Tryby auto zawężają źródło (w trybie long liczymy tylko trafione cykle) —
+  // bez tej notki liczby w panelu wyglądałyby jak błąd.
+  if (typeof smartFilterIsActive === "function" && smartFilterIsActive()) {
+    const smartNote = document.createElement("div");
+    smartNote.className = "duration-analysis-note";
+    smartNote.textContent = t("aggregationSmartNote");
+    aggregationWorkbenchSummaryEl.appendChild(smartNote);
+  }
+
   const controls = document.createElement("div");
   controls.className = "aggregation-controls";
 

@@ -575,7 +575,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260917-02";
+const APP_BUILD_VERSION = "20260918-05";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -592,6 +592,7 @@ function flushViewRefresh() {
     if (typeof renderColumnProfiles === "function") renderColumnProfiles();
     if (typeof renderSections === "function") renderSections();
     if (typeof renderRepeatingBlocks === "function") renderRepeatingBlocks();
+    if (typeof renderSmartFilterUi === "function") renderSmartFilterUi();
     if (typeof renderDurationAnalysis === "function") renderDurationAnalysis();
     if (typeof renderAggregationWorkbench === "function") renderAggregationWorkbench();
   }
@@ -659,7 +660,10 @@ const CELL_STYLE_PREFS_KEY = "excel-workbench-cell-style-prefs";
 const ROW_HEIGHT_KEY = "excel-workbench-row-height-all";
 const COL_WIDTH_KEY = "excel-workbench-col-width-all";
 const SORT_PRESETS_KEY = "excel-workbench-sort-presets";
-const TOOLBAR_COLLAPSED_KEY = "excel-workbench-toolbar-collapsed";
+// v2: stary klucz zapisywał "0" przy KAŻDYM starcie (nawet bez decyzji użytkownika),
+// więc nowy domyślny stan na telefonie nigdy by nie zadziałał. Nowy klucz zapisujemy
+// wyłącznie po świadomym kliknięciu w przełącznik paska.
+const TOOLBAR_COLLAPSED_KEY = "excel-workbench-toolbar-collapsed-v2";
 // Tryb zaznaczania wynika z GESTU, nie z ustawienia:
 //   zwykly klik / wejscie Tabem  -> caly wiersz (selectionKind = "row")
 //   Shift+klik, Shift+strzalka   -> poziom komorki (selectionKind = "cell")

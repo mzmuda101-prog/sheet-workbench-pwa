@@ -434,7 +434,9 @@ async function run() {
       id: document.activeElement?.id || document.activeElement?.className,
     }));
     if (info.out) escapes++;
-    if (i < 7) visited.push(info.id);
+    // 9 przystanków: tyle ma okno z paskiem chipów „Tryby auto"; bez niego pętla
+    // i tak wraca do pola wcześniej (asercja szuka pola w odwiedzonych).
+    if (i < 9) visited.push(info.id);
   }
   check("Tab nie ucieka z okna szukania (pułapka fokusu)", escapes === 0, `ucieczek: ${escapes}`);
   check("obieg Tab wraca do pola szukania", visited.includes("quickSearchPopupInput"), visited.join(" → "));
@@ -494,8 +496,14 @@ async function run() {
   // Pełny obieg Tab w oknie szukania musi być IDENTYCZNY w każdym silniku
   await page.evaluate(() => { openQuickSearchPopup(); });
   await sleep(300);
+  // Pasek chipów „Tryby auto" pojawia się w oknie tylko dla arkuszy z powtarzalnymi
+  // blokami kolumn — obieg liczymy więc pod faktyczny stan okna, nie pod stałą listę.
+  const chipBarVisible = await page.evaluate(() => {
+    const el = document.getElementById("quickSearchSmartChips");
+    return !!el && !el.classList.contains("hidden") && el.querySelectorAll("button").length > 0;
+  });
   const obieg = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < (chipBarVisible ? 8 : 7); i++) {
     await page.keyboard.press("Tab");
     obieg.push(await page.evaluate(() => {
       const a = document.activeElement;
@@ -503,11 +511,16 @@ async function run() {
       if (a?.getAttribute && a.getAttribute("role") === "radio") {
         return a.closest(".seg-group")?.previousElementSibling?.id || "seg";
       }
+      // Chipy trybów auto: cały pasek to JEDEN przystanek (roving tabindex, strzałki)
+      const chipBar = a?.closest ? a.closest("#quickSearchSmartChips") : null;
+      if (chipBar) return chipBar.id;
       return a?.id || "‹POZA›";
     }));
   }
   const oczekiwany = ["quickSearchPopupMode", "quickSearchPopupAction", "quickSearchPopupOperators",
-    "qsAllSheetsPopup", "quickSearchPopupColumnsBtn", "quickSearchPopupBtn", "quickSearchPopupInput"];
+    "qsAllSheetsPopup", "quickSearchPopupColumnsBtn", "quickSearchPopupBtn",
+    ...(chipBarVisible ? ["quickSearchSmartChips"] : []),
+    "quickSearchPopupInput"];
   check("obieg Tab w oknie szukania jest taki sam w każdym silniku i na dotyku",
     obieg.join(",") === oczekiwany.join(","), obieg.join(" → "));
   await page.evaluate(() => closeQuickSearchPopup());
