@@ -22,18 +22,17 @@ const IS_SAFARI = (() => {
 })();
 document.documentElement.classList.toggle("browser-safari", IS_SAFARI);
 
-// Przełącznik szkła do pomiaru „czy backdrop-filter kosztuje na TYM urządzeniu":
-// `?noglass` (albo localStorage noglass=1) zdejmuje rozmycie z nagłówka, paneli
-// i pływających elementów. Ustawiane jak najwcześniej, żeby pierwsza klatka
-// malowała się już bez szkła.
+// Szkło (backdrop-filter) jest na dotyku WYŁĄCZONE — rozstrzygnięte pomiarem A/B
+// na fizycznym iPhonie (patrz komentarz w app.css). `?glass` przywraca je z powrotem,
+// gdyby trzeba było powtórzyć pomiar albo sprawdzić tańszy wariant rozmycia.
 (() => {
   try {
-    const on = /(\?|&)noglass\b/.test(location.search)
-      || /noglass/.test(location.hash)
-      || localStorage.getItem("noglass") === "1";
-    document.documentElement.classList.toggle("no-glass", on);
+    const force = /(\?|&)glass\b/.test(location.search)
+      || /(^|#)glass/.test(location.hash)
+      || localStorage.getItem("glass") === "1";
+    document.documentElement.classList.toggle("force-glass", force);
   } catch (_) {
-    document.documentElement.classList.toggle("no-glass", /noglass/.test(location.search + location.hash));
+    document.documentElement.classList.toggle("force-glass", /[?&#]glass\b/.test(location.search + location.hash));
   }
 })();
 
@@ -632,7 +631,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260918-14";
+const APP_BUILD_VERSION = "20260918-15";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

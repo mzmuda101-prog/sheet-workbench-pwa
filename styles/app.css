@@ -5613,48 +5613,55 @@ body.tr-active .toast-container {
 }
 
 /* =========================================================================
-   SZKŁO (backdrop-filter) — PRZEŁĄCZALNE, DO ROZSTRZYGNIĘCIA POMIAREM
+   SZKŁO (backdrop-filter) — WYŁĄCZONE NA DOTYKU (rozstrzygnięte pomiarem A/B)
    -------------------------------------------------------------------------
-   Kontekst: zacinanie na iPhonie 15 Pro naprawiły TRZY zmiany naraz (puls
-   przycisku aktualizacji, wyłączenie szkła na dotyku, przywrócenie
-   content-visibility), więc nie wiadomo, która była decydująca. Dowody
-   wskazują na puls — bo telefon gubił klatki RÓWNIEŻ W BEZRUCHU, a tylko
-   animacja w pętli to tłumaczy. Szkło i lazy-paint kosztują przy przewijaniu,
-   nie w spoczynku.
-   Dlatego szkło wraca domyślnie WSZĘDZIE (też na dotyku), a wyłączyć je można
-   natychmiast, bez nowego wdrożenia: adres z `?noglass` (albo localStorage
-   `noglass=1`) dokłada klasę `no-glass` na <html>. Dzięki temu oba warianty
-   da się porównać w jednej sesji, tym samym palcem, na tym samym pliku.
-   Jeśli pomiar pokaże, że szkło jednak kosztuje — wystarczy zmienić tu selektor
-   `html.no-glass` na `@media (pointer: coarse)`.
+   To NIE jest przeczucie, tylko wynik testu na fizycznym iPhonie 15 Pro:
+     • build -12/-13 (puls naprawiony + szkło ZDJĘTE na dotyku) → płynnie,
+     • build -14   (puls naprawiony + szkło PRZYWRÓCONE)        → zacinanie WRACA.
+   Zmieniała się dokładnie jedna rzecz, więc sprawca jest pewny: `backdrop-filter`.
+   Samo naprawienie pulsu przycisku aktualizacji NIE wystarczyło.
+
+   Dlaczego tak drogo: `--glass` to `blur(26px) saturate(1.95) brightness(1.02)`
+   nakładane na `.hero` i KAŻDY `.panel`. Przy dpr 3 rozmycie liczy się dla
+   trzykrotnie większej liczby pikseli i jest przeliczane za każdym razem, gdy
+   zmienia się cokolwiek pod spodem — czyli przy przewijaniu tabeli non stop.
+   Co ważne, koszt idzie wątkiem KOMPOZYTORA, więc licznik fps głównego wątku
+   pokazywał spokojne 60 fps, a obraz i tak szarpał.
+
+   Zostaje ten sam układ i kolory, tylko bez rozmycia (tła pełniejsze).
+   Na desktopie (pointer: fine) szkło jest nietknięte.
+   `?glass` w adresie WŁĄCZA szkło z powrotem — gdyby kiedyś trzeba było powtórzyć
+   pomiar albo przetestować tańszy wariant rozmycia.
    ========================================================================= */
-html.no-glass .hero,
-html.no-glass .panel,
-html.no-glass .sidebar,
-html.no-glass .sidebar-handle,
-html.no-glass .sheet-picker-fab,
-html.no-glass .sheet-picker-sheet,
-html.no-glass .cell-tooltip,
-html.no-glass .quick-search-popup-box,
-html.no-glass .toast,
-html.no-glass .loading-box,
-html.no-glass .scroll-top-fab,
-html.no-glass .clear-selection-fab {
-  -webkit-backdrop-filter: none !important;
-  backdrop-filter: none !important;
-}
-html.no-glass .hero,
-html.no-glass .panel {
-  background: var(--glass-sheen), var(--panel);
-}
-html.no-glass .sidebar-handle,
-html.no-glass .sheet-picker-fab,
-html.no-glass .scroll-top-fab,
-html.no-glass .clear-selection-fab,
-html.no-glass .cell-tooltip,
-html.no-glass .quick-search-popup-box,
-html.no-glass .loading-box {
-  background: var(--panel);
+@media (pointer: coarse) {
+  html:not(.force-glass) .hero,
+  html:not(.force-glass) .panel,
+  html:not(.force-glass) .sidebar,
+  html:not(.force-glass) .sidebar-handle,
+  html:not(.force-glass) .sheet-picker-fab,
+  html:not(.force-glass) .sheet-picker-sheet,
+  html:not(.force-glass) .cell-tooltip,
+  html:not(.force-glass) .quick-search-popup-box,
+  html:not(.force-glass) .toast,
+  html:not(.force-glass) .loading-box,
+  html:not(.force-glass) .scroll-top-fab,
+  html:not(.force-glass) .clear-selection-fab {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  html:not(.force-glass) .hero,
+  html:not(.force-glass) .panel {
+    background: var(--glass-sheen), var(--panel);
+  }
+  html:not(.force-glass) .sidebar-handle,
+  html:not(.force-glass) .sheet-picker-fab,
+  html:not(.force-glass) .scroll-top-fab,
+  html:not(.force-glass) .clear-selection-fab,
+  html:not(.force-glass) .cell-tooltip,
+  html:not(.force-glass) .quick-search-popup-box,
+  html:not(.force-glass) .loading-box {
+    background: var(--panel);
+  }
 }
 
 /* ===================================================
