@@ -376,11 +376,13 @@ async function buildConditionalFormatting(bytes, wb) {
   currentCFRules = null;
   cfEvalCache = new Map();
   currentTables = {};
+  cfClearFormulaAstCache();
   if (typeof JSZip === "undefined" || !bytes || !wb) return;
   try {
     const zip = await getSharedWorkbookZip(bytes);
     if (!zip) return;
     currentTables = await parseTables(zip);
+    cfClearFormulaAstCache();
     const stylesXml = await readSharedZipText(zip, "xl/styles.xml");
     if (stylesXml) currentDxfs = parseDxfs(stylesXml);
     const wbXml = await readSharedZipText(zip, "xl/workbook.xml");
@@ -669,13 +671,39 @@ function resolveStructuredRefs(formula, thisRow) {
 // zależnych od TODAY()/NOW() (np. „Długość dni" do dzisiaj) bez wchodzenia do Excela.
 // thisRow = absolutny wiersz komórki (dla odwołań strukturalnych [#This Row]/@).
 // Zwraca number|string|boolean albo null, gdy formuła jest nieobsługiwana/błędna → zostaje wartość z pliku.
+// Cache sparsowanych formuł. Kolumna wyliczana w arkuszu ma zwykle DOKŁADNIE ten sam
+// tekst formuły w każdym wierszu (referencje strukturalne `[#This Row]` albo formuły
+// dzielone) — w pliku testowym 4504 komórki z TODAY() to tylko 8 różnych formuł.
+// Wcześniej każda z 4504 komórek przechodziła pełne resolveStructuredRefs + tokenize
+// + parse: 527 ms z ~1 s wczytywania arkusza (profil CPU, Chromium ×6).
+//
+// Klucz to sam tekst formuły; AST parsujemy RAZ dla wiersza bazowego, a dla kolejnych
+// wierszy podajemy silnikowi przesunięcie `dr`. To jest dokładnie semantyka referencji
+// względnych — cfRefToRC przesuwa tylko refy bez `$`, więc `$B$1` zostaje na miejscu,
+// a `C3` jedzie z wierszem. Nieudane parsowania zapamiętujemy jako null, żeby nie
+// próbować ich ponownie w każdym wierszu.
+let _cfFormulaAstCache = new Map();
+
+function cfClearFormulaAstCache() {
+  _cfFormulaAstCache = new Map();
+}
+
 function cfRecomputeCellFormula(sheet, formulaText, thisRow) {
   if (!sheet || !formulaText) return null;
-  const resolved = resolveStructuredRefs(formulaText, thisRow || 0);
-  let ast;
-  try { ast = cfParse(cfTokenize(resolved)); } catch { return null; }
+  const row = thisRow || 0;
+  let entry = _cfFormulaAstCache.get(formulaText);
+  if (entry === undefined) {
+    const resolved = resolveStructuredRefs(formulaText, row);
+    try {
+      entry = { ast: cfParse(cfTokenize(resolved)), baseRow: row };
+    } catch {
+      entry = null;
+    }
+    _cfFormulaAstCache.set(formulaText, entry);
+  }
+  if (!entry) return null;
   let v;
-  try { v = cfEval(ast, { sheet, dr: 0, dc: 0 }); } catch { return null; }
+  try { v = cfEval(entry.ast, { sheet, dr: row - entry.baseRow, dc: 0 }); } catch { return null; }
   if (cfIsErr(v) || v === undefined) return null;
   if (typeof v === "number" && !isFinite(v)) return null;
   return v;

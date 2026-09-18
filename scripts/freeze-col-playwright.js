@@ -1,17 +1,18 @@
 // freeze-col-playwright.js — BLOKADA PIERWSZEJ KOLUMNY: poprawność + zabezpieczenie wydajności.
 //
-// `position: sticky` dostają dwie komórki w KAŻDYM wierszu, więc przy 200 wierszach
-// silnik repozycjonuje 400 elementów na każdej klatce przewijania. Dopóki tabela nie
-// jest odjechana w bok, te komórki stoją tam, gdzie stałyby normalnie — trzymamy je
-// wtedy jako zwykłe (klasa `.freeze-col-active` wchodzi dopiero przy scrollLeft > 0).
+// Historia: na iPhonie przewijanie z włączoną blokadą potrafiło zjeść 3× więcej czasu
+// na klatkę. Winowajcą był `backdrop-filter: blur(4px)` na komórkach zamrożonej kolumny
+// — dostają go DWIE komórki w KAŻDYM wierszu, czyli setki rozmywanych warstw liczonych
+// co klatkę. Blur był wprawdzie wyłączany regułą `html.browser-safari`, ale iOS w trybie
+// PWA z ekranu głównego nie wysyła w user-agencie tokenu „Safari", więc akurat tam
+// obejście nie działało. Dlatego blur zniknął dla wszystkich.
 //
 // Co musi być prawdą:
-//   1. blokada wyłączona → brak sticky i brak klasy (stan wyjściowy),
-//   2. blokada włączona, scrollLeft = 0 → komórki NIE są sticky (to jest ta oszczędność),
-//   3. po przewinięciu w bok → sticky wchodzi, a zamrożona kolumna FAKTYCZNIE stoi
-//      w miejscu (jej pozycja na ekranie się nie zmienia) — czyli funkcja dalej działa,
-//   4. powrót do lewej krawędzi → sticky znowu schodzi,
-//   5. przełączenie klasy nie przesuwa kolumny (brak skoku przy starcie przewijania).
+//   1. blokada wyłączona → komórki nie są sticky,
+//   2. po włączeniu → sticky wchodzi i zamrożona kolumna FAKTYCZNIE stoi w miejscu
+//      przy przewijaniu w bok (pozycja na ekranie bez zmian),
+//   3. zamrożone komórki NIE mają backdrop-filter (to jest ta regresja, której pilnujemy),
+//   4. tło zamrożonych komórek jest nieprzezroczyste (inaczej treść spod spodu prześwituje).
 //
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
 
@@ -43,10 +44,12 @@ async function run() {
   const probe = () => page.evaluate(() => {
     const wrap = document.getElementById("tableWrap");
     const cell = document.querySelector("#dataTable tbody td:nth-child(2)");
+    const st = cell ? getComputedStyle(cell) : null;
     return {
-      active: wrap.classList.contains("freeze-col-active"),
       frozen: wrap.classList.contains("freeze-first-col"),
-      position: cell ? getComputedStyle(cell).position : "",
+      position: st ? st.position : "",
+      backdrop: st ? (st.backdropFilter || st.webkitBackdropFilter || "none") : "",
+      background: st ? st.backgroundColor : "",
       left: cell ? Math.round(cell.getBoundingClientRect().left) : -1,
       scrollLeft: Math.round(wrap.scrollLeft),
     };
@@ -75,17 +78,20 @@ async function run() {
 
   const failures = [];
   if (off.frozen) failures.push("blokada powinna startować wyłączona");
-  if (off.active) failures.push("klasa freeze-col-active nie powinna istnieć bez blokady");
+  if (off.position === "sticky") failures.push("bez blokady komórki nie powinny być sticky");
   if (!onAtZero.frozen) failures.push("po włączeniu brakuje klasy freeze-first-col");
-  if (onAtZero.active) failures.push("przy scrollLeft=0 sticky ma być ZDJĘTY (to jest oszczędność)");
-  if (onAtZero.position !== "static") failures.push(`przy scrollLeft=0 pozycja komórki = ${onAtZero.position}, oczekiwano static`);
-  if (!onScrolled.active) failures.push("po przewinięciu w bok brakuje klasy freeze-col-active");
-  if (onScrolled.position !== "sticky") failures.push(`po przewinięciu pozycja komórki = ${onScrolled.position}, oczekiwano sticky`);
+  if (onAtZero.position !== "sticky") failures.push(`po włączeniu pozycja komórki = ${onAtZero.position}, oczekiwano sticky`);
+  // To jest właściwa regresja, której pilnujemy — rozmycie na setkach komórek zabijało scroll.
+  if (onAtZero.backdrop && onAtZero.backdrop !== "none") {
+    failures.push(`zamrożona kolumna ma backdrop-filter (${onAtZero.backdrop}) — to kosztuje ~2,5× czasu klatki przy przewijaniu`);
+  }
+  if (/rgba\(.*0(\.\d+)?\)$/.test(onAtZero.background)) {
+    failures.push(`tło zamrożonej kolumny jest przezroczyste (${onAtZero.background}) — treść spod spodu będzie prześwitywać`);
+  }
   if (onScrolled.scrollLeft < 100) failures.push(`tabela nie przewinęła się w bok (scrollLeft=${onScrolled.scrollLeft}) — test nic nie sprawdza`);
   if (Math.abs(onScrolled.left - onAtZero.left) > 2) {
     failures.push(`zamrożona kolumna przesunęła się przy przewijaniu: ${onAtZero.left}px → ${onScrolled.left}px`);
   }
-  if (backAtZero.active) failures.push("po powrocie do lewej krawędzi sticky powinien znów zejść");
   if (errors.length) failures.push(`błędy konsoli/strony: ${errors.join(" | ")}`);
 
   console.log(JSON.stringify({ off, onAtZero, onScrolled, backAtZero, errors }, null, 2));

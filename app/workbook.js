@@ -302,9 +302,6 @@ function showCellTooltip(cell, persistent = false) {
 
 function syncHorizontalScrollbar() {
   if (!tableWrapEl || !tableScrollbarEl || !tableScrollbarInnerEl) return;
-  // Po renderze tabela mogła zmienić szerokość (przeglądarka sama przycina scrollLeft
-  // bez zdarzenia scroll) — odśwież stan sticky zamrożonej kolumny.
-  if (typeof syncFreezeColActive === "function") syncFreezeColActive();
   const active = !tableWrapEl.classList.contains("hidden") && tableWrapEl.scrollWidth > tableWrapEl.clientWidth + 1;
   tableScrollbarEl.classList.toggle("hidden", !active);
   if (!active) return;
@@ -325,6 +322,21 @@ function toDisplay(value) {
   return String(value);
 }
 
+// Tworzenie Intl.DateTimeFormat jest DROGIE (buduje reguły lokalizacji), a tu leciało
+// po jednym na każdą komórkę z datą — przy wczytywaniu arkusza 563×33 dało to 420 ms
+// z 3,5 s całego profilu CPU. Formatery zależą wyłącznie od (język, zestaw opcji),
+// więc trzymamy je w mapie; zestawów jest kilka, więc mapa nie rośnie.
+const _dateFormatterCache = new Map();
+function getCachedDateFormatter(locale, opts) {
+  const key = `${locale}|${opts.month || ""}|${opts.day || ""}|${opts.year || ""}|${opts.weekday || ""}|${opts.hour || ""}|${opts.minute || ""}|${opts.second || ""}`;
+  let fmt = _dateFormatterCache.get(key);
+  if (!fmt) {
+    fmt = new Intl.DateTimeFormat(locale, opts);
+    _dateFormatterCache.set(key, fmt);
+  }
+  return fmt;
+}
+
 function formatLocalizedDateDisplay(date, options = {}) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
   const formatterOptions = {
@@ -343,7 +355,7 @@ function formatLocalizedDateDisplay(date, options = {}) {
     }
   }
 
-  return new Intl.DateTimeFormat(I18N[currentLang]?.locale || "pl-PL", formatterOptions)
+  return getCachedDateFormatter(I18N[currentLang]?.locale || "pl-PL", formatterOptions)
     .format(date)
     .replace(/\.$/g, "")
     .replace(/\s+/g, " ")

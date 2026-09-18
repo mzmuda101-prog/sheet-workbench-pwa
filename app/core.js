@@ -271,6 +271,34 @@ let flipNextRender = false;
 // urządzeniach, ale i nie okrajać sprawnych. To NIE limit wyświetlania: dzięki
 // animacji tylko w paśmie viewportu (flipRows) liczba kandydatów i tak jest mała,
 // a ten cap jest bezpiecznikiem. Liczony przy każdym FLIP (obrót iPada zmienia ekran).
+// Wiersze, którym FLIP nałożył inline transform/transition — tylko je trzeba
+// wyczyścić przed kolejnym pomiarem (zamiast całej tabeli).
+let _flipDirtyRows = [];
+
+// Wiersze w okolicy widoku, wybrane wyszukiwaniem binarnym po offsetTop.
+// Tabela układa wiersze w rosnącym offsetTop, więc binsearch jest poprawny,
+// a kosztuje ~log2(n) odczytów zamiast n.
+function flipViewportSlice(rows, buffer) {
+  const list = Array.isArray(rows) ? rows : Array.from(rows);
+  if (!tableWrapEl || list.length <= 60) return list; // mało wierszy → taniej zmierzyć wszystkie
+  const top = tableWrapEl.scrollTop - buffer;
+  const bottom = tableWrapEl.scrollTop + tableWrapEl.clientHeight + buffer;
+  const offsetAt = (i) => list[i].offsetTop;
+  const firstAtLeast = (value) => {
+    let lo = 0;
+    let hi = list.length - 1;
+    let found = list.length;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      if (offsetAt(mid) >= value) { found = mid; hi = mid - 1; } else { lo = mid + 1; }
+    }
+    return found;
+  };
+  const start = Math.max(0, firstAtLeast(top) - 1);
+  const end = Math.min(list.length, firstAtLeast(bottom) + 1);
+  return list.slice(start, end);
+}
+
 function computeFlipRowCap() {
   const cores = navigator.hardwareConcurrency || 8;
   const mem = navigator.deviceMemory || 8; // Safari nie wspiera → traktuj jak 8
@@ -312,19 +340,30 @@ function flipRows(mutate) {
   const inBand = (y) => y != null && y >= bandTop && y <= bandBottom;
   const cap = computeFlipRowCap();
 
-  // Wyzeruj resztkowe transformy z poprzedniej animacji, by mierzyć layout.
-  oldRows.forEach((tr) => { tr.style.transition = "none"; tr.style.transform = ""; });
+  // Wyzeruj resztkowe transformy z POPRZEDNIEJ animacji. Wcześniej szło to pętlą po
+  // wszystkich wierszach (200 zapisów stylu), choć inline-style ma tylko garstka
+  // animowanych — trzymamy więc ich listę i czyścimy dokładnie je.
+  _flipDirtyRows.forEach((tr) => { tr.style.transition = "none"; tr.style.transform = ""; });
+  _flipDirtyRows = [];
+
+  // Mierzymy TYLKO wiersze w okolicy widoku. Wcześniej getBoundingClientRect()
+  // leciało po wszystkich wierszach dwa razy (przed i po przebudowie) — przy 200
+  // wierszach to 400 odczytów layoutu na każde sortowanie/filtrowanie, czyli lwia
+  // część kosztu (zmierzone: sortowanie 524 ms z animacją vs 166 ms bez, CPU ×6).
+  // Zakres znajdujemy wyszukiwaniem binarnym po offsetTop (~8 odczytów zamiast 200).
+  // Świadomy kompromis: wiersz, który WYJEŻDŻA daleko poza widok, nie dostaje już
+  // animacji odlotu — i tak nie widać go po ruchu.
   const before = new Map();
-  oldRows.forEach((tr) => {
+  flipViewportSlice(oldRows, buffer).forEach((tr) => {
     const top = tr.getBoundingClientRect().top;
-    if (inBand(top)) before.set(tr.dataset.rowKey, top); // tylko widoczne pasmo
+    if (inBand(top)) before.set(tr.dataset.rowKey, top);
   });
 
   mutate();
 
   // Przebieg 1 (odczyt): nowe pozycje + dopasowanie do „before" po kluczu.
   const newRows = Array.from(tbodyEl.querySelectorAll("tr[data-row-key]"));
-  const measured = newRows.map((tr) => ({
+  const measured = flipViewportSlice(newRows, buffer).map((tr) => ({
     tr,
     top: tr.getBoundingClientRect().top,
     prev: before.get(tr.dataset.rowKey),
@@ -371,6 +410,8 @@ function flipRows(mutate) {
     .sort((a, b) => a.top - b.top)
     .forEach((entry, i) => delayFor.set(entry.tr, Math.min(i * staggerStep, maxStagger)));
 
+  _flipDirtyRows = [...movers, ...entering].map((entry) => entry.tr);
+
   requestAnimationFrame(() =>
     requestAnimationFrame(() => {
       movers.forEach(({ tr }) => {
@@ -391,6 +432,7 @@ function flipRows(mutate) {
   setTimeout(() => {
     movers.forEach(({ tr }) => { tr.style.transition = ""; tr.style.transform = ""; });
     entering.forEach(({ tr }) => { tr.style.transition = ""; tr.style.transform = ""; tr.style.opacity = ""; });
+    _flipDirtyRows = [];
   }, maxStagger + 420);
 }
 
@@ -575,7 +617,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260918-06";
+const APP_BUILD_VERSION = "20260918-08";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -774,15 +816,24 @@ function setLoading(isLoading, text, options = {}) {
   }
 }
 
+let _statusAnimRaf = 0;
 function setStatus(msg) {
   // Animuj tylko gdy treść faktycznie się zmienia (np. licznik wierszy po filtrze) —
   // powtórne wywołania z tym samym tekstem (częste przy re-renderach) nie mają migać.
   const changed = statusEl.textContent !== msg;
   statusEl.textContent = msg;
   if (!changed) return;
+  // Restart animacji BEZ `void statusEl.offsetWidth`. Ten odczyt wymuszał
+  // synchroniczne przeliczenie układu CAŁEJ strony — a przy tabeli na tysiące
+  // komórek i kilku wywołaniach w trakcie wczytywania zebrało się z tego 374 ms
+  // (11% profilu CPU wczytywania arkusza). Klasa wraca w następnej klatce, co dla
+  // oka jest nie do odróżnienia, a nie dotyka layoutu.
   statusEl.classList.remove("status-updated");
-  void statusEl.offsetWidth;
-  statusEl.classList.add("status-updated");
+  if (_statusAnimRaf) cancelAnimationFrame(_statusAnimRaf);
+  _statusAnimRaf = requestAnimationFrame(() => {
+    _statusAnimRaf = 0;
+    statusEl.classList.add("status-updated");
+  });
 }
 
 function setDirtyState(isDirty) {
@@ -864,18 +915,6 @@ function applyFreezeHeaders() {
 function applyFreezeFirstColumn() {
   if (!tableWrapEl) return;
   tableWrapEl.classList.toggle("freeze-first-col", !!(freezeFirstColEl && freezeFirstColEl.checked));
-  syncFreezeColActive();
-}
-
-// Sticky na zamrożonej kolumnie kosztuje tyle, ile jest wierszy w DOM (2 komórki na
-// wiersz, repozycjonowane przy każdej klatce przewijania). Dopóki tabela nie jest
-// odjechana w bok, te komórki i tak stoją w swoim naturalnym miejscu — trzymamy je
-// wtedy jako zwykłe komórki. Wywoływane z obsługi scrolla (tanie: classList.toggle
-// z niezmienioną wartością nie rusza DOM) oraz po renderze i zmianie ustawienia.
-function syncFreezeColActive() {
-  if (!tableWrapEl) return;
-  const frozen = !!(freezeFirstColEl && freezeFirstColEl.checked);
-  tableWrapEl.classList.toggle("freeze-col-active", frozen && tableWrapEl.scrollLeft > 0);
 }
 
 

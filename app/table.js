@@ -757,6 +757,14 @@ let _headerScanCache = new Map();
 let _headerScanCacheStamp = -1;
 let _headerScanCacheLang = null;
 
+// PAMIĘĆ: jeden wpis to PEŁNA kopia arkusza (wszystkie wiersze × kolumny). Autodetekcja
+// sprawdza ~8 kandydatów na wiersz nagłówka, więc bez limitu cache trzymał 6–8 kopii
+// naraz — zmierzone: +17 MB na pliku 563×33, czyli przy dużym arkuszu setki megabajtów
+// i pewna zadyszka telefonu. Trzymamy więc tylko kilka NAJŚWIEŻSZYCH wpisów (LRU);
+// werdykt autodetekcji i tak jest osobno zapamiętany, więc ponowne renderowanie panelu
+// pyta zwykle o jeden wiersz nagłówka.
+const HEADER_SCAN_CACHE_LIMIT = 3;
+
 function getCachedHeaderRowScan(sheet, headerRow) {
   const lang = typeof currentLang === "string" ? currentLang : "";
   const stamp = typeof sheetDataStamp === "number" ? sheetDataStamp : 0;
@@ -767,12 +775,21 @@ function getCachedHeaderRowScan(sheet, headerRow) {
   }
   const key = `${currentSheetName}\u001f${headerRow}`;
   const hit = _headerScanCache.get(key);
-  if (hit) return hit;
+  if (hit) {
+    // odśwież pozycję w kolejce LRU (Map pamięta kolejność wstawiania)
+    _headerScanCache.delete(key);
+    _headerScanCache.set(key, hit);
+    return hit;
+  }
 
   const data = buildRows(sheet, headerRow, workbook);
   const groups = detectRepeatingBlocks(sheet, headerRow, data);
   const entry = { data, group: Array.isArray(groups) && groups.length ? groups[0] : null };
   _headerScanCache.set(key, entry);
+  while (_headerScanCache.size > HEADER_SCAN_CACHE_LIMIT) {
+    const oldest = _headerScanCache.keys().next().value;
+    _headerScanCache.delete(oldest);
+  }
   return entry;
 }
 
@@ -1586,6 +1603,129 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
   return out;
 }
 
+// ── Ponowne użycie wierszy DOM (sortowanie / filtrowanie) ────────────────────
+// Sortowanie i filtrowanie zmieniają KOLEJNOŚĆ i ZESTAW wierszy, ale nie treść
+// komórek — a mimo to każdy render budował od zera ~6800 węzłów (200 wierszy × 33
+// kolumny). Zmierzone: sam renderActiveTable to 232 ms z 250 ms całego cyklu
+// filtrowania (Chromium, CPU ×6, plik 563×33).
+//
+// Dlatego trzymamy zbudowane <tr> pod kluczem wiersza i przy kolejnym renderze
+// PRZESTAWIAMY je zamiast odtwarzać. Warunek bezpieczeństwa: wszystko, co wpływa
+// na TREŚĆ komórek, musi być niezmienione — to pilnuje `envKey` poniżej. Rzeczy
+// zmienne z natury (zaznaczenie, podświetlenie trafień, numer wiersza w widoku long,
+// wysokość wiersza) odświeżamy jawnie w refreshReusedRow().
+//
+// Scalone komórki (rowspan/colspan) zależą od WIDOCZNEGO zakresu wierszy, więc przy
+// nich reuse jest wyłączony. Tak samo przy otwartym edytorze komórki.
+let _rowNodeCache = new Map();   // rowKey -> <tr>
+let _rowNodeEnvKey = "";
+
+function computeRenderEnvKey(model, headers, useExcelLayout, limit, hasCfMap) {
+  return [
+    model.mode,
+    headers.length,
+    headers.join("\u0001"),
+    typeof sheetDataStamp === "number" ? sheetDataStamp : 0,
+    typeof dcAppliedCount === "number" ? dcAppliedCount : 0,
+    useExcelLayout ? 1 : 0,
+    cellStyleShowFontColors ? 1 : 0,
+    cellStyleShowFills ? 1 : 0,
+    cellStyleShowFonts ? 1 : 0,
+    cellStyleShowBorders ? 1 : 0,
+    cellStyleShowConditionalFormatting ? 1 : 0,
+    cellStyleShowSubheaders ? 1 : 0,
+    recalcDateFormulas ? 1 : 0,
+    displayModeEl ? displayModeEl.value : "",
+    limit,
+    manualRowHeightAll,
+    typeof currentLang === "string" ? currentLang : "",
+    hasCfMap ? 1 : 0,
+    currentStartCol,
+    tableViewMode,
+    typeof currentHeaderRow === "number" ? currentHeaderRow : 0,
+  ].join("\u001f");
+}
+
+function invalidateRowNodeCache() {
+  _rowNodeCache = new Map();
+  _rowNodeEnvKey = "";
+}
+
+// Odświeża w gotowym wierszu TYLKO to, co zmienia się między renderami.
+function refreshReusedRow(tr, row, rowPos, model, useExcelLayout, pulseMatches) {
+  const rowKey = tr.dataset.rowKey;
+  const classes = [];
+  if (focusedCellState && focusedCellState.rowKey === rowKey
+    && !isSingleCellSelection() && !isCellSelectionMode()) classes.push("row-focused");
+  if (cellStyleShowSubheaders && row.isSubheader) classes.push("row-subheader");
+  if (quickSearchHighlightMode && matchedRowIndexes.size > 0) {
+    if (matchedRowIndexes.has(row.rowIndex0)) {
+      classes.push("row-matched");
+      if (pulseMatches) classes.push("search-match-pulse");
+    } else {
+      classes.push("row-unmatched");
+    }
+  }
+
+  let rowH = manualRowHeights[row.rowIndex0] || (manualRowHeightAll > 0 ? manualRowHeightAll : 0);
+  if (!rowH && useExcelLayout) rowH = toPixelHeight(currentSheetRowHeights[row.rowIndex0]) || 0;
+  if (rowH) {
+    tr.style.height = `${rowH}px`;
+    classes.push("row-fixed-height");
+  } else {
+    tr.style.height = "";
+  }
+  tr.className = classes.join(" ");
+
+  const cells = tr.children;
+  const head = cells[0];
+  if (head) {
+    const label = model.rowHeadFormatter ? model.rowHeadFormatter(row, rowPos) : String(row.rowIndex0 + 1);
+    // textContent skasowałoby uchwyt zmiany wysokości — podmieniamy sam węzeł tekstowy.
+    if (head.firstChild && head.firstChild.nodeType === 3) head.firstChild.nodeValue = label;
+    else head.insertBefore(document.createTextNode(label), head.firstChild);
+  }
+
+  // Klasy komórek (zaznaczenie, trafienie filtra) zmieniamy RÓŻNICOWO. Przejście
+  // pętlą po wszystkich komórkach przy każdym renderze kosztowało więcej, niż dawało
+  // ponowne użycie wiersza (6600 wywołań classList na 200×33) — przy sortowaniu
+  // wychodziło wolniej niż budowa od zera. Zapamiętujemy więc na wierszu, co zostało
+  // nałożone ostatnio, i ruszamy wyłącznie różnicę; w typowym renderze to zero komórek.
+  const matchedCols = highlightMatchedCells ? matchedCellsByRow.get(row.rowIndex0) : null;
+  const nextMatched = matchedCols ? Array.from(matchedCols) : [];
+  const prevMatched = tr._swbMatched || [];
+  if (prevMatched.length || nextMatched.length) {
+    const nextSet = matchedCols || null;
+    prevMatched.forEach((colIndex) => {
+      if (nextSet && nextSet.has(colIndex)) return;
+      const td = cells[colIndex + 1];
+      if (td) td.classList.remove("cell-filter-match");
+    });
+    nextMatched.forEach((colIndex) => {
+      const td = cells[colIndex + 1];
+      if (td) td.classList.add("cell-filter-match");
+    });
+    tr._swbMatched = nextMatched.length ? nextMatched : null;
+  }
+
+  const selectedCol = (selectedCellState && selectedCellState.rowKey === rowKey)
+    ? selectedCellState.colIndex0
+    : -1;
+  const prevSelectedCol = typeof tr._swbSelectedCol === "number" ? tr._swbSelectedCol : -1;
+  if (prevSelectedCol !== selectedCol) {
+    if (prevSelectedCol >= 0) {
+      const td = cells[prevSelectedCol + 1];
+      if (td) td.classList.remove("cell-selected");
+    }
+    if (selectedCol >= 0) {
+      const td = cells[selectedCol + 1];
+      if (td) td.classList.add("cell-selected");
+    }
+    tr._swbSelectedCol = selectedCol;
+  }
+  return tr;
+}
+
 function renderTable(modelOrHeaders, maybeRows) {
   const model = Array.isArray(modelOrHeaders)
     ? {
@@ -1721,10 +1861,30 @@ function renderTable(modelOrHeaders, maybeRows) {
     ? getSheetCFMap(currentSheetName)
     : null;
 
+  // Ponowne użycie wierszy: bezpieczne tylko, gdy nic nie zmieniło TREŚCI komórek
+  // (envKey), nie ma scaleń (zależą od widocznego zakresu) i nie jest otwarty edytor.
+  const envKey = computeRenderEnvKey(model, headers, useExcelLayout, limit, !!cfMapForRender);
+  const mergesActive = !!(mergeLayout && ((mergeLayout.anchors && mergeLayout.anchors.size > 0) || (mergeLayout.covered && mergeLayout.covered.size > 0)));
+  const editorOpen = typeof activeCellEditor !== "undefined" && !!activeCellEditor;
+  const reuseBlocked = mergesActive || editorOpen || (typeof window !== "undefined" && window.__swbNoRowReuse === true);
+  const canReuse = !reuseBlocked && envKey === _rowNodeEnvKey && _rowNodeCache.size > 0;
+  const nextRowNodes = new Map();
+
   const tbodyFragment = document.createDocumentFragment();
   rowsShown.forEach((row, rowPos) => {
+    const reuseKey = getRowSelectionKey(row);
+    if (canReuse) {
+      const cached = _rowNodeCache.get(reuseKey);
+      // Liczba komórek musi się zgadzać — inaczej to wiersz z innego układu.
+      if (cached && cached.childElementCount === headers.length + 1) {
+        refreshReusedRow(cached, row, rowPos, model, useExcelLayout, pulseMatches);
+        nextRowNodes.set(reuseKey, cached);
+        tbodyFragment.appendChild(cached);
+        return;
+      }
+    }
     const tr = document.createElement("tr");
-    tr.dataset.rowKey = getRowSelectionKey(row);
+    tr.dataset.rowKey = reuseKey;
     if (focusedCellState && focusedCellState.rowKey === tr.dataset.rowKey
       && !isSingleCellSelection() && !isCellSelectionMode()) tr.classList.add("row-focused");
     if (cellStyleShowSubheaders && row.isSubheader) tr.classList.add("row-subheader");
@@ -1800,9 +1960,18 @@ function renderTable(modelOrHeaders, maybeRows) {
       }
       tr.appendChild(td);
     });
+    // punkt odniesienia dla różnicowego odświeżania przy kolejnym renderze
+    tr._swbMatched = matchedCols ? Array.from(matchedCols) : null;
+    tr._swbSelectedCol = (selectedCellState && selectedCellState.rowKey === reuseKey)
+      ? selectedCellState.colIndex0
+      : -1;
+    nextRowNodes.set(reuseKey, tr);
     tbodyFragment.appendChild(tr);
   });
   tbodyEl.appendChild(tbodyFragment);
+  // Pamiętamy TYLKO wiersze faktycznie narysowane — żeby nie hodować odłączonych węzłów.
+  _rowNodeCache = nextRowNodes;
+  _rowNodeEnvKey = reuseBlocked ? "" : envKey;
 
   updateTableStatus(model);
   syncFocusedCellInDom({ clearMissing: true, focusDom: hadGridFocus });

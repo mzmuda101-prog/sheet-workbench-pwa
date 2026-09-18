@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260918-06";
+const CACHE_VERSION = "20260918-08";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -64,14 +64,35 @@ function cacheNameForUrl(url) {
   return RUNTIME_CACHE;
 }
 
+// Instalacja pobiera TYLKO lekką powłokę. Ciężkie zasoby (xlsx ~900 KB, jszip, film
+// z intro) szły wcześniej w tej samej paczce — czyli zaraz po każdej aktualizacji
+// telefon ściągał i zapisywał kilka megabajtów dokładnie wtedy, gdy użytkownik
+// wczytuje arkusz i zaczyna nim przewijać. Teraz dogrywamy je po aktywacji, z opóźnieniem,
+// a gdyby service worker został w międzyczasie uśpiony — i tak trafią do cache przy
+// pierwszym użyciu, bo handler fetch zapisuje je do HEAVY_CACHE.
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    Promise.all([
-      caches.open(APP_CACHE).then((cache) => cache.addAll(SHELL_ASSETS)),
-      caches.open(HEAVY_CACHE).then((cache) => cache.addAll(HEAVY_ASSETS)),
-    ]).catch(() => {})
+    caches.open(APP_CACHE).then((cache) => cache.addAll(SHELL_ASSETS)).catch(() => {})
   );
 });
+
+function precacheHeavyAssetsLater(delayMs = 8000) {
+  return new Promise((resolve) => {
+    setTimeout(async () => {
+      try {
+        const cache = await caches.open(HEAVY_CACHE);
+        for (const asset of HEAVY_ASSETS) {
+          // Pojedynczo i sekwencyjnie — równoległe addAll potrafi zapchać łącze telefonu.
+          if (await cache.match(asset)) continue;
+          try { await cache.add(asset); } catch (_) { /* dogramy przy pierwszym użyciu */ }
+        }
+      } catch (_) {
+        // brak miejsca / prywatny tryb — zostaje ścieżka „cache przy pierwszym użyciu"
+      }
+      resolve();
+    }, delayMs);
+  });
+}
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
@@ -84,6 +105,8 @@ self.addEventListener("activate", (event) => {
     )
   );
   self.clients.claim();
+  // Ciężkie zasoby dogrywamy po chwili, już poza ścieżką krytyczną startu.
+  event.waitUntil(precacheHeavyAssetsLater());
 });
 
 self.addEventListener("message", (event) => {

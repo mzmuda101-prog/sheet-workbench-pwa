@@ -982,24 +982,47 @@ function getPrimaryAggregationValueKind(measures, aggregation) {
   return "number";
 }
 
+// Werdykt autodetekcji wiersza nagłówka. Sam skan buduje PEŁNY kontekst (wszystkie
+// wiersze) dla ~8 kandydatów — i robił to przy KAŻDYM przerysowaniu panelu, czyli po
+// każdym filtrowaniu i sortowaniu. Wynik zależy od struktury arkusza, a nie od filtra,
+// więc wystarczy zapamiętać, KTÓRY wiersz wygrał, i dalej liczyć już tylko jego.
+let _aggHeaderVerdict = null; // { key, headerRow }
+
+function aggHeaderVerdictKey() {
+  const lang = typeof currentLang === "string" ? currentLang : "";
+  const stamp = typeof sheetDataStamp === "number" ? sheetDataStamp : 0;
+  return [currentSheetName || "", currentHeaderRow || 0, stamp, lang, aggregationWorkbenchState.sourceMode].join("\u001f");
+}
+
 function getNormalizedAggregationWorkbenchContext() {
-  const headerCandidates = getAggregationHeaderCandidateRows();
   let resolvedHeaderRow = currentHeaderRow;
   let context = null;
 
   if (aggregationWorkbenchState.headerRowChoice === "auto") {
-    headerCandidates.forEach((candidateRow) => {
-      const candidateContext = collectAggregationContextForHeaderRow(
-        candidateRow,
+    const verdictKey = aggHeaderVerdictKey();
+    if (_aggHeaderVerdict && _aggHeaderVerdict.key === verdictKey) {
+      resolvedHeaderRow = _aggHeaderVerdict.headerRow;
+      context = collectAggregationContextForHeaderRow(
+        resolvedHeaderRow,
         aggregationWorkbenchState.sourceMode,
         aggregationWorkbenchState.scopeMode
       );
-      const score = scoreAggregationContext(candidateContext);
-      if (!context || score > context.score) {
-        context = { ...candidateContext, score };
-        resolvedHeaderRow = candidateRow;
-      }
-    });
+      context = { ...context, score: scoreAggregationContext(context) };
+    } else {
+      getAggregationHeaderCandidateRows().forEach((candidateRow) => {
+        const candidateContext = collectAggregationContextForHeaderRow(
+          candidateRow,
+          aggregationWorkbenchState.sourceMode,
+          aggregationWorkbenchState.scopeMode
+        );
+        const score = scoreAggregationContext(candidateContext);
+        if (!context || score > context.score) {
+          context = { ...candidateContext, score };
+          resolvedHeaderRow = candidateRow;
+        }
+      });
+      if (context) _aggHeaderVerdict = { key: verdictKey, headerRow: resolvedHeaderRow };
+    }
   } else {
     const explicitRow = Number.isFinite(aggregationWorkbenchState.customHeaderRow)
       ? aggregationWorkbenchState.customHeaderRow
@@ -1064,7 +1087,9 @@ function getNormalizedAggregationWorkbenchContext() {
     selectedMeasuresRaw: selectedMeasures,
     longAvailable,
     allowedAggregations,
-    headerCandidates,
+    // sama lista numerów wierszy-kandydatów jest tania (bez buildRows) — liczymy ją
+    // dopiero tutaj, bo pętla skanująca odpala się teraz tylko przy pierwszym wykryciu
+    headerCandidates: getAggregationHeaderCandidateRows(),
     resolvedHeaderRow,
   };
 }
