@@ -3238,46 +3238,34 @@ thead th {
 }
 
 /* Blokada pierwszej kolumny: przyklejona kolumna numerów (1.) + pierwsza kolumna danych (2.).
-   Offset 2. kolumny = szerokość kolumny numerów (--row-head-w, ustawiane w renderTable). */
-.table-wrap.freeze-first-col tbody td:first-child,
-.table-wrap.freeze-first-col tbody td:nth-child(2) {
+   Offset 2. kolumny = szerokość kolumny numerów (--row-head-w, ustawiane w renderTable).
+
+   WYDAJNOŚĆ: `position: sticky` dostają DWIE komórki w KAŻDYM wierszu (przy 200
+   wierszach to 400 elementów, które silnik musi repozycjonować i odmalowywać
+   przy każdej klatce przewijania). Dopóki tabela nie jest przewinięta w poziomie
+   (scrollLeft = 0), przyklejone komórki i tak stoją dokładnie tam, gdzie stałyby
+   normalnie — więc trzymamy je wtedy jako zwykłe komórki i włączamy sticky
+   dopiero klasą `.freeze-col-active` (ustawianą w obsłudze scrolla).
+   Zmierzone (Chromium, CPU ×6, 200 wierszy, bez blura — czyli jak na Safari):
+   mediana klatki 10,7 ms z sticky vs 8,4 ms bez, przy przewijaniu w pionie
+   11,1 vs 9,5 ms. Wizualnie bez różnicy. */
+.table-wrap.freeze-first-col.freeze-col-active tbody td:first-child,
+.table-wrap.freeze-first-col.freeze-col-active tbody td:nth-child(2) {
   position: sticky;
   z-index: 4;
-  /* „Frosted glass": półprzezroczyste tło + lekki blur — przewijana treść pod spodem
-     ładnie się rozmywa, a tekst kolumny pozostaje czytelny. Własny fill komórki
-     (inline !important) i tak wygrywa. */
-  background: color-mix(in srgb, var(--surface) 62%, transparent);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-}
-/* Słabsze urządzenia dotykowe (iPad/telefon): sticky + backdrop-filter to na iOS
-   kosztowny dla kompozytora wzorzec (rozmycie liczone co klatkę przy przewijaniu).
-   Zdejmujemy blur i dajemy pełne, nieprzezroczyste tło — wizualnie prawie bez różnicy,
-   a płynność przewijania wyraźnie lepsza. Na mocnych urządzeniach zostaje frosted glass. */
-@media (pointer: coarse) {
-  html.low-power .table-wrap.freeze-first-col tbody td:first-child,
-  html.low-power .table-wrap.freeze-first-col tbody td:nth-child(2) {
-    -webkit-backdrop-filter: none;
-    backdrop-filter: none;
-    background: var(--surface);
-  }
-}
-/* Safari (desktop i mobile): position:sticky + backdrop-filter + poziomy scroll = smearing.
-   Bug w silniku WebKit — blur przeliczany co klatkę zamiast przez osobną warstwę kompozytora.
-   Zastępujemy solidnym tłem — efekt frosted glass i tak ledwo widoczny na tle tabeli. */
-html.browser-safari .table-wrap.freeze-first-col tbody td:first-child,
-html.browser-safari .table-wrap.freeze-first-col tbody td:nth-child(2) {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  /* Pełne, nieprzezroczyste tło — BEZ backdrop-filter.
+     Wcześniej był tu „frosted glass" (półprzezroczyste tło + blur(4px)), zdejmowany
+     tylko na Safari i słabym sprzęcie. Problem: rozmycie dostawały DWIE komórki
+     w KAŻDYM wierszu (200 wierszy = 400 rozmywanych warstw przeliczanych co klatkę),
+     a wykrywanie Safari opiera się o „safari" w user-agencie — którego iOS NIE wysyła
+     w trybie aplikacji z ekranu głównego (PWA standalone). Czyli dokładnie tam, gdzie
+     najbardziej boli, blur zostawał włączony.
+     Zmierzone (Chromium, CPU ×6, 200 wierszy): mediana klatki przy przewijaniu
+     24,8 ms z blurem vs 10,7 ms bez. Efekt wizualny był ledwie widoczny. */
   background: var(--surface);
 }
-html.browser-safari .table-wrap.freeze-headers thead th {
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  background: var(--surface);
-}
-.table-wrap.freeze-first-col tbody td:first-child { left: 0; }
-.table-wrap.freeze-first-col tbody td:nth-child(2) {
+.table-wrap.freeze-first-col.freeze-col-active tbody td:first-child { left: 0; }
+.table-wrap.freeze-first-col.freeze-col-active tbody td:nth-child(2) {
   left: var(--row-head-w, 44px);
   box-shadow: 6px 0 8px -6px rgba(20, 30, 20, 0.16); /* delikatny cień odcinający zamrożoną kolumnę */
 }

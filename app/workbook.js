@@ -302,6 +302,9 @@ function showCellTooltip(cell, persistent = false) {
 
 function syncHorizontalScrollbar() {
   if (!tableWrapEl || !tableScrollbarEl || !tableScrollbarInnerEl) return;
+  // Po renderze tabela mogła zmienić szerokość (przeglądarka sama przycina scrollLeft
+  // bez zdarzenia scroll) — odśwież stan sticky zamrożonej kolumny.
+  if (typeof syncFreezeColActive === "function") syncFreezeColActive();
   const active = !tableWrapEl.classList.contains("hidden") && tableWrapEl.scrollWidth > tableWrapEl.clientWidth + 1;
   tableScrollbarEl.classList.toggle("hidden", !active);
   if (!active) return;

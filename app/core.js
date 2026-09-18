@@ -575,7 +575,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260918-05";
+const APP_BUILD_VERSION = "20260918-06";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -864,6 +864,18 @@ function applyFreezeHeaders() {
 function applyFreezeFirstColumn() {
   if (!tableWrapEl) return;
   tableWrapEl.classList.toggle("freeze-first-col", !!(freezeFirstColEl && freezeFirstColEl.checked));
+  syncFreezeColActive();
+}
+
+// Sticky na zamrożonej kolumnie kosztuje tyle, ile jest wierszy w DOM (2 komórki na
+// wiersz, repozycjonowane przy każdej klatce przewijania). Dopóki tabela nie jest
+// odjechana w bok, te komórki i tak stoją w swoim naturalnym miejscu — trzymamy je
+// wtedy jako zwykłe komórki. Wywoływane z obsługi scrolla (tanie: classList.toggle
+// z niezmienioną wartością nie rusza DOM) oraz po renderze i zmianie ustawienia.
+function syncFreezeColActive() {
+  if (!tableWrapEl) return;
+  const frozen = !!(freezeFirstColEl && freezeFirstColEl.checked);
+  tableWrapEl.classList.toggle("freeze-col-active", frozen && tableWrapEl.scrollLeft > 0);
 }
 
 

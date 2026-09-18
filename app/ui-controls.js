@@ -2554,6 +2554,9 @@ if (tableWrapEl && tableScrollbarEl) {
   tableWrapEl.addEventListener("touchcancel", markTableTouchEnd, { passive: true });
 
   tableWrapEl.addEventListener("scroll", () => {
+    // PRZED rAF: sticky zamrożonej kolumny ma być aktywne już w tej samej klatce,
+    // w której tabela odjeżdża w bok (inaczej kolumna „doganiałaby" widok).
+    syncFreezeColActive();
     if (tableScrollFxRaf) return;
     tableScrollFxRaf = requestAnimationFrame(() => {
       tableScrollFxRaf = 0;
