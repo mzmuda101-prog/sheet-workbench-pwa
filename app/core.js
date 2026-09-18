@@ -22,6 +22,21 @@ const IS_SAFARI = (() => {
 })();
 document.documentElement.classList.toggle("browser-safari", IS_SAFARI);
 
+// Przełącznik szkła do pomiaru „czy backdrop-filter kosztuje na TYM urządzeniu":
+// `?noglass` (albo localStorage noglass=1) zdejmuje rozmycie z nagłówka, paneli
+// i pływających elementów. Ustawiane jak najwcześniej, żeby pierwsza klatka
+// malowała się już bez szkła.
+(() => {
+  try {
+    const on = /(\?|&)noglass\b/.test(location.search)
+      || /noglass/.test(location.hash)
+      || localStorage.getItem("noglass") === "1";
+    document.documentElement.classList.toggle("no-glass", on);
+  } catch (_) {
+    document.documentElement.classList.toggle("no-glass", /noglass/.test(location.search + location.hash));
+  }
+})();
+
 // iPadOS 13+ podaje często „MacIntel" + dotyk — osobna klasa pod poprawki scrolla
 // (słaby native fling na overflow:auto; telefon zostaje bez zmian).
 const IS_IPAD = (() => {
@@ -617,7 +632,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260918-13";
+const APP_BUILD_VERSION = "20260918-14";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

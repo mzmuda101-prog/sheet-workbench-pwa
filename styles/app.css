@@ -5613,47 +5613,48 @@ body.tr-active .toast-container {
 }
 
 /* =========================================================================
-   SZKŁO (backdrop-filter) — WYŁĄCZONE NA DOTYKU
+   SZKŁO (backdrop-filter) — PRZEŁĄCZALNE, DO ROZSTRZYGNIĘCIA POMIAREM
    -------------------------------------------------------------------------
-   `--glass` to `blur(26px) saturate(1.95) brightness(1.02)` nakładane na nagłówek
-   i KAŻDY panel. Na telefonie przy dpr 3 rozmycie liczy się dla trzykrotnie
-   większej liczby pikseli, a przeliczane jest za każdym razem, gdy zmienia się
-   cokolwiek pod spodem — czyli przy przewijaniu tabeli non stop.
-   Zmierzone na fizycznym iPhonie (500 wierszy × 35 kolumn): 11 fps, mediana
-   klatki 89 ms, 105 zaciętych klatek na 180 — również W BEZRUCHU.
-   Na dotyku zostawiamy ten sam układ i kolory, tylko bez rozmycia: tła robią się
-   pełniejsze, więc wizualnie różnica jest niewielka, a pracy ubywa drastycznie.
-   Na desktopie (pointer: fine) szkło zostaje nietknięte.
+   Kontekst: zacinanie na iPhonie 15 Pro naprawiły TRZY zmiany naraz (puls
+   przycisku aktualizacji, wyłączenie szkła na dotyku, przywrócenie
+   content-visibility), więc nie wiadomo, która była decydująca. Dowody
+   wskazują na puls — bo telefon gubił klatki RÓWNIEŻ W BEZRUCHU, a tylko
+   animacja w pętli to tłumaczy. Szkło i lazy-paint kosztują przy przewijaniu,
+   nie w spoczynku.
+   Dlatego szkło wraca domyślnie WSZĘDZIE (też na dotyku), a wyłączyć je można
+   natychmiast, bez nowego wdrożenia: adres z `?noglass` (albo localStorage
+   `noglass=1`) dokłada klasę `no-glass` na <html>. Dzięki temu oba warianty
+   da się porównać w jednej sesji, tym samym palcem, na tym samym pliku.
+   Jeśli pomiar pokaże, że szkło jednak kosztuje — wystarczy zmienić tu selektor
+   `html.no-glass` na `@media (pointer: coarse)`.
    ========================================================================= */
-@media (pointer: coarse) {
-  .hero,
-  .panel,
-  .sidebar,
-  .sidebar-handle,
-  .sheet-picker-fab,
-  .sheet-picker-sheet,
-  .cell-tooltip,
-  .quick-search-popup-box,
-  .toast,
-  .loading-box,
-  .scroll-top-fab,
-  .clear-selection-fab {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
-  .hero,
-  .panel {
-    background: var(--glass-sheen), var(--panel);
-  }
-  .sidebar-handle,
-  .sheet-picker-fab,
-  .scroll-top-fab,
-  .clear-selection-fab,
-  .cell-tooltip,
-  .quick-search-popup-box,
-  .loading-box {
-    background: var(--panel);
-  }
+html.no-glass .hero,
+html.no-glass .panel,
+html.no-glass .sidebar,
+html.no-glass .sidebar-handle,
+html.no-glass .sheet-picker-fab,
+html.no-glass .sheet-picker-sheet,
+html.no-glass .cell-tooltip,
+html.no-glass .quick-search-popup-box,
+html.no-glass .toast,
+html.no-glass .loading-box,
+html.no-glass .scroll-top-fab,
+html.no-glass .clear-selection-fab {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html.no-glass .hero,
+html.no-glass .panel {
+  background: var(--glass-sheen), var(--panel);
+}
+html.no-glass .sidebar-handle,
+html.no-glass .sheet-picker-fab,
+html.no-glass .scroll-top-fab,
+html.no-glass .clear-selection-fab,
+html.no-glass .cell-tooltip,
+html.no-glass .quick-search-popup-box,
+html.no-glass .loading-box {
+  background: var(--panel);
 }
 
 /* ===================================================
