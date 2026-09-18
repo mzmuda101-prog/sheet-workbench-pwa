@@ -8,7 +8,7 @@
     s.defer = true;
     document.head.appendChild(s);
   }
-  var v = "20260629-06";
+  var v = typeof APP_BUILD_VERSION !== "undefined" ? APP_BUILD_VERSION : "20260629-06";
   try {
     if (/(\?|&)scrolltest\b/.test(location.search) ||
         /scrolltest/.test(location.hash) ||
@@ -20,6 +20,13 @@
         localStorage.getItem("scrolldebug") === "1") {
       loadScript("app/ipad-scroll-debug.js?v=" + v);
     }
+    // Licznik płynności na urządzeniu — do mierzenia zacinania tam, gdzie ono
+    // faktycznie występuje (telefon), bo w Chromium/WebKicie na Macu nie wychodzi.
+    if (/(\?|&)perfhud\b/.test(location.search) ||
+        /perfhud/.test(location.hash) ||
+        localStorage.getItem("perfhud") === "1") {
+      loadScript("app/perf-hud.js?v=" + v);
+    }
   } catch (e) {
     // [EN] localStorage may throw (private mode) — fall back to URL flags only
     if (/scrolltest/.test(location.search + location.hash)) {
@@ -27,6 +34,9 @@
     }
     if (/scrolldebug/.test(location.search + location.hash)) {
       loadScript("app/ipad-scroll-debug.js?v=" + v);
+    }
+    if (/perfhud/.test(location.search + location.hash)) {
+      loadScript("app/perf-hud.js?v=" + v);
     }
   }
 })();

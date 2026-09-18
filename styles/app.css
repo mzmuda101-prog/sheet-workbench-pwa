@@ -3232,6 +3232,19 @@ thead th {
   z-index: 6;
   box-shadow: 0 1px 0 var(--border), 0 8px 18px rgba(20, 30, 20, 0.08);
 }
+/* Na dotyku ten sam zabieg, co przy zamrożonej kolumnie: ROZMYTY cień siedzi na
+   KAŻDEJ komórce przyklejonego nagłówka (tyle, ile kolumn) i jest przeliczany przy
+   każdej klatce pionowego przewijania. Zostawiamy ostrą kreskę — wygląda praktycznie
+   tak samo, a nie każe kompozytorowi rozmywać kilkudziesięciu warstw pod palcem. */
+@media (pointer: coarse) {
+  .table-wrap.freeze-headers thead .header-row th {
+    box-shadow: 0 1px 0 var(--border);
+    border-bottom: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+  .table-wrap.freeze-first-col tbody td:nth-child(2) {
+    box-shadow: 1px 0 0 color-mix(in srgb, var(--ink) 12%, transparent);
+  }
+}
 
 .table-wrap.freeze-headers .corner-cell {
   z-index: 8;
@@ -3925,9 +3938,14 @@ html.low-power #dataTable tbody tr {
   #dataTable tbody tr { content-visibility: visible; }
 }
 
-tbody tr { transition: background var(--t-fast); }
-tbody tr:hover td { background: rgba(47,111,92,.04); }
-[data-theme="dark"] tbody tr:hover td { background: rgba(77,184,143,.05); }
+/* Podświetlenie pod kursorem i przejście tła mają sens tylko przy prawdziwym
+   wskaźniku. Na dotyku iOS potrafi zostawić stan :hover po tapnięciu, a przejście
+   tła na KAŻDYM wierszu to dodatkowa praca malowania przy przewijaniu. */
+@media (hover: hover) {
+  tbody tr { transition: background var(--t-fast); }
+  tbody tr:hover td { background: rgba(47,111,92,.04); }
+  [data-theme="dark"] tbody tr:hover td { background: rgba(77,184,143,.05); }
+}
 /* Podnagłówki = neutralny „pasek sekcji" z górnym separatorem i pogrubieniem.
    Celowo NIE zielony (to kolor zaznaczenia wiersza) ani bursztynowy (podświetlenie filtra),
    żeby nie mylił się ze stanami zaznaczenia. Spójny z paletą (tinty --ink na --surface). */

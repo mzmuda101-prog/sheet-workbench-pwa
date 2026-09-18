@@ -1923,7 +1923,11 @@ function renderTable(modelOrHeaders, maybeRows) {
       const td = document.createElement("td");
       const displayValue = getDisplayValue(row, i);
       td.textContent = displayValue;
-      td.dataset.fullText = displayValue;
+      // BEZ `data-full-text` na komórkach danych: ten atrybut trzymał DRUGĄ kopię tekstu
+      // każdej komórki (przy 563×33 to 19 000 zdublowanych łańcuchów w DOM), a czytające
+      // go miejsca i tak mają fallback na textContent — który dla <td> jest pełną treścią
+      // (CSS przycina tylko wizualnie). Na nagłówkach atrybut ZOSTAJE, bo tam textContent
+      // zawiera doklejoną strzałkę sortowania.
       td.dataset.colIndex = String(i);
       if (selectedCellState && selectedCellState.rowKey === tr.dataset.rowKey && selectedCellState.colIndex0 === i) {
         td.classList.add("cell-selected");

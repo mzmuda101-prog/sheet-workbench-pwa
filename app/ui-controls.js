@@ -789,6 +789,19 @@ function buildSampleWorkbookArrayBuffer() {
     "Anna Kowalska", "Jan Nowak", "Piotr Wiśniewski", "Maria Wójcik", "Tomasz Lewandowski",
     "Katarzyna Zielińska", "Michał Szymański", "Agnieszka Dąbrowska",
   ];
+  // Rozmiar próbki można podbić adresem: ?sample=600 (1–5000 wierszy). Po to, żeby
+  // dało się odtworzyć zachowanie CIĘŻKIEGO arkusza na dowolnym urządzeniu —
+  // w symulatorze iOS czy na cudzym telefonie nie ma jak wgrać własnego pliku,
+  // a to właśnie na dużych arkuszach widać różnice w płynności.
+  const sampleRowsParam = (() => {
+    try {
+      const raw = new URLSearchParams(location.search).get("sample");
+      const n = parseInt(raw || "", 10);
+      return Number.isFinite(n) ? Math.max(1, Math.min(5000, n)) : 0;
+    } catch (_) {
+      return 0;
+    }
+  })();
   const CYCLES = 4;
   const BLOCK = ["Imię i Nazwisko", "od", "do", "Długość"];
   const today = new Date();
@@ -836,10 +849,16 @@ function buildSampleWorkbookArrayBuffer() {
     { closed: 3, open: true, openAgeDays: 21 },
   ];
 
+  // Przy ?sample=N powtarzamy wzorce scenariuszy w kółko, żeby zachować proporcje
+  // stanów (w toku / zakończone / bez startu / nie zaczęte) niezależnie od rozmiaru.
+  const planRows = sampleRowsParam
+    ? Array.from({ length: sampleRowsParam }, (_, i) => plan[i % plan.length])
+    : plan;
+
   const rows = [];
   let closedTotal = 0, openTotal = 0, untouchedTotal = 0;
 
-  plan.forEach((spec, i) => {
+  planRows.forEach((spec, i) => {
     const teren = `Teren ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
     const cells = [i + 1, teren, ""];
     const closedCount = Math.min(spec.closed, spec.open ? CYCLES - 1 : CYCLES);
@@ -3575,7 +3594,6 @@ function openCellEditor(td, options = {}) {
     if (Array.isArray(row.display)) row.display[colIndex0] = display;
     close();
     td.textContent = display;
-    td.dataset.fullText = display;
     setDirtyState(true);
     flashCellSaved(td);
     if (move) {
