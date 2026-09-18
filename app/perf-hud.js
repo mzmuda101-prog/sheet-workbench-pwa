@@ -54,6 +54,13 @@
   mount();
 
   // ── zbieranie klatek ───────────────────────────────────────────────────────
+  // UWAGA METODYCZNA: requestAnimationFrame mierzy GŁÓWNY WĄTEK (JavaScript).
+  // Na iOS przewijaniem zajmuje się osobny wątek kompozytora — gdy to ON się dławi
+  // malowaniem kafelków, obraz szarpie, a rAF dalej tyka równiutko 60 razy na sekundę.
+  // Użytkownik zgłosił dokładnie to: „licznik pokazuje 60 fps, a i tak się zacina".
+  // Dlatego oprócz klatek mierzymy RUCH OBRAZU: próbkujemy pozycję przewijania w każdej
+  // klatce i patrzymy, czy przesuwa się równo. Zamrożony obraz pod jadącym palcem to
+  // ciąg klatek z zerowym przyrostem pozycji — i to widać w liczbie „zamrożone".
   var frames = [];          // czasy klatek z okna ~3 s
   var jank = 0;             // klatki > 32 ms w tym oknie
   var worstEver = 0;        // najgorsza klatka od startu (nie kasowana)
@@ -62,12 +69,23 @@
   var last = performance.now();
 
   var wrap = document.getElementById("tableWrap");
+  var lastTop = 0, lastLeft = 0;
+  var moveDeltas = [];      // przyrosty pozycji przewijania (px/klatkę) w oknie
+  var frozenFrames = 0;     // klatki BEZ ruchu obrazu, mimo trwającego przewijania
+  var worstFreeze = 0;      // najdłuższa taka seria (w klatkach)
+  var freezeRun = 0;
+
   if (wrap) {
     wrap.addEventListener("scroll", function () {
       scrolling = true;
       clearTimeout(scrollEndTimer);
-      scrollEndTimer = setTimeout(function () { scrolling = false; }, 220);
+      scrollEndTimer = setTimeout(function () {
+        scrolling = false;
+        freezeRun = 0;
+      }, 220);
     }, { passive: true });
+    lastTop = wrap.scrollTop;
+    lastLeft = wrap.scrollLeft;
   }
 
   function tick(now) {
@@ -81,6 +99,23 @@
         var dropped = frames.shift();
         if (dropped > 32) jank = Math.max(0, jank - 1);
       }
+    }
+    if (wrap && scrolling) {
+      var moved = Math.abs(wrap.scrollTop - lastTop) + Math.abs(wrap.scrollLeft - lastLeft);
+      lastTop = wrap.scrollTop;
+      lastLeft = wrap.scrollLeft;
+      moveDeltas.push(moved);
+      if (moveDeltas.length > 180) moveDeltas.shift();
+      if (moved < 0.5) {
+        frozenFrames += 1;
+        freezeRun += 1;
+        if (freezeRun > worstFreeze) worstFreeze = freezeRun;
+      } else {
+        freezeRun = 0;
+      }
+    } else if (wrap) {
+      lastTop = wrap.scrollTop;
+      lastLeft = wrap.scrollLeft;
     }
     requestAnimationFrame(tick);
   }
@@ -120,10 +155,17 @@
     var p95 = pct(sorted, 0.95);
     var fps = p50 > 0 ? Math.round(1000 / p50) : 0;
     var ver = (typeof APP_BUILD_VERSION !== "undefined") ? APP_BUILD_VERSION : "?";
+    var moves = moveDeltas.slice().sort(function (a, b) { return a - b; });
+    var moveMed = pct(moves, 0.5);
+    var ruch = moves.length
+      ? "ruch obrazu: mediana " + moveMed.toFixed(0) + " px/klatkę · zamrożone "
+        + frozenFrames + " kl. (najdłuższa seria " + worstFreeze + ")"
+      : "ruch obrazu: — (jeszcze nie przewijano)";
     box.textContent = [
-      (scrolling ? "▶ PRZEWIJANIE" : "• spokój") + "   " + fps + " fps",
+      (scrolling ? "▶ PRZEWIJANIE" : "• spokój") + "   " + fps + " fps (główny wątek)",
       "klatka: " + p50.toFixed(1) + " ms  p95 " + p95.toFixed(1) + "  max " + worstEver.toFixed(0),
-      "zacięcia (>32 ms): " + jank + " / " + frames.length,
+      "zacięcia JS (>32 ms): " + jank + " / " + frames.length,
+      ruch,
       tableLine(),
       deviceLine(),
       "build " + ver + "  (stuknij, by schować)",

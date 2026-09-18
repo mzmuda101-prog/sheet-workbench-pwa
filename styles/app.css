@@ -587,9 +587,33 @@ body.splashing {
 /* (1) Przycisk Aktualizuj (PWA) — gdy widoczny: wjazd-morph + delikatny puls uwagi.
    Styl gotowy pod Feature C (JD usuwa .hidden, gdy jest nowa wersja). */
 .app-update-btn:not(.hidden) {
-  animation:
-    updateMorphIn 260ms cubic-bezier(0.22, 1, 0.36, 1),
-    updatePulse 2.4s ease-in-out 0.5s infinite;
+  animation: updateMorphIn 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+}
+/* Puls uwagi rysujemy PIERŚCIENIEM na pseudoelemencie i animujemy transformem
+   oraz przezroczystością. Wcześniej pulsował `box-shadow` samego przycisku —
+   a to animacja MALOWANIA, nie kompozytora: każda klatka odmalowywała przycisk,
+   który siedzi w nagłówku z `backdrop-filter`, więc przy okazji kazała przeliczać
+   rozmycie szkła. Zmierzone na fizycznym iPhonie (17 500 komórek w tabeli):
+   11 fps i mediana klatki 89 ms W BEZRUCHU, przy stale widocznym przycisku.
+   Transform + opacity dostają własną warstwę i nie ruszają tła. */
+.app-update-btn:not(.hidden)::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  animation: updateRingPulse 2.4s ease-out 0.5s infinite;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+@keyframes updateRingPulse {
+  0%   { transform: scale(1);    opacity: 0.9; }
+  70%  { transform: scale(1.14); opacity: 0; }
+  100% { transform: scale(1.14); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-update-btn:not(.hidden)::after { animation: none; opacity: 0; }
 }
 @keyframes updateMorphIn {
   from { transform: scale(0.6); opacity: 0; }
@@ -3931,9 +3955,11 @@ tbody td.cell-active {
   content-visibility: auto;
   contain-intrinsic-size: auto 34px;
 }
-html.low-power #dataTable tbody tr {
-  content-visibility: visible;
-}
+/* WCZEŚNIEJ: `html.low-power` WYŁĄCZAŁO tu content-visibility. To było odwrotnie
+   niż trzeba — telefon Mateusza zgłasza 4 rdzenie (czyli „low-power"), a miał
+   17 500 komórek w tabeli, więc akurat tam najbardziej opłaca się nie malować
+   wierszy poza ekranem. Reguła usunięta; wsparcie silnika i tak jest sprawdzane
+   przez samą właściwość. */
 @media print {
   #dataTable tbody tr { content-visibility: visible; }
 }
@@ -5584,6 +5610,50 @@ body.tr-active .toast-container {
   /* Szybkie chipy zakresu dni — sekundarne, inline: umiarkowany wzrost
      (nie pełne 44px, bo balonowałyby i łamały zawijanie), ale wygodniejsze. */
   .chip { min-height: 34px; padding-top: 7px; padding-bottom: 7px; }
+}
+
+/* =========================================================================
+   SZKŁO (backdrop-filter) — WYŁĄCZONE NA DOTYKU
+   -------------------------------------------------------------------------
+   `--glass` to `blur(26px) saturate(1.95) brightness(1.02)` nakładane na nagłówek
+   i KAŻDY panel. Na telefonie przy dpr 3 rozmycie liczy się dla trzykrotnie
+   większej liczby pikseli, a przeliczane jest za każdym razem, gdy zmienia się
+   cokolwiek pod spodem — czyli przy przewijaniu tabeli non stop.
+   Zmierzone na fizycznym iPhonie (500 wierszy × 35 kolumn): 11 fps, mediana
+   klatki 89 ms, 105 zaciętych klatek na 180 — również W BEZRUCHU.
+   Na dotyku zostawiamy ten sam układ i kolory, tylko bez rozmycia: tła robią się
+   pełniejsze, więc wizualnie różnica jest niewielka, a pracy ubywa drastycznie.
+   Na desktopie (pointer: fine) szkło zostaje nietknięte.
+   ========================================================================= */
+@media (pointer: coarse) {
+  .hero,
+  .panel,
+  .sidebar,
+  .sidebar-handle,
+  .sheet-picker-fab,
+  .sheet-picker-sheet,
+  .cell-tooltip,
+  .quick-search-popup-box,
+  .toast,
+  .loading-box,
+  .scroll-top-fab,
+  .clear-selection-fab {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  .hero,
+  .panel {
+    background: var(--glass-sheen), var(--panel);
+  }
+  .sidebar-handle,
+  .sheet-picker-fab,
+  .scroll-top-fab,
+  .clear-selection-fab,
+  .cell-tooltip,
+  .quick-search-popup-box,
+  .loading-box {
+    background: var(--panel);
+  }
 }
 
 /* ===================================================
