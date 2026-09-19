@@ -911,13 +911,25 @@ if ("serviceWorker" in navigator) {
 
   if (appUpdateBtn) {
     appUpdateBtn.addEventListener("click", () => {
+      if (appUpdateBtn.classList.contains("is-busy")) return; // drugi klik w trakcie = nic
+      // Najpierw WIDOCZNA zmiana stanu (spinner + tekst + blokada), dopiero potem
+      // robota. Aktywacja nowego workera i przeładowanie trwają kilkaset ms do paru
+      // sekund — bez tego klik wyglądał, jakby przycisk go nie zarejestrował.
+      appUpdateBtn.classList.add("is-busy");
+      appUpdateBtn.setAttribute("aria-busy", "true");
+      appUpdateBtn.disabled = true;
+      appUpdateBtn.textContent = t("refreshingApp");
       if (!waitingServiceWorker) {
         hardRefreshApp();
         return;
       }
-      appUpdateBtn.disabled = true;
-      appUpdateBtn.textContent = t("refreshingApp");
       waitingServiceWorker.postMessage({ type: "SKIP_WAITING" });
+      // Bezpiecznik: gdyby nowy worker nie przejął kontroli (zdarza się, gdy karta
+      // wisi pod starym SW), nie zostawiaj wiecznego „Odświeżam…" — po 4 s idziemy
+      // twardą ścieżką (czyszczenie cache + reload), która kończy się zawsze.
+      window.setTimeout(() => {
+        if (!refreshingForUpdate) hardRefreshApp();
+      }, 4000);
     });
   }
 

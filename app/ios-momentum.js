@@ -1,6 +1,15 @@
 /* ============================================================================
    ios-momentum.js — inercyjne (fling) przewijanie tabeli dla iOS/iPadOS.
    ----------------------------------------------------------------------------
+   STAN: ZAPARKOWANY — plik NIE jest ładowany (brak wpisu w index.html i w
+   APP_ASSETS w sw.js). Decyzja Mateusza z 2026-06-21 po teście na realnym
+   iPadzie: JS-fling działa, ale „czuć lagi, zwłaszcza w poziomie" (rAF na głównym
+   wątku przegrywa z natywnym kompozytorem, w poziomie dochodzi repaint sticky
+   pierwszej kolumny) → wrócono do NATYWNEGO przewijania. Plik zostaje na wypadek
+   powrotu/podrasowania. Jeśli kiedyś wróci: zjazd jest już niezależny od
+   odświeżania ekranu (patrz onEnd), bo wersja „na klatkę" na 120 Hz kończyła
+   machnięcie dwa razy szybciej niż na 60 Hz.
+   ----------------------------------------------------------------------------
    PO CO: Safari/WebKit daje WEWNĘTRZNYM kontenerom overflow:auto marny rozpęd
    (fling) — na iPadzie tabela „zatrzymuje się pod palcem", brak inercji jak na
    telefonie/Androidzie czy przy przewijaniu całej strony. Zmierzone nagrywarką
@@ -67,15 +76,28 @@
   function onEnd() {
     if (!tracking) return; tracking = false;
     if (!moved) return;
-    var fX = vX * 16 * cfg.xBoost, fY = vY * 16; // px/klatkę
+    var fX = vX * 16 * cfg.xBoost, fY = vY * 16; // px na 16 ms (jednostka strojenia)
     var ax = Math.abs(fX), ay = Math.abs(fY);
     if (ax > ay * cfg.axisLock) fY = 0; else if (ay > ax * cfg.axisLock) fX = 0;
     var cap = cfg.maxVpf;
     fX = Math.max(-cap, Math.min(cap, fX)); fY = Math.max(-cap, Math.min(cap, fY));
-    function step() {
-      fX *= cfg.friction; fY *= cfg.friction;
+    // ZJAZD LICZONY W CZASIE, NIE W KLATKACH. Wcześniej i tarcie, i przesunięcie szły
+    // „na klatkę", więc na ekranie 120 Hz (iPhone Pro / iPad Pro z ProMotion) rozpęd
+    // wytracał się DWA RAZY szybciej niż na 60 Hz i machnięcie kończyło się w pół
+    // drogi — czyli lepszy sprzęt dostawał GORSZE przewijanie. Teraz jedna kalibracja
+    // (fX/fY w px na 16 ms, friction odniesione do tych samych 16 ms) daje ten sam
+    // zjazd niezależnie od odświeżania ekranu; na 60 Hz zachowanie bez zmian.
+    var lastFrame = performance.now();
+    function step(now) {
+      var dt = now - lastFrame;
+      if (!(dt > 0)) dt = 16;
+      if (dt > 64) dt = 64;            // po zacięciu nie teleportuj widoku
+      lastFrame = now;
+      var units = dt / 16;
+      var decay = Math.pow(cfg.friction, units);
+      fX *= decay; fY *= decay;
       if (Math.abs(fX) < 0.15 && Math.abs(fY) < 0.15) { raf = null; return; }
-      el.scrollLeft -= fX; el.scrollTop -= fY;
+      el.scrollLeft -= fX * units; el.scrollTop -= fY * units;
       raf = requestAnimationFrame(step);
     }
     raf = requestAnimationFrame(step);

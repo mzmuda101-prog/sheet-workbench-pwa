@@ -657,6 +657,10 @@ function updateNetworkBadge() {
 }
 
 async function hardRefreshApp() {
+  // Sygnał NATYCHMIAST po kliknięciu. Wcześniej toast leciał dopiero PO czyszczeniu
+  // cache i registration.update() — a to na telefonie potrafi trwać sekundę i dłużej,
+  // więc klik wyglądał, jakby przycisk go nie złapał.
+  toast(t("cacheRefresh"), "info");
   try {
     if ("serviceWorker" in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
@@ -669,9 +673,8 @@ async function hardRefreshApp() {
       await Promise.all(appKeys.map((key) => caches.delete(key).catch(() => false)));
     }
 
-    toast(t("cacheRefresh"), "info");
   } catch {
-    toast(t("refreshingApp"), "info");
+    // cache/SW nie dały się posprzątać — i tak przeładuj, toast już poszedł wyżej
   }
 
   window.location.reload();
@@ -3254,6 +3257,11 @@ function getRowByKey(rowKey) {
   return currentDisplayModel.rows.find((r) => getRowSelectionKey(r) === rowKey) || null;
 }
 
+// Wysokość dropdownu podpowiedzi: sufit jak w CSS, podłoga na wypadek, gdyby nad
+// klawiaturą nie zostało praktycznie nic (wtedy lepiej mała przewijalna lista niż brak).
+const SUGGEST_MAX_HEIGHT = 240;
+const SUGGEST_MIN_HEIGHT = 96;
+
 // Własny dropdown podpowiedzi pod edytorem komórki (Data Validation list).
 // Powód istnienia: natywny <datalist> na dotyku kradnie focus z inputa → nasz
 // blur zatwierdzał po jednej literze i zamykał edytor. Tu wybór pozycji NIE
@@ -3271,35 +3279,62 @@ function createCellSuggestions(input, values, onPick) {
   const startInteract = () => { interacting = true; if (interactTimer) { clearTimeout(interactTimer); interactTimer = null; } };
   const endInteract = () => { if (interactTimer) clearTimeout(interactTimer); interactTimer = setTimeout(() => { interacting = false; }, 250); };
 
-  // Pozycja liczona względem visualViewport, nie window — na dotyku klawiatura
-  // ekranowa zasłania dolną połowę layout viewportu, ale window.innerHeight tego
-  // nie widzi (stąd „ucieczka" listy pod klawiaturę, gdy input jest niski w panelu).
-  // Dodatkowo: flip nad input, gdy pod nim nie ma miejsca, i clamp w osi X, żeby
-  // lista nie wystawała za prawą/lewą krawędź ekranu telefonu.
+  // UKŁAD WSPÓŁRZĘDNYCH (to był główny winowajca „podpowiedzi w dziwnym miejscu"):
+  // getBoundingClientRect() zwraca pozycję względem WIDOCZNEGO obszaru (visual
+  // viewport), ale `position: fixed` iOS kotwiczy do LAYOUT viewportu. Przy otwartej
+  // klawiaturze ekranowej te dwa układy rozjeżdżają się dokładnie o
+  // visualViewport.offsetTop — zmierzone na iPhonie w symulatorze: lista lądowała
+  // 100 px WYŻEJ, niż wyliczył kod, czyli nad komórką zamiast pod nią. Dlatego:
+  //   • liczymy wszystko w układzie rect-ów (widoczny obszar = 0 … vv.height),
+  //   • a przy zapisie do stylu dodajemy offset visual→layout.
+  // Przy okazji ten sam offset naprawia pozycję po pinch-zoomie (offsetLeft/Top).
+  //
+  // Dalej jak wcześniej: flip nad komórkę, gdy pod nią nie ma miejsca, clamp w osi X,
+  // a gdy komórka wyjedzie poza okno tabeli albo pod klawiaturę — lista NIE parkuje
+  // się przy krawędzi ekranu, tylko chowa się do czasu powrotu komórki w widok.
   const position = () => {
     const r = input.getBoundingClientRect();
     const vv = window.visualViewport;
-    const viewTop = vv ? vv.offsetTop : 0;
-    const viewBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
-    const viewRight = window.innerWidth;
+    const offX = vv ? vv.offsetLeft : 0;   // korekta visual → layout (fixed)
+    const offY = vv ? vv.offsetTop : 0;
+    const viewTop = 0;
+    const viewBottom = vv ? vv.height : window.innerHeight;
+    const viewRight = vv ? vv.width : window.innerWidth;
     const margin = 6;
+    // Widoczny kawałek komórki = przecięcie okna tabeli z obszarem nad klawiaturą.
+    const clip = tableWrapEl ? tableWrapEl.getBoundingClientRect() : null;
+    const visTop = Math.max(viewTop, clip ? clip.top : viewTop);
+    const visBottom = Math.min(viewBottom, clip ? clip.bottom : viewBottom);
+    const cellVisible = Math.min(r.bottom, visBottom) - Math.max(r.top, visTop) > 6;
+    box.classList.toggle("cell-suggest-offscreen", !cellVisible);
+    if (!cellVisible) return;
     box.style.minWidth = `${Math.round(r.width)}px`;
     box.style.maxWidth = `${Math.round(Math.max(120, viewRight - margin * 2))}px`;
+    // WYSOKOŚĆ DOPASOWANA DO MIEJSCA: klawiatura ekranowa potrafi zostawić nad sobą
+    // ~150 px, a lista miała sztywne 240 px — wtedy „nie mieściła się" i była dosuwana
+    // do krawędzi widoku, czyli NA komórkę, którą się właśnie edytuje (stąd wrażenie
+    // „podpowiedzi pojawiają się w dziwnym miejscu, nie przy komórce"). Teraz zamiast
+    // zasłaniać, lista jest po prostu niższa i przewijana w środku.
+    const spaceBelow = viewBottom - r.bottom - margin;
+    const spaceAbove = r.top - viewTop - margin;
+    const room = Math.max(spaceBelow, spaceAbove);
+    box.style.maxHeight = `${Math.round(Math.max(SUGGEST_MIN_HEIGHT, Math.min(SUGGEST_MAX_HEIGHT, room)))}px`;
     const boxHeight = box.offsetHeight || 0;
-    const spaceBelow = viewBottom - r.bottom;
-    const spaceAbove = r.top - viewTop;
     let top;
-    if (spaceBelow >= boxHeight + 2 || spaceBelow >= spaceAbove) {
-      top = Math.min(r.bottom + 2, viewBottom - margin - boxHeight);
+    if (spaceBelow >= boxHeight) {
+      top = r.bottom + 2;                          // normalnie: pod komórką
+    } else if (spaceAbove >= boxHeight) {
+      top = r.top - boxHeight - 2;                 // flip: nad komórką
     } else {
-      top = Math.max(viewTop + margin, r.top - boxHeight - 2);
+      // Skrajna ciasnota (mniej niż SUGGEST_MIN_HEIGHT z obu stron) — wciśnij w widok.
+      top = Math.max(viewTop + margin, Math.min(r.bottom + 2, viewBottom - margin - boxHeight));
     }
     const boxWidth = box.offsetWidth || r.width;
     let left = r.left;
     if (left + boxWidth > viewRight - margin) left = viewRight - margin - boxWidth;
     if (left < margin) left = margin;
-    box.style.left = `${Math.round(left)}px`;
-    box.style.top = `${Math.round(top)}px`;
+    box.style.left = `${Math.round(left + offX)}px`;
+    box.style.top = `${Math.round(top + offY)}px`;
   };
 
   const choose = (v) => {
@@ -3426,7 +3461,11 @@ function createCellSuggestions(input, values, onPick) {
   const onScroll = () => { if (!box.classList.contains("hidden")) position(); };
   input.addEventListener("keydown", onKeydown);
   input.addEventListener("input", onInput);
-  (tableWrapEl || window).addEventListener("scroll", onScroll, { passive: true });
+  // Capture na dokumencie zamiast listenera na samej tabeli: komórkę rusza NIE TYLKO
+  // scroll #tableWrap, ale też scroll CAŁEJ STRONY (na iOS klawiatura ekranowa sama
+  // dosuwa pole edycji — to scroll dokumentu, nie tabeli) i scroll paneli bocznych.
+  // Scroll nie bąbelkuje, więc jedyny sposób na „każdy scroller" to faza capture.
+  document.addEventListener("scroll", onScroll, { capture: true, passive: true });
   window.addEventListener("resize", onScroll, { passive: true });
   // visualViewport (klawiatura ekranowa wjeżdża/wyjeżdża) NIE odpala zawsze
   // window.resize na iOS — bez tego lista po otwarciu klawiatury zostawała
@@ -3437,15 +3476,44 @@ function createCellSuggestions(input, values, onPick) {
     vv.addEventListener("scroll", onScroll);
   }
 
+  // STRAŻNIK POZYCJI (rAF): komórkę na telefonie ruszają też rzeczy, które nie dają
+  // ŻADNEGO zdarzenia scroll/resize — zwijany nagłówek hero, dojeżdżająca animacja
+  // klawiatury, przeliczenie layoutu po obrocie, smooth scrollIntoView z „trzymaj
+  // pole nad klawiaturą". Bez tego lista zostawała w starym miejscu i wracała pod
+  // komórkę dopiero, gdy palec ruszył tabelą (zdarzenie scroll). Koszt: jedno
+  // getBoundingClientRect na klatkę i TYLKO gdy otwarty jest edytor z listą;
+  // position() woła się dopiero, gdy prostokąt faktycznie się zmienił.
+  let watchRaf = 0;
+  let watchKey = "";
+  const watch = () => {
+    watchRaf = 0;
+    if (!box.isConnected) return;
+    if (!box.classList.contains("hidden")) {
+      const r = input.getBoundingClientRect();
+      const vv = window.visualViewport;
+      // W kluczu WSZYSTKO, od czego zależy position() — także okno tabeli (potrafi
+      // urosnąć/zmaleć bez ruchu komórki, np. gdy zwija się nagłówek hero).
+      const c = tableWrapEl ? tableWrapEl.getBoundingClientRect() : null;
+      const key = `${Math.round(r.top)}|${Math.round(r.left)}|${Math.round(r.width)}|`
+        + `${vv ? Math.round(vv.offsetTop) : 0}|${vv ? Math.round(vv.offsetLeft) : 0}|`
+        + `${Math.round(vv ? vv.height : window.innerHeight)}|${Math.round(vv ? vv.width : window.innerWidth)}|`
+        + `${c ? Math.round(c.top) : 0}|${c ? Math.round(c.bottom) : 0}`;
+      if (key !== watchKey) { watchKey = key; position(); }
+    }
+    watchRaf = requestAnimationFrame(watch);
+  };
+  watchRaf = requestAnimationFrame(watch);
+
   render();
 
   return {
     isInteracting: () => interacting,
     destroy() {
       if (interactTimer) clearTimeout(interactTimer);
+      if (watchRaf) cancelAnimationFrame(watchRaf);
       input.removeEventListener("keydown", onKeydown);
       input.removeEventListener("input", onInput);
-      (tableWrapEl || window).removeEventListener("scroll", onScroll);
+      document.removeEventListener("scroll", onScroll, { capture: true });
       window.removeEventListener("resize", onScroll);
       if (vv) {
         vv.removeEventListener("resize", onScroll);
@@ -3738,6 +3806,12 @@ themeToggle.addEventListener("click", () => {
 
 if (brandRefreshBtn) {
   brandRefreshBtn.addEventListener("click", () => {
+    if (brandRefreshBtn.classList.contains("is-busy")) return; // drugi klik w trakcie = nic
+    // Stan „pracuję" zakładamy SYNCHRONICZNIE w handlerze, żeby zmiana była widoczna
+    // w tej samej klatce co tap — reszta (SW, cache, reload) trwa i dotąd nie dawała
+    // żadnego znaku życia.
+    brandRefreshBtn.classList.add("is-busy");
+    brandRefreshBtn.setAttribute("aria-busy", "true");
     hardRefreshApp();
   });
 

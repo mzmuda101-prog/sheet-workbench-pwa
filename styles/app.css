@@ -534,6 +534,25 @@ body.splashing {
   border-color: var(--accent-border);
 }
 
+/* Stan „pracuję" po kliknięciu odświeżania/aktualizacji. Sama zmiana tekstu to za
+   mało (a na okrągłym przycisku z logo nie było NICZEGO) — pierścień kręci się przez
+   cały czas pracy SW/cache i przeładowania, więc widać, że tap został złapany.
+   `spin` z sekcji loading-overlay; pointer-events blokuje drugi klik. */
+.logo-badge.is-busy { pointer-events: none; }
+.logo-badge.is-busy img { opacity: .22; }
+.logo-badge.is-busy::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: var(--r-full);
+  border: 2px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  border-top-color: var(--accent);
+  animation: spin 700ms linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-badge.is-busy::after { animation: none; }
+}
+
 .theme-toggle {
   width: 36px;
   height: 36px;
@@ -576,6 +595,33 @@ body.splashing {
 
 .app-update-btn.hidden {
   display: none;
+}
+
+/* „Aktualizuj" w trakcie pracy: spinner przed tekstem + zgaszony puls uwagi
+   (pulsowanie „kliknij mnie" po kliknięciu byłoby mylące). */
+.app-update-btn.is-busy {
+  pointer-events: none;
+  padding-left: 30px;
+}
+.app-update-btn.is-busy::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: var(--r-full);
+  animation: spin 700ms linear infinite;
+}
+.app-update-btn.is-busy::after {
+  animation: none;
+  opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-update-btn.is-busy::before { animation: none; }
 }
 
 /* ===================================================
@@ -3564,6 +3610,11 @@ input.cell-editor.input-shake {
   font-size: 13px;
 }
 .cell-suggest.hidden { display: none; }
+/* Edytowana komórka wyjechała poza okno tabeli albo pod klawiaturę ekranową — lista
+   znika zamiast parkować się przy krawędzi ekranu (wyglądało to jak „podpowiedzi
+   w losowym miejscu"). Wraca sama, gdy komórka wróci w widok. visibility (a nie
+   display) — żeby dało się dalej mierzyć jej wysokość przy pozycjonowaniu. */
+.cell-suggest-offscreen { visibility: hidden; pointer-events: none; }
 
 /* Greying na liście podpowiedzi: część już wpisana = mocny tekst; reszta
    „jeszcze nie wpisana" = przygaszona zieleń z palety (jak wcześniejszy efekt). */
