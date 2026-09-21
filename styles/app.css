@@ -4890,6 +4890,31 @@ html.low-power .loading-overlay.is-file {
   max-width: 320px;
 }
 
+/* „Wklej" przy PUSTEJ komórce (tylko dotyk). Pozycję ustawia JS z prostokąta pola —
+   `position: fixed` na iOS trzyma się layout viewportu, a klawiatura rusza visual viewport.
+   Mały i przy samej komórce: ma być pod palcem, a nie zasłaniać kolejnych wierszy. */
+.empty-cell-paste {
+  position: fixed;
+  z-index: 130;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: var(--panel);
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(18, 30, 23, .16);
+  -webkit-tap-highlight-color: transparent;
+}
+.empty-cell-paste.hidden { display: none; }
+.empty-cell-paste.is-offscreen { visibility: hidden; pointer-events: none; }
+.empty-cell-paste:active { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+
 /* TELEFON: toast na DOLE jest niewidoczny — dolny pasek Safari (i pasek gestu na
    Androidzie) leży dokładnie tam, gdzie `bottom: 20px`. Zmierzone na symulatorze
    iPhone'a: po „Kopiuj" nie pojawiało się ŻADNE potwierdzenie, więc przycisk sprawiał

@@ -110,6 +110,10 @@ async function run() {
   const context = await browser.newContext({ serviceWorkers: "block", ...playwright.devices["iPhone 13"] });
   await context.addInitScript(() => {
     localStorage.setItem("introPlayed", "true");
+    // Pasek działań jest DOMYŚLNIE WYŁĄCZONY (patrz CELL_ACTIONS_ENABLED w core.js).
+    // Test włącza go świadomie, żeby kod nie zgnił — wraz z osobną asercją niżej,
+    // że przy wyłączonym przełączniku faktycznie go nie ma.
+    localStorage.setItem("excel-workbench-cell-actions", "1");
     // Schowek SYSTEMOWY odmawia — dokładnie jak na telefonie bez zgody użytkownika.
     // To najważniejszy wariant: „Wklej" MUSI wtedy zadziałać z bufora aplikacji.
     Object.defineProperty(navigator, "clipboard", {
@@ -257,6 +261,59 @@ async function run() {
   ok("w edytorze nie ma wlasnych przyciskow kopiuj/wklej", !nativeEditing.wlasnyPasek, nativeEditing);
   ok("pole edycji pozwala na natywne zaznaczanie", nativeEditing.userSelect === "text", nativeEditing);
 
+  // ── 5b. PUSTA komórka ma OBIE drogi ──────────────────────────────────────
+  // Przytrzymanie → menu systemowe (gest iOS/Androida, nie do wywołania z kodu).
+  // Tap → nasz przycisk „Wklej", bo w pustym polu systemowe menu po tapnięciu NIE wychodzi
+  // (nie ma zaznaczonego tekstu). W komórce Z TREŚCIĄ przycisku NIE MA — tam menu systemowe
+  // jest o jedno tapnięcie i drugi przycisk tylko zasłaniałby dane.
+  const filledHasNoButton = await page.evaluate(() => !!document.querySelector(".empty-cell-paste:not(.hidden)"));
+  ok("komorka z trescia nie dostaje wlasnego przycisku", !filledHasNoButton, filledHasNoButton);
+
+  const emptyCell = await page.evaluate(async () => {
+    document.querySelector("input.cell-editor")?.blur();
+    await new Promise((r) => setTimeout(r, 300));
+    const row = currentDisplayModel.rows[1];
+    row.values[2] = null;
+    row.display[2] = "";
+    const key = getRowSelectionKey(row);
+    const tr = document.querySelector(`#dataTable tbody tr[data-row-key="${CSS.escape(key)}"]`);
+    const td = tr.querySelector('td[data-col-index="2"]');
+    td.textContent = "";
+    openCellEditor(td);
+    await new Promise((r) => setTimeout(r, 250));
+    const btn = document.querySelector(".empty-cell-paste");
+    const cell = document.querySelector("input.cell-editor").getBoundingClientRect();
+    const r = btn ? btn.getBoundingClientRect() : null;
+    return {
+      widoczny: !!btn && !btn.classList.contains("hidden"),
+      etykieta: btn ? btn.textContent : null,
+      przyKomorce: r ? Math.abs((r.top + r.height / 2) - (cell.top + cell.height / 2)) < 30 : false,
+    };
+  });
+  report.emptyCell = emptyCell;
+  ok("pusta komorka dostaje przycisk Wklej", emptyCell.widoczny && emptyCell.etykieta === "Wklej", emptyCell);
+  ok("przycisk stoi przy komorce", emptyCell.przyKomorce, emptyCell);
+
+  // Wklejenie NIE MOŻE zamknąć edytora i ma wypełnić puste pole; potem przycisk znika,
+  // bo od tej chwili działa już ścieżka systemowa.
+  await page.evaluate(() => {
+    const btn = document.querySelector(".empty-cell-paste");
+    btn.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch" }));
+    btn.click();
+  });
+  await sleep(400);
+  const afterEmptyPaste = await page.evaluate(() => ({
+    stillEditing: !!document.querySelector("input.cell-editor"),
+    value: document.querySelector("input.cell-editor")?.value ?? null,
+    btnHidden: !document.querySelector(".empty-cell-paste:not(.hidden)"),
+  }));
+  report.afterEmptyPaste = afterEmptyPaste;
+  ok("wklejenie nie zamyka edytora", afterEmptyPaste.stillEditing, afterEmptyPaste);
+  ok("wklejenie wypelnia puste pole", !!afterEmptyPaste.value, afterEmptyPaste);
+  ok("po wklejeniu przycisk znika", afterEmptyPaste.btnHidden, afterEmptyPaste);
+  await page.evaluate(() => document.querySelector("input.cell-editor")?.blur());
+  await sleep(250);
+
   // ── 6. Podpowiedzi z kolumny (kolumna „Rejon" jest słownikowa) ───────────
   const suggest = await page.evaluate(() => {
     const box = document.querySelector(".cell-suggest");
@@ -352,7 +409,10 @@ async function run() {
 
   // ── Kontekst MYSZY: paska nie ma (desktop ma skróty klawiszowe) ──────────
   const deskCtx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1200, height: 800 } });
-  await deskCtx.addInitScript(() => localStorage.setItem("introPlayed", "true"));
+  await deskCtx.addInitScript(() => {
+    localStorage.setItem("introPlayed", "true");
+    localStorage.setItem("excel-workbench-cell-actions", "1");
+  });
   const deskPage = await deskCtx.newPage();
   await deskPage.goto(APP_URL, { waitUntil: "load" });
   await deskPage.evaluate(() => document.getElementById("heroSplash")?.remove());
@@ -363,6 +423,29 @@ async function run() {
   const desk = await barState(deskPage);
   report.desktop = desk;
   ok("na myszy paska nie ma", !desk.bar, desk);
+
+  // ── Domyślnie WYŁĄCZONE ──────────────────────────────────────────────────
+  // Bez przełącznika na dotyku nie ma ani paska „Akcje", ani przycisku w pustej
+  // komórce — zostaje systemowe menu w otwartym polu tekstowym.
+  const offCtx = await browser.newContext({ serviceWorkers: "block", ...playwright.devices["iPhone 13"] });
+  await offCtx.addInitScript(() => {
+    localStorage.setItem("introPlayed", "true");
+    localStorage.removeItem("excel-workbench-cell-actions");
+  });
+  const offPage = await offCtx.newPage();
+  await offPage.goto(APP_URL, { waitUntil: "load" });
+  await offPage.evaluate(() => document.getElementById("heroSplash")?.remove());
+  await offPage.evaluate(() => ensureXlsxLibs(false));
+  await offPage.waitForFunction(() => typeof buildRows === "function");
+  await loadSheet(offPage);
+  await focusCell(offPage, 0, 0);
+  const off = await offPage.evaluate(() => ({
+    flaga: typeof CELL_ACTIONS_ENABLED !== "undefined" ? CELL_ACTIONS_ENABLED : null,
+    pasek: !document.getElementById("cellActions").classList.contains("hidden"),
+  }));
+  report.domyslnieWylaczone = off;
+  ok("domyslnie przelacznik jest wylaczony", off.flaga === false, off);
+  ok("przy wylaczonym przelaczniku paska nie ma", !off.pasek, off);
 
   console.log(JSON.stringify(report, null, 2));
   if (errors.length) failures.push("bledy strony: " + errors.join(" | "));

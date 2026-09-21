@@ -631,7 +631,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260921-10";
+const APP_BUILD_VERSION = "20260921-15";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -735,6 +735,26 @@ function log(msg, type = "info") {
   line.textContent = `${new Date().toLocaleTimeString(I18N[currentLang].locale)} ${msg}`;
   logEl.prepend(line);
 }
+
+// ── WYŁĄCZONE 2026-09-21 (decyzja Mateusza, po testach na iPhonie) ─────────────
+// Własne przyciski kopiuj/wklej na dotyku: pasek „Akcje" nad siatką ORAZ przycisk
+// „Wklej" w pustej komórce. Powód wyłączenia: w edytorze działa systemowe menu
+// (iOS/Android), a schowek jest wspólny — „Kopiuj" z apki widać w natywnym „Wklej",
+// więc własne przyciski w większości przypadków dublują system i zabierają miejsce,
+// którego na telefonie jest mało.
+// KOD ZOSTAJE (razem z testami) — to jest przełącznik, nie usunięcie. Czego brakuje
+// przy wyłączonym pasku: kopiowania/wklejania ZAKRESU komórek i „Wypełnij w dół/w prawo"
+// bez klawiatury — systemowe menu działa tylko wewnątrz otwartego pola tekstowego.
+// Włączenie: `?cellactions=1` w adresie albo
+// localStorage.setItem("excel-workbench-cell-actions", "1") i przeładowanie.
+const CELL_ACTIONS_ENABLED = (() => {
+  try {
+    if (/[?&]cellactions=1/.test(location.search)) return true;
+    return localStorage.getItem("excel-workbench-cell-actions") === "1";
+  } catch {
+    return false;
+  }
+})();
 
 function toast(msg, type = "info") {
   const toastEl = document.createElement("div");

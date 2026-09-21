@@ -3565,6 +3565,131 @@ function formatDateForEdit(d) {
   return base;
 }
 
+// ── „Wklej" w PUSTEJ komórce (tylko dotyk) ──────────────────────────────────
+//
+// Po co dokładnie tu i nigdzie indziej. W komórce Z TREŚCIĄ tekst zaznacza się sam przy
+// otwarciu edytora, więc systemowe menu („Wytnij | Kopiuj | Wklej") wychodzi po zwykłym
+// tapnięciu w tekst — i niczego własnego tam nie trzeba. W PUSTEJ nie ma czego zaznaczyć,
+// więc ten sam tap nie robi nic; menu wychodzi dopiero po PRZYTRZYMANIU, a tego gestu
+// nie widać. Wywołać menu z kodu się NIE DA (to gest systemowy), więc pusta komórka
+// dostaje jeden własny przycisk. Obie drogi działają równolegle: przytrzymanie → menu
+// systemowe, tap → ten przycisk.
+//
+// Znika, gdy tylko w polu pojawi się cokolwiek — bo od tego momentu działa już ścieżka
+// systemowa i drugi przycisk byłby dokładnie tym dublowaniem, którego nie chcemy.
+function createEmptyCellPaste(input) {
+  if (!CELL_ACTIONS_ENABLED) return null;   // patrz przełącznik w core.js
+  if (!cellTapCoarseMQ || !cellTapCoarseMQ.matches) return null;
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "empty-cell-paste hidden";
+  btn.textContent = t("cellActionPaste");
+
+  let interacting = false;
+  let interactTimer = null;
+  const startInteract = () => {
+    interacting = true;
+    if (interactTimer) { clearTimeout(interactTimer); interactTimer = null; }
+  };
+  const endInteract = () => {
+    if (interactTimer) clearTimeout(interactTimer);
+    interactTimer = setTimeout(() => { interacting = false; }, 250);
+  };
+
+  let running = false;
+  const doPaste = async () => {
+    if (running) return;
+    running = true;
+    setTimeout(() => { running = false; }, 300);
+    try {
+      const got = await readClipboardTsv();
+      if (!got) { toast(t("clipboardUnavailable"), "warning"); return; }
+      // Do POLA wkleja się jedna wartość, nie siatka — z wielokomórkowego schowka
+      // bierzemy pierwszą komórkę, zamiast wsypywać do jednej komórki tabulatory.
+      const text = String(got.text).split(/\r?\n/)[0].split("\t")[0];
+      if (!text) return;
+      input.value = text;
+      input.setSelectionRange(text.length, text.length);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    } finally {
+      input.focus();
+      endInteract();
+    }
+  };
+
+  // Tapnięcie NIE MOŻE odebrać focusu polu — blur edytora zatwierdza i zamyka edycję,
+  // więc bez tej ochrony „Wklej" zamykałby to, do czego wkleja (ta sama sztuczka,
+  // co w createCellSuggestions).
+  btn.addEventListener("pointerdown", (e) => { startInteract(); if (e.pointerType !== "touch") e.preventDefault(); });
+  btn.addEventListener("pointerup", endInteract);
+  btn.addEventListener("touchstart", () => startInteract(), { passive: true });
+  btn.addEventListener("touchend", (e) => { e.preventDefault(); doPaste(); }, { passive: false });
+  btn.addEventListener("click", () => doPaste());
+  document.body.appendChild(btn);
+
+  // Kotwica przy komórce (nie przy klawiaturze): iOS dokłada nad klawiaturą własny pasek
+  // formularza, którego wysokości nie widać w żadnym API — zmierzone na symulatorze,
+  // element kotwiczony „nad klawiaturą" lądował pod nią.
+  const position = () => {
+    if (btn.classList.contains("hidden")) return;
+    const r = input.getBoundingClientRect();
+    const vv = window.visualViewport;
+    const offX = vv ? vv.offsetLeft : 0;
+    const offY = vv ? vv.offsetTop : 0;
+    const viewRight = vv ? vv.width : window.innerWidth;
+    const viewBottom = vv ? vv.height : window.innerHeight;
+    const clip = tableWrapEl ? tableWrapEl.getBoundingClientRect() : null;
+    const visTop = Math.max(0, clip ? clip.top : 0);
+    const visBottom = Math.min(viewBottom, clip ? clip.bottom : viewBottom);
+    const cellVisible = Math.min(r.bottom, visBottom) - Math.max(r.top, visTop) > 6;
+    btn.classList.toggle("is-offscreen", !cellVisible);
+    if (!cellVisible) return;
+    const h = btn.offsetHeight || 32;
+    const w = btn.offsetWidth || 70;
+    let top = r.top + (r.height - h) / 2;
+    top = Math.max(visTop + 4, Math.min(top, visBottom - h - 4));
+    // Domyślnie tuż za prawą krawędzią komórki; gdy tam nie ma miejsca — przy krawędzi widoku.
+    const left = Math.min(r.right + 6, viewRight - w - 8);
+    btn.style.top = `${Math.round(top + offY)}px`;
+    btn.style.left = `${Math.round(Math.max(8, left) + offX)}px`;
+  };
+
+  const sync = () => {
+    const empty = !input.value;
+    btn.classList.toggle("hidden", !empty);
+    if (empty) position();
+  };
+  sync();
+  input.addEventListener("input", sync);
+
+  let raf = 0;
+  let key = "";
+  const watch = () => {
+    raf = 0;
+    if (!btn.isConnected) return;
+    if (!btn.classList.contains("hidden")) {
+      const r = input.getBoundingClientRect();
+      const vv = window.visualViewport;
+      const now = `${Math.round(r.top)}|${Math.round(r.right)}|${vv ? Math.round(vv.offsetTop) : 0}|`
+        + `${vv ? Math.round(vv.height) : window.innerHeight}`;
+      if (now !== key) { key = now; position(); }
+    }
+    raf = requestAnimationFrame(watch);
+  };
+  raf = requestAnimationFrame(watch);
+
+  return {
+    isInteracting: () => interacting,
+    destroy() {
+      if (interactTimer) clearTimeout(interactTimer);
+      if (raf) cancelAnimationFrame(raf);
+      input.removeEventListener("input", sync);
+      btn.remove();
+    },
+  };
+}
+
 // ── Podpowiedzi wartości z KOLUMNY (nie tylko z walidacji listowej) ─────────
 //
 // Realny problem z telefonu: „szybciej wpiszę tę samą datę piąty raz, niż ją skopiuję".
@@ -3688,6 +3813,19 @@ function openCellEditor(td, options = {}) {
   input.setAttribute("aria-label", t("editCellAria"));
   const initialChar = options.initialChar;
   input.value = initialChar != null ? initialChar : cellEditString(row, colIndex0);
+  // PUSTA KOMÓRKA NA DOTYKU: w komórce z treścią tekst zaznacza się sam, więc systemowe
+  // menu („Wklej") wychodzi po zwykłym tapnięciu w tekst. W pustej nie ma czego zaznaczyć
+  // i to samo tapnięcie nie robi nic — trzeba PRZYTRZYMAĆ. Sprawdzone na symulatorze
+  // iPhone'a: menu jest, tylko pod innym gestem. Zamiast dokładać własny przycisk
+  // (dublowałby menu systemowe i zasłaniał komórki) mówimy to wprost w polu —
+  // placeholder nie zajmuje ani piksela i znika przy pierwszym znaku.
+  // PUSTE POLE = jedyny przypadek, w którym systemowe menu nie wychodzi po zwykłym
+  // tapnięciu (nie ma zaznaczonego tekstu, więc iOS nie ma czego pokazać — i NIE DA SIĘ
+  // tego wywołać z kodu). Tam, i tylko tam, dokładamy jeden własny przycisk „Wklej".
+  // Efekt: pusta komórka ma obie drogi — przytrzymanie daje menu systemowe, tap nasz
+  // przycisk. Komórka z treścią nie dostaje nic, bo tam menu jest o jedno tapnięcie
+  // i drugi przycisk tylko zasłaniałby dane.
+  const emptyPaste = createEmptyCellPaste(input);
   // Wartość wyjściowa — do wykrycia, czy user faktycznie coś zmienił.
   // Start pisaniem (initialChar) traktujemy od razu jako zmianę.
   const baseValue = initialChar != null ? null : input.value;
@@ -3736,6 +3874,7 @@ function openCellEditor(td, options = {}) {
     if (finished) return;
     finished = true;
     if (dvSuggest) dvSuggest.destroy();
+    if (emptyPaste) emptyPaste.destroy();
     input.remove();
     td.classList.remove("cell-editing");
     activeCellEditor = null;
@@ -3834,6 +3973,7 @@ function openCellEditor(td, options = {}) {
     // Tapnięcie/przewijanie listy podpowiedzi nie może zamykać edytora (na dotyku
     // input chwilowo traci focus) — w trakcie interakcji z popupem pomijamy commit.
     if (dvSuggest && dvSuggest.isInteracting()) return;
+    if (emptyPaste && emptyPaste.isInteracting()) return;
     commit(null);
   });
 

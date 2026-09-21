@@ -817,6 +817,13 @@ function setCellActionsCollapsed(next) {
 
 function updateCellActionBar() {
   if (!cellActionsEl) return;
+  // Wyłączony przełącznikiem (patrz CELL_ACTIONS_ENABLED w core.js) — pasek ma nie
+  // istnieć wizualnie, ale cała logika niżej zostaje na miejscu.
+  if (!CELL_ACTIONS_ENABLED) {
+    cellActionsEl.classList.add("hidden");
+    liftFabsAboveActions();
+    return;
+  }
   const coarse = !!cellActionsCoarseMQ && cellActionsCoarseMQ.matches;
   const hasFocus = !!focusedCellState && !!currentDisplayModel;
   if (!coarse || !workbook || !hasFocus) {
