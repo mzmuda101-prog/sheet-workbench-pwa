@@ -3533,6 +3533,77 @@ function formatDateForEdit(d) {
   return base;
 }
 
+// ── Podpowiedzi wartości z KOLUMNY (nie tylko z walidacji listowej) ─────────
+//
+// Realny problem z telefonu: „szybciej wpiszę tę samą datę piąty raz, niż ją skopiuję".
+// Dotąd edytor podpowiadał wyłącznie tam, gdzie plik .xlsx miał regułę Data Validation
+// type="list". W zwykłej kolumnie („Data", „Status", „Rejon") nie było nic.
+//
+// Zasada doboru — dwa różne źródła, bo odpowiadają na dwie różne potrzeby:
+//   • OSTATNIO WPISANE w tej kolumnie (pamięć sesji) — to jest lek na powtarzanie
+//     tej samej wartości w kolejnych wierszach; działa NAWET gdy kolumna ma same
+//     unikaty (np. data dzienna, która dziś powtarza się dwadzieścia razy);
+//   • CZĘSTE WARTOŚCI z kolumny — sensowne tylko, gdy kolumna jest „słownikowa"
+//     (mało różnych wartości). W kolumnie z nazwiskami lista 50 unikatów to szum,
+//     więc jej tam nie pokazujemy.
+//
+// Nie zgadujemy i nie autouzupełniamy sami — to tylko lista do tapnięcia.
+const COL_SUGGEST_MAX = 30;        // dłuższa lista i tak nie mieści się nad klawiaturą
+const COL_SUGGEST_RECENT = 8;      // ile „ostatnio wpisanych" trzymamy na kolumnę
+const COL_SUGGEST_MAX_DISTINCT = 200;  // powyżej tego kolumna nie jest słownikowa
+const COL_SUGGEST_MAX_RATIO = 0.6;     // unikaty/wypełnione — jw.
+
+// Klucz: `arkusz::kolumna`. Pamięć sesji, świadomie nietrwała: „ostatnio wpisane"
+// ma znaczyć „przed chwilą", a nie „kiedyś w zeszłym tygodniu".
+const colRecentValues = new Map();
+
+function colSuggestKey(colIndex0) {
+  return `${currentSheetName || "?"}::${colIndex0}`;
+}
+
+function rememberColumnValue(colIndex0, value) {
+  const v = String(value ?? "").trim();
+  if (!v) return;
+  const key = colSuggestKey(colIndex0);
+  const list = colRecentValues.get(key) || [];
+  const next = [v, ...list.filter((x) => x !== v)].slice(0, COL_SUGGEST_RECENT);
+  colRecentValues.set(key, next);
+}
+
+// Zwraca listę podpowiedzi albo [] (wtedy edytor nie pokazuje dropdownu).
+function buildColumnSuggestions(colIndex0) {
+  const recent = colRecentValues.get(colSuggestKey(colIndex0)) || [];
+  const src = Array.isArray(baseRows) && baseRows.length ? baseRows : [];
+  const counts = new Map();
+  let filled = 0;
+  // Próbkujemy: przy 50 000 wierszy pełny przelot na każde otwarcie edytora byłby
+  // widoczny jako zacięcie, a do wykrycia „kolumna słownikowa" próbka wystarcza.
+  const step = Math.max(1, Math.floor(src.length / 3000) || 1);
+  for (let i = 0; i < src.length; i += step) {
+    const raw = cellEditString(src[i], colIndex0);
+    const v = String(raw ?? "").trim();
+    if (!v) continue;
+    filled += 1;
+    counts.set(v, (counts.get(v) || 0) + 1);
+    if (counts.size > COL_SUGGEST_MAX_DISTINCT * 2) break; // ewidentnie nie słownikowa
+  }
+  const distinct = counts.size;
+  const dictionaryLike = filled > 0
+    && distinct <= COL_SUGGEST_MAX_DISTINCT
+    && distinct / filled <= COL_SUGGEST_MAX_RATIO;
+
+  const out = [];
+  const seen = new Set();
+  const push = (v) => { if (v && !seen.has(v)) { seen.add(v); out.push(v); } };
+  recent.forEach(push);
+  if (dictionaryLike) {
+    Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .forEach(([v]) => { if (out.length < COL_SUGGEST_MAX) push(v); });
+  }
+  return out.slice(0, COL_SUGGEST_MAX);
+}
+
 function cellEditString(row, i) {
   const raw = Array.isArray(row.values) ? row.values[i] : null;
   if (raw == null || raw === "") return "";
@@ -3603,11 +3674,18 @@ function openCellEditor(td, options = {}) {
   td.classList.add("cell-editing");
   td.appendChild(input);
   activeCellEditor = { td, input };
+  updateCellActionBar();   // pasek działań chowa się na czas edycji (miejsce dla klawiatury)
 
   // Własny popup podpowiedzi (poniżej). Tapnięcie pozycji NIE odbiera focusu
   // inputowi → blur nie zamyka edytora; tap autouzupełnia i zatwierdza.
-  const dvSuggest = (dvRule && dvRule.values.length)
-    ? createCellSuggestions(input, dvRule.values, (v) => { input.value = v; commit(null); })
+  // Reguła z pliku ma pierwszeństwo (to słownik narzucony przez autora arkusza).
+  // Dopiero gdy jej nie ma, podpowiadamy wartości z samej kolumny — ostatnio wpisane
+  // i, jeśli kolumna jest słownikowa, te najczęstsze.
+  const suggestValues = (dvRule && dvRule.values.length)
+    ? dvRule.values
+    : buildColumnSuggestions(colIndex0);
+  const dvSuggest = suggestValues.length
+    ? createCellSuggestions(input, suggestValues, (v) => { input.value = v; commit(null); })
     : null;
   if (dvSuggest) input.classList.add("cell-editor-has-list");
 
@@ -3619,6 +3697,7 @@ function openCellEditor(td, options = {}) {
     input.remove();
     td.classList.remove("cell-editing");
     activeCellEditor = null;
+    updateCellActionBar();
   };
   const commit = (move) => {
     if (finished) return;
@@ -3656,6 +3735,10 @@ function openCellEditor(td, options = {}) {
     }
     updateSheetCell(row.rowIndex0, colIndex0, parsed);
     const newVal = parsed ? parsed.value : null;
+    // „Ostatnio wpisane" zapisujemy w TEJ SAMEJ postaci, w jakiej czyta je
+    // buildColumnSuggestions (cellEditString) — inaczej ta sama data raz byłaby
+    // „2026-09-21", a raz „Mon Sep 21 2026" i lista dublowałaby pozycje.
+    rememberColumnValue(colIndex0, newVal instanceof Date ? formatDateForEdit(newVal) : newVal);
     if (Array.isArray(row.values)) row.values[colIndex0] = newVal;
     if (Array.isArray(row.rawValues)) row.rawValues[colIndex0] = newVal;
     const display = newVal == null ? "" : toDisplay(newVal);

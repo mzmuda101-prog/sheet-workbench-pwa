@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260919-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260921-01" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1246,6 +1246,16 @@
               <div class="table-scrollbar-inner" id="tableScrollbarInner"></div>
             </div>
             <div class="sheet-tabs hidden" id="sheetTabs" role="tablist" aria-label="Arkusze"></div>
+            <!-- Pasek działań na zaznaczeniu — TYLKO dotyk. Na dotyku siatka ma wyłączone
+                 natywne menu „Kopiuj/Wklej" (bez tego iOS nie przewija tabeli palcem),
+                 więc te akcje muszą mieć własne, widoczne przyciski. Na myszy zostają
+                 skróty Ctrl/⌘+C/V i pasek się nie pokazuje. -->
+            <div class="cell-actions hidden" id="cellActions" role="toolbar" aria-label="Działania na zaznaczeniu">
+              <button class="cell-action" id="cellActionCopy" type="button"><span class="ca-label">Kopiuj</span></button>
+              <button class="cell-action" id="cellActionPaste" type="button"><span class="ca-label">Wklej</span></button>
+              <button class="cell-action" id="cellActionFillDown" type="button"><span class="ca-ico" aria-hidden="true">↓</span><span class="ca-label">Wypełnij w dół</span></button>
+              <button class="cell-action" id="cellActionFillRight" type="button"><span class="ca-ico" aria-hidden="true">→</span><span class="ca-label">Wypełnij w prawo</span></button>
+            </div>
             <div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div>
             <button class="sheet-picker-fab hidden" id="sheetPickerFab" type="button" aria-label="Przełącz arkusz" aria-haspopup="dialog">
               <svg class="spf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1497,6 +1507,17 @@
         </div>
         <div class="tr-stats" id="trStats"></div>
         <div class="tr-scope-note" id="trScopeNote"></div>
+        <!-- Nieodnalezione ✓ po zmianie pliku: sama liczba nic nie mówi, więc pokazujemy
+             podgląd treści każdego takiego wiersza i (jeśli jest) najbardziej podobny
+             wiersz w tym pliku. Odhaczenie zostaje decyzją użytkownika. -->
+        <div class="tr-unmatched hidden" id="trUnmatched">
+          <div class="tr-unmatched-head">
+            <span class="tr-unmatched-title" id="trUnmatchedTitle"></span>
+            <button class="btn btn-xs ghost" id="trUnmatchedToggle" type="button" aria-expanded="false" aria-controls="trUnmatchedList">Pokaż listę</button>
+          </div>
+          <div class="tr-unmatched-hint" id="trUnmatchedHint"></div>
+          <div class="tr-unmatched-list hidden" id="trUnmatchedList"></div>
+        </div>
         <div class="tr-fields-actions">
           <button class="btn btn-sm ghost tr-reset" id="trResetBtn" type="button">Wyczyść ✓</button>
         </div>
@@ -1523,24 +1544,24 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260919-01"></script>
-    <script defer src="app/language.js?v=20260919-01"></script>
-    <script defer src="app/analysis.js?v=20260919-01"></script>
-    <script defer src="app/smart-filters.js?v=20260919-01"></script>
-    <script defer src="app/workbook.js?v=20260919-01"></script>
-    <script defer src="app/xlsx-patch.js?v=20260919-01"></script>
-    <script defer src="app/table.js?v=20260919-01"></script>
-    <script defer src="app/conditional-formatting.js?v=20260919-01"></script>
-    <script defer src="app/data-validation.js?v=20260919-01"></script>
-    <script defer src="app/derived-columns.js?v=20260919-01"></script>
-    <script defer src="app/formulas.js?v=20260919-01"></script>
-    <script defer src="app/edit-tools.js?v=20260919-01"></script>
-    <script defer src="app/ui-controls.js?v=20260919-01"></script>
-    <script defer src="app/transcribe.js?v=20260919-01"></script>
+    <script defer src="app/core.js?v=20260921-01"></script>
+    <script defer src="app/language.js?v=20260921-01"></script>
+    <script defer src="app/analysis.js?v=20260921-01"></script>
+    <script defer src="app/smart-filters.js?v=20260921-01"></script>
+    <script defer src="app/workbook.js?v=20260921-01"></script>
+    <script defer src="app/xlsx-patch.js?v=20260921-01"></script>
+    <script defer src="app/table.js?v=20260921-01"></script>
+    <script defer src="app/conditional-formatting.js?v=20260921-01"></script>
+    <script defer src="app/data-validation.js?v=20260921-01"></script>
+    <script defer src="app/derived-columns.js?v=20260921-01"></script>
+    <script defer src="app/formulas.js?v=20260921-01"></script>
+    <script defer src="app/edit-tools.js?v=20260921-01"></script>
+    <script defer src="app/ui-controls.js?v=20260921-01"></script>
+    <script defer src="app/transcribe.js?v=20260921-01"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260919-01"></script>
-    <script defer src="app/bootstrap.js?v=20260919-01"></script>
+    <script defer src="app/debug-loaders.js?v=20260921-01"></script>
+    <script defer src="app/bootstrap.js?v=20260921-01"></script>
   </body>
 </html>

@@ -65,6 +65,11 @@ const trNoticeTextEl = document.getElementById("trNoticeText");
 const trNoticeResetBtn = document.getElementById("trNoticeResetBtn");
 const trNoticeKeepBtn = document.getElementById("trNoticeKeepBtn");
 const trLiveEl = document.getElementById("trLive");
+const trUnmatchedEl = document.getElementById("trUnmatched");
+const trUnmatchedTitleEl = document.getElementById("trUnmatchedTitle");
+const trUnmatchedHintEl = document.getElementById("trUnmatchedHint");
+const trUnmatchedListEl = document.getElementById("trUnmatchedList");
+const trUnmatchedToggleEl = document.getElementById("trUnmatchedToggle");
 
 let trIsOpen = false;
 let trRows = [];             // snapshot wierszy z modelu widoku
@@ -94,6 +99,7 @@ let trDoneSigs = new Map();     // klucz wiersza -> odcisk treści (przeżywa pr
 let trSigCache = new Map();     // rowIndex0 -> odcisk (liczony leniwie)
 let trFingerprint = null;       // odcisk arkusza z TEJ sesji
 let trChangeInfo = null;        // { level, savedRows, rows, moved, lost, savedAt } albo null
+let trUnmatched = [];           // ✓ których nie dało się dopasować: [{ prev, best, score }]
 let trScrollRaf = 0;
 let trHoldTimer = 0;          // odliczanie do startu turbo (przytrzymanie)
 let trHoldProgressTimer = 0;  // animacja paska „ładowania" przytrzymania
@@ -130,7 +136,28 @@ function trSaveStore(store) {
     }
     localStorage.setItem(TR_STORE_KEY, JSON.stringify(store));
   } catch {
-    /* prywatne okno / brak miejsca — tryb działa dalej, tylko bez pamięci */
+    // Brak miejsca. Odciski kolumnowe i podglądy to największa część zapisu, a zarazem
+    // jedyna, bez której tryb DALEJ działa (zostaje dopasowanie po hashu całego wiersza).
+    // Więc zanim stracimy ✓, zrzucamy balast — najpierw ze starszych zakresów, potem
+    // ze wszystkich. Cichy brak zapisu byłby tu najgorszy: użytkownik traci postęp
+    // godzinnego przepisywania i nie dowiaduje się o tym.
+    const scopes = store.scopes || {};
+    const order = Object.keys(scopes).sort((a, b) => (scopes[a]?.ts || 0) - (scopes[b]?.ts || 0));
+    const strip = (k) => {
+      const rec = scopes[k];
+      if (!rec) return;
+      rec.cols = [];
+      rec.doneCells = [];
+      rec.donePrev = [];
+    };
+    for (let i = 0; i <= order.length; i++) {
+      if (i < order.length) strip(order[i]);
+      try {
+        localStorage.setItem(TR_STORE_KEY, JSON.stringify(store));
+        return;
+      } catch { /* dalej za duże — zrzucamy kolejny zakres */ }
+    }
+    /* prywatne okno / twardy brak miejsca — tryb działa dalej, tylko bez pamięci */
   }
 }
 
@@ -151,6 +178,13 @@ function trPersist() {
     // Odciski TREŚCI odhaczonych wierszy — równolegle do `done`. To one pozwalają odnaleźć
     // te same wiersze, gdy plik urośnie albo ktoś przestawi kolejność.
     doneSig: doneList.map((key) => trDoneSigs.get(key) || ""),
+    // Odcisk KOLUMNOWY (v2) + czytelny podglad wiersza. Podglad jest jedyna rzecza,
+    // po ktorej da sie pokazac uzytkownikowi, CZEGO nie udalo sie potem dopasowac.
+    // Przy bardzo duzych zapisach odpuszczamy oba — localStorage ma ~5 MB na origin,
+    // a tryb ma dzialac dalej (wtedy zostaje samo dopasowanie po hashu calego wiersza).
+    cols: doneList.length <= TR_SIG_MAX_ROWS ? trSigCols.map((c) => c.name) : [],
+    doneCells: doneList.length <= TR_SIG_MAX_ROWS ? doneList.map((key) => trDoneCells.get(key) || "") : [],
+    donePrev: doneList.length <= TR_SIG_MAX_ROWS ? doneList.map((key) => trDonePrev.get(key) || "") : [],
     sig: trFingerprint,
     volCols: Array.from(trVolatileCols),
     rowsTotal: trRows.length,
@@ -181,6 +215,9 @@ function trScopeKey(model) {
 // przeliczenia w tabeli). Inaczej ten sam wiersz miałby jutro inny odcisk i mechanizm
 // psułby się sam z siebie, raz na dobę.
 
+// Separator pol w odcisku wiersza: znak sterujacy, ktory nie wystapi w tresci komorki.
+const TR_SEP = String.fromCharCode(1);
+
 function trHash(text) {
   let h = 0x811c9dc5;
   const s = String(text);
@@ -207,6 +244,8 @@ function trCollectVolatileCols(savedCols) {
   return out;
 }
 
+// Odcisk v1 (cały wiersz, kolumny po POZYCJI). Zostaje wyłącznie po to, żeby czytać
+// zapisy zrobione przed wprowadzeniem odcisku kolumnowego — nowych już tak nie liczymy.
 function trRowSig(row) {
   if (!row) return "";
   const cacheKey = row.rowIndex0;
@@ -217,9 +256,163 @@ function trRowSig(row) {
     if (trVolatileCols.has(i)) continue;
     parts.push(String(getDisplayValue(row, i) ?? ""));
   }
-  const sig = trHash(parts.join("\u0001"));
+  const sig = trHash(parts.join(TR_SEP));
   if (cacheKey !== undefined) trSigCache.set(cacheKey, sig);
   return sig;
+}
+
+// ── Odcisk v2: po NAZWACH kolumn, nie po pozycjach ───────────────────────────
+//
+// Czego nie umiał v1 (jeden hash całego wiersza, kolumny liczone po numerze):
+//   • poprawka JEDNEJ komórki → inny hash → ✓ przepadało,
+//   • dodana/przestawiona kolumna → inne hashe WSZYSTKICH wierszy → przepadało wszystko,
+//   • inne formatowanie liczby/daty → inny hash, choć treść ta sama.
+//
+// v2 zapisuje osobny odcisk KAŻDEJ kolumny, podpisany NAZWĄ nagłówka. Przy dopasowaniu
+// bierzemy część wspólną kolumn (te, które są w obu plikach) i widzimy, ile z nich się
+// zgadza — czyli mamy stopień podobieństwa zamiast zero-jedynkowego hasha. Wartości
+// normalizujemy (spacje, wielkość liter, separator dziesiętny, daty do ISO), więc
+// kosmetyka formatowania przestaje cokolwiek psuć.
+
+const TR_SIG_MAX_COLS = 16;   // ile kolumn wchodzi w odcisk (reszta to i tak szum)
+const TR_SIG_MAX_ROWS = 4000; // powyżej tego nie zapisujemy odcisków kolumnowych (localStorage)
+const TR_SIM_MIN = 0.7;       // próg tury „po podobieństwie"
+const TR_SIM_COMMON = 8;      // wartość częstsza niż tyle razy nie identyfikuje wiersza
+
+let trSigCols = [];            // [{ name, idx }] — kolumny wchodzące w odcisk, w kolejności arkusza
+let trCellsCache = new Map();  // rowIndex0 -> odcisk kolumnowy (liczony leniwie)
+let trDoneCells = new Map();   // klucz wiersza -> odcisk kolumnowy
+let trDonePrev = new Map();    // klucz wiersza -> czytelny podgląd (lista nieodnalezionych)
+
+// Nagłówek tak, jak widzi go użytkownik — do komunikatów. Do porównań służy postać
+// znormalizowana (trNormHeaderName), ale pokazywanie jej w UI wyglądałoby jak literówka.
+function trHeaderLabel(idx) {
+  const src = Array.isArray(currentHeaders) && currentHeaders.length ? currentHeaders : trHeaders;
+  const raw = String(src[idx] ?? "").trim();
+  return raw || `#${idx + 1}`;
+}
+
+function trNormHeaderName(name) {
+  return String(name ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+// Nazwy nagłówków jako podpisy kolumn. Duplikaty numerujemy, bo inaczej dwie kolumny
+// „Uwagi" byłyby tą samą kolumną i dopasowanie mieszałoby je ze sobą.
+function trSigHeaderNames() {
+  const src = Array.isArray(currentHeaders) && currentHeaders.length ? currentHeaders : trHeaders;
+  const seen = new Map();
+  return src.map((h, i) => {
+    const base = trNormHeaderName(h) || `#${i}`;
+    const n = (seen.get(base) || 0) + 1;
+    seen.set(base, n);
+    return n > 1 ? `${base}#${n}` : base;
+  });
+}
+
+// Wartość do odcisku: surowa (values), bo `display` zależy od ustawień wyświetlania.
+function trRawValue(row, i) {
+  if (row && Array.isArray(row.values) && i < row.values.length) return row.values[i];
+  return getDisplayValue(row, i);
+}
+
+// Normalizacja decyduje, czy „12,50" i „12.5" to ta sama treść. Ta sama funkcja pracuje
+// po obu stronach porównania, więc jest symetryczna z definicji.
+function trNormValue(v) {
+  if (v == null) return "";
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? "" : v.toISOString().slice(0, 10);
+  if (typeof v === "number") return Number.isFinite(v) ? String(Math.round(v * 1e6) / 1e6) : "";
+  if (typeof v === "boolean") return v ? "1" : "0";
+  const s = String(v).replace(/ /g, " ").trim().replace(/\s+/g, " ");
+  if (!s) return "";
+  // Liczba zapisana tekstem („1 234,50", „1,234.50") — do jednej postaci, żeby zmiana
+  // formatu kolumny w Excelu nie wyglądała jak zmiana treści.
+  if (/^-?[\d\s.,]+$/.test(s) && /\d/.test(s)) {
+    const cleaned = s.replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+    const n = Number(cleaned);
+    if (Number.isFinite(n)) return String(Math.round(n * 1e6) / 1e6);
+  }
+  return s.toLowerCase();
+}
+
+function trValueSig(row, idx) {
+  const norm = trNormValue(trRawValue(row, idx));
+  return norm ? trHash(norm) : "";
+}
+
+// Które kolumny biorą udział w odcisku. Liczy się informacja: kolumna wypełniona
+// i zróżnicowana identyfikuje wiersz, kolumna z trzema powtarzającymi się wartościami
+// prawie nic nie wnosi. Kolumny „na dziś" (TODAY) odpadają z definicji.
+function trPickSigCols() {
+  const names = trSigHeaderNames();
+  const src = Array.isArray(baseRows) && baseRows.length ? baseRows : trRows;
+  const step = Math.max(1, Math.floor(src.length / 400) || 1);
+  const scored = [];
+  for (let i = 0; i < names.length; i++) {
+    if (trVolatileCols.has(i)) continue;
+    let seen = 0;
+    let filled = 0;
+    const distinct = new Set();
+    for (let r = 0; r < src.length; r += step) {
+      seen += 1;
+      const v = trNormValue(trRawValue(src[r], i));
+      if (!v) continue;
+      filled += 1;
+      if (distinct.size <= 4000) distinct.add(v);
+    }
+    if (!seen || !filled) continue;
+    const fill = filled / seen;
+    const uniq = distinct.size / filled;
+    scored.push({ name: names[i], idx: i, score: fill * (0.4 + 0.6 * uniq) });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  const keep = scored.slice(0, TR_SIG_MAX_COLS);
+  keep.sort((a, b) => a.idx - b.idx);
+  trSigCols = keep;
+  trCellsCache.clear();
+}
+
+function trRowCells(row) {
+  if (!row || !trSigCols.length) return "";
+  const cacheKey = row.rowIndex0;
+  if (cacheKey !== undefined && trCellsCache.has(cacheKey)) return trCellsCache.get(cacheKey);
+  const out = trSigCols.map((c) => trValueSig(row, c.idx)).join("|");
+  if (cacheKey !== undefined) trCellsCache.set(cacheKey, out);
+  return out;
+}
+
+// Podgląd wiersza — jedyne, po czym człowiek pozna, CZEGO nie udało się dopasować.
+// Bierzemy pola pokazywane na karcie, bo to one opisują wiersz w języku użytkownika.
+function trRowPreview(row) {
+  if (!row) return "";
+  const order = Array.isArray(trFieldOrder) && trFieldOrder.length
+    ? trFieldOrder
+    : trHeaders.map((_, i) => i);
+  const cols = trSelected && trSelected.size ? order.filter((i) => trSelected.has(i)) : order;
+  const out = [];
+  for (const i of cols) {
+    const v = String(getDisplayValue(row, i) ?? "").trim();
+    if (!v) continue;
+    out.push(v.length > 28 ? `${v.slice(0, 27)}…` : v);
+    if (out.length >= 3) break;
+  }
+  return out.join(" · ");
+}
+
+function trClearSigs() {
+  trDoneSigs.clear();
+  trDoneCells.clear();
+  trDonePrev.clear();
+}
+
+// Jedno miejsce, w którym wiersz dostaje komplet odcisków. Wołane przy KAŻDYM ✓ —
+// inaczej zapis miałby klucz bez odcisku i przy następnej zmianie pliku byłby nie do uratowania.
+function trMarkSig(key, row) {
+  if (!key || !row) return;
+  trDoneSigs.set(key, trRowSig(row));
+  const cells = trRowCells(row);
+  if (cells) trDoneCells.set(key, cells);
+  const prev = trRowPreview(row);
+  if (prev) trDonePrev.set(key, prev);
 }
 
 // Odcisk ARKUSZA liczymy z `baseRows` (pełne, nieprzefiltrowane) — inaczej otwarcie trybu
@@ -238,7 +431,7 @@ function trSheetFingerprint() {
   return {
     rows: src.length,
     cols: trHeaders.length,
-    h: trHash((Array.isArray(currentHeaders) ? currentHeaders : trHeaders).join("\u0001")),
+    h: trHash((Array.isArray(currentHeaders) ? currentHeaders : trHeaders).join(TR_SEP)),
     sample: trHash(sample),
     mtime,
   };
@@ -255,35 +448,255 @@ function trCompareFingerprint(saved, now) {
   return "same";
 }
 
-// Przeniesienie ✓ po TREŚCI. Duplikaty (kilka wierszy identycznych co do znaku) obsługujemy
-// licznikowo: ile odcisków tego rodzaju było odhaczonych, tyle wierszy odhaczamy teraz —
-// w kolejności arkusza. To przewidywalne i nie wymaga zgadywania.
-function trRemapDone(savedDone, savedSigs) {
+// Przeniesienie ✓ dla zapisów SPRZED odcisku kolumnowego: jedyne, co mamy, to hash całego
+// wiersza — albo trafia w punkt, albo nie ma czego szukać. Duplikaty rozdajemy licznikowo.
+function trRemapDoneLegacy(savedDone, savedSigs, savedPrev) {
   const keys = new Set();
-  const wanted = new Map(); // odcisk -> ile ✓ do rozdania
-  const sigByKey = new Map();
+  const wanted = new Map();
+  const owner = new Map(); // odcisk -> indeksy w savedDone (do podglądu nieodnalezionych)
   savedDone.forEach((key, i) => {
     const sig = savedSigs[i];
     if (!sig) return;
-    sigByKey.set(key, sig);
     wanted.set(sig, (wanted.get(sig) || 0) + 1);
+    if (!owner.has(sig)) owner.set(sig, []);
+    owner.get(sig).push(i);
   });
-  if (!wanted.size) return { keys: new Set(savedDone), moved: 0, lost: 0, remapped: false };
-
+  if (!wanted.size) {
+    return {
+      keys: new Set(savedDone),
+      moved: 0, exact: 0, byKey: 0, similar: 0,
+      lost: 0, unmatched: [], remapped: false, keyCol: "",
+    };
+  }
   const source = Array.isArray(baseRows) && baseRows.length ? baseRows : trRows;
   let moved = 0;
   for (const row of source) {
     const sig = trRowSig(row);
     const left = wanted.get(sig);
     if (!left) continue;
-    keys.add(trKeyOf(row));
-    trDoneSigs.set(trKeyOf(row), sig);
+    const key = trKeyOf(row);
+    keys.add(key);
+    trMarkSig(key, row);
     wanted.set(sig, left - 1);
+    const queue = owner.get(sig);
+    if (queue && queue.length) queue.shift();
     moved += 1;
   }
-  let lost = 0;
-  wanted.forEach((left) => { if (left > 0) lost += left; });
-  return { keys, moved, lost, remapped: true, hadSigs: sigByKey.size };
+  const unmatched = [];
+  wanted.forEach((left, sig) => {
+    const queue = owner.get(sig) || [];
+    for (let n = 0; n < left; n++) {
+      const i = queue[n];
+      unmatched.push({ prev: (savedPrev && savedPrev[i]) || "", best: null, score: 0 });
+    }
+  });
+  return {
+    keys,
+    moved, exact: moved, byKey: 0, similar: 0,
+    lost: unmatched.length, unmatched, remapped: true, keyCol: "",
+  };
+}
+
+// ── Kaskada dopasowania ✓ ───────────────────────────────────────────────────
+//
+// Trzy tury, od najpewniejszej do najluźniejszej. Każdy wiersz docelowy może zostać zajęty
+// tylko RAZ, a tury idą po kolei — więc pewne dopasowanie zawsze wygrywa z domysłem,
+// niezależnie od kolejności wierszy w pliku.
+//
+//   1. DOKŁADNIE  — zgadzają się wszystkie wspólne kolumny.
+//   2. PO KLUCZU  — zgadza się kolumna, która w tym arkuszu jednoznacznie identyfikuje wiersz
+//                   (prawie same unikaty, prawie zawsze wypełniona — np. „Nr"). Wymagamy
+//                   jednoznaczności po OBU stronach: jeden zapis, jeden wiersz.
+//   3. PO PODOBIEŃSTWIE — co najmniej 70% wspólnych kolumn i JEDEN wyraźny zwycięzca (bez
+//                   remisu). Jeśli arkusz ma kolumnę-klucz, jej wartość MUSI się zgadzać —
+//                   inaczej „podobny" wiersz to po prostu cudzy wiersz.
+//
+// Czego kaskada NIE robi: nie zgaduje przy remisie i nie odhacza niczego „na oko" — to,
+// czego nie dopasuje, ląduje na liście nieodnalezionych razem z podglądem treści.
+function trMatchDone(rec) {
+  const savedDone = Array.isArray(rec?.done) ? rec.done : [];
+  const savedSigs = Array.isArray(rec?.doneSig) ? rec.doneSig : [];
+  const savedPrev = Array.isArray(rec?.donePrev) ? rec.donePrev : [];
+  const savedCols = Array.isArray(rec?.cols) ? rec.cols : [];
+  const savedCells = Array.isArray(rec?.doneCells) ? rec.doneCells : [];
+  if (!savedDone.length) {
+    return { keys: new Set(), moved: 0, exact: 0, byKey: 0, similar: 0, lost: 0, unmatched: [], remapped: false, keyCol: "" };
+  }
+  if (!savedCols.length || !savedCells.some(Boolean)) {
+    return trRemapDoneLegacy(savedDone, savedSigs, savedPrev);
+  }
+
+  // Część wspólna kolumn: po NAZWIE, z pominięciem kolumn liczonych „na dziś" po TEJ stronie.
+  // Tu leżał błąd przy „Przenieś": odciski źródła liczone były bez kolumny TODAY, a odciski
+  // celu razem z nią — porównywaliśmy dwie różne rzeczy i ✓ nie miały prawa trafić.
+  const names = trSigHeaderNames();
+  const byName = new Map();
+  names.forEach((n, i) => { if (!byName.has(n)) byName.set(n, i); });
+  const pairs = [];
+  savedCols.forEach((name, pos) => {
+    const idx = byName.get(name);
+    if (idx === undefined || trVolatileCols.has(idx)) return;
+    pairs.push({ pos, idx, name });
+  });
+  if (!pairs.length) return trRemapDoneLegacy(savedDone, savedSigs, savedPrev);
+
+  const rows = Array.isArray(baseRows) && baseRows.length ? baseRows : trRows;
+  // Indeksy odwrotne: hash wartości -> wiersze. Dają naraz turę 1 (pełny klucz), wykrycie
+  // kolumny-klucza (ile unikatów) i głosowanie tury 3 — bez skanowania każdy z każdym.
+  const colIndex = pairs.map(() => new Map());
+  const fullIndex = new Map();
+  rows.forEach((row, r) => {
+    const cells = pairs.map((p, pi) => {
+      const h = trValueSig(row, p.idx);
+      if (h) {
+        const list = colIndex[pi].get(h);
+        if (list) list.push(r); else colIndex[pi].set(h, [r]);
+      }
+      return h;
+    });
+    const full = cells.join("|");
+    const bucket = fullIndex.get(full);
+    if (bucket) bucket.push(r); else fullIndex.set(full, [r]);
+  });
+
+  const taken = new Set();
+  const keys = new Set();
+  let exact = 0;
+  let byKey = 0;
+  let similar = 0;
+  const claim = (r) => {
+    taken.add(r);
+    const key = trKeyOf(rows[r]);
+    keys.add(key);
+    trMarkSig(key, rows[r]);
+  };
+  const freeIn = (list) => {
+    if (!list) return -1;
+    for (const r of list) if (!taken.has(r)) return r;
+    return -1;
+  };
+
+  const pending = [];
+  const legacyPending = [];
+  savedDone.forEach((key, i) => {
+    const raw = savedCells[i];
+    if (!raw) {
+      legacyPending.push({ i, sig: savedSigs[i] || "", prev: savedPrev[i] || "" });
+      return;
+    }
+    const all = String(raw).split("|");
+    pending.push({ i, cells: pairs.map((p) => all[p.pos] || ""), prev: savedPrev[i] || "" });
+  });
+
+  // ── Tura 1: dokładnie ──
+  const minShared = Math.min(2, pairs.length);
+  let rest = [];
+  pending.forEach((p) => {
+    if (p.cells.filter(Boolean).length < minShared) { rest.push(p); return; }
+    const hit = freeIn(fullIndex.get(p.cells.join("|")));
+    if (hit < 0) { rest.push(p); return; }
+    claim(hit);
+    exact += 1;
+  });
+
+  // Wiersze zapisane starszą wersją (mają tylko hash całego wiersza) — dokładamy je do
+  // tury 1, żeby mieszany zapis nie tracił ✓ tylko dlatego, że część jest starsza.
+  legacyPending.forEach((p) => {
+    let hit = -1;
+    if (p.sig) {
+      for (let r = 0; r < rows.length; r++) {
+        if (taken.has(r)) continue;
+        if (trRowSig(rows[r]) === p.sig) { hit = r; break; }
+      }
+    }
+    if (hit < 0) { rest.push({ i: p.i, cells: [], prev: p.prev }); return; }
+    claim(hit);
+    exact += 1;
+  });
+
+  // ── Kolumna-klucz: ta, która w TYM arkuszu identyfikuje wiersz jednoznacznie ──
+  let keyPi = -1;
+  let keyScore = 0;
+  pairs.forEach((_, pi) => {
+    const m = colIndex[pi];
+    let filled = 0;
+    m.forEach((list) => { filled += list.length; });
+    if (!filled || !rows.length) return;
+    const uniq = m.size / filled;
+    const fill = filled / rows.length;
+    if (uniq < 0.9 || fill < 0.8) return;
+    const score = uniq * fill;
+    if (score > keyScore) { keyScore = score; keyPi = pi; }
+  });
+
+  // ── Tura 2: po kluczu ──
+  if (keyPi >= 0 && rest.length) {
+    const demand = new Map(); // ilu zapisanych wierszy chce tej samej wartości klucza
+    rest.forEach((p) => {
+      const h = p.cells[keyPi];
+      if (h) demand.set(h, (demand.get(h) || 0) + 1);
+    });
+    const next = [];
+    rest.forEach((p) => {
+      const h = p.cells[keyPi];
+      // Jednoznacznie po obu stronach — inaczej nie wiadomo, który wiersz jest czyj.
+      if (!h || demand.get(h) !== 1) { next.push(p); return; }
+      const list = colIndex[keyPi].get(h);
+      if (!list || list.length !== 1 || taken.has(list[0])) { next.push(p); return; }
+      claim(list[0]);
+      byKey += 1;
+    });
+    rest = next;
+  }
+
+  // ── Tura 3: po podobieństwie ──
+  const unmatched = [];
+  rest.forEach((p) => {
+    const denom = p.cells.filter(Boolean).length;
+    if (!denom) { unmatched.push({ prev: p.prev, best: null, score: 0 }); return; }
+    const votes = new Map();
+    pairs.forEach((_, pi) => {
+      const h = p.cells[pi];
+      if (!h) return;
+      const list = colIndex[pi].get(h);
+      // Wartość pospolita („Teren" w 900 wierszach) niczego nie identyfikuje — pomijamy,
+      // inaczej głosowanie wygrywałby przypadkowy wiersz o tym samym statusie.
+      if (!list || list.length > TR_SIM_COMMON) return;
+      list.forEach((r) => { if (!taken.has(r)) votes.set(r, (votes.get(r) || 0) + 1); });
+    });
+    let best = -1;
+    let bestV = 0;
+    let secondV = 0;
+    votes.forEach((v, r) => {
+      if (v > bestV) { secondV = bestV; bestV = v; best = r; }
+      else if (v > secondV) secondV = v;
+    });
+    const score = denom ? bestV / denom : 0;
+    const keyOk = keyPi < 0 || !p.cells[keyPi]
+      || (best >= 0 && trValueSig(rows[best], pairs[keyPi].idx) === p.cells[keyPi]);
+    if (best >= 0 && score >= TR_SIM_MIN && bestV > secondV && keyOk) {
+      claim(best);
+      similar += 1;
+      return;
+    }
+    unmatched.push({
+      prev: p.prev,
+      best: best >= 0 ? trKeyOf(rows[best]) : null,
+      score: best >= 0 ? score : 0,
+    });
+  });
+
+  return {
+    keys,
+    moved: exact + byKey + similar,
+    exact,
+    byKey,
+    similar,
+    lost: unmatched.length,
+    unmatched,
+    remapped: true,
+    keyCol: keyPi >= 0 ? trHeaderLabel(pairs[keyPi].idx) : "",
+  };
 }
 
 // ── Model / wiersze ─────────────────────────────────────────────────────────
@@ -679,7 +1092,7 @@ function trToggleDone() {
   if (!row) return;
   const key = trKeyOf(row);
   if (trDone.has(key)) trDone.delete(key);
-  else { trDone.add(key); trDoneSigs.set(key, trRowSig(row)); }
+  else { trDone.add(key); trMarkSig(key, row); }
   if (trHideDone) {
     const keep = trPos;
     trRebuildOrder(null);
@@ -698,7 +1111,7 @@ function trMarkAndNext(options = {}) {
   const key = trKeyOf(row);
   const wasDone = trDone.has(key);
   trDone.add(key);
-  trDoneSigs.set(key, trRowSig(row));
+  trMarkSig(key, row);
   const before = trPos;
   if (trHideDone) {
     const keep = trPos;
@@ -855,7 +1268,8 @@ function trSetHideDone(on) {
 
 function trResetProgress() {
   trDone.clear();
-  trDoneSigs.clear();
+  trClearSigs();
+  trUnmatched = [];
   trChangeInfo = null;   // czyścimy też powód ostrzeżenia — nie ma już czego ratować
   trHideChangeNotice();
   trRebuildOrder(null);
@@ -1043,6 +1457,10 @@ function trShowChangeNotice() {
         when,
       })
       : t("trNoticeUnknown", { all: info.savedDone, when });
+    // Baner mówi „nieodnalezione: 60" — bez tego zdania nie widać, że da się je obejrzeć.
+    if (info.remapped && info.lost > 0) {
+      trNoticeTextEl.textContent += ` ${t("trNoticeSeeProgress")}`;
+    }
   }
   trNoticeEl.classList.remove("hidden");
 }
@@ -1092,6 +1510,21 @@ function trRenderProgressPanel() {
         ? t("trScopeChangedRemapped", { moved: trChangeInfo.moved, all: trChangeInfo.savedDone, lost: trChangeInfo.lost })
         : t("trScopeChangedUnknown"));
     }
+    if (trChangeInfo?.level === "import") {
+      lines.push(t("trScopeImported", { moved: trChangeInfo.moved, all: trChangeInfo.savedDone, lost: trChangeInfo.lost }));
+    }
+    // Rozbicie na tury mówi, CZEMU można temu wynikowi ufać: „dokładnie" to zero domysłu,
+    // „po kluczu" to zgodny numer/ID, „po podobieństwie" to jedyny wyraźny kandydat.
+    if (trChangeInfo?.remapped && trChangeInfo.moved) {
+      const parts = [t("trMatchExact", { n: trChangeInfo.exact || 0 })];
+      if (trChangeInfo.byKey) {
+        parts.push(trChangeInfo.keyCol
+          ? t("trMatchByKeyCol", { n: trChangeInfo.byKey, col: trChangeInfo.keyCol })
+          : t("trMatchByKey", { n: trChangeInfo.byKey }));
+      }
+      if (trChangeInfo.similar) parts.push(t("trMatchSimilar", { n: trChangeInfo.similar }));
+      lines.push(`${t("trMatchHow")} ${parts.join(" · ")}`);
+    }
     trScopeNoteEl.replaceChildren();
     lines.forEach((text) => {
       const div = document.createElement("div");
@@ -1100,7 +1533,80 @@ function trRenderProgressPanel() {
     });
   }
 
+  trRenderUnmatched();
   trRenderStoreList();
+}
+
+// ── Lista nieodnalezionych ✓ ────────────────────────────────────────────────
+// Samo „60 nie znaleziono" to ślepy zaułek: nie wiadomo, czego dotyczy, więc nie da się
+// nic z tym zrobić. Pokazujemy więc, KTÓRE to były wiersze (podgląd zapisany razem z ✓),
+// a przy każdym — najbardziej podobny wiersz w tym pliku, jeśli w ogóle jakiś jest.
+// „Pokaż" tylko przeskakuje na ten wiersz. Odhaczenie zostaje decyzją użytkownika:
+// odhaczenie cudzego wiersza jest przy przepisywaniu na papier najgorszym możliwym błędem.
+function trRenderUnmatched() {
+  if (!trUnmatchedEl) return;
+  const items = Array.isArray(trUnmatched) ? trUnmatched : [];
+  if (!items.length) {
+    trUnmatchedEl.classList.add("hidden");
+    if (trUnmatchedListEl) trUnmatchedListEl.replaceChildren();
+    return;
+  }
+  trUnmatchedEl.classList.remove("hidden");
+  if (trUnmatchedTitleEl) trUnmatchedTitleEl.textContent = t("trUnmatchedTitle", { count: items.length });
+  if (trUnmatchedHintEl) trUnmatchedHintEl.textContent = t("trUnmatchedHint");
+  if (!trUnmatchedListEl) return;
+
+  const open = trUnmatchedToggleEl?.getAttribute("aria-expanded") === "true";
+  if (trUnmatchedToggleEl) trUnmatchedToggleEl.textContent = open ? t("trUnmatchedHide") : t("trUnmatchedShowAll");
+  trUnmatchedListEl.classList.toggle("hidden", !open);
+  if (!open) return;
+
+  trUnmatchedListEl.replaceChildren();
+  // Sufit na długość listy: przy setkach pozycji panel przestaje być czytelny, a sens
+  // listy jest taki, żeby dało się ją przejrzeć okiem.
+  const shown = items.slice(0, 200);
+  shown.forEach((it) => {
+    const row = document.createElement("div");
+    row.className = "tr-unmatched-item";
+    const text = document.createElement("div");
+    text.className = "tr-unmatched-text";
+    text.textContent = it.prev || t("trUnmatchedNoPreview");
+    row.appendChild(text);
+    if (it.best) {
+      const near = document.createElement("button");
+      near.type = "button";
+      near.className = "btn btn-xs ghost";
+      near.textContent = t("trUnmatchedNear", { pct: Math.round((it.score || 0) * 100) });
+      near.addEventListener("click", () => trJumpToKey(it.best));
+      row.appendChild(near);
+    } else {
+      const none = document.createElement("span");
+      none.className = "tr-unmatched-none";
+      none.textContent = t("trUnmatchedNoCandidate");
+      row.appendChild(none);
+    }
+    trUnmatchedListEl.appendChild(row);
+  });
+  if (items.length > shown.length) {
+    const more = document.createElement("div");
+    more.className = "tr-unmatched-none";
+    more.textContent = t("trUnmatchedMore", { n: items.length - shown.length });
+    trUnmatchedListEl.appendChild(more);
+  }
+}
+
+// Skok na wskazany wiersz BEZ odhaczania — użytkownik porównuje kartę z papierem i decyduje.
+function trJumpToKey(rowKey) {
+  if (!rowKey) return;
+  const at = trOrder.findIndex((i) => trKeyOf(trRows[i]) === rowKey);
+  if (at < 0) {
+    toast(t("trUnmatchedGone"), "warning");
+    return;
+  }
+  trPos = at;
+  trCloseProgress();
+  trRenderCard();
+  toast(t("trUnmatchedJumped"), "info");
 }
 
 // Lista WSZYSTKICH zapamiętanych spisywań — także z innych plików. Bez niej „wyczyść"
@@ -1188,14 +1694,32 @@ function trImportFromScope(key) {
   const rec = store.scopes?.[key];
   if (!rec) return;
   const savedDone = Array.isArray(rec.done) ? rec.done : [];
-  const savedSigs = Array.isArray(rec.doneSig) ? rec.doneSig : [];
   const sourceName = key.split("::")[0] || key;
-  const remap = trRemapDone(savedDone, savedSigs);
+  // Zapisy v2 niosą nazwy kolumn, więc kolumny „na dziś" odpadają po obu stronach same
+  // z siebie. Zapisy sprzed v2 (same hashe pozycyjne) zostają dopasowaniem awaryjnym —
+  // nie da się ich naprawić wstecz, ale przy pierwszym ✓ dostają już komplet odcisków.
+  const remap = trMatchDone(rec);
   if (!remap.moved) {
     toast(t("trImportNone"), "warning");
+    trUnmatched = remap.unmatched;
+    trRenderProgressPanel();
     return;
   }
   remap.keys.forEach((k) => trDone.add(k));
+  trUnmatched = remap.unmatched;
+  trChangeInfo = {
+    level: "import",
+    rows: trFingerprint?.rows ?? trRows.length,
+    savedDone: savedDone.length,
+    moved: remap.moved,
+    exact: remap.exact,
+    byKey: remap.byKey,
+    similar: remap.similar,
+    keyCol: remap.keyCol,
+    lost: remap.lost,
+    savedAt: rec?.ts || 0,
+    remapped: true,
+  };
   trRebuildOrder(trCurrentKey());
   trRenderCard();
   trRenderProgressPanel();
@@ -1212,7 +1736,8 @@ function trDeleteScope(key) {
     // inaczej najbliższy zapis wskrzesiłby go z powrotem.
     trWithoutPersist(() => {
       trDone.clear();
-      trDoneSigs.clear();
+      trClearSigs();
+      trUnmatched = [];
       trChangeInfo = null;
       trHideChangeNotice();
       trRebuildOrder(null);
@@ -1231,7 +1756,8 @@ function trClearAllScopes() {
   } catch { /* prywatne okno — i tak nie było czego kasować */ }
   trWithoutPersist(() => {
     trDone.clear();
-    trDoneSigs.clear();
+    trClearSigs();
+    trUnmatched = [];
     trChangeInfo = null;
     trHideChangeNotice();
     trRebuildOrder(null);
@@ -1397,18 +1923,23 @@ function openTranscribe() {
   // Kolejność jest istotna: najpierw kolumny zmienne (bo wchodzą w odcisk), potem odcisk
   // arkusza, dopiero na końcu decyzja, co zrobić z zapamiętanymi ✓.
   trSigCache.clear();
-  trDoneSigs.clear();
+  trCellsCache.clear();
+  trClearSigs();
   trVolatileCols = trCollectVolatileCols(saved?.volCols);
+  trPickSigCols();          // kolumny odcisku — muszą być gotowe PRZED liczeniem czegokolwiek
   trFingerprint = trSheetFingerprint();
 
   const savedDone = Array.isArray(saved?.done) ? saved.done : [];
   const savedSigs = Array.isArray(saved?.doneSig) ? saved.doneSig : [];
   const level = savedDone.length ? trCompareFingerprint(saved?.sig, trFingerprint) : "same";
   trChangeInfo = null;
+  trUnmatched = [];   // lista dotyczy KONKRETNEGO wczytania — nie może przeżyć zmiany arkusza
 
-  if (level === "hard" && savedSigs.some(Boolean)) {
+  const hasAnySig = savedSigs.some(Boolean)
+    || (Array.isArray(saved?.doneCells) && saved.doneCells.some(Boolean));
+  if (level === "hard" && hasAnySig) {
     // Plik inny, ale mamy odciski treści → przenosimy ✓ tam, gdzie ich miejsce.
-    const remap = trRemapDone(savedDone, savedSigs);
+    const remap = trMatchDone(saved);
     trDone = remap.keys;
     trChangeInfo = {
       level: "hard",
@@ -1416,10 +1947,15 @@ function openTranscribe() {
       rows: trFingerprint.rows,
       savedDone: savedDone.length,
       moved: remap.moved,
+      exact: remap.exact,
+      byKey: remap.byKey,
+      similar: remap.similar,
+      keyCol: remap.keyCol,
       lost: remap.lost,
       savedAt: saved?.ts || 0,
       remapped: true,
     };
+    trUnmatched = remap.unmatched;
   } else if (level === "hard") {
     // Zapis sprzed wersji z odciskami — kluczy nie ma jak zweryfikować. Zostawiamy je
     // (nic nie kasujemy bez pytania), ale mówimy wprost, że mogą być nie na swoim miejscu.
@@ -1436,7 +1972,13 @@ function openTranscribe() {
     };
   } else {
     trDone = new Set(savedDone);
-    savedDone.forEach((key, i) => { if (savedSigs[i]) trDoneSigs.set(key, savedSigs[i]); });
+    const savedCells = Array.isArray(saved?.doneCells) ? saved.doneCells : [];
+    const savedPrev = Array.isArray(saved?.donePrev) ? saved.donePrev : [];
+    savedDone.forEach((key, i) => {
+      if (savedSigs[i]) trDoneSigs.set(key, savedSigs[i]);
+      if (savedCells[i]) trDoneCells.set(key, savedCells[i]);
+      if (savedPrev[i]) trDonePrev.set(key, savedPrev[i]);
+    });
     // Zapis mógł powstać w wersji sprzed odcisków treści (albo pojedynczy klucz je zgubił).
     // Skoro fingerprint arkusza się zgadza (same/soft), pozycje są wciąż te same — możemy
     // bezpiecznie DOPISAĆ brakujący odcisk od razu, zamiast czekać aż ktoś ręcznie tknie
@@ -1444,12 +1986,16 @@ function openTranscribe() {
     // realnej zmianie pliku znów wpadłyby w gałąź „nie da się zweryfikować".
     if (trDone.size) {
       const missing = new Set();
-      trDone.forEach((key) => { if (!trDoneSigs.has(key)) missing.add(key); });
+      // Brakuje CZEGOKOLWIEK z kompletu (hash wiersza / odcisk kolumnowy / podgląd) —
+      // pozycje są wciąż te same, więc dopisujemy od razu, zamiast czekać, aż ktoś ruszy wiersz.
+      trDone.forEach((key) => {
+        if (!trDoneSigs.has(key) || !trDoneCells.has(key) || !trDonePrev.has(key)) missing.add(key);
+      });
       if (missing.size) {
         for (const row of trRows) {
           const key = trKeyOf(row);
           if (!missing.has(key)) continue;
-          trDoneSigs.set(key, trRowSig(row));
+          trMarkSig(key, row);
           missing.delete(key);
           if (!missing.size) break;
         }
@@ -1672,6 +2218,13 @@ if (trProgressBtn) {
   });
 }
 if (trProgressDoneBtn) trProgressDoneBtn.addEventListener("click", trCloseProgress);
+if (trUnmatchedToggleEl) {
+  trUnmatchedToggleEl.addEventListener("click", () => {
+    const open = trUnmatchedToggleEl.getAttribute("aria-expanded") === "true";
+    trUnmatchedToggleEl.setAttribute("aria-expanded", open ? "false" : "true");
+    trRenderUnmatched();
+  });
+}
 if (trStoreClearAllBtn) trStoreClearAllBtn.addEventListener("click", () => trArmDanger(trStoreClearAllBtn, t("trStoreClearAll"), trClearAllScopes));
 if (trNoticeKeepBtn) trNoticeKeepBtn.addEventListener("click", trHideChangeNotice);
 if (trNoticeResetBtn) {
@@ -1738,6 +2291,8 @@ window.__transcribe = {
     turbo: !!trTurboTimer,
     volatileCols: Array.from(trVolatileCols),
     changed: trChangeInfo ? { ...trChangeInfo } : null,
+    unmatched: trUnmatched.map((u) => ({ prev: u.prev, best: u.best, score: u.score })),
+    sigCols: trSigCols.map((c) => c.name),
     undoVisible: !!(trUndoBtn && !trUndoBtn.classList.contains("hidden")),
     burst: trBurstKeys.length,
     values: (() => {

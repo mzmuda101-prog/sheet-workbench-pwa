@@ -518,15 +518,48 @@ function serializeRangeToTsv(rect) {
   return lines.join("\n");
 }
 
+// ── Schowek: systemowy + własny ─────────────────────────────────────────────
+//
+// Dlaczego własny. Na dotyku siatka ma `user-select: none` i `-webkit-touch-callout: none`
+// (bez tego iOS łapie przeciągnięcie palcem po tekście komórki jako zaznaczanie i tabela
+// przestaje się przewijać — patrz komentarz przy @media (pointer: coarse) w app.css).
+// Skutek uboczny: nie ma natywnego menu „Kopiuj/Wklej". Do tego `clipboard.readText()`
+// na telefonie potrafi po prostu odmówić — iOS pyta o zgodę przy każdym odczycie,
+// Android bywa łaskawszy, ale też nie zawsze. Przycisk „Wklej", który czasem nic nie robi,
+// jest gorszy niż brak przycisku, więc kopiowanie zapisuje treść RÓWNIEŻ u nas.
+// Kolejność przy wklejaniu: najpierw system (bo user mógł skopiować coś w innej apce),
+// dopiero potem własny bufor — i mówimy wprost, z którego źródła poszło.
+let internalClipboard = null; // { tsv, rows, cols, ts }
+
+// Jedno miejsce zapisu komórki — używa tego i wklejanie, i wypełnianie zakresu.
+// Zwraca: "ok" | "formula" (formuł ze schowka nie wklejamy) | "skip" (poza tabelą
+// albo wiersz nieedytowalny).
+function writeCellFromInput(model, row, col, raw) {
+  if (!row || row.isLongViewRow || row.isSubheader) return "skip";
+  if (col < 0 || col >= model.headers.length) return "skip";
+  const parsed = parseInputValue(raw);
+  if (parsed && parsed.type === "formula") return "formula";
+  updateSheetCell(row.rowIndex0, col, parsed);
+  const newVal = parsed ? parsed.value : null;
+  if (Array.isArray(row.values)) row.values[col] = newVal;
+  if (Array.isArray(row.rawValues)) row.rawValues[col] = newVal;
+  if (Array.isArray(row.display)) row.display[col] = newVal == null ? "" : toDisplay(newVal);
+  return "ok";
+}
+
 async function copySelectionToClipboard() {
   const rect = rangeCellsToCopy();
   if (!rect) return;
   const tsv = serializeRangeToTsv(rect);
+  const count = rect.rowCount * rect.colCount;
+  internalClipboard = { tsv, rows: rect.rowCount, cols: rect.colCount, ts: Date.now() };
   try {
     await navigator.clipboard.writeText(tsv);
-    toast(t("cellsCopied", { count: rect.rowCount * rect.colCount }), "success");
+    toast(t("cellsCopied", { count }), "success");
   } catch {
-    toast(t("clipboardUnavailable"), "warning");
+    // Zapis do schowka systemu odpadł (brak zgody / kontekst bez HTTPS), ale własny
+    // bufor już mamy — wklejenie W TEJ APCE zadziała, i tylko to obiecujemy.
+    toast(t("cellsCopiedApp", { count }), "success");
   }
 }
 
@@ -536,6 +569,22 @@ function parseTsvClipboard(text) {
   // bez tego cięcia wklejenie dorzucałoby dodatkowy pusty wiersz pod spodem.
   const trimmed = normalized.endsWith("\n") ? normalized.slice(0, -1) : normalized;
   return trimmed.split("\n").map((line) => line.split("\t"));
+}
+
+// System ma pierwszeństwo (user mógł skopiować datę w notatniku), własny bufor jest
+// siatką bezpieczeństwa. `source` wraca na zewnątrz, żeby dało się to uczciwie napisać
+// w komunikacie — „wklejone", które wkleja coś innego, niż user właśnie skopiował, to
+// najgorszy rodzaj niespodzianki.
+async function readClipboardTsv() {
+  let osText = "";
+  try {
+    osText = await navigator.clipboard.readText();
+  } catch {
+    osText = "";
+  }
+  if (osText) return { text: osText, source: "os" };
+  if (internalClipboard?.tsv) return { text: internalClipboard.tsv, source: "app" };
+  return null;
 }
 
 async function pasteClipboardToSelection() {
@@ -548,15 +597,12 @@ async function pasteClipboardToSelection() {
   const anchorRowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
   if (anchorRowIdx < 0) return;
 
-  let text;
-  try {
-    text = await navigator.clipboard.readText();
-  } catch {
+  const got = await readClipboardTsv();
+  if (!got) {
     toast(t("clipboardUnavailable"), "warning");
     return;
   }
-  if (!text) return;
-  const grid = parseTsvClipboard(text);
+  const grid = parseTsvClipboard(got.text);
   if (!grid.length || !grid[0].length) return;
 
   const startCol = focusedCellState.colIndex0;
@@ -565,30 +611,78 @@ async function pasteClipboardToSelection() {
 
   grid.forEach((cells, rOff) => {
     const row = model.rows[anchorRowIdx + rOff];
-    if (!row || row.isLongViewRow || row.isSubheader) return; // poza tabelą / wiersz nieedytowalny
     cells.forEach((raw, cOff) => {
-      const col = startCol + cOff;
-      if (col >= model.headers.length) return; // poza ostatnią kolumną — przycinamy w ciszy
-      const parsed = parseInputValue(raw);
-      if (parsed && parsed.type === "formula") { skippedFormula += 1; return; }
-      updateSheetCell(row.rowIndex0, col, parsed);
-      const newVal = parsed ? parsed.value : null;
-      if (Array.isArray(row.values)) row.values[col] = newVal;
-      if (Array.isArray(row.rawValues)) row.rawValues[col] = newVal;
-      if (Array.isArray(row.display)) row.display[col] = newVal == null ? "" : toDisplay(newVal);
-      changed += 1;
+      const res = writeCellFromInput(model, row, startCol + cOff, raw);
+      if (res === "ok") changed += 1;
+      else if (res === "formula") skippedFormula += 1;
     });
   });
 
   if (changed > 0) {
     setDirtyState(true);
     renderActiveTable();
-    toast(t("cellsPasted", { count: changed }), "success");
-    log(`Wklejono ${changed} komorek ze schowka`, "success");
+    toast(got.source === "app"
+      ? t("cellsPastedApp", { count: changed })
+      : t("cellsPasted", { count: changed }), "success");
+    log(`Wklejono ${changed} komorek ze schowka (${got.source})`, "success");
   } else {
     toast(t("editToolNoChange"), "info");
   }
   if (skippedFormula > 0) toast(t("pasteSkippedFormulas", { count: skippedFormula }), "warning");
+}
+
+// ── Wypełnianie zakresu ─────────────────────────────────────────────────────
+//
+// To jest odpowiedź na „szybciej wpiszę tę datę piąty raz, niż ją skopiuję": zaznaczasz
+// zakres, jedno tapnięcie i pierwsza komórka rozlewa się na resztę. Nie dotyka schowka
+// systemowego, więc nie ma tu żadnej zgody do wyklikania i nic nie może odmówić.
+function fillSelection(direction) {
+  if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") {
+    toast(t("editWideOnly"), "info");
+    return;
+  }
+  const rect = getSelectionRectangle();
+  if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) {
+    toast(t("fillNeedsRange"), "info");
+    return;
+  }
+  const model = rect.model;
+  let changed = 0;
+  let skippedFormula = 0;
+  const bump = (res) => {
+    if (res === "ok") changed += 1;
+    else if (res === "formula") skippedFormula += 1;
+  };
+
+  if (direction === "down") {
+    for (let c = rect.colMin; c <= rect.colMax; c++) {
+      const src = model.rows[rect.rowStart];
+      if (!src) continue;
+      const raw = cellEditString(src, c);
+      for (let r = rect.rowStart + 1; r <= rect.rowEnd; r++) {
+        bump(writeCellFromInput(model, model.rows[r], c, raw));
+      }
+    }
+  } else {
+    for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
+      const row = model.rows[r];
+      if (!row) continue;
+      const raw = cellEditString(row, rect.colMin);
+      for (let c = rect.colMin + 1; c <= rect.colMax; c++) {
+        bump(writeCellFromInput(model, row, c, raw));
+      }
+    }
+  }
+
+  if (changed > 0) {
+    setDirtyState(true);
+    renderActiveTable();
+    toast(t("cellsFilled", { count: changed }), "success");
+    log(`Wypelniono ${changed} komorek (${direction})`, "success");
+  } else {
+    toast(t("editToolNoChange"), "info");
+  }
+  if (skippedFormula > 0) toast(t("fillSkippedFormulas", { count: skippedFormula }), "warning");
 }
 
 // Podświetla prostokąt zaznaczenia: wypełnienie + obwódkę całego zakresu
@@ -682,8 +776,101 @@ function renderCellStatsChips(parts) {
   cellStatsBarEl.classList.remove("hidden");
 }
 
+// ── Pasek działań na zaznaczeniu (dotyk) ────────────────────────────────────
+//
+// Po co istnieje: na `pointer: coarse` siatka ma wyłączone zaznaczanie tekstu i callout,
+// więc systemowe „Kopiuj/Wklej" z długiego przytrzymania nie ma prawa się pokazać (i nie
+// może wrócić — to ono psuło przewijanie palcem na iOS). Bez tego paska na telefonie nie
+// da się skopiować komórki w ogóle.
+//
+// Stoi w NORMALNYM przepływie pod tabelą, nad paskiem statystyk — nie jako pływająca
+// nakładka. Dzięki temu nigdy nie zasłania komórek, nie bije się z klawiaturą ekranową
+// ani z FAB-ami, i zawsze jest w tym samym miejscu.
+const cellActionsEl = document.getElementById("cellActions");
+const cellActionCopyEl = document.getElementById("cellActionCopy");
+const cellActionPasteEl = document.getElementById("cellActionPaste");
+const cellActionFillDownEl = document.getElementById("cellActionFillDown");
+const cellActionFillRightEl = document.getElementById("cellActionFillRight");
+
+const cellActionsCoarseMQ = typeof matchMedia === "function" ? matchMedia("(pointer: coarse)") : null;
+
+function updateCellActionBar() {
+  if (!cellActionsEl) return;
+  const coarse = !!cellActionsCoarseMQ && cellActionsCoarseMQ.matches;
+  const hasFocus = !!focusedCellState && !!currentDisplayModel;
+  if (!coarse || !workbook || !hasFocus) {
+    cellActionsEl.classList.add("hidden");
+    liftFabsAboveActions();
+    return;
+  }
+  // W trakcie edycji pasek się chowa: klawiatura ekranowa i tak zjada pół ekranu,
+  // a wtedy liczy się widok edytowanej komórki i lista podpowiedzi, nie „Wklej".
+  // Sprawdzamy DOM, a nie zmienną z ui-controls.js — moduły to zwykłe skrypty,
+  // więc sięganie po cudze `let` zależałoby od kolejności ładowania.
+  if (tbodyEl && tbodyEl.querySelector("input.cell-editor")) {
+    cellActionsEl.classList.add("hidden");
+    liftFabsAboveActions();
+    return;
+  }
+  const wide = currentDisplayModel.mode === "wide";
+  const rect = getSelectionRectangle();
+  const rowCount = rect ? rect.rowCount : 1;
+  const colCount = rect ? rect.colCount : 1;
+
+  // Etykiety ustawiamy tutaj (a nie w applyStaticTranslations), bo pasek i tak
+  // przerysowuje się przy każdej zmianie zaznaczenia — i przy zmianie języka,
+  // która woła updateCellStats().
+  if (cellActionCopyEl) {
+    cellActionCopyEl.querySelector(".ca-label").textContent = t("cellActionCopy");
+    cellActionCopyEl.setAttribute("aria-label", t("cellActionCopyAria", { n: rowCount * colCount }));
+  }
+  if (cellActionPasteEl) {
+    cellActionPasteEl.querySelector(".ca-label").textContent = t("cellActionPaste");
+    cellActionPasteEl.classList.toggle("hidden", !wide);
+  }
+  // Wypełnianie pokazujemy DOPIERO, gdy jest co wypełniać — przycisk, który przy
+  // jednej komórce tylko tłumaczy się toastem, uczy ignorować pasek.
+  if (cellActionFillDownEl) {
+    cellActionFillDownEl.querySelector(".ca-label").textContent = t("cellActionFillDown");
+    cellActionFillDownEl.classList.toggle("hidden", !(wide && rowCount > 1));
+  }
+  if (cellActionFillRightEl) {
+    cellActionFillRightEl.querySelector(".ca-label").textContent = t("cellActionFillRight");
+    cellActionFillRightEl.classList.toggle("hidden", !(wide && colCount > 1));
+  }
+  cellActionsEl.classList.remove("hidden");
+  liftFabsAboveActions();
+}
+
+// FAB-y („Odznacz", „Do góry") są kotwiczone do dołu sekcji tabeli, więc bez tego
+// pasek działań wchodzi im dokładnie pod przyciski (zmierzone na 375 px: ✕ lądowało
+// na „Wklej"). Podnosimy je o realną wysokość paska — realną, bo pasek ma raz jeden
+// rząd, a raz dwa (wąskie telefony, przyciski wypełniania).
+function liftFabsAboveActions() {
+  if (!cellActionsEl) return;
+  const host = cellActionsEl.parentElement;
+  if (!host) return;
+  const visible = !cellActionsEl.classList.contains("hidden");
+  // Mierzymy od DOŁU sekcji do GÓRY paska, czyli razem z paskiem statystyk pod spodem —
+  // inaczej „Do góry" (pokazuje się dopiero po przewinięciu tabeli) nadal wchodziłby
+  // na „Kopiuj/Wklej". Gdy paska nie ma, wracamy do zera i FAB-y stoją jak dotąd.
+  let h = 0;
+  if (visible) {
+    const hostRect = host.getBoundingClientRect();
+    const barRect = cellActionsEl.getBoundingClientRect();
+    h = Math.max(0, Math.round(hostRect.bottom - barRect.top) + 8);
+  }
+  host.style.setProperty("--cell-actions-h", `${h}px`);
+}
+
+if (cellActionCopyEl) cellActionCopyEl.addEventListener("click", () => { copySelectionToClipboard(); });
+if (cellActionPasteEl) cellActionPasteEl.addEventListener("click", () => { pasteClipboardToSelection(); });
+if (cellActionFillDownEl) cellActionFillDownEl.addEventListener("click", () => fillSelection("down"));
+if (cellActionFillRightEl) cellActionFillRightEl.addEventListener("click", () => fillSelection("right"));
+
 function updateCellStats() {
   updateClearSelectionFab();
+  updateCellActionBar();
   if (!cellStatsBarEl) return;
   const rect = getSelectionRectangle();
   const hasRange = rect && !(rect.rowCount === 1 && rect.colCount === 1);
