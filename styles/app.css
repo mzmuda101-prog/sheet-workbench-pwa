@@ -737,9 +737,7 @@ body.splashing {
 .clear-sel-fab {
   position: absolute;
   right: 16px;
-  /* --cell-actions-h ustawia JS na realną wysokość paska działań (0 gdy go nie ma),
-     żeby FAB-y nie lądowały na przyciskach „Kopiuj/Wklej" — patrz liftFabsAboveActions. */
-  bottom: calc(16px + var(--cell-actions-h, 0px));
+  bottom: 16px;
   display: inline-flex;
   align-items: center;
   height: 44px;
@@ -832,14 +830,16 @@ body.splashing {
 
 /* Przycisk „Odznacz" (dotykowy zamiennik Esc, gdy aktywne zaznaczenie/fokus).
    Stoi nad przyciskiem „Do góry", by oba mogły być widoczne naraz. */
-.clear-sel-fab { bottom: calc(72px + var(--cell-actions-h, 0px)); }
+.clear-sel-fab { bottom: 72px; }
 
 /* ── Sheet picker FAB (mobile) ────────────────────────── */
 .sheet-picker-fab {
   display: none; /* pokazywany tylko na pointer:coarse przez JS */
   position: absolute;
   left: 12px;
-  bottom: 16px;
+  /* Pasek działań stoi w tym samym rogu — `--cell-actions-h` (z JS) odsuwa picker w górę,
+     gdy pasek jest widoczny, i wraca do zera, gdy go nie ma. */
+  bottom: calc(16px + var(--cell-actions-h, 0px));
   align-items: center;
   gap: 6px;
   height: 36px;
@@ -3898,14 +3898,29 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
    pełne 44 px wysokości (cel dla palca) i CZYTELNE słowa zamiast ikon —
    „Kopiuj" jest jednoznaczne, ikona schowka już nie. */
 .cell-actions {
+  /* NAKŁADKA, nie element przepływu. Wcześniej pasek stał pod tabelą i — nawet zwinięty —
+     zabierał wysokość, czyli wiersz danych. Na telefonie to za drogo: teraz unosi się nad
+     dolnym rogiem tabeli, domyślnie jako sama pigułka „Akcje", i nie kosztuje ANI JEDNEGO
+     piksela układu. Rozwinięty przykrywa na chwilę dolny wiersz — świadomie, bo to stan
+     chwilowy i user sam go wywołał. */
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 6;
+  /* Zapas z prawej = kolumna FAB-ów („Odznacz", „Do góry"), żeby pasek nigdy pod nie nie wszedł. */
+  max-width: calc(100% - 84px);
   display: flex;
   /* NOWRAP celowo: zawijanie na tym poziomie zrzucało przycisk zwijania do osobnego,
      trzeciego rzędu po lewej (flexbox zawija ZANIM zacznie ściskać). Zawijają się
      dopiero przyciski wewnątrz `.cell-actions-group`, a strzałka zostaje po prawej. */
   flex-wrap: nowrap;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  margin-top: 8px;
+  padding: 4px;
+  border-radius: var(--r-full);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  -webkit-backdrop-filter: none;   /* szkło na dotyku zabija klatki — patrz pass wydajności */
+  box-shadow: 0 4px 16px rgba(18, 30, 23, .14);
 }
 .cell-actions.hidden { display: none; }
 
@@ -3917,10 +3932,26 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
    to samo (pasek nie przeszkadza), a nie ma żadnego z tych stanów do zepsucia. */
 .cell-actions-group {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  /* JEDEN rząd z przewijaniem w poziomie zamiast zawijania do dwóch — sprawdzone na
+     iPhonie: pasek na dwa rzędy zjadał tyle ekranu, że przestawał być pomocą, a stawał
+     się przeszkodą. To ten sam wzorzec, co pasek chipów „Tryby auto" w oknie szukania. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
+  /* Wygaszenie prawej krawędzi = sygnał „jest tego więcej w bok". */
+  mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+}
+.cell-actions-group::-webkit-scrollbar { display: none; }
+/* Gdy wszystko się mieści, maska tylko przygaszałaby ostatni przycisk bez powodu. */
+.cell-actions-group:not(.has-overflow) {
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 .cell-actions-group.hidden { display: none; }
 
@@ -3933,10 +3964,8 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-height: 44px;
-  /* Rozwinięty pasek pokazuje samą strzałkę — bez tego cel dotykowy miał 34 px
-     szerokości (zmierzone), czyli poniżej progu wygodnego trafienia palcem. */
-  min-width: 44px;
+  min-height: 34px;
+  min-width: 38px;
   padding: 0 12px;
   border-radius: var(--r-sm);
   border: 1px solid var(--border);
@@ -3956,7 +3985,7 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
    Zwinięty: pełna etykieta „Akcje", bo poza nią nie zostaje żaden inny sygnał. */
 .cell-actions:not(.is-collapsed) .ca-toggle-label { display: none; }
 .cell-actions.is-collapsed .cell-actions-toggle {
-  min-height: 34px;
+  min-height: 30px;
   border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
   color: var(--accent);
 }
@@ -3977,22 +4006,25 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
 }
 
 .cell-action {
-  flex: 1 1 auto;
-  min-width: 92px;
-  min-height: 44px;
+  /* Rozmiar pigułki, nie przycisku formularza: 34 px wysokości zamiast 44 i tylko tyle
+     szerokości, ile potrzeba na słowo. Mateusz na iPhonie: „te przyciski są za duże".
+     Cel dotykowy zostaje wygodny, bo pasek ma nad i pod sobą własny margines. */
+  flex: 0 0 auto;
+  min-height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 0 14px;
-  border-radius: var(--r-sm);
-  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  gap: 5px;
+  padding: 0 11px;
+  border-radius: var(--r-full);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
   background: var(--surface);
   color: var(--accent);
   font-family: inherit;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 600;
   line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background var(--t), border-color var(--t), transform var(--t);
@@ -4010,15 +4042,10 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   opacity: 0.85;
 }
 
-/* Bardzo wąskie telefony: cztery przyciski w jednym rzędzie robią się nieczytelne,
-   więc zawijają się do dwóch rzędów po dwa (flex-wrap + min-width wyżej). */
-@media (max-width: 360px) {
-  .cell-action {
-    min-width: 0;
-    flex-basis: calc(50% - 4px);
-    font-size: 13px;
-    padding: 0 8px;
-  }
+/* Dotyk: pigułki zostają niskie, ale dostają więcej powietrza po bokach — palec trafia
+   w szerokość, a nie w wysokość (wysokość i tak ma zapas z marginesu paska). */
+@media (pointer: coarse) {
+  .cell-action { padding: 0 13px; min-height: 36px; }
 }
 
 .cell-stats-bar {
@@ -4163,6 +4190,17 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   padding: calc(4px * var(--table-zoom)) calc(6px * var(--table-zoom));
   font-size: calc(12.5px * var(--table-zoom));
   font-family: inherit;
+  /* KLUCZOWE NA TELEFONIE (zweryfikowane w symulatorze iPhone 17, iOS): `user-select:none`
+     i `-webkit-touch-callout:none` z komórek siatki DZIEDZICZĄ SIĘ do tego inputa, przez co
+     przytrzymanie palcem w otwartym edytorze pokazywało uchwyty zaznaczenia, ale NIE
+     pokazywało systemowego menu „Zaznacz / Wklej". Czyli jedyne miejsce, w którym natywny
+     schowek iOS ma prawo działać (pole tekstowe), było wyłączone razem z siatką.
+     Tu przywracamy je punktowo — siatka zostaje bez zaznaczania (to ona psuła przewijanie
+     palcem, patrz @media (pointer: coarse) przy #tableWrap). Efekt: przy otwartej
+     klawiaturze wklejanie robi się tak, jak wszędzie na telefonie. */
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
 }
 
 /* zaznaczony wiersz - też dajemy transition, żeby tło zmieniało się spójnie z komórką */
@@ -4850,6 +4888,24 @@ html.low-power .loading-overlay.is-file {
   z-index: 300;
   pointer-events: none;
   max-width: 320px;
+}
+
+/* TELEFON: toast na DOLE jest niewidoczny — dolny pasek Safari (i pasek gestu na
+   Androidzie) leży dokładnie tam, gdzie `bottom: 20px`. Zmierzone na symulatorze
+   iPhone'a: po „Kopiuj" nie pojawiało się ŻADNE potwierdzenie, więc przycisk sprawiał
+   wrażenie martwego, choć działał. Na wąskich, dotykowych ekranach przenosimy toasty
+   pod górną krawędź — tak samo, jak robi to już tryb spisywania. */
+@media (max-width: 768px) and (pointer: coarse) {
+  .toast-container {
+    bottom: auto;
+    top: max(12px, calc(env(safe-area-inset-top) + 8px));
+    left: 12px;
+    right: 12px;
+    max-width: none;
+    flex-direction: column;
+    align-items: center;
+  }
+  .toast { width: fit-content; max-width: 100%; }
 }
 
 .toast {

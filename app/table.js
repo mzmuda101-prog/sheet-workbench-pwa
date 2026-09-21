@@ -799,8 +799,14 @@ const cellActionsCoarseMQ = typeof matchMedia === "function" ? matchMedia("(poin
 // Stan zwinięcia jest preferencją URZĄDZENIA, nie pliku — kto raz zwinie pasek, ma go
 // zwinięty do odwołania. Osobny klucz, żeby nie mieszać z ustawieniami widoku.
 const CELL_ACTIONS_COLLAPSED_KEY = "excel-workbench-cell-actions-collapsed";
+// DOMYŚLNIE ZWINIĘTY. Na telefonie liczy się każdy piksel, a większość czasu i tak
+// nie kopiuje się komórek — więc startujemy od samej pigułki „Akcje" i to user decyduje,
+// kiedy chce więcej. Rozwinięcie też jest zapamiętywane.
 let cellActionsCollapsed = (() => {
-  try { return localStorage.getItem(CELL_ACTIONS_COLLAPSED_KEY) === "1"; } catch { return false; }
+  try {
+    const saved = localStorage.getItem(CELL_ACTIONS_COLLAPSED_KEY);
+    return saved === null ? true : saved === "1";
+  } catch { return true; }
 })();
 
 function setCellActionsCollapsed(next) {
@@ -860,37 +866,49 @@ function updateCellActionBar() {
   }
   // Wypełnianie pokazujemy DOPIERO, gdy jest co wypełniać — przycisk, który przy
   // jednej komórce tylko tłumaczy się toastem, uczy ignorować pasek.
+  // Etykiety wypełniania są SKRÓCONE („w dół" zamiast „Wypełnij w dół"), bo stoją obok
+  // strzałki ↓/→, która i tak mówi, o co chodzi — a pasek ma zmieścić się w jednym rzędzie.
+  // Pełne brzmienie zostaje w aria-label dla czytnika ekranu.
   if (cellActionFillDownEl) {
-    cellActionFillDownEl.querySelector(".ca-label").textContent = t("cellActionFillDown");
+    cellActionFillDownEl.querySelector(".ca-label").textContent = t("cellActionFillDownShort");
+    cellActionFillDownEl.setAttribute("aria-label", t("cellActionFillDown"));
     cellActionFillDownEl.classList.toggle("hidden", !(wide && rowCount > 1));
   }
   if (cellActionFillRightEl) {
-    cellActionFillRightEl.querySelector(".ca-label").textContent = t("cellActionFillRight");
+    cellActionFillRightEl.querySelector(".ca-label").textContent = t("cellActionFillRightShort");
+    cellActionFillRightEl.setAttribute("aria-label", t("cellActionFillRight"));
     cellActionFillRightEl.classList.toggle("hidden", !(wide && colCount > 1));
   }
   cellActionsEl.classList.remove("hidden");
+  if (cellActionsGroupEl) {
+    cellActionsGroupEl.classList.toggle(
+      "has-overflow",
+      cellActionsGroupEl.scrollWidth - cellActionsGroupEl.clientWidth > 4,
+    );
+  }
   liftFabsAboveActions();
 }
 
-// FAB-y („Odznacz", „Do góry") są kotwiczone do dołu sekcji tabeli, więc bez tego
-// pasek działań wchodzi im dokładnie pod przyciski (zmierzone na 375 px: ✕ lądowało
-// na „Wklej"). Podnosimy je o realną wysokość paska — realną, bo pasek ma raz jeden
-// rząd, a raz dwa (wąskie telefony, przyciski wypełniania).
+// Pasek jest nakładką w lewym dolnym rogu tabeli — dokładnie tam, gdzie stoi FAB wyboru
+// arkusza. Odsuwamy więc TYLKO jego, o realną wysokość paska (prawa kolumna FAB-ów ma
+// własny róg i zapas `max-width` po stronie CSS).
 function liftFabsAboveActions() {
   if (!cellActionsEl) return;
   const host = cellActionsEl.parentElement;
   if (!host) return;
   const visible = !cellActionsEl.classList.contains("hidden");
-  // Mierzymy od DOŁU sekcji do GÓRY paska, czyli razem z paskiem statystyk pod spodem —
-  // inaczej „Do góry" (pokazuje się dopiero po przewinięciu tabeli) nadal wchodziłby
-  // na „Kopiuj/Wklej". Gdy paska nie ma, wracamy do zera i FAB-y stoją jak dotąd.
-  let h = 0;
-  if (visible) {
-    const hostRect = host.getBoundingClientRect();
-    const barRect = cellActionsEl.getBoundingClientRect();
-    h = Math.max(0, Math.round(hostRect.bottom - barRect.top) + 8);
-  }
+  const h = visible ? cellActionsEl.offsetHeight + 8 : 0;
   host.style.setProperty("--cell-actions-h", `${h}px`);
+
+  // Pasek jest pozycjonowany względem SEKCJI, ale ma siedzieć w dolnym rogu SIATKI.
+  // Bez tej korekty lądował na pasku statystyk („Σ Długość …" — widać było na iPhonie).
+  // Liczymy odstęp od dołu sekcji do dołu okna tabeli, czyli wysokość wszystkiego,
+  // co jest pod siatką (pasek przewijania + statystyki + zakładki arkuszy).
+  if (!visible || !tableWrapEl) return;
+  const hostRect = host.getBoundingClientRect();
+  const wrapRect = tableWrapEl.getBoundingClientRect();
+  const bottom = Math.max(8, Math.round(hostRect.bottom - wrapRect.bottom) + 10);
+  cellActionsEl.style.bottom = `${bottom}px`;
 }
 
 if (cellActionsToggleEl) {

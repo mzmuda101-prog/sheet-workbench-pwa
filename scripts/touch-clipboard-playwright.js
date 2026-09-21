@@ -134,12 +134,28 @@ async function run() {
   // ── 1. Pasek na dotyku ───────────────────────────────────────────────────
   const beforeFocus = await barState(page);
   await focusCell(page, 0, 0);
+  // Pasek startuje ZWINIĘTY (na telefonie miejsce jest najdroższym zasobem) — rozwijamy go,
+  // żeby sprawdzić przyciski, a osobna sekcja niżej pilnuje samego zwijania.
+  const collapsedByDefault = await page.evaluate(() =>
+    document.getElementById("cellActions").classList.contains("is-collapsed"));
+  await page.click("#cellActionsToggle");
+  await sleep(200);
   const oneCell = await barState(page);
+  report.collapsedByDefault = collapsedByDefault;
+  ok("pasek startuje zwiniety", collapsedByDefault, collapsedByDefault);
   report.bar = { beforeFocus, oneCell };
   ok("bez zaznaczenia paska nie ma", !beforeFocus.bar, beforeFocus);
   ok("po zaznaczeniu komorki pasek widoczny", oneCell.bar && oneCell.copy && oneCell.paste, oneCell);
   ok("przy jednej komorce bez przyciskow wypelniania", !oneCell.fillDown && !oneCell.fillRight, oneCell);
   ok("etykiety sa slowami, nie ikonami", oneCell.labels.join("|").includes("Kopiuj"), oneCell.labels);
+
+  // Pasek NIE MOŻE zabierać wysokosci tabeli — jest nakladka, nie elementem przeplywu.
+  const overlay = await page.evaluate(() => {
+    const el = document.getElementById("cellActions");
+    return { position: getComputedStyle(el).position, inFlow: el.offsetParent !== null };
+  });
+  report.overlay = overlay;
+  ok("pasek jest nakladka (nie zabiera miejsca)", overlay.position === "absolute", overlay);
 
   // ── 1b. Zwijanie paska ───────────────────────────────────────────────────
   // Pasek ma dawać się schować (i pamiętać tę decyzję), bo na telefonie każdy
@@ -157,7 +173,10 @@ async function run() {
     aria: document.getElementById("cellActionsToggle").getAttribute("aria-expanded"),
   }));
   report.collapse = { expandedH, collapsed };
-  ok("zwiniety pasek jest wyraznie nizszy", collapsed.h < expandedH - 20, report.collapse);
+  // Pasek ma byc JEDNYM rzedem niskich pigulek (na iPhonie dwa rzedy przyciskow po 44 px
+  // zjadaly tyle ekranu, ze przestawaly pomagac). Zwiniety moze byc juz tylko nizszy.
+  ok("rozwiniety pasek miesci sie w jednym rzedzie", expandedH <= 52, report.collapse);
+  ok("zwiniety pasek nie jest wyzszy niz rozwiniety", collapsed.h <= expandedH, report.collapse);
   ok("zwiniety pasek chowa przyciski", collapsed.groupHidden, collapsed);
   ok("zwiniecie zapisuje sie na urzadzeniu", collapsed.saved === "1", collapsed);
   ok("zwiniety pasek sygnalizuje dzialania dla zakresu", collapsed.dot, collapsed);
@@ -209,7 +228,9 @@ async function run() {
   const untouched = await cellText(page, 4, 2);
   ok("wypelnienie nie ruszylo innej kolumny", untouched === source, { untouched, source });
 
-  // ── 5. Pasek chowa się na czas edycji ────────────────────────────────────
+  // ── 5. Pasek chowa się na czas edycji + JEDNORAZOWA podpowiedź o menu systemowym ──
+  // Przy klawiaturze paska nie ma (nie ma na niego miejsca), więc user musi wiedzieć,
+  // że kopiowanie/wklejanie robi się wtedy systemowym menu — ale tylko RAZ.
   await focusCell(page, 1, 2);
   await page.evaluate(() => {
     const key = getRowSelectionKey(currentDisplayModel.rows[1]);
@@ -218,8 +239,23 @@ async function run() {
   });
   await sleep(250);
   const whileEditing = await barState(page);
-  report.editing = whileEditing;
-  ok("w trakcie edycji paska nie ma", !whileEditing.bar, whileEditing);
+  report.editing = { bar: whileEditing };
+  ok("w trakcie edycji paska pod tabela nie ma", !whileEditing.bar, whileEditing);
+  // W otwartym polu tekstowym kopiowanie/wklejanie robi MENU SYSTEMOWE — nie dublujemy
+  // go własnymi przyciskami (zasłaniałyby komórki). Pilnujemy więc, że ich tam NIE MA
+  // i że pole nadal pozwala na natywne zaznaczanie (to ono daje dostęp do menu).
+  const nativeEditing = await page.evaluate(() => {
+    const el = document.querySelector("input.cell-editor");
+    const cs = el ? getComputedStyle(el) : null;
+    return {
+      wlasnyPasek: !!document.querySelector(".editor-actions"),
+      userSelect: cs ? (cs.webkitUserSelect || cs.userSelect) : null,
+      callout: cs ? cs.webkitTouchCallout || "" : null,
+    };
+  });
+  report.nativeEditing = nativeEditing;
+  ok("w edytorze nie ma wlasnych przyciskow kopiuj/wklej", !nativeEditing.wlasnyPasek, nativeEditing);
+  ok("pole edycji pozwala na natywne zaznaczanie", nativeEditing.userSelect === "text", nativeEditing);
 
   // ── 6. Podpowiedzi z kolumny (kolumna „Rejon" jest słownikowa) ───────────
   const suggest = await page.evaluate(() => {

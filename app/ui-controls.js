@@ -3706,7 +3706,12 @@ function openCellEditor(td, options = {}) {
   td.classList.add("cell-editing");
   td.appendChild(input);
   activeCellEditor = { td, input };
-  updateCellActionBar();   // pasek działań chowa się na czas edycji (miejsce dla klawiatury)
+  // Pasek działań chowa się na czas edycji — i nic go nie zastępuje. W OTWARTYM POLU
+  // TEKSTOWYM działa systemowe menu (iOS: tap w zaznaczony tekst → „Wytnij | Kopiuj |
+  // Wklej"; Android tak samo), więc własne przyciski byłyby dokładnie tym samym, tylko
+  // zasłaniającym komórki. Wyłączone jest wyłącznie zaznaczanie w SIATCE — tam menu
+  // systemowego nie ma i tam pracuje pasek „Akcje" pod tabelą.
+  updateCellActionBar();
 
   // Własny popup podpowiedzi (poniżej). Tapnięcie pozycji NIE odbiera focusu
   // inputowi → blur nie zamyka edytora; tap autouzupełnia i zatwierdza.
