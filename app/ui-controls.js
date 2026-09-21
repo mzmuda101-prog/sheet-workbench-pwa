@@ -3268,9 +3268,22 @@ const SUGGEST_MIN_HEIGHT = 96;
 // odbiera focusu (pointerdown/touch z flagą „interacting"), więc swobodne
 // wpisywanie w trybie podpowiadaj/ostrzegaj jest płynne; tap autouzupełnia.
 // Rozróżnia tap od przewijania (jak siatka), żeby scroll listy nie wybierał.
-function createCellSuggestions(input, values, onPick) {
+// `options.variant`:
+//   "list" (domyślnie) — słownik Data Validation z pliku: lista jest OBOWIĄZKIEM, więc
+//        pokazuje się od razu po otwarciu edytora, pokazuje całość i potwierdza dokładne
+//        trafienie zielonym ✓ („wpisane zgodnie ze słownikiem").
+//   "soft" — podpowiedzi z samej kolumny: to tylko pomoc, nie reguła. Dlatego pojawia się
+//        DOPIERO po wpisaniu znaku, pokazuje wyłącznie trafienia (żadnego „cała lista, gdy
+//        nic nie pasuje"), nie ma zielonego ✓ (nie ma czego potwierdzać — każda wartość jest
+//        dozwolona) i jest wizualnie cichsza. Chodzi o to, żeby ani przez chwilę nie wyglądała
+//        jak walidacja, bo walidacja niesie zupełnie inną informację.
+function createCellSuggestions(input, values, onPick, options = {}) {
+  const soft = options.variant === "soft";
+  const minChars = soft ? Math.max(1, options.minChars || 1) : 0;
+  const maxItems = soft ? 6 : 50;
+  const maxHeight = soft ? 168 : SUGGEST_MAX_HEIGHT;
   const box = document.createElement("div");
-  box.className = "cell-suggest hidden";
+  box.className = soft ? "cell-suggest cell-suggest-soft hidden" : "cell-suggest hidden";
   box.setAttribute("role", "listbox");
   document.body.appendChild(box);
 
@@ -3318,7 +3331,7 @@ function createCellSuggestions(input, values, onPick) {
     const spaceBelow = viewBottom - r.bottom - margin;
     const spaceAbove = r.top - viewTop - margin;
     const room = Math.max(spaceBelow, spaceAbove);
-    box.style.maxHeight = `${Math.round(Math.max(SUGGEST_MIN_HEIGHT, Math.min(SUGGEST_MAX_HEIGHT, room)))}px`;
+    box.style.maxHeight = `${Math.round(Math.max(SUGGEST_MIN_HEIGHT, Math.min(maxHeight, room)))}px`;
     const boxHeight = box.offsetHeight || 0;
     let top;
     if (spaceBelow >= boxHeight) {
@@ -3394,6 +3407,16 @@ function createCellSuggestions(input, values, onPick) {
   const render = () => {
     const typed = input.value.trim();
     const q = typed.toLowerCase();
+    // Tryb „soft": póki nic nie wpisano, nie ma czego podpowiadać — pusty edytor ma
+    // zostać pustym edytorem, a nie listą zasłaniającą pół ekranu telefonu.
+    if (soft && q.length < minChars) {
+      box.replaceChildren();
+      currentValues = [];
+      highlightedIndex = -1;
+      input.removeAttribute("aria-activedescendant");
+      box.classList.add("hidden");
+      return;
+    }
     const starts = [], has = [];
     let exactValue = null;
     let exactCaseMatch = false;
@@ -3410,9 +3433,18 @@ function createCellSuggestions(input, values, onPick) {
     let rest = starts.concat(has);
     // Brak JAKIEGOKOLWIEK dopasowania (np. wartość SPOZA listy lub literówka),
     // a nie jest to dokładne trafienie → pokaż CAŁĄ listę (wtedy podpowiedź jest
-    // najpotrzebniejsza: user widzi z czego wybierać).
-    if (!rest.length && exactValue == null) rest = values.slice();
-    rest = rest.slice(0, exactValue != null ? 49 : 50);
+    // najpotrzebniejsza: user widzi z czego wybierać). W trybie „soft" odwrotnie:
+    // nie ma trafień = nie ma podpowiedzi. Wyrzucanie całej kolumny pod palec, gdy
+    // ktoś wpisuje nową wartość, to dokładnie ten szum, którego ma nie być.
+    if (!rest.length && exactValue == null && !soft) rest = values.slice();
+    if (soft) {
+      // Dokładnie wpisana wartość nie jest tu niczym do potwierdzenia (to nie słownik),
+      // więc zamiast zielonego kafelka po prostu nie ma jej na liście.
+      exactValue = null;
+      rest = rest.slice(0, maxItems);
+    } else {
+      rest = rest.slice(0, exactValue != null ? 49 : 50);
+    }
 
     box.replaceChildren();
     currentValues = [];
@@ -3685,7 +3717,12 @@ function openCellEditor(td, options = {}) {
     ? dvRule.values
     : buildColumnSuggestions(colIndex0);
   const dvSuggest = suggestValues.length
-    ? createCellSuggestions(input, suggestValues, (v) => { input.value = v; commit(null); })
+    ? createCellSuggestions(
+      input,
+      suggestValues,
+      (v) => { input.value = v; commit(null); },
+      dvRule && dvRule.values.length ? {} : { variant: "soft", minChars: 1 },
+    )
     : null;
   if (dvSuggest) input.classList.add("cell-editor-has-list");
 

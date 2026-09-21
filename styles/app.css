@@ -3664,6 +3664,51 @@ input.cell-editor.input-shake {
   .cell-suggest { font-size: 15px; }
 }
 
+/* ── Podpowiedzi „soft" (wartości z kolumny, NIE walidacja z pliku) ──
+   Muszą być rozpoznawalne na pierwszy rzut oka jako COŚ INNEGO niż lista walidacji:
+   walidacja to reguła z arkusza (akcentowana ramka, zielone ✓ przy trafieniu), a to
+   jest tylko pomoc przy pisaniu. Stąd: cieńsza neutralna ramka zamiast akcentu, mniejszy
+   tekst, ciaśniejsze pozycje, delikatniejszy cień — i nigdy zielonego potwierdzenia.
+   Pojawia się dopiero od pierwszego wpisanego znaku (logika w createCellSuggestions). */
+.cell-suggest-soft {
+  border: 1px solid var(--border);
+  /* Pełne krycie: przy 97% prześwitywały wiersze tabeli pod spodem i lista wyglądała
+     jak artefakt renderowania (widoczne na screenshocie z telefonu). */
+  background: var(--surface);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .12);
+  border-radius: 7px;
+  padding: 3px;
+  font-size: 12px;
+}
+
+.cell-suggest-soft .cell-suggest-item {
+  padding: 5px 9px;
+  border-radius: 5px;
+  color: var(--muted-strong);
+}
+
+/* Część jeszcze niewpisana: szarość zamiast zieleni — zieleń w tej appce znaczy
+   „zaznaczone / poprawne", a tu nie ma czego potwierdzać. */
+.cell-suggest-soft .cell-suggest-rest { color: var(--muted); opacity: .8; }
+.cell-suggest-soft .cell-suggest-typed { color: var(--ink); font-weight: 600; }
+
+.cell-suggest-soft .cell-suggest-item:hover {
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  color: var(--ink);
+}
+
+/* Dotyk: pozycja zostaje wygodna do trafienia palcem (36 px), ale sama lista jest
+   krótsza i lżejsza niż słownik walidacji — nie ma zjadać ekranu nad klawiaturą. */
+@media (pointer: coarse) {
+  .cell-suggest-soft { font-size: 13px; }
+  .cell-suggest-soft .cell-suggest-item {
+    padding: 8px 11px;
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+  }
+}
+
 /* ######################################################################################################################### */
 /* Zaznaczony wiersz */
 /* ######################################################################################################################### */
@@ -3854,11 +3899,82 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
    „Kopiuj" jest jednoznaczne, ikona schowka już nie. */
 .cell-actions {
   display: flex;
-  flex-wrap: wrap;
+  /* NOWRAP celowo: zawijanie na tym poziomie zrzucało przycisk zwijania do osobnego,
+     trzeciego rzędu po lewej (flexbox zawija ZANIM zacznie ściskać). Zawijają się
+     dopiero przyciski wewnątrz `.cell-actions-group`, a strzałka zostaje po prawej. */
+  flex-wrap: nowrap;
+  align-items: flex-start;
   gap: 8px;
   margin-top: 8px;
 }
 .cell-actions.hidden { display: none; }
+
+/* ── Zwijanie paska działań ──
+   Zwinięty pasek to jedna mała pigułka po prawej (~34 px zamiast ~96 px z przyciskami).
+   Świadomie NIE robimy z tego pływającego, przeciąganego okienka: na telefonie taki
+   panel ląduje pod klawiaturą albo poza ekranem, zasłania komórki i trzeba pilnować
+   jego pozycji przy obrocie, zmianie wysokości widoku i przewijaniu. Zwijanie daje
+   to samo (pasek nie przeszkadza), a nie ma żadnego z tych stanów do zepsucia. */
+.cell-actions-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cell-actions-group.hidden { display: none; }
+
+.cell-actions.is-collapsed { justify-content: flex-end; }
+
+.cell-actions-toggle {
+  flex: 0 0 auto;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 44px;
+  /* Rozwinięty pasek pokazuje samą strzałkę — bez tego cel dotykowy miał 34 px
+     szerokości (zmierzone), czyli poniżej progu wygodnego trafienia palcem. */
+  min-width: 44px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted-strong);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--t), border-color var(--t), color var(--t);
+}
+.cell-actions-toggle:active { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+
+/* Rozwinięty pasek: sama strzałka, bez słowa — przyciski obok same mówią, co to jest.
+   Zwinięty: pełna etykieta „Akcje", bo poza nią nie zostaje żaden inny sygnał. */
+.cell-actions:not(.is-collapsed) .ca-toggle-label { display: none; }
+.cell-actions.is-collapsed .cell-actions-toggle {
+  min-height: 34px;
+  border-color: color-mix(in srgb, var(--accent) 22%, var(--border));
+  color: var(--accent);
+}
+
+.ca-chevron { font-size: 13px; line-height: 1; }
+
+/* Kropka = „dla tego zaznaczenia jest tu coś więcej niż Kopiuj/Wklej" (wypełnianie).
+   Bursztyn, ta sama konwencja co inne sygnały „zwróć uwagę", nie zieleń zaznaczenia. */
+.cell-actions-toggle.has-more::after {
+  content: "";
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning);
+}
 
 .cell-action {
   flex: 1 1 auto;

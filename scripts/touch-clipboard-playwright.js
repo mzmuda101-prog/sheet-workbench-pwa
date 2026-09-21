@@ -141,6 +141,35 @@ async function run() {
   ok("przy jednej komorce bez przyciskow wypelniania", !oneCell.fillDown && !oneCell.fillRight, oneCell);
   ok("etykiety sa slowami, nie ikonami", oneCell.labels.join("|").includes("Kopiuj"), oneCell.labels);
 
+  // ── 1b. Zwijanie paska ───────────────────────────────────────────────────
+  // Pasek ma dawać się schować (i pamiętać tę decyzję), bo na telefonie każdy
+  // zajęty rząd to jeden wiersz tabeli mniej. Zwinięty pokazuje kropkę, gdy dla
+  // zaznaczonego zakresu są jeszcze inne działania — inaczej nikt by ich nie znalazł.
+  await selectRange(page, 0, 3, 1, 1);
+  const expandedH = await page.evaluate(() => Math.round(document.getElementById("cellActions").getBoundingClientRect().height));
+  await page.click("#cellActionsToggle");
+  await sleep(250);
+  const collapsed = await page.evaluate(() => ({
+    h: Math.round(document.getElementById("cellActions").getBoundingClientRect().height),
+    groupHidden: document.getElementById("cellActionsGroup").classList.contains("hidden"),
+    dot: document.getElementById("cellActionsToggle").classList.contains("has-more"),
+    saved: localStorage.getItem("excel-workbench-cell-actions-collapsed"),
+    aria: document.getElementById("cellActionsToggle").getAttribute("aria-expanded"),
+  }));
+  report.collapse = { expandedH, collapsed };
+  ok("zwiniety pasek jest wyraznie nizszy", collapsed.h < expandedH - 20, report.collapse);
+  ok("zwiniety pasek chowa przyciski", collapsed.groupHidden, collapsed);
+  ok("zwiniecie zapisuje sie na urzadzeniu", collapsed.saved === "1", collapsed);
+  ok("zwiniety pasek sygnalizuje dzialania dla zakresu", collapsed.dot, collapsed);
+  ok("stan zwiniecia jest w aria-expanded", collapsed.aria === "false", collapsed);
+  await page.click("#cellActionsToggle");
+  await sleep(250);
+  const reexpanded = await page.evaluate(() => ({
+    groupHidden: document.getElementById("cellActionsGroup").classList.contains("hidden"),
+    saved: localStorage.getItem("excel-workbench-cell-actions-collapsed"),
+  }));
+  ok("rozwiniecie wraca do przyciskow", !reexpanded.groupHidden && reexpanded.saved === "0", reexpanded);
+
   // ── 2. Kopiuj → Wklej mimo odmowy schowka systemowego ────────────────────
   await focusCell(page, 0, 0);                       // „2026-09-01"
   await page.click("#cellActionCopy");
@@ -212,23 +241,35 @@ async function run() {
     openCellEditor(tr.querySelector('td[data-col-index="1"]'));
   });
   await sleep(250);
-  // Pole startuje z wartością komórki, a lista filtruje po wpisanym tekście — czyścimy je,
-  // żeby zobaczyć cały słownik kolumny (tak samo wygląda to przy pustej komórce).
-  await page.evaluate(() => {
+  // Podpowiedzi z kolumny są w trybie „soft": mają się pokazać DOPIERO od pisania
+  // (i wyglądać inaczej niż lista walidacji, która jest regułą z pliku, nie pomocą).
+  const softBeforeTyping = await page.evaluate(() => {
     const el = document.querySelector("input.cell-editor");
     if (el) { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); }
+    const box = document.querySelector(".cell-suggest");
+    return { hidden: !box || box.classList.contains("hidden") };
+  });
+  await sleep(150);
+  ok("pusty edytor NIE wyrzuca listy podpowiedzi", softBeforeTyping.hidden, softBeforeTyping);
+  await page.evaluate(() => {
+    const el = document.querySelector("input.cell-editor");
+    if (el) { el.value = "P"; el.dispatchEvent(new Event("input", { bubbles: true })); }
   });
   await sleep(200);
   const suggestRejon = await page.evaluate(() => {
     const box = document.querySelector(".cell-suggest");
     return {
       hidden: !box || box.classList.contains("hidden"),
+      soft: !!box && box.classList.contains("cell-suggest-soft"),
+      green: !!box && !!box.querySelector(".cell-suggest-item-exact"),
       items: box ? Array.from(box.querySelectorAll(".cell-suggest-item")).map((n) => n.textContent) : [],
     };
   });
   report.suggestRejon = suggestRejon;
   ok("kolumna slownikowa podpowiada wartosci", !suggestRejon.hidden && suggestRejon.items.length > 0, suggestRejon);
   ok("podpowiedzi to wartosci z TEJ kolumny", suggestRejon.items.join("|").includes("Północ"), suggestRejon.items);
+  ok("podpowiedzi kolumnowe maja WLASNY, cichszy wyglad", suggestRejon.soft, suggestRejon);
+  ok("brak zielonego ✓ (to nie walidacja, nie ma czego potwierdzac)", !suggestRejon.green, suggestRejon);
   await page.evaluate(() => document.querySelector("input.cell-editor")?.blur());
   await sleep(250);
 
@@ -256,7 +297,7 @@ async function run() {
   await openEditor(1, 2);
   await page.evaluate(() => {
     const el = document.querySelector("input.cell-editor");
-    if (el) { el.value = ""; el.dispatchEvent(new Event("input", { bubbles: true })); }
+    if (el) { el.value = "PIL"; el.dispatchEvent(new Event("input", { bubbles: true })); }
   });
   await sleep(200);
   const recent = await page.evaluate(() => {

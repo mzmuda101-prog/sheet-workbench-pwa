@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260921-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260921-02" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1251,10 +1251,17 @@
                  więc te akcje muszą mieć własne, widoczne przyciski. Na myszy zostają
                  skróty Ctrl/⌘+C/V i pasek się nie pokazuje. -->
             <div class="cell-actions hidden" id="cellActions" role="toolbar" aria-label="Działania na zaznaczeniu">
-              <button class="cell-action" id="cellActionCopy" type="button"><span class="ca-label">Kopiuj</span></button>
-              <button class="cell-action" id="cellActionPaste" type="button"><span class="ca-label">Wklej</span></button>
-              <button class="cell-action" id="cellActionFillDown" type="button"><span class="ca-ico" aria-hidden="true">↓</span><span class="ca-label">Wypełnij w dół</span></button>
-              <button class="cell-action" id="cellActionFillRight" type="button"><span class="ca-ico" aria-hidden="true">→</span><span class="ca-label">Wypełnij w prawo</span></button>
+              <div class="cell-actions-group" id="cellActionsGroup">
+                <button class="cell-action" id="cellActionCopy" type="button"><span class="ca-label">Kopiuj</span></button>
+                <button class="cell-action" id="cellActionPaste" type="button"><span class="ca-label">Wklej</span></button>
+                <button class="cell-action" id="cellActionFillDown" type="button"><span class="ca-ico" aria-hidden="true">↓</span><span class="ca-label">Wypełnij w dół</span></button>
+                <button class="cell-action" id="cellActionFillRight" type="button"><span class="ca-ico" aria-hidden="true">→</span><span class="ca-label">Wypełnij w prawo</span></button>
+              </div>
+              <!-- Zwijanie: pasek ma pomagać, a nie zajmować ekran, gdy akurat nie jest
+                   potrzebny. Wybór zapamiętywany, więc kto go zwinie — ma zwinięty. -->
+              <button class="cell-actions-toggle" id="cellActionsToggle" type="button" aria-expanded="true" aria-controls="cellActionsGroup">
+                <span class="ca-toggle-label">Akcje</span><span class="ca-chevron" aria-hidden="true">⌄</span>
+              </button>
             </div>
             <div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div>
             <button class="sheet-picker-fab hidden" id="sheetPickerFab" type="button" aria-label="Przełącz arkusz" aria-haspopup="dialog">
@@ -1544,24 +1551,24 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260921-01"></script>
-    <script defer src="app/language.js?v=20260921-01"></script>
-    <script defer src="app/analysis.js?v=20260921-01"></script>
-    <script defer src="app/smart-filters.js?v=20260921-01"></script>
-    <script defer src="app/workbook.js?v=20260921-01"></script>
-    <script defer src="app/xlsx-patch.js?v=20260921-01"></script>
-    <script defer src="app/table.js?v=20260921-01"></script>
-    <script defer src="app/conditional-formatting.js?v=20260921-01"></script>
-    <script defer src="app/data-validation.js?v=20260921-01"></script>
-    <script defer src="app/derived-columns.js?v=20260921-01"></script>
-    <script defer src="app/formulas.js?v=20260921-01"></script>
-    <script defer src="app/edit-tools.js?v=20260921-01"></script>
-    <script defer src="app/ui-controls.js?v=20260921-01"></script>
-    <script defer src="app/transcribe.js?v=20260921-01"></script>
+    <script defer src="app/core.js?v=20260921-02"></script>
+    <script defer src="app/language.js?v=20260921-02"></script>
+    <script defer src="app/analysis.js?v=20260921-02"></script>
+    <script defer src="app/smart-filters.js?v=20260921-02"></script>
+    <script defer src="app/workbook.js?v=20260921-02"></script>
+    <script defer src="app/xlsx-patch.js?v=20260921-02"></script>
+    <script defer src="app/table.js?v=20260921-02"></script>
+    <script defer src="app/conditional-formatting.js?v=20260921-02"></script>
+    <script defer src="app/data-validation.js?v=20260921-02"></script>
+    <script defer src="app/derived-columns.js?v=20260921-02"></script>
+    <script defer src="app/formulas.js?v=20260921-02"></script>
+    <script defer src="app/edit-tools.js?v=20260921-02"></script>
+    <script defer src="app/ui-controls.js?v=20260921-02"></script>
+    <script defer src="app/transcribe.js?v=20260921-02"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260921-01"></script>
-    <script defer src="app/bootstrap.js?v=20260921-01"></script>
+    <script defer src="app/debug-loaders.js?v=20260921-02"></script>
+    <script defer src="app/bootstrap.js?v=20260921-02"></script>
   </body>
 </html>

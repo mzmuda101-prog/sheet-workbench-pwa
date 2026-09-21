@@ -787,12 +787,27 @@ function renderCellStatsChips(parts) {
 // nakładka. Dzięki temu nigdy nie zasłania komórek, nie bije się z klawiaturą ekranową
 // ani z FAB-ami, i zawsze jest w tym samym miejscu.
 const cellActionsEl = document.getElementById("cellActions");
+const cellActionsGroupEl = document.getElementById("cellActionsGroup");
+const cellActionsToggleEl = document.getElementById("cellActionsToggle");
 const cellActionCopyEl = document.getElementById("cellActionCopy");
 const cellActionPasteEl = document.getElementById("cellActionPaste");
 const cellActionFillDownEl = document.getElementById("cellActionFillDown");
 const cellActionFillRightEl = document.getElementById("cellActionFillRight");
 
 const cellActionsCoarseMQ = typeof matchMedia === "function" ? matchMedia("(pointer: coarse)") : null;
+
+// Stan zwinięcia jest preferencją URZĄDZENIA, nie pliku — kto raz zwinie pasek, ma go
+// zwinięty do odwołania. Osobny klucz, żeby nie mieszać z ustawieniami widoku.
+const CELL_ACTIONS_COLLAPSED_KEY = "excel-workbench-cell-actions-collapsed";
+let cellActionsCollapsed = (() => {
+  try { return localStorage.getItem(CELL_ACTIONS_COLLAPSED_KEY) === "1"; } catch { return false; }
+})();
+
+function setCellActionsCollapsed(next) {
+  cellActionsCollapsed = !!next;
+  try { localStorage.setItem(CELL_ACTIONS_COLLAPSED_KEY, cellActionsCollapsed ? "1" : "0"); } catch { /* prywatne okno */ }
+  updateCellActionBar();
+}
 
 function updateCellActionBar() {
   if (!cellActionsEl) return;
@@ -816,6 +831,21 @@ function updateCellActionBar() {
   const rect = getSelectionRectangle();
   const rowCount = rect ? rect.rowCount : 1;
   const colCount = rect ? rect.colCount : 1;
+  const hasRange = rowCount > 1 || colCount > 1;
+
+  cellActionsEl.classList.toggle("is-collapsed", cellActionsCollapsed);
+  if (cellActionsGroupEl) cellActionsGroupEl.classList.toggle("hidden", cellActionsCollapsed);
+  if (cellActionsToggleEl) {
+    cellActionsToggleEl.setAttribute("aria-expanded", cellActionsCollapsed ? "false" : "true");
+    cellActionsToggleEl.setAttribute("aria-label", t(cellActionsCollapsed ? "cellActionsExpand" : "cellActionsCollapse"));
+    const label = cellActionsToggleEl.querySelector(".ca-toggle-label");
+    if (label) label.textContent = t("cellActionsLabel");
+    const chev = cellActionsToggleEl.querySelector(".ca-chevron");
+    if (chev) chev.textContent = cellActionsCollapsed ? "⌃" : "⌄";
+    // Kropka przy zwiniętym pasku: sygnał „jest tu coś więcej dla tego zaznaczenia".
+    // Bez niej zwinięty pasek ukrywałby wypełnianie tak skutecznie, że nikt by go nie znalazł.
+    cellActionsToggleEl.classList.toggle("has-more", cellActionsCollapsed && wide && hasRange);
+  }
 
   // Etykiety ustawiamy tutaj (a nie w applyStaticTranslations), bo pasek i tak
   // przerysowuje się przy każdej zmianie zaznaczenia — i przy zmianie języka,
@@ -863,6 +893,9 @@ function liftFabsAboveActions() {
   host.style.setProperty("--cell-actions-h", `${h}px`);
 }
 
+if (cellActionsToggleEl) {
+  cellActionsToggleEl.addEventListener("click", () => setCellActionsCollapsed(!cellActionsCollapsed));
+}
 if (cellActionCopyEl) cellActionCopyEl.addEventListener("click", () => { copySelectionToClipboard(); });
 if (cellActionPasteEl) cellActionPasteEl.addEventListener("click", () => { pasteClipboardToSelection(); });
 if (cellActionFillDownEl) cellActionFillDownEl.addEventListener("click", () => fillSelection("down"));
