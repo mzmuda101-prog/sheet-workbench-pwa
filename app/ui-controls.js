@@ -3206,9 +3206,30 @@ tbodyEl.addEventListener("mousedown", (e) => {
 // Cache media-query (pointer: coarse), bo sprawdzamy je przy każdym tapnięciu.
 const cellTapCoarseMQ = typeof matchMedia === "function" ? matchMedia("(pointer: coarse)") : null;
 
+// BŁĄD ZGŁOSZONY Z IPHONE'A (2026-09-22): tapnięcie W EDYTOWANĄ komórkę zamykało edycję.
+// Przyczyna: pole edycji nie wypełnia całej komórki — wokół niego zostaje kilka pikseli
+// paddingu `td`. Tap w ten margines to dla przeglądarki kliknięcie w KOMÓRKĘ, nie w pole:
+// input traci focus → blur → commit → edytor się zamyka. A że systemowe menu („Kopiuj/
+// Wklej") wywołuje się właśnie tapnięciem w zaznaczony tekst, to raz się udawało, raz nie.
+// Umowa jest prosta i taka, jakiej użytkownik się spodziewa: zamyka DOPIERO tap POZA
+// edytowaną komórką. Stąd znacznik czasu ostatniego tapnięcia w jej obrębie — czytają go
+// i handler kliknięcia siatki, i blur (blur nie niesie informacji o tym, co go wywołało).
+let lastPointerInEditedCell = 0;
+document.addEventListener("pointerdown", (e) => {
+  if (!activeCellEditor || !activeCellEditor.td) return;
+  if (e.target === activeCellEditor.input) return;      // normalne wejście w pole
+  if (activeCellEditor.td.contains(e.target)) lastPointerInEditedCell = Date.now();
+}, true);
+
 tbodyEl.addEventListener("click", (e) => {
   const td = e.target.closest("td");
   if (!td || td.classList.contains("row-head")) return;
+  // Tap w edytowaną komórkę (także w jej margines) — zostajemy w edycji i oddajemy
+  // pole palcowi, zamiast traktować to jak kliknięcie w siatkę.
+  if (activeCellEditor && activeCellEditor.td === td) {
+    activeCellEditor.input.focus();
+    return;
+  }
   const tr = td.parentElement;
   const rowKey = tr?.dataset.rowKey || "";
   const colIndex0 = parseInt(td.dataset.colIndex || "", 10);
@@ -3974,6 +3995,16 @@ function openCellEditor(td, options = {}) {
     // input chwilowo traci focus) — w trakcie interakcji z popupem pomijamy commit.
     if (dvSuggest && dvSuggest.isInteracting()) return;
     if (emptyPaste && emptyPaste.isInteracting()) return;
+    // Tap w obrębie TEJ SAMEJ komórki (margines wokół pola) — to nie jest wyjście
+    // z edycji. Oddajemy focus polu; zapis nastąpi dopiero przy tapnięciu POZA nią.
+    if (Date.now() - lastPointerInEditedCell < 400) {
+      // Znacznik ZUŻYWAMY: chroni dokładnie jedno wyjście z pola, to wywołane tym tapnięciem.
+      // Bez tego kolejny blur w ciągu tych samych 400 ms (np. natychmiastowe tapnięcie
+      // POZA komórką) też zostałby uznany za „tap w komórkę" i zapis by nie nastąpił.
+      lastPointerInEditedCell = 0;
+      setTimeout(() => { if (activeCellEditor && activeCellEditor.input === input) input.focus(); }, 0);
+      return;
+    }
     commit(null);
   });
 

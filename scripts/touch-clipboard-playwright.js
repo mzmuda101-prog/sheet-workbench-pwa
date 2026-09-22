@@ -314,6 +314,49 @@ async function run() {
   await page.evaluate(() => document.querySelector("input.cell-editor")?.blur());
   await sleep(250);
 
+  // ── 5c. Tap W EDYTOWANĄ komórkę NIE zamyka edycji ────────────────────────
+  // Zgłoszenie z iPhone'a: „jak tapuję w tę komórkę, to mi się zamyka — a powinno się
+  // zamykać dopiero po tapnięciu POZA nią". Pole nie wypełnia całej komórki (padding td),
+  // więc tap w margines gubił focus i zatwierdzał. To psuło też systemowe menu, bo ono
+  // wywołuje się właśnie tapnięciem w zaznaczony tekst.
+  await page.evaluate(async () => {
+    const key = getRowSelectionKey(currentDisplayModel.rows[0]);
+    const tr = document.querySelector(`#dataTable tbody tr[data-row-key="${CSS.escape(key)}"]`);
+    openCellEditor(tr.querySelector('td[data-col-index="2"]'));
+    await new Promise((r) => setTimeout(r, 250));
+  });
+  const tapInsideCell = await page.evaluate(async () => {
+    const td = document.querySelector("td.cell-editing");
+    const r = td.getBoundingClientRect();
+    // celowo w MARGINES komórki, tuż przy jej krawędzi — czyli obok samego pola
+    const x = r.left + 3;
+    const y = r.top + 3;
+    // Celujemy w SAM `td` (margines wokół pola) — elementFromPoint w headless potrafi
+    // zwrócić input, a wtedy test badałby przypadek, który i tak zawsze działał.
+    const target = td;
+    target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "touch", clientX: x, clientY: y }));
+    document.querySelector("input.cell-editor").blur();
+    target.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: x, clientY: y }));
+    await new Promise((r2) => setTimeout(r2, 300));
+    return {
+      nadalEdytuje: !!document.querySelector("input.cell-editor"),
+      maFocus: document.activeElement === document.querySelector("input.cell-editor"),
+    };
+  });
+  report.tapInsideCell = tapInsideCell;
+  ok("tap w edytowana komorke nie zamyka edycji", tapInsideCell.nadalEdytuje, tapInsideCell);
+  ok("pole odzyskuje focus po takim tapnieciu", tapInsideCell.maFocus, tapInsideCell);
+
+  // …a tap POZA komórką nadal zatwierdza i zamyka (umowa bez zmian).
+  const tapOutside = await page.evaluate(async () => {
+    const input = document.querySelector("input.cell-editor");
+    if (input) input.blur();
+    await new Promise((r) => setTimeout(r, 300));
+    return { nadalEdytuje: !!document.querySelector("input.cell-editor") };
+  });
+  report.tapOutside = tapOutside;
+  ok("tap poza komorka nadal zamyka edycje", !tapOutside.nadalEdytuje, tapOutside);
+
   // ── 6. Podpowiedzi z kolumny (kolumna „Rejon" jest słownikowa) ───────────
   const suggest = await page.evaluate(() => {
     const box = document.querySelector(".cell-suggest");
