@@ -58,7 +58,9 @@ async function run() {
     const wrap = document.getElementById("tableWrap");
     wrap.scrollLeft = x;
     wrap.dispatchEvent(new Event("scroll"));
-    return new Promise((r) => requestAnimationFrame(() => setTimeout(r, 120)));
+    // 350 ms = po spoczynku: w trakcie przewijania prawdziwe komórki oddają miejsce
+    // „szybie" (app/freeze-pane.js, test: freeze-pane-playwright.js), a sticky wraca po ~180 ms.
+    return new Promise((r) => requestAnimationFrame(() => setTimeout(r, 350)));
   }, x);
 
   const off = await probe();

@@ -3266,7 +3266,8 @@ html.device-ipad .table-wrap {
   #tableWrap,
   #dataTable,
   #dataTable th,
-  #dataTable td {
+  #dataTable td,
+  .fz-clone td {
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
@@ -3367,6 +3368,36 @@ thead th {
 }
 .table-wrap.freeze-first-col thead th:first-child { left: 0; }
 .table-wrap.freeze-first-col thead th:nth-child(2) { left: var(--row-head-w, 44px); }
+
+/* „Szyba" zamrożonej kolumny NA CZAS PRZEWIJANIA (app/freeze-pane.js): zamiast ~400
+   przyklejonych komórek (każda = osobna warstwa kompozytora) jedna przyklejona warstwa
+   z kopią dwóch pierwszych kolumn. W spoczynku szyba i klasy `fz-off` znikają — wszystko jest jak wyżej.
+   Kopia leży wewnątrz .table-wrap.freeze-first-col, więc dostaje te same style
+   zamrożonych komórek (tło, cień odcinający) z tych samych selektorów. */
+/* Ta sama specyficzność co reguła sticky wyżej (0,3,2), a stoi później → wygrywa. */
+.table-wrap.freeze-first-col tbody td.fz-off,
+.table-wrap.freeze-first-col .fz-clone tbody td {
+  position: relative; /* bez sticky; relative zostawia z-index i blok dla znaczników ::after */
+  left: auto;         /* przy relative `left` z reguły sticky PRZESUWAŁOBY komórkę o szer. numerów */
+}
+/* Prawdziwe zamrożone komórki leżą w trybie szyby ZAWSZE pod nią albo poza ekranem
+   (widoczny fragment [scrollLeft, szer. kolumn] = dokładnie obszar szyby). Gdyby się
+   malowały, ich cień odcinający nakładałby się na cień kopii (ciemniejsza linia przy
+   scrollLeft = 0). opacity, NIE visibility: hidden — ukrycie zdjęłoby fokus z komórki,
+   po której ktoś właśnie chodzi strzałkami. */
+.table-wrap.freeze-first-col tbody td.fz-off { opacity: 0; }
+.fz-pane {
+  position: sticky;
+  left: 0;
+  z-index: 5;          /* nad zwykłymi komórkami (4), pod przyklejonym nagłówkiem (6+) */
+  height: 0;           /* nie zajmuje miejsca w przepływie — tabela zaczyna się jak zawsze */
+  pointer-events: none;
+}
+.fz-clone {
+  position: absolute;
+  left: 0;
+  table-layout: fixed;
+}
 
 thead tr.header-row th {
   background: var(--surface);
@@ -3477,7 +3508,7 @@ tbody td {
 }
 
 /* [EN] Optional text wrapping toggle (Widok → „Zawijaj tekst") */
-#dataTable.wrap-cells tbody td {
+:is(#dataTable, .fz-clone).wrap-cells tbody td {
   white-space: normal;
   word-break: break-word;
 }
@@ -3816,7 +3847,7 @@ tbody td.cell-selected.cell-selected {
    A w trybie WIERSZA nie rysujemy na pojedynczej komórce nic: wiersz ma być wierszem. */
 /* Tylko outline z globalnej warstwy awaryjnej — box-shadow zostawiamy nietknięty,
    bo niesie zwykłą krawędź wiersza; zgaszenie go robiło dziurę w linii. */
-.kbd-focus #dataTable tbody:not(.sel-cell) td:focus { outline: none; }
+.kbd-focus :is(#dataTable, .fz-clone) tbody:not(.sel-cell) td:focus { outline: none; }
 .kbd-focus #dataTable tbody.sel-cell td:focus:not(:focus-visible) {
   outline: none;
   box-shadow:
@@ -3839,7 +3870,7 @@ tbody td.cell-selected.cell-selected {
   outline: none;
 }
 
-#dataTable tbody td:focus { outline: none; }
+:is(#dataTable, .fz-clone) tbody td:focus { outline: none; }
 #dataTable tbody.sel-cell td:focus-visible {
   outline: none;
   /* Ta sama, złagodzona forma co zaznaczona komórka (patrz .cell-selected niżej):
