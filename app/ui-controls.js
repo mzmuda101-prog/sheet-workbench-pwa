@@ -2708,7 +2708,9 @@ function measureHeroHeight() {
   heroEl.style.maxHeight = "none";
   const h = Math.max(heroEl.getBoundingClientRect().height, heroEl.scrollHeight);
   heroEl.style.maxHeight = prevMax;
-  if (h) document.documentElement.style.setProperty("--hero-h", `${Math.ceil(h)}px`);
+  // Na SAMYM hero (nie na <html>): zmienna jest niedziedziczona (@property w app.css),
+  // a zapis na korzeniu kazał przeliczać style całego dokumentu.
+  if (h) heroEl.style.setProperty("--hero-h", `${Math.ceil(h)}px`);
 }
 
 // Płynność na telefonie: panel tabeli ma wysokość z CSS var liczonego po `rect.top`

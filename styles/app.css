@@ -16,6 +16,15 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
+/* Zmienne ustawiane z JS na PRZODKU, ale czytane tylko przez ten sam element.
+   Zwykła zmienna CSS DZIEDZICZY się, więc każda zmiana wysokości panelu tabeli
+   (co klatkę w trakcie zwijania nagłówka) kazała przeliczyć style WSZYSTKICH
+   potomków — przy 200 wierszach to ~4000 komórek. `inherits: false` ucina to do
+   jednego elementu. Składnia '*' = bez wartości początkowej, więc fallbacki w var()
+   działają jak dotąd (przeglądarka bez @property też zachowuje się jak wcześniej). */
+@property --table-panel-height { syntax: '*'; inherits: false; }
+@property --hero-h { syntax: '*'; inherits: false; }
+
 /* ===================================================
    DESIGN TOKENS
    =================================================== */
