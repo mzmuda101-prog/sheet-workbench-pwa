@@ -6339,3 +6339,51 @@ body.tr-active .toast-container {
 @media (pointer: coarse) {
   .cell-menu-item { min-height: 44px; font-size: 15px; }
 }
+
+/* ===================== Historia zapytań (qs-history.js) ===================== */
+.qs-hist-row { display: flex; align-items: center; gap: 2px; }
+.qs-hist-item { flex: 1; min-width: 0; align-items: center; }
+.qs-hist-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.qs-hist-flag {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  background: var(--accent-light);
+}
+.qs-hist-flag.is-neg { color: var(--warning); background: var(--warning-bg); }
+.qs-hist-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity var(--t), background var(--t), color var(--t);
+}
+.qs-hist-row:hover .qs-hist-btn, .qs-hist-btn:focus-visible, .qs-hist-pin.is-pinned { opacity: 1; }
+.qs-hist-btn:hover { background: var(--accent-light); color: var(--ink); }
+.qs-hist-pin.is-pinned { color: var(--warning); }
+.qs-hist-clear {
+  align-self: flex-end;
+  margin-top: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+@media (pointer: coarse) {
+  .qs-hist-btn { width: 38px; height: 38px; font-size: 17px; opacity: 1; }
+}

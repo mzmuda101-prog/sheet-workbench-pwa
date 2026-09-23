@@ -575,6 +575,7 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   const absoluteCol = currentStartCol + colIndex0;
   const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
   if (!parsed || parsed.value === null) {
+    if (typeof undoCaptureCell === "function") undoCaptureCell(rowIndex0, colIndex0); // stan „przed" do Cofnij
     delete sheet[cellRef];
     bumpSheetDataStamp(); // zawartość arkusza się zmieniła -> unieważnij cache'e
     recordPendingEdit(currentSheetName, cellRef, null); // null = usunięcie przy zapisie
@@ -586,6 +587,7 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   }
   // Zachowaj styl (.s) i format liczbowy (.z) z poprzedniej komórki, jeśli były —
   // edycja samej wartości nie powinna gubić formatowania odczytanego z pliku.
+  if (typeof undoCaptureCell === "function") undoCaptureCell(rowIndex0, colIndex0); // stan „przed" do Cofnij
   const prev = sheet[cellRef];
   const cell = {};
   if (prev && prev.s) cell.s = prev.s;

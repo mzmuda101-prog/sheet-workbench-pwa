@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260923-04" />
+    <link rel="stylesheet" href="styles/app.css?v=20260923-05" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1077,6 +1077,8 @@
               <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd>Esc</kbd> <span data-shortcut-text="clearCellSelection">Odznacz wszystko (zaznaczenie i fokus)</span></div>
               <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>F</kbd> <span data-shortcut-text="quickSearch">Szybkie szukanie</span></div>
               <div class="shortcut-row"><kbd>/</kbd> <span data-shortcut-text="quickSearchSlash">Szybkie szukanie (bez aktywnej komórki / poza polem)</span></div>
+              <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Z</kbd> <span data-shortcut-text="undoShortcut">Cofnij zmianę w arkuszu (edycja, wklejenie, wypełnianie, narzędzia edycji)</span></div>
+              <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>Z</kbd> <span data-shortcut-text="redoShortcut">Ponów (także Ctrl + Y)</span></div>
               <div class="shortcut-row"><kbd>Enter</kbd> <span data-shortcut-text="quickSearchEnter">w oknie szukania = Szukaj (zawsze, gdy popup otwarty)</span></div>
               <div class="shortcut-row"><kbd>↓</kbd> <kbd>↑</kbd> <span data-shortcut-text="quickSearchArrows">w szukaniu = nawigacja po podglądzie wyników</span></div>
               <div class="shortcut-row"><kbd data-shortcut-text="spaceKey">Spacja</kbd> <span data-shortcut-text="qsSpaceToggle">przełącza pola wyboru w oknie szukania (np. „Operatory wyszukiwania")</span></div>
@@ -1190,6 +1192,12 @@
                 <div class="qs-live hidden" id="qsLiveResults" role="listbox" aria-label="Podgląd wyników szukania"></div>
               </div>
               <div class="table-actions" id="tableActions">
+                <button class="btn btn-sm ghost icon-only undo-btn hidden" id="undoBtn" type="button" aria-label="Cofnij" data-hint data-hint-pl="Cofnij ostatnią zmianę w arkuszu (Ctrl/⌘+Z)" data-hint-en="Undo the last change in the sheet (Ctrl/⌘+Z)" data-hint-delay="0.8" data-hint-touch="on">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+                </button>
+                <button class="btn btn-sm ghost icon-only undo-btn hidden" id="redoBtn" type="button" aria-label="Ponów" data-hint data-hint-pl="Ponów cofniętą zmianę (Ctrl/⌘+Shift+Z)" data-hint-en="Redo the undone change (Ctrl/⌘+Shift+Z)" data-hint-delay="0.8" data-hint-touch="on">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+                </button>
                 <button class="btn btn-sm ghost toggle-pill hidden" id="wideLongToggle" type="button" aria-pressed="false" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
                   Wide-to-Long
                 </button>
@@ -1567,26 +1575,28 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260923-04"></script>
-    <script defer src="app/language.js?v=20260923-04"></script>
-    <script defer src="app/analysis.js?v=20260923-04"></script>
-    <script defer src="app/smart-filters.js?v=20260923-04"></script>
-    <script defer src="app/workbook.js?v=20260923-04"></script>
-    <script defer src="app/xlsx-patch.js?v=20260923-04"></script>
-    <script defer src="app/table.js?v=20260923-04"></script>
-    <script defer src="app/conditional-formatting.js?v=20260923-04"></script>
-    <script defer src="app/data-validation.js?v=20260923-04"></script>
-    <script defer src="app/derived-columns.js?v=20260923-04"></script>
-    <script defer src="app/formulas.js?v=20260923-04"></script>
-    <script defer src="app/edit-tools.js?v=20260923-04"></script>
-    <script defer src="app/ui-controls.js?v=20260923-04"></script>
-    <script defer src="app/filter-bar.js?v=20260923-04"></script>
-    <script defer src="app/transcribe.js?v=20260923-04"></script>
-    <script defer src="app/freeze-pane.js?v=20260923-04"></script>
+    <script defer src="app/core.js?v=20260923-05"></script>
+    <script defer src="app/language.js?v=20260923-05"></script>
+    <script defer src="app/analysis.js?v=20260923-05"></script>
+    <script defer src="app/smart-filters.js?v=20260923-05"></script>
+    <script defer src="app/workbook.js?v=20260923-05"></script>
+    <script defer src="app/xlsx-patch.js?v=20260923-05"></script>
+    <script defer src="app/table.js?v=20260923-05"></script>
+    <script defer src="app/conditional-formatting.js?v=20260923-05"></script>
+    <script defer src="app/data-validation.js?v=20260923-05"></script>
+    <script defer src="app/derived-columns.js?v=20260923-05"></script>
+    <script defer src="app/formulas.js?v=20260923-05"></script>
+    <script defer src="app/edit-tools.js?v=20260923-05"></script>
+    <script defer src="app/ui-controls.js?v=20260923-05"></script>
+    <script defer src="app/filter-bar.js?v=20260923-05"></script>
+    <script defer src="app/qs-history.js?v=20260923-05"></script>
+    <script defer src="app/undo.js?v=20260923-05"></script>
+    <script defer src="app/transcribe.js?v=20260923-05"></script>
+    <script defer src="app/freeze-pane.js?v=20260923-05"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260923-04"></script>
-    <script defer src="app/bootstrap.js?v=20260923-04"></script>
+    <script defer src="app/debug-loaders.js?v=20260923-05"></script>
+    <script defer src="app/bootstrap.js?v=20260923-05"></script>
   </body>
 </html>

@@ -928,6 +928,7 @@ if (cellActionFillRightEl) cellActionFillRightEl.addEventListener("click", () =>
 
 function updateCellStats() {
   updateClearSelectionFab();
+  if (typeof updateUndoButtons === "function") updateUndoButtons(); // nowy plik → chowa stare Cofnij
   updateCellActionBar();
   if (!cellStatsBarEl) return;
   const rect = getSelectionRectangle();

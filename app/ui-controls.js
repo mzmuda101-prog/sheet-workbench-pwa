@@ -2049,6 +2049,7 @@ function applyQuickSearch() {
   if (quickSearchPopupInput) quickSearchPopupInput.value = value;
   if (quickSearchEl) quickSearchEl.value = value;
   searchQueryEl.value = value;
+  if (typeof rememberQsQuery === "function") rememberQsQuery(value);
   applyFilters();
   sortRows();
   // Delikatny feedback przeliczenia: filtrowanie przestawia/odsłania wiersze → FLIP;
@@ -2411,7 +2412,10 @@ function renderQsLive(ctx) {
   const flags = qsFlagsFor(ctx.operatorsEl);
   const operators = flags.operators;
   const q = normalizeTermForMode(value, flags.mode);
+  // Puste pole → historia zapytań (qs-history.js) zamiast pustego podglądu.
+  if (!q && typeof renderQsHistory === "function" && renderQsHistory(ctx)) return;
   if (q.length < 2 || !currentHeaders.length) { hideQsLive(ctx); return; }
+  ctx.liveEl.classList.remove("is-history");
   const PER_SHEET = 8;
   const groups = [];
   let total = 0;
@@ -2520,7 +2524,8 @@ function wireQuickSearchScope(ctx) {
       timer = window.setTimeout(() => renderQsLive(ctx), 180);
     });
     ctx.inputEl.addEventListener("focus", () => {
-      if ((ctx.inputEl.value || "").trim().length >= 2) renderQsLive(ctx);
+      const len = (ctx.inputEl.value || "").trim().length;
+      if (len >= 2 || len === 0) renderQsLive(ctx); // 0 znaków = historia zapytań
     });
     ctx.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Escape") hideQsLive(ctx);
