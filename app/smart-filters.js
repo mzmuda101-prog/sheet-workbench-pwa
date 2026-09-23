@@ -443,7 +443,7 @@ function smartScopeCriteria(criteria, rec, model) {
   if (hit) return hit;
   const scoped = criteria.map((criterion) => (
     criterion.query || (criterion.emptyMode && criterion.emptyMode !== "all")
-      ? { ...criterion, indexes: smartScopeIndexes(criterion.indexes, rec, model) }
+      ? { ...criterion, indexes: smartScopeIndexes(criterion.indexes, rec, model), blockScope: model.blockScope[rec.blockIndex] }
       : criterion
   ));
   _smartScopeCache.set(rec.blockIndex, scoped);

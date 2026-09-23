@@ -779,22 +779,96 @@ function cellSatisfiesComparison(row, i, cmp) {
   return compareWithOp(cmp.op, n, cmp.value);
 }
 
+// ── Zakres kolumny w zapytaniu: „Kolumna:wartość" (tylko przy operatorach) ──
+// Prefiks przed dwukropkiem jest kolumną WYŁĄCZNIE, gdy dokładnie (bez wielkości liter,
+// ze zwiniętymi spacjami) równa się nazwie nagłówka — „10:30" czy „Uwaga: brak" przy
+// braku takiej kolumny zostają zwykłym tekstem. Powtarzające się nagłówki (bloki
+// w szerokiej tabeli) → wszystkie ich kolumny. Najdłuższy pasujący prefiks wygrywa
+// (nagłówek sam może mieć dwukropek). Wartość może mieć własne „!" (Status:!Anulowana)
+// i cudzysłów (Klient:"Jan Kowalski"). Cały term w cudzysłowie = dosłowny tekst.
+function normalizeHeaderKey(s) {
+  return String(s == null ? "" : s).trim().replace(/\s+/g, " ").toLowerCase();
+}
+function criterionColumnMap(criterion) {
+  if (criterion._colMap !== undefined) return criterion._colMap;
+  let map = null;
+  if (Array.isArray(criterion.headers) && criterion.headers.length) {
+    map = new Map();
+    criterion.headers.forEach((h, i) => {
+      const key = normalizeHeaderKey(h);
+      if (!key) return;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(i);
+    });
+  }
+  criterion._colMap = map;
+  return map;
+}
+function unquoteTerm(s) {
+  const t = String(s || "").trim();
+  return t.length >= 2 && t.startsWith('"') && t.endsWith('"') ? t.slice(1, -1) : t;
+}
+// → { term, indexes, negated, column } — term gotowy do dopasowania komórek.
+function resolveScopedTerm(q, criterion) {
+  const out = { term: q, indexes: criterion.indexes, negated: false, column: null };
+  if (!criterion.operatorsEnabled) return out;
+  if (q.length >= 2 && q.startsWith('"') && q.endsWith('"')) {
+    out.term = q.slice(1, -1);
+    return out;
+  }
+  const map = q.includes(":") ? criterionColumnMap(criterion) : null;
+  if (!map) return out;
+  let best = -1;
+  for (let k = q.indexOf(":"); k > 0; k = q.indexOf(":", k + 1)) {
+    if (map.has(normalizeHeaderKey(q.slice(0, k)))) best = k;
+  }
+  if (best < 0) return out;
+  out.column = normalizeHeaderKey(q.slice(0, best));
+  out.indexes = map.get(out.column);
+  // Tryb auto (rekordy-cykle): „Data:…" przy powtarzających się blokach ma patrzeć
+  // tylko w kolumnę BIEŻĄCEGO cyklu — inaczej rozjechałaby się korelacja tekst+stan.
+  if (criterion.blockScope) {
+    const inBlock = out.indexes.filter((i) => criterion.blockScope.has(i));
+    if (inBlock.length) out.indexes = inBlock;
+  }
+  let value = q.slice(best + 1).trim();
+  if (value.startsWith("!")) {
+    out.negated = true;
+    value = value.slice(1).trim();
+  }
+  out.term = unquoteTerm(value);
+  return out;
+}
+
+// Regex zachowuje wielkość liter WZORCA (flaga "i" i tak ignoruje ją w danych) —
+// lowercase zamieniałby \D w \d, \S w \s, \W w \w.
+function normalizeTermForMode(term, mode) {
+  const t = String(term || "").trim();
+  return mode === "regex" ? t : t.toLowerCase();
+}
+
+// Wspólny rdzeń dopasowania jednego termu: które komórki wiersza trafiają.
+// Zwraca null, gdy term jest pusty (np. samo „Status:" w trakcie pisania).
+function scopedTermMatcher(term, criterion) {
+  const scoped = resolveScopedTerm(normalizeTermForMode(term, criterion.mode), criterion);
+  if (!scoped.term) return null;
+  const cmp = (criterion.mode !== "regex" && criterion.operatorsEnabled) ? parseComparisonTerm(scoped.term) : null;
+  const q = scoped.term;
+  const mode = criterion.mode;
+  scoped.cellHit = cmp
+    ? (row, i) => cellSatisfiesComparison(row, i, cmp)
+    : (row, i) => cellMatchesTerm(row, i, q, mode);
+  return scoped;
+}
+
 function rowMatchesSingleTerm(row, term, criterion) {
-  const q = term.trim().toLowerCase();
-  if (!q) return true;
-  // Regex ma własną semantykę dopasowania (case-insensitive przez flagę "i" przy
-  // kompilacji) — operatory porównań (>>/<<) się tu nie stosują.
-  if (criterion.mode === "regex") {
-    for (const i of criterion.indexes) {
-      if (cellMatchesTerm(row, i, q, criterion.mode)) return true;
-    }
-    return false;
+  const m = scopedTermMatcher(term, criterion);
+  if (!m) return true;
+  let hit = false;
+  for (const i of m.indexes) {
+    if (m.cellHit(row, i)) { hit = true; break; }
   }
-  const cmp = criterion.operatorsEnabled ? parseComparisonTerm(q) : null;
-  for (const i of criterion.indexes) {
-    if (cmp ? cellSatisfiesComparison(row, i, cmp) : cellMatchesTerm(row, i, q, criterion.mode)) return true;
-  }
-  return false;
+  return m.negated ? !hit : hit;
 }
 
 function parseOperatorTerm(rawTerm, operatorsEnabled = false) {
@@ -810,13 +884,17 @@ function parseOperatorTerm(rawTerm, operatorsEnabled = false) {
   return parsed;
 }
 
+// „!" wyklucza jedno słowo — albo całą frazę w cudzysłowie: !"Jan Kowalski",
+// także z kolumną: !Klient:"Jan Kowalski". Bez cudzysłowu dalej tylko do spacji.
+const NOT_TERM_RE_SRC = '(^|\\s)!(\\S*?"[^"]*"\\S*|\\S+)';
+
 // Tokenize a flat string (no brackets) into NOT-aware terms split by && and ||
 // Returns an AST node: { type: "or", children: [ { type: "and", terms: [...] } ] }
 function parseFlatExpr(text) {
   function parseAndPart(part) {
     const terms = [];
     const s = String(part || "");
-    const notPattern = /(^|\s)!(\S+)/g;
+    const notPattern = new RegExp(NOT_TERM_RE_SRC, "g");
     let cursor = 0;
     let match = notPattern.exec(s);
     while (match) {
@@ -929,7 +1007,7 @@ function parseQueryTerms(query, operatorsEnabled = false) {
         } else {
           // Parse text part for NOT and individual terms
           const s = seg.value;
-          const notPattern = /(^|\s)!(\S+)/g;
+          const notPattern = new RegExp(NOT_TERM_RE_SRC, "g");
           let cur = 0;
           let mt = notPattern.exec(s);
           while (mt) {
@@ -1203,7 +1281,7 @@ function gatherPositiveTermStrings(parsed) {
   const walkTerm = (term) => {
     if (!term || term.negated) return;
     if (term.subExpr) walkAst(term.subExpr);
-    else if (term.term) out.push(term.term.trim().toLowerCase());
+    else if (term.term) out.push(term.term.trim());
   };
   const walkAst = (ast) => {
     ast.children.forEach((andGroup) => andGroup.terms.forEach(walkTerm));
@@ -1222,9 +1300,10 @@ function collectMatchingCellsForRow(row, criteria, dateFilter) {
     const parsed = parseQueryTerms(criterion.query, criterion.operatorsEnabled);
     const positiveTerms = gatherPositiveTermStrings(parsed);
     for (const q of positiveTerms) {
-      const cmp = (criterion.mode !== "regex" && criterion.operatorsEnabled) ? parseComparisonTerm(q) : null;
-      for (const i of criterion.indexes) {
-        if (cmp ? cellSatisfiesComparison(row, i, cmp) : cellMatchesTerm(row, i, q, criterion.mode)) cols.add(i);
+      const m = scopedTermMatcher(q, criterion);
+      if (!m || m.negated) continue; // „Status:!Anulowana" nie wskazuje komórki-dowodu
+      for (const i of m.indexes) {
+        if (m.cellHit(row, i)) cols.add(i);
       }
     }
   }
@@ -1266,16 +1345,18 @@ function applyFilters() {
   flipNextRender = true;
   const criteria = [
     {
-      query: (searchQueryEl.value || "").trim().toLowerCase(),
+      query: normalizeTermForMode(searchQueryEl.value, getNormalizedSelectValue(filterModeEl)),
       mode: getNormalizedSelectValue(filterModeEl),
+      headers: currentHeaders,
       indexes: resolveIndexes(currentHeaders, columnSelections.filter1),
       emptyMode: getNormalizedSelectValue(filterEmptyModeEl),
       negated: filterNegateEl.checked,
       operatorsEnabled: !!filterOperatorsEl?.checked,
     },
     {
-      query: (searchQuery2El.value || "").trim().toLowerCase(),
+      query: normalizeTermForMode(searchQuery2El.value, getNormalizedSelectValue(filterMode2El)),
       mode: getNormalizedSelectValue(filterMode2El),
+      headers: currentHeaders,
       indexes: resolveIndexes(currentHeaders, columnSelections.filter2),
       emptyMode: getNormalizedSelectValue(filterEmptyMode2El),
       negated: filterNegate2El.checked,

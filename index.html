@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260923-02" />
+    <link rel="stylesheet" href="styles/app.css?v=20260923-03" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1108,7 +1108,8 @@
               <div class="shortcut-section-title" data-shortcut-text="searchOperatorsTitle">Operatory wyszukiwania</div>
               <div class="shortcut-row"><kbd>||</kbd> <span><strong data-shortcut-text="orStrong">LUB</strong> <span data-shortcut-text="searchOperatorOrRest">— wiersz zawiera przynajmniej jeden z wyrazów</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorOrExample">np. „Kowalski || Nowak"</em></span></div>
               <div class="shortcut-row"><kbd>&&</kbd> <span><strong data-shortcut-text="andStrong">I</strong> <span data-shortcut-text="searchOperatorAndRest">— wiersz zawiera wszystkie wyrazy jednocześnie</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorAndExample">np. „Kowalski && Faktura" · ma pierwszeństwo nad ||</em></span></div>
-              <div class="shortcut-row"><kbd>!</kbd> <span data-shortcut-text="searchOperatorNot">wykluczenie pojedynczego warunku</span></div>
+              <div class="shortcut-row"><kbd>!</kbd> <span data-shortcut-text="searchOperatorNot">wykluczenie pojedynczego warunku</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorNotPhrase">całą frazę bierz w cudzysłów: !"Jan Kowalski"</em></div>
+              <div class="shortcut-row"><kbd>:</kbd> <span><strong data-shortcut-text="searchColStrong">Szukaj w jednej kolumnie</strong> <span data-shortcut-text="searchColRest">— nazwa nagłówka, dwukropek, wartość</span><br><em class="shortcut-example" data-shortcut-text="searchColExample">np. „Status:Anulowana", „Status:!Anulowana", „Kwota:&gt;&gt;1000", „Klient:"Jan Kowalski"" · tekst w cudzysłowie = dosłownie</em></span></div>
               <div class="shortcut-row"><kbd>{&nbsp;}</kbd> <em class="shortcut-example" data-shortcut-text="searchOperatorBracket">nawiasy {} wymuszają kolejność, np. „{Kowalski || Nowak} && Faktura"</em></div>
               <div class="shortcut-row"><kbd>&gt;&gt;</kbd> <kbd>&lt;&lt;</kbd> <span><strong data-shortcut-text="searchCmpStrong">Porównania liczb i dat</strong> <span data-shortcut-text="searchCmpRest">— „&gt;&gt;" większe, „&lt;&lt;" mniejsze; dodaj „=" dla ≥/≤ (&gt;&gt;=, =&lt;&lt;)</span><br><em class="shortcut-example" data-shortcut-text="searchCmpExample">np. „&gt;&gt;1000", „=&lt;&lt;50", „&gt;&gt;2026-01-01" · zakres: „&gt;&gt;5 &amp;&amp; &lt;&lt;10"</em></span></div>
               <div class="shortcut-row"><kbd>dl&gt;&gt;</kbd> <kbd>dl&lt;&lt;</kbd> <span><strong data-shortcut-text="searchLenStrong">Długość tekstu komórki</strong> <span data-shortcut-text="searchLenRest">— ten sam operator co wyżej, z prefiksem „dl" (lub „len")</span><br><em class="shortcut-example" data-shortcut-text="searchLenExample">np. „dl&gt;&gt;20" (dłuższe niż 20 znaków), „len&lt;&lt;=3"</em></span></div>
@@ -1149,11 +1150,15 @@
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
+                <div class="qs-field">
                 <input id="quickSearch" type="text" placeholder="Szybkie szukanie..." />
-                <select id="quickSearchMode" aria-label="Tryb szybkiego szukania">
-                  <option value="contains">Zawiera</option>
-                  <option value="exact">Dokładnie</option>
-                </select>
+                <div class="qs-flags" id="qsFlags" role="toolbar" aria-label="Opcje dopasowania">
+                  <button class="qs-flag qs-flag-negate" type="button" data-qs-flag="negate" aria-pressed="false" aria-label="Odwróć" data-hint-pl="Odwróć — pokaż wiersze, które NIE pasują do zapytania" data-hint-en="Invert — show rows that do NOT match the query" data-hint-delay="0.6" data-hint-touch="on">≠</button>
+                  <button class="qs-flag" type="button" data-qs-flag="equals" aria-pressed="false" aria-label="Dokładnie" data-hint-pl="Dokładnie — cała komórka równa się zapytaniu" data-hint-en="Exact — the whole cell equals the query" data-hint-delay="0.6" data-hint-touch="on">=</button>
+                  <button class="qs-flag" type="button" data-qs-flag="starts_with" aria-pressed="false" aria-label="Zaczyna się" data-hint-pl="Zaczyna się — komórka zaczyna się od zapytania" data-hint-en="Starts with — the cell begins with the query" data-hint-delay="0.6" data-hint-touch="on">a…</button>
+                  <button class="qs-flag" type="button" data-qs-flag="regex" aria-pressed="false" aria-label="Regex" data-hint-pl="Regex — wyrażenie regularne, np. „^FV-\d+$&quot;" data-hint-en="Regex — regular expression, e.g. „^INV-\d+$&quot;" data-hint-delay="0.6" data-hint-touch="on">.*</button>
+                </div>
+                </div>
                 <select id="quickSearchAction" aria-label="Akcja szybkiego szukania" data-hint data-hint-pl="Filtruj – ukrywa niepasujące wiersze · Zaznacz – pokazuje wszystkie i wyróżnia pasujące wiersze · Podświetl pasujące – pokazuje wszystkie i podświetla tylko pasujące komórki · Filtruj + podświetl – ukrywa niepasujące wiersze i podświetla pasujące komórki w pozostałych" data-hint-en="Filter – hides non-matching rows · Highlight – shows all, marks matching rows · Highlight matches – shows all, highlights only matching cells · Filter + highlight – hides non-matching rows and highlights matching cells in the rest" data-hint-delay="1.1" data-hint-touch="on">
                   <option value="filter">Filtruj</option>
                   <option value="highlight">Zaznacz</option>
@@ -1376,11 +1381,15 @@
       <div class="quick-search-popup-box">
         <label class="quick-search-popup-label" for="quickSearchPopupInput">Szukaj w tabeli</label>
         <div class="quick-search-popup-row">
+          <div class="qs-field">
           <input id="quickSearchPopupInput" type="text" placeholder="np. faktura..." />
-          <select id="quickSearchPopupMode" aria-label="Tryb szybkiego szukania w oknie">
-            <option value="contains">Zawiera</option>
-            <option value="exact">Dokładnie</option>
-          </select>
+          <div class="qs-flags" id="qsFlagsPopup" role="toolbar" aria-label="Opcje dopasowania">
+                  <button class="qs-flag qs-flag-negate" type="button" data-qs-flag="negate" aria-pressed="false" aria-label="Odwróć" data-hint-pl="Odwróć — pokaż wiersze, które NIE pasują do zapytania" data-hint-en="Invert — show rows that do NOT match the query" data-hint-delay="0.6" data-hint-touch="on">≠</button>
+                  <button class="qs-flag" type="button" data-qs-flag="equals" aria-pressed="false" aria-label="Dokładnie" data-hint-pl="Dokładnie — cała komórka równa się zapytaniu" data-hint-en="Exact — the whole cell equals the query" data-hint-delay="0.6" data-hint-touch="on">=</button>
+                  <button class="qs-flag" type="button" data-qs-flag="starts_with" aria-pressed="false" aria-label="Zaczyna się" data-hint-pl="Zaczyna się — komórka zaczyna się od zapytania" data-hint-en="Starts with — the cell begins with the query" data-hint-delay="0.6" data-hint-touch="on">a…</button>
+                  <button class="qs-flag" type="button" data-qs-flag="regex" aria-pressed="false" aria-label="Regex" data-hint-pl="Regex — wyrażenie regularne, np. „^FV-\d+$&quot;" data-hint-en="Regex — regular expression, e.g. „^INV-\d+$&quot;" data-hint-delay="0.6" data-hint-touch="on">.*</button>
+                </div>
+          </div>
           <select id="quickSearchPopupAction" aria-label="Akcja szybkiego szukania w oknie">
             <option value="filter">Filtruj</option>
             <option value="highlight">Zaznacz</option>
@@ -1551,25 +1560,25 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260923-02"></script>
-    <script defer src="app/language.js?v=20260923-02"></script>
-    <script defer src="app/analysis.js?v=20260923-02"></script>
-    <script defer src="app/smart-filters.js?v=20260923-02"></script>
-    <script defer src="app/workbook.js?v=20260923-02"></script>
-    <script defer src="app/xlsx-patch.js?v=20260923-02"></script>
-    <script defer src="app/table.js?v=20260923-02"></script>
-    <script defer src="app/conditional-formatting.js?v=20260923-02"></script>
-    <script defer src="app/data-validation.js?v=20260923-02"></script>
-    <script defer src="app/derived-columns.js?v=20260923-02"></script>
-    <script defer src="app/formulas.js?v=20260923-02"></script>
-    <script defer src="app/edit-tools.js?v=20260923-02"></script>
-    <script defer src="app/ui-controls.js?v=20260923-02"></script>
-    <script defer src="app/transcribe.js?v=20260923-02"></script>
-    <script defer src="app/freeze-pane.js?v=20260923-02"></script>
+    <script defer src="app/core.js?v=20260923-03"></script>
+    <script defer src="app/language.js?v=20260923-03"></script>
+    <script defer src="app/analysis.js?v=20260923-03"></script>
+    <script defer src="app/smart-filters.js?v=20260923-03"></script>
+    <script defer src="app/workbook.js?v=20260923-03"></script>
+    <script defer src="app/xlsx-patch.js?v=20260923-03"></script>
+    <script defer src="app/table.js?v=20260923-03"></script>
+    <script defer src="app/conditional-formatting.js?v=20260923-03"></script>
+    <script defer src="app/data-validation.js?v=20260923-03"></script>
+    <script defer src="app/derived-columns.js?v=20260923-03"></script>
+    <script defer src="app/formulas.js?v=20260923-03"></script>
+    <script defer src="app/edit-tools.js?v=20260923-03"></script>
+    <script defer src="app/ui-controls.js?v=20260923-03"></script>
+    <script defer src="app/transcribe.js?v=20260923-03"></script>
+    <script defer src="app/freeze-pane.js?v=20260923-03"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260923-02"></script>
-    <script defer src="app/bootstrap.js?v=20260923-02"></script>
+    <script defer src="app/debug-loaders.js?v=20260923-03"></script>
+    <script defer src="app/bootstrap.js?v=20260923-03"></script>
   </body>
 </html>

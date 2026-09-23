@@ -153,24 +153,21 @@ async function run() {
   check("live-lista ma realne trafienia (warunek testu)",
     liveInfo.visible && liveInfo.hits > 0, JSON.stringify(liveInfo) + ` term="${term}"`);
 
-  // Na dotyku <select> jest ukryty (zastąpiony segmentami), więc ta asercja
-  // dotyczy wyłącznie profilu desktopowego.
-  const selectWidoczny = await page.evaluate(() =>
-    getComputedStyle(document.getElementById("quickSearchPopupMode")).display !== "none");
-  if (selectWidoczny) {
-    await page.evaluate(() => {
-      window.__prevented = null;
-      document.getElementById("quickSearchPopupMode").focus();
-    });
-    await page.keyboard.press("ArrowDown");
-    await sleep(200);
-    const selectEvt = await page.evaluate(() => ({
-      prevented: window.__prevented,
-      stillFocused: document.activeElement?.id === "quickSearchPopupMode",
-    }));
-    check("↓ na <select> Tryb NIE jest przechwytywane (select dostaje swoje zdarzenie)",
-      selectEvt.prevented === false && selectEvt.stillFocused, JSON.stringify(selectEvt));
-  }
+  // ←/→ na ikonkach dopasowania (≠ = a… .*) chodzą PO IKONKACH i nie wyciekają
+  // do tabeli/listy wyników (zastąpiło dawny <select> „Tryb").
+  await page.evaluate(() => {
+    window.__prevented = null;
+    document.querySelector("#qsFlagsPopup .qs-flag").focus();
+  });
+  await page.keyboard.press("ArrowRight");
+  await sleep(150);
+  const flagEvt = await page.evaluate(() => ({
+    flag: document.activeElement?.dataset?.qsFlag || null,
+    tabStops: [...document.querySelectorAll("#qsFlagsPopup .qs-flag")].filter((b) => b.tabIndex === 0).length,
+  }));
+  check("→ na ikonkach dopasowania przechodzi do następnej (jeden przystanek Tab)",
+    flagEvt.flag === "equals" && flagEvt.tabStops === 1, JSON.stringify(flagEvt));
+  await page.keyboard.press("ArrowLeft");
 
   // ── 6. REGRESJA: ↓ z POLA szukania nadal wchodzi na listę wyników ─────────────
   await page.evaluate(() => document.getElementById("quickSearchPopupInput").focus());
@@ -514,10 +511,12 @@ async function run() {
       // Chipy trybów auto: cały pasek to JEDEN przystanek (roving tabindex, strzałki)
       const chipBar = a?.closest ? a.closest("#quickSearchSmartChips") : null;
       if (chipBar) return chipBar.id;
+      const flags = a?.closest ? a.closest(".qs-flags") : null;
+      if (flags) return flags.id;
       return a?.id || "‹POZA›";
     }));
   }
-  const oczekiwany = ["quickSearchPopupMode", "quickSearchPopupAction", "quickSearchPopupOperators",
+  const oczekiwany = ["qsFlagsPopup", "quickSearchPopupAction", "quickSearchPopupOperators",
     "qsAllSheetsPopup", "quickSearchPopupColumnsBtn", "quickSearchPopupBtn",
     ...(chipBarVisible ? ["quickSearchSmartChips"] : []),
     "quickSearchPopupInput"];
@@ -544,8 +543,10 @@ async function run() {
   if (seg.coarse) {
     check("na dotyku <select> ustępuje miejsca segmentom",
       seg.segmentyWidoczne === true && seg.selectWidoczny === false, JSON.stringify(seg));
-    check("grupy segmentów mają własne, różne etykiety",
-      seg.etykiety.length === 2 && seg.etykiety[0] !== seg.etykiety[1], JSON.stringify(seg.etykiety));
+    // Po zastąpieniu „Trybu" ikonkami (≠ = a… .*) została jedna grupa — „Akcja".
+    // Pilnujemy, żeby nie odziedziczyła etykiety „Tryb" (stary błąd czytnika ekranu).
+    check("grupa segmentów ma własną etykietę akcji",
+      seg.etykiety.length === 1 && /akcj|action/i.test(seg.etykiety[0] || ""), JSON.stringify(seg.etykiety));
     // Strzałka zmienia wartość ukrytego <select> — reszta kodu czyta ją bez zmian
     const przed = await page.evaluate(() => {
       const grp = document.getElementById("quickSearchPopupAction").nextElementSibling;

@@ -148,7 +148,6 @@ const resetSortBtn = document.getElementById("resetSortBtn");
 const readingToggle = document.getElementById("readingToggle");
 const quickSearchWrap = document.getElementById("quickSearchWrap");
 const quickSearchEl = document.getElementById("quickSearch");
-const quickSearchModeEl = document.getElementById("quickSearchMode");
 const quickSearchColumnsBtn = document.getElementById("quickSearchColumnsBtn");
 const quickSearchBtn = document.getElementById("quickSearchBtn");
 const quickSearchActionEl = document.getElementById("quickSearchAction");
@@ -185,7 +184,6 @@ const toastContainerEl = document.getElementById("toastContainer");
 const cellTooltipEl = document.getElementById("cellTooltip");
 const quickSearchPopupEl = document.getElementById("quickSearchPopup");
 const quickSearchPopupInput = document.getElementById("quickSearchPopupInput");
-const quickSearchPopupModeEl = document.getElementById("quickSearchPopupMode");
 const quickSearchPopupColumnsBtn = document.getElementById("quickSearchPopupColumnsBtn");
 const quickSearchPopupBtn = document.getElementById("quickSearchPopupBtn");
 const quickSearchPopupActionEl = document.getElementById("quickSearchPopupAction");
@@ -631,7 +629,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260923-02";
+const APP_BUILD_VERSION = "20260923-03";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

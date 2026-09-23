@@ -2938,6 +2938,86 @@ details.panel[open] > summary {
   outline: none;
 }
 
+/* ── Przełączniki dopasowania w polu szukania (≠ = a… .*) ─────────────────────
+   Małe ikonki jak w VS Code zamiast listy „Zawiera/Dokładnie": więcej trybów
+   przy MNIEJSZEJ szerokości paska. Aktywny tryb = akcent; aktywne „≠" = bursztyn
+   (to modyfikator FILTRA — bursztyn w apce znaczy filtr), a całe pole dostaje
+   bursztynową obwódkę, żeby odwrócone szukanie nie zostało przeoczone. */
+.qs-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.quick-search .qs-field input:not([type="checkbox"]) { min-width: 80px; }
+.qs-flags {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.qs-flag {
+  min-width: 24px;
+  height: 24px;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: background var(--t), color var(--t), border-color var(--t);
+}
+.qs-flag:hover { color: var(--ink-2); background: var(--accent-light); }
+.qs-flag:focus-visible {
+  outline: none;
+  border-color: var(--accent-h);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.qs-flag[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-light);
+  border-color: var(--accent-border);
+  font-weight: 600;
+}
+.qs-flag-negate[aria-pressed="true"] {
+  color: var(--warning);
+  background: var(--warning-bg);
+  border-color: color-mix(in srgb, var(--warning) 35%, var(--border));
+}
+.quick-search.qs-negated {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--border));
+}
+/* Okno (Cmd+Shift+F): pole ma własną ramkę → ikonki siedzą W NIEJ, przy prawej krawędzi. */
+.quick-search-popup-row .qs-field {
+  position: relative;
+  flex: 1 1 260px;
+  min-width: 180px;
+}
+.quick-search-popup-row .qs-field input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 0;
+  padding-right: 118px;
+}
+.quick-search-popup-row .qs-flags {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.quick-search-popup.qs-negated .qs-field input:not([type="checkbox"]) {
+  border-color: color-mix(in srgb, var(--warning) 60%, var(--border));
+}
+@media (pointer: coarse) {
+  .qs-flag { min-width: 32px; height: 32px; font-size: 13px; }
+  .quick-search-popup-row .qs-field input:not([type="checkbox"]) { padding-right: 146px; }
+}
+
 /* Operators toggle — kompaktowy pill z checkboxem */
 /* ── Segmenty zamiast list wyboru — TYLKO na urządzeniach dotykowych ─────────
    Na iPadzie fokus klawiatury na <select> natychmiast otwiera systemowy picker;

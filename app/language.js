@@ -1546,7 +1546,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchActionCells: "Podświetl pasujące",
     quickSearchActionFilterCells: "Filtruj + podświetl",
     quickSearchOperatorsLabel: "&&·||",
-    quickSearchOperatorsTitle: "Włącz operatory szukania: || (lub) · && (oraz) · ! (bez słowa) · {…} (grupowanie) · >> (większe) · << (mniejsze; z „=” → ≥/≤) · dl>>/dl<< (długość tekstu). /| Przykłady: „Kowalski && Faktura”, „>>1000”, „=<<50”, „>>2026-01-01”, „dl>>20”.",
+    quickSearchOperatorsTitle: "Włącz operatory szukania: || (lub) · && (oraz) · ! (bez słowa) · {…} (grupowanie) · >> (większe) · << (mniejsze; z „=” → ≥/≤) · dl>>/dl<< (długość tekstu) · Kolumna:wartość (tylko ta kolumna). /| Przykłady: „Kowalski && Faktura”, „>>1000”, „dl>>20”, „Status:!Anulowana”, „Kwota:>>1000”, „!\"Jan Kowalski\"”.",
     searchOperatorsToggle: "Operatory wyszukiwania",
     searchOperatorsTitle: "Operatory wyszukiwania",
     arrows: "Strzałki",
@@ -1592,6 +1592,10 @@ const STATIC_TRANSLATIONS = {
     searchOperatorAnd: "ORAZ — wiersz zawiera wszystkie wyrazy jednocześnie",
     searchOperatorAndExample: "np. 'Kowalski && Faktura' · ma pierwszeństwo nad ||",
     searchOperatorNot: "wykluczenie pojedynczego warunku, np. 'Kowalski !J.'",
+    searchOperatorNotPhrase: "całą frazę bierz w cudzysłów: !\"Jan Kowalski\"",
+    searchColStrong: "Szukaj w jednej kolumnie",
+    searchColRest: "— nazwa nagłówka, dwukropek, wartość",
+    searchColExample: "np. 'Status:Anulowana', 'Status:!Anulowana', 'Kwota:>>1000', 'Klient:\"Jan Kowalski\"' · tekst w cudzysłowie = dosłownie",
     searchOperatorCombined: "możesz łączyć operatory, np. 'Kowalski && !Anulowana || Nowak'",
     searchOperatorWhere: "działają w: filtrach, szybkim szukaniu oraz w szukajce wyników w Agregacjach (tam >> / << porównuje WARTOŚĆ miary, np. „>>100”) — wszędzie po włączeniu „Operatory wyszukiwania”",
     searchCmpStrong: "Porównania liczb i dat",
@@ -1627,7 +1631,11 @@ const STATIC_TRANSLATIONS = {
     hintExportCsv: "Wyeksportuj widok do CSV",
     statusNoData: "Brak danych",
     quickSearchPlaceholder: "Szybkie szukanie...",
-    quickSearchAria: "Tryb szybkiego szukania",
+    qsFlagsAria: "Opcje dopasowania",
+    qsFlagNegate: "Odwróć",
+    qsFlagEquals: "Dokładnie",
+    qsFlagStartsWith: "Zaczyna się",
+    qsFlagRegex: "Regex",
     quickSearchColumnsTitle: "Wybierz kolumny dla szybkiego szukania",
     resetSort: "Domyślne sortowanie",
     exportCsv: "Eksport",
@@ -1641,7 +1649,6 @@ const STATIC_TRANSLATIONS = {
     quickSearchDialogAria: "Szybkie szukanie",
     searchInTable: "Szukaj w tabeli",
     quickSearchPopupPlaceholder: "np. faktura...",
-    quickSearchPopupModeAria: "Tryb szybkiego szukania w oknie",
     quickSearchActionAria: "Akcja szybkiego szukania",
     quickSearchPopupActionAria: "Akcja szybkiego szukania w oknie",
     quickSearchHint: "Enter – zastosuj · ↓↑ – wyniki · Esc – zamknij · / – otwórz",
@@ -1782,7 +1789,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchActionCells: "Highlight matches",
     quickSearchActionFilterCells: "Filter + highlight",
     quickSearchOperatorsLabel: "&&·||",
-    quickSearchOperatorsTitle: "Enable search operators: || (or) · && (and) · ! (without word) · {…} (grouping) · >> (greater) · << (less; add „=” → ≥/≤) · dl>>/dl<< (text length). /| Examples: „Kowalski && Invoice”, „>>1000”, „=<<50”, „>>2026-01-01”, „dl>>20”.",
+    quickSearchOperatorsTitle: "Enable search operators: || (or) · && (and) · ! (without word) · {…} (grouping) · >> (greater) · << (less; add „=” → ≥/≤) · dl>>/dl<< (text length) · Column:value (that column only). /| Examples: „Kowalski && Invoice”, „>>1000”, „len>>20”, „Status:!Cancelled”, „Amount:>>1000”, „!\"John Smith\"”.",
     searchOperatorsToggle: "Search operators",
     searchOperatorsTitle: "Search operators",
     arrows: "Arrow keys",
@@ -1828,6 +1835,10 @@ const STATIC_TRANSLATIONS = {
     searchOperatorAnd: "AND — row contains all terms simultaneously",
     searchOperatorAndExample: "e.g. \'Kowalski && Invoice\' · takes precedence over ||",
     searchOperatorNot: "exclude a single condition, e.g. 'Kowalski !J.'",
+    searchOperatorNotPhrase: "wrap a whole phrase in quotes: !\"John Smith\"",
+    searchColStrong: "Search one column",
+    searchColRest: "— header name, colon, value",
+    searchColExample: "e.g. 'Status:Cancelled', 'Status:!Cancelled', 'Amount:>>1000', 'Client:\"John Smith\"' · quoted text = literal",
     searchOperatorBracket: "brackets {} force grouping, e.g. '{Kowalski || Nowak} && Invoice'",
     searchOperatorCombined: "operators can be combined, e.g. 'Kowalski && !Canceled || Nowak'",
     searchOperatorWhere: "available in: filters, quick search and the results search in Aggregations (there >> / << compare the METRIC value, e.g. “>>100”) — everywhere after ticking “Search operators”",
@@ -1863,7 +1874,11 @@ const STATIC_TRANSLATIONS = {
     hintExportCsv: "Export the view to CSV",
     statusNoData: "No data",
     quickSearchPlaceholder: "Quick search...",
-    quickSearchAria: "Quick search mode",
+    qsFlagsAria: "Match options",
+    qsFlagNegate: "Invert",
+    qsFlagEquals: "Exact",
+    qsFlagStartsWith: "Starts with",
+    qsFlagRegex: "Regex",
     quickSearchColumnsTitle: "Choose columns for quick search",
     resetSort: "Default sort",
     exportCsv: "Export",
@@ -1877,7 +1892,6 @@ const STATIC_TRANSLATIONS = {
     quickSearchDialogAria: "Quick search",
     searchInTable: "Search in table",
     quickSearchPopupPlaceholder: "e.g. invoice...",
-    quickSearchPopupModeAria: "Quick search mode in dialog",
     quickSearchActionAria: "Quick search action",
     quickSearchPopupActionAria: "Quick search action in dialog",
     quickSearchHint: "Enter – apply · ↓↑ – results · Esc – close · / – open",
@@ -2090,22 +2104,6 @@ const SELECT_VALUE_ALIASES = {
     all_empty: "all_empty",
     "bez daty (wszystkie)": "all_empty",
     "without date (all)": "all_empty",
-  },
-  quickSearchMode: {
-    contains: "contains",
-    "zawiera": "contains",
-    exact: "exact",
-    "dokladnie": "exact",
-    "dokładnie": "exact",
-    equals: "exact",
-  },
-  quickSearchPopupMode: {
-    contains: "contains",
-    "zawiera": "contains",
-    exact: "exact",
-    "dokladnie": "exact",
-    "dokładnie": "exact",
-    equals: "exact",
   },
   displayMode: {
     values: "values",
@@ -2357,8 +2355,9 @@ function applyStaticTranslations() {
 
   setAttr("#sidebarScrim", "aria-label", copy.sidebarScrimAria);
   setAttr("#quickSearchPopup", "aria-label", copy.quickSearchDialogAria);
-  setAttr("#quickSearchMode", "aria-label", copy.quickSearchAria);
-  setAttr("#quickSearchPopupMode", "aria-label", copy.quickSearchPopupModeAria);
+  document.querySelectorAll(".qs-flags").forEach((g) => g.setAttribute("aria-label", copy.qsFlagsAria));
+  const qsFlagLabels = { negate: copy.qsFlagNegate, equals: copy.qsFlagEquals, starts_with: copy.qsFlagStartsWith, regex: copy.qsFlagRegex };
+  document.querySelectorAll(".qs-flag[data-qs-flag]").forEach((b) => b.setAttribute("aria-label", qsFlagLabels[b.dataset.qsFlag] || ""));
   // Obie listy „Akcja" dostawały etykietę „Tryb" — czytnik ekranu ogłaszał je błędnie.
   setAttr("#quickSearchAction", "aria-label", copy.quickSearchActionAria);
   setAttr("#quickSearchPopupAction", "aria-label", copy.quickSearchPopupActionAria);
@@ -2509,14 +2508,6 @@ function applySelectTranslations() {
       any_empty: "dateAnyEmpty",
       all_empty: "dateAllEmpty",
     },
-    quickSearchMode: {
-      contains: "contains",
-      exact: "equals",
-    },
-    quickSearchPopupMode: {
-      contains: "contains",
-      exact: "equals",
-    },
     quickSearchAction: {
       filter: "quickSearchActionFilter",
       highlight: "quickSearchActionHighlight",
@@ -2578,7 +2569,6 @@ function applySelectTranslations() {
   const ids = [
     "displayMode", "filterMode", "filterMode2", "dateMode",
     "filterEmptyMode", "filterEmptyMode2", "dateEmptyMode",
-    "quickSearchMode", "quickSearchPopupMode",
     "quickSearchAction", "quickSearchPopupAction",
     "sortDirectionSelect", "formulaFilter",
     "editScope", "editOp", "editPatternMode", "editCaseMode",

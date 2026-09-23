@@ -142,14 +142,38 @@ function syncQuickSearchInputs() {
   if (quickSearchPopupInput) quickSearchPopupInput.value = searchQueryEl.value;
 }
 
-function getQuickSearchModeValue() {
-  return filterModeEl && getNormalizedSelectValue(filterModeEl) === "equals" ? "exact" : "contains";
+// ── Przełączniki dopasowania w polu szybkiego szukania (≠ = a… .*) ──────────
+// Jedynym źródłem stanu jest Filtr 1 w panelu (tryb + „Odwróć") — szybkie szukanie
+// zawsze było jego lustrem, więc ikonki tylko go czytają i zapisują. Dzięki temu
+// panel i oba paski nie mogą się rozjechać (np. Regex ustawiony w panelu świeci się
+// teraz także w szybkim szukaniu, zamiast udawać „Zawiera").
+const QS_MODE_FLAGS = ["equals", "starts_with", "regex"];
+
+function getQuickSearchFlags() {
+  const mode = filterModeEl ? getNormalizedSelectValue(filterModeEl) || "contains" : "contains";
+  return { mode, negated: !!filterNegateEl?.checked };
 }
 
 function syncQuickSearchModeControls() {
-  const mode = getQuickSearchModeValue();
-  if (quickSearchModeEl) quickSearchModeEl.value = mode;
-  if (quickSearchPopupModeEl) quickSearchPopupModeEl.value = mode;
+  const { mode, negated } = getQuickSearchFlags();
+  document.querySelectorAll(".qs-flag[data-qs-flag]").forEach((btn) => {
+    const flag = btn.dataset.qsFlag;
+    const on = flag === "negate" ? negated : flag === mode;
+    btn.setAttribute("aria-pressed", String(on));
+  });
+  [quickSearchWrap, quickSearchPopupEl].forEach((el) => {
+    if (el) el.classList.toggle("qs-negated", negated);
+  });
+}
+
+function toggleQuickSearchFlag(flag) {
+  if (flag === "negate") {
+    if (filterNegateEl) filterNegateEl.checked = !filterNegateEl.checked;
+  } else if (QS_MODE_FLAGS.includes(flag) && filterModeEl) {
+    // Tryby wykluczają się; ponowny klik aktywnego wraca do „Zawiera".
+    filterModeEl.value = getQuickSearchFlags().mode === flag ? "contains" : flag;
+  }
+  syncQuickSearchModeControls();
 }
 
 function syncQuickSearchOperatorsControls() {
@@ -157,13 +181,6 @@ function syncQuickSearchOperatorsControls() {
   quickSearchOperatorsEnabled = enabled;
   if (quickSearchOperatorsEl) quickSearchOperatorsEl.checked = enabled;
   if (quickSearchPopupOperatorsEl) quickSearchPopupOperatorsEl.checked = enabled;
-}
-
-function applyQuickSearchMode(mode) {
-  const normalizedQuickMode = normalizeSelectValue("quickSearchMode", mode);
-  const normalized = normalizedQuickMode === "exact" ? "equals" : "contains";
-  if (filterModeEl) filterModeEl.value = normalized;
-  syncQuickSearchModeControls();
 }
 
 function updateQuickSearchColumnButtons() {
@@ -2005,8 +2022,6 @@ function applyQuickSearch() {
   else if (quickSearchEl) value = quickSearchEl.value;
   else value = searchQueryEl.value || "";
   const popupActive = quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden");
-  if (popupActive && quickSearchPopupModeEl) applyQuickSearchMode(getNormalizedSelectValue(quickSearchPopupModeEl));
-  else if (quickSearchModeEl) applyQuickSearchMode(getNormalizedSelectValue(quickSearchModeEl));
 
   // Odczytaj tryb akcji: filtruj (ukryj niepasujące) / zaznacz (wyróżnij wiersze) /
   // cells (pokaż wszystkie, podświetl KOMÓRKI) / filter-cells (filtruj wiersze ORAZ
@@ -2120,7 +2135,7 @@ function syncSegmentedFrom(select) {
 
 // Odbudowa po zmianie języka: etykiety segmentów pochodzą z <option>.
 function refreshQuickSearchSegments() {
-  [quickSearchPopupModeEl, quickSearchPopupActionEl].forEach((sel) => {
+  [quickSearchPopupActionEl].forEach((sel) => {
     if (sel) buildSegmentedFor(sel);
   });
 }
@@ -2213,54 +2228,39 @@ function qsSheetContext(sheetName) {
   return ctx;
 }
 
-function qsMakeCriterion(mode, indexes, operators, query) {
-  return { query, mode, indexes, operatorsEnabled: operators, negated: false, emptyMode: "all" };
+function qsFirstNonEmptyCol(row, indexes) {
+  return indexes.find((i) => i < row.values.length && String(getDisplayValue(row, i)).trim() !== "") ?? -1;
 }
 
-// [EN] First matching column in selected set — same cellMatchesTerm as applyFilters
-function qsFirstMatchingCol(row, q, mode, indexes) {
-  for (const i of indexes) {
-    if (i >= row.values.length) continue;
-    if (String(getDisplayValue(row, i)).trim() === "") continue;
-    if (cellMatchesTerm(row, i, q, mode)) return i;
-  }
-  return -1;
-}
-
-function qsRowMatchesOperators(row, q, criterion) {
-  const parsed = parseQueryTerms(q, true);
-  if (!parsed.groups.length) return false;
-  return parsed.groups.some((group) => group.every((term) => rowMatchesParsedTerm(row, term, criterion)));
-}
-
-function qsEvidenceCol(row, q, criterion, operators) {
-  if (operators) {
-    const cols = collectMatchingCellsForRow(row, [criterion], null);
-    if (cols.size) return Array.from(cols)[0];
-    return criterion.indexes.find((i) => i < row.values.length) ?? -1;
-  }
-  return qsFirstMatchingCol(row, q, criterion.mode, criterion.indexes);
-}
-
-// Skan wierszy arkusza (nie surowych komórek): te same kolumny, parser i semantyka co filtr.
-// `q` jest już .trim().toLowerCase(); `count` = liczba pasujących WIERSZY.
-function qsScanSheet(sheetName, q, exact, perSheet, operators) {
+// Skan wierszy arkusza (nie surowych komórek): ten sam parser, kryterium i semantyka
+// co applyFilters — z przełącznikami (tryb, odwrócenie), operatorami i „Kolumna:…".
+// `q` jest już znormalizowane (normalizeTermForMode); `count` = liczba pasujących WIERSZY.
+function qsScanSheet(sheetName, q, flags, perSheet) {
   const res = { count: 0, hits: [] };
   const ctx = qsSheetContext(sheetName);
   if (!ctx || !ctx.headers.length) return res;
-  const mode = exact ? "equals" : "contains";
   const indexes = resolveIndexes(ctx.headers, columnSelections.filter1);
   if (!indexes.length) return res;
-  const criterion = qsMakeCriterion(mode, indexes, operators, q);
+  const criterion = {
+    query: q, mode: flags.mode, indexes, headers: ctx.headers,
+    operatorsEnabled: flags.operators, negated: flags.negated, emptyMode: "all",
+  };
+  const parsed = parseQueryTerms(q, flags.operators);
+  if (!parsed.groups.length) return res;
 
   for (const row of ctx.rows) {
-    const matched = operators
-      ? qsRowMatchesOperators(row, q, criterion)
-      : qsFirstMatchingCol(row, q, mode, indexes) >= 0;
-    if (!matched) continue;
+    const hit = parsed.groups.some((group) => group.every((term) => rowMatchesParsedTerm(row, term, criterion)));
+    if (hit === flags.negated) continue;
     res.count += 1;
     if (res.hits.length >= perSheet) continue;
-    const colIdx = qsEvidenceCol(row, q, criterion, operators);
+    // Dowód trafienia: pierwsza pasująca komórka; przy odwróceniu nic nie „pasuje",
+    // więc pokazujemy pierwszą niepustą komórkę wiersza.
+    let colIdx = -1;
+    if (!flags.negated) {
+      const cols = collectMatchingCellsForRow(row, [criterion], null);
+      if (cols.size) colIdx = Math.min(...cols);
+    }
+    if (colIdx < 0) colIdx = qsFirstNonEmptyCol(row, indexes);
     if (colIdx < 0 || colIdx >= row.values.length) continue;
     const display = getDisplayValue(row, colIdx);
     if (String(display).trim() === "") continue;
@@ -2287,15 +2287,15 @@ function qsSheetOrder() {
   return currentSheetName ? [currentSheetName, ...rest] : workbook.SheetNames.slice();
 }
 
-function qsFirstMatchingSheet(q, exact, operators) {
+function qsFirstMatchingSheet(q, flags) {
   for (const name of qsSheetOrder()) {
-    if (qsScanSheet(name, q, exact, 1, operators).count > 0) return name;
+    if (qsScanSheet(name, q, flags, 1).count > 0) return name;
   }
   return currentSheetName;
 }
 
-function qsCtxExact(ctx) {
-  return ctx.modeEl ? getNormalizedSelectValue(ctx.modeEl) === "exact" : false;
+function qsFlagsFor(operatorsEl) {
+  return { ...getQuickSearchFlags(), operators: !!(operatorsEl && operatorsEl.checked) };
 }
 function hideQsLive(ctx) {
   if (ctx && ctx.liveEl) { ctx.liveEl.classList.add("hidden"); ctx.liveEl.replaceChildren(); }
@@ -2354,6 +2354,10 @@ function qsLiveHighlightNeedle(query, operatorsEnabled) {
     if (term.startsWith("{") && term.endsWith("}")) term = term.slice(1, -1).trim();
     if (term.startsWith("!")) term = term.slice(1).trim();
     if (!term) continue;
+    // „Status:anul" → podświetlamy samą wartość „anul"; „Status:!x" niczego nie wskazuje.
+    const scoped = resolveScopedTerm(term.toLowerCase(), { operatorsEnabled: true, headers: currentHeaders, indexes: [] });
+    if (scoped.negated || !scoped.term) continue;
+    term = scoped.term;
     if (/^(?:>>|<<|>>=|=<<|>=|<=|>|<|=)/.test(term)) continue;
     return term;
   }
@@ -2388,13 +2392,11 @@ function qsApplyOnSheet(sheetName, value) {
 function commitQuickSearch() {
   const popupActive = quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden");
   const inputEl = popupActive ? quickSearchPopupInput : quickSearchEl;
-  const modeEl = popupActive ? quickSearchPopupModeEl : quickSearchModeEl;
   const operatorsEl = popupActive ? quickSearchPopupOperatorsEl : quickSearchOperatorsEl;
   const value = inputEl ? inputEl.value : (searchQueryEl ? searchQueryEl.value : "");
   if (qsAllSheetsScope && value.trim().length >= 1) {
-    const exact = modeEl ? getNormalizedSelectValue(modeEl) === "exact" : false;
-    const operators = !!(operatorsEl && operatorsEl.checked);
-    qsApplyOnSheet(qsFirstMatchingSheet(value.trim().toLowerCase(), exact, operators), value);
+    const flags = qsFlagsFor(operatorsEl);
+    qsApplyOnSheet(qsFirstMatchingSheet(normalizeTermForMode(value, flags.mode), flags), value);
   } else {
     hideAllQsLive();
     applyQuickSearch();
@@ -2404,17 +2406,17 @@ function commitQuickSearch() {
 function renderQsLive(ctx) {
   if (!ctx || !ctx.liveEl || !ctx.inputEl) return;
   const value = ctx.inputEl.value || "";
-  const q = value.trim().toLowerCase();
+  const flags = qsFlagsFor(ctx.operatorsEl);
+  const operators = flags.operators;
+  const q = normalizeTermForMode(value, flags.mode);
   if (q.length < 2 || !currentHeaders.length) { hideQsLive(ctx); return; }
-  const exact = qsCtxExact(ctx);
-  const operators = !!(ctx.operatorsEl && ctx.operatorsEl.checked);
   const PER_SHEET = 8;
   const groups = [];
   let total = 0;
   qsBeginSheetCtxCache();
   try {
   for (const name of qsSheetOrder()) {
-    const r = qsScanSheet(name, q, exact, PER_SHEET, operators);
+    const r = qsScanSheet(name, q, flags, PER_SHEET);
     if (r.count > 0) { groups.push({ sheet: name, count: r.count, hits: r.hits }); total += r.count; }
     if (groups.length >= 8) break; // ochrona długości listy
   }
@@ -2454,7 +2456,7 @@ function renderQsLive(ctx) {
       const text = document.createElement("span");
       text.className = "qs-live-text";
       // [EN] Same typed/rest greying as DV cell-suggest — needle = query (or 1st operator term)
-      const needle = qsLiveHighlightNeedle(value, operators);
+      const needle = (flags.negated || flags.mode === "regex") ? "" : qsLiveHighlightNeedle(value, operators);
       const raw = String(h.text ?? "");
       const truncated = raw.length > 80;
       appendTypedRestLabel(text, truncated ? raw.slice(0, 80) : raw, needle);
@@ -2528,7 +2530,6 @@ function wireQuickSearchScope(ctx) {
       }
     });
   }
-  if (ctx.modeEl) ctx.modeEl.addEventListener("change", () => renderQsLive(ctx));
   // Przełączenie „Operatory wyszukiwania" → przelicz live-podgląd tym samym trybem.
   if (ctx.operatorsEl) ctx.operatorsEl.addEventListener("change", () => renderQsLive(ctx));
   document.addEventListener("click", (e) => {
@@ -2540,7 +2541,6 @@ function wireQuickSearchScope(ctx) {
 
 wireQuickSearchScope({
   inputEl: quickSearchEl,
-  modeEl: quickSearchModeEl,
   operatorsEl: quickSearchOperatorsEl,
   toggleEl: document.getElementById("qsAllSheets"),
   liveEl: document.getElementById("qsLiveResults"),
@@ -2548,7 +2548,6 @@ wireQuickSearchScope({
 });
 wireQuickSearchScope({
   inputEl: quickSearchPopupInput,
-  modeEl: quickSearchPopupModeEl,
   operatorsEl: quickSearchPopupOperatorsEl,
   toggleEl: document.getElementById("qsAllSheetsPopup"),
   liveEl: document.getElementById("qsLiveResultsPopup"),
@@ -2890,11 +2889,47 @@ if (quickSearchColumnsBtn) {
   });
 }
 
-if (quickSearchModeEl) {
-  quickSearchModeEl.addEventListener("change", () => {
-    applyQuickSearchMode(getNormalizedSelectValue(quickSearchModeEl));
+// Klawiatura: cały zestaw ikonek to JEDEN przystanek Tab (roving tabindex, ←/→),
+// jak segmenty — cztery osobne przystanki rozciągałyby obieg Tab w oknie szukania.
+document.querySelectorAll(".qs-flags").forEach((group) => {
+  const btns = Array.from(group.querySelectorAll(".qs-flag"));
+  btns.forEach((b, i) => { b.tabIndex = i === 0 ? 0 : -1; });
+  group.addEventListener("keydown", (e) => {
+    const i = btns.indexOf(document.activeElement);
+    if (i < 0) return;
+    let next = null;
+    if (e.key === "ArrowRight") next = (i + 1) % btns.length;
+    if (e.key === "ArrowLeft") next = (i - 1 + btns.length) % btns.length;
+    if (e.key === "Home") next = 0;
+    if (e.key === "End") next = btns.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    e.stopPropagation(); // strzałki nie idą do tabeli ani listy wyników
+    btns[i].tabIndex = -1;
+    btns[next].tabIndex = 0;
+    btns[next].focus();
   });
-}
+});
+
+// Klik w ikonkę w polu: zmienia Filtr 1, przelicza podgląd, a jeśli to zapytanie
+// JUŻ jest zastosowane z paska — od razu przefiltrowuje (inaczej „≠" przy aktywnym
+// filtrze wyglądałoby na martwe). W oknie (popup) czekamy na Enter jak dotąd.
+document.querySelectorAll(".qs-flag[data-qs-flag]").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    toggleQuickSearchFlag(btn.dataset.qsFlag);
+    const inPopup = !!(quickSearchPopupEl && quickSearchPopupEl.contains(btn));
+    const inputEl = inPopup ? quickSearchPopupInput : quickSearchEl;
+    // Myszą/palcem → fokus wraca do pola (pisze się dalej); z klawiatury zostaje na ikonce.
+    if (inputEl && e.detail > 0) inputEl.focus({ preventScroll: true });
+    refreshQsLivePreview();
+    const typed = inputEl ? inputEl.value.trim() : "";
+    if (!inPopup && typed && typed === (searchQueryEl.value || "").trim()) {
+      applyFilters();
+      sortRows();
+      scheduleViewRefresh({ table: true, analyses: true, filterBadge: true });
+    }
+  });
+});
 
 // Enter uruchamia szukanie z DOWOLNEGO elementu szybkiego szukania (pole, selecty
 // trybu/akcji) — nie tylko z pola tekstowego. Wyjątek: fokus na kontroli, którą
@@ -2937,11 +2972,6 @@ function attachQuickSearchEnter(container, handler) {
 }
 attachQuickSearchEnter(quickSearchWrap, commitQuickSearch);   // pasek pod przyciskiem (z zakresem)
 attachQuickSearchEnter(quickSearchPopupEl, commitQuickSearch); // okno ze skrótu Cmd+Shift+F
-if (quickSearchPopupModeEl) {
-  quickSearchPopupModeEl.addEventListener("change", () => {
-    applyQuickSearchMode(getNormalizedSelectValue(quickSearchPopupModeEl));
-  });
-}
 if (quickSearchPopupBtn) {
   quickSearchPopupBtn.addEventListener("click", commitQuickSearch); // Enter / Szukaj = ten sam commit (zakres arkuszy)
 }
@@ -4037,6 +4067,7 @@ tbodyEl.addEventListener("dblclick", (e) => {
 
 searchQueryEl.addEventListener("input", syncQuickSearchInputs);
 filterModeEl.addEventListener("change", syncQuickSearchModeControls);
+filterNegateEl.addEventListener("change", syncQuickSearchModeControls);
 if (filterOperatorsEl) {
   filterOperatorsEl.addEventListener("change", syncQuickSearchOperatorsControls);
 }
