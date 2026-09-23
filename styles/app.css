@@ -315,6 +315,13 @@ body.splashing {
   /* Podpowiedź dla kompozytora TYLKO w trakcie animacji (zdejmowane po niej w JS),
      żeby nie trzymać warstwy bez potrzeby. */
   body.hero-animating .hero { will-change: max-height; }
+  /* Tabela na czas zwijania dostaje WŁASNĄ warstwę: panel przesuwa się co klatkę,
+     a bez warstwy każda klatka przemalowywała całą tabelę razem z dokumentem.
+     Pomiar (Chromium, CPU×6, 200 w., 5 rund na przemian): mediana klatki 83–91 → 58–66 ms,
+     z zablokowaną kolumną 100–108 → 83–84 ms. Wygląd bez zmian (test pikselowy
+     w scripts/hero-layer-playwright.js). Warstwa znika razem z .hero-animating (340 ms).
+     scroll-position zostaje — to bazowa wartość .table-wrap, nie wolno jej zgubić. */
+  body.hero-animating .table-wrap { will-change: scroll-position, transform; }
 
   /* Cienki uchwyt-„pigułka" (drawer handle) — tap toggluje, czytelny affordance */
   .hero-grip {
