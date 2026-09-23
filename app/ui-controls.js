@@ -235,6 +235,8 @@ function resetFilterInputs() {
   syncQuickSearchModeControls();
   syncQuickSearchOperatorsControls();
   updateColumnSummary();
+  lastAppliedFilters = null;
+  if (typeof renderActiveFilters === "function") renderActiveFilters();
   updateDateChipsActive();
   updateFilterBadge();
   if (typeof setSecondFilterVisible === "function") setSecondFilterVisible(false);

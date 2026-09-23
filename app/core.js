@@ -598,6 +598,8 @@ let manualRowHeightAll = 0;  // px > 0 = jednolita wysokość wszystkich wierszy
 let manualColWidthAll = 0;   // px > 0 = jednolita szerokość wszystkich kolumn (pole w „Widok")
 let hasUnsavedChanges = false;
 let focusedCellState = null;
+// Wynik ostatniego applyFilters (ile widać / z ilu) — czyta go pasek aktywnych filtrów.
+let lastAppliedFilters = null;
 let selectedCellState = null;
 let syncingHorizontalScroll = false;
 let tooltipHideTimer = null;
@@ -629,7 +631,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260923-03";
+const APP_BUILD_VERSION = "20260923-04";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

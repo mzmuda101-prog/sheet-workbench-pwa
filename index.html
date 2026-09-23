@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260923-03" />
+    <link rel="stylesheet" href="styles/app.css?v=20260923-04" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1109,7 +1109,7 @@
               <div class="shortcut-row"><kbd>||</kbd> <span><strong data-shortcut-text="orStrong">LUB</strong> <span data-shortcut-text="searchOperatorOrRest">— wiersz zawiera przynajmniej jeden z wyrazów</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorOrExample">np. „Kowalski || Nowak"</em></span></div>
               <div class="shortcut-row"><kbd>&&</kbd> <span><strong data-shortcut-text="andStrong">I</strong> <span data-shortcut-text="searchOperatorAndRest">— wiersz zawiera wszystkie wyrazy jednocześnie</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorAndExample">np. „Kowalski && Faktura" · ma pierwszeństwo nad ||</em></span></div>
               <div class="shortcut-row"><kbd>!</kbd> <span data-shortcut-text="searchOperatorNot">wykluczenie pojedynczego warunku</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorNotPhrase">całą frazę bierz w cudzysłów: !"Jan Kowalski"</em></div>
-              <div class="shortcut-row"><kbd>:</kbd> <span><strong data-shortcut-text="searchColStrong">Szukaj w jednej kolumnie</strong> <span data-shortcut-text="searchColRest">— nazwa nagłówka, dwukropek, wartość</span><br><em class="shortcut-example" data-shortcut-text="searchColExample">np. „Status:Anulowana", „Status:!Anulowana", „Kwota:&gt;&gt;1000", „Klient:"Jan Kowalski"" · tekst w cudzysłowie = dosłownie</em></span></div>
+              <div class="shortcut-row"><kbd>:</kbd> <span><strong data-shortcut-text="searchColStrong">Szukaj w jednej kolumnie</strong> <span data-shortcut-text="searchColRest">— nazwa nagłówka, dwukropek, wartość</span><br><em class="shortcut-example" data-shortcut-text="searchColExample">np. „Status:Anulowana", „Status:!Anulowana", „Kwota:&gt;&gt;1000", „Klient:"Jan Kowalski"" · tekst w cudzysłowie = dosłownie · „Status:=Anulowana" = cała komórka, „Uwagi:=""" = pusta, „Uwagi:!=""" = niepusta · prawy klik / przytrzymanie komórki = „Pokaż tylko takie"</em></span></div>
               <div class="shortcut-row"><kbd>{&nbsp;}</kbd> <em class="shortcut-example" data-shortcut-text="searchOperatorBracket">nawiasy {} wymuszają kolejność, np. „{Kowalski || Nowak} && Faktura"</em></div>
               <div class="shortcut-row"><kbd>&gt;&gt;</kbd> <kbd>&lt;&lt;</kbd> <span><strong data-shortcut-text="searchCmpStrong">Porównania liczb i dat</strong> <span data-shortcut-text="searchCmpRest">— „&gt;&gt;" większe, „&lt;&lt;" mniejsze; dodaj „=" dla ≥/≤ (&gt;&gt;=, =&lt;&lt;)</span><br><em class="shortcut-example" data-shortcut-text="searchCmpExample">np. „&gt;&gt;1000", „=&lt;&lt;50", „&gt;&gt;2026-01-01" · zakres: „&gt;&gt;5 &amp;&amp; &lt;&lt;10"</em></span></div>
               <div class="shortcut-row"><kbd>dl&gt;&gt;</kbd> <kbd>dl&lt;&lt;</kbd> <span><strong data-shortcut-text="searchLenStrong">Długość tekstu komórki</strong> <span data-shortcut-text="searchLenRest">— ten sam operator co wyżej, z prefiksem „dl" (lub „len")</span><br><em class="shortcut-example" data-shortcut-text="searchLenExample">np. „dl&gt;&gt;20" (dłuższe niż 20 znaków), „len&lt;&lt;=3"</em></span></div>
@@ -1202,6 +1202,10 @@
                 <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport</button>
               </div>
             </div>
+
+            <!-- Co teraz filtruje: jedna linia pigułek z × — widać, DLACZEGO wierszy jest mało,
+                 i każdy filtr zdejmuje się jednym tapnięciem. Ukryta, gdy nic nie filtruje. -->
+            <div class="active-filters hidden" id="activeFilters" role="group" aria-label="Aktywne filtry"></div>
 
             <div class="empty-state" id="emptyState">
               <div class="empty-icon" aria-hidden="true">
@@ -1375,6 +1379,9 @@
         </form>
       </div>
     </div>
+
+    <!-- Menu komórki: prawy klik / przytrzymanie palcem / klawisz menu (Shift+F10) -->
+    <div class="cell-menu hidden" id="cellMenu" role="menu" aria-label="Działania na komórce"></div>
 
     <!-- Quick search popup (Ctrl/Cmd+Shift+F) -->
     <div class="quick-search-popup hidden" id="quickSearchPopup" role="dialog" aria-label="Szybkie szukanie">
@@ -1560,25 +1567,26 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260923-03"></script>
-    <script defer src="app/language.js?v=20260923-03"></script>
-    <script defer src="app/analysis.js?v=20260923-03"></script>
-    <script defer src="app/smart-filters.js?v=20260923-03"></script>
-    <script defer src="app/workbook.js?v=20260923-03"></script>
-    <script defer src="app/xlsx-patch.js?v=20260923-03"></script>
-    <script defer src="app/table.js?v=20260923-03"></script>
-    <script defer src="app/conditional-formatting.js?v=20260923-03"></script>
-    <script defer src="app/data-validation.js?v=20260923-03"></script>
-    <script defer src="app/derived-columns.js?v=20260923-03"></script>
-    <script defer src="app/formulas.js?v=20260923-03"></script>
-    <script defer src="app/edit-tools.js?v=20260923-03"></script>
-    <script defer src="app/ui-controls.js?v=20260923-03"></script>
-    <script defer src="app/transcribe.js?v=20260923-03"></script>
-    <script defer src="app/freeze-pane.js?v=20260923-03"></script>
+    <script defer src="app/core.js?v=20260923-04"></script>
+    <script defer src="app/language.js?v=20260923-04"></script>
+    <script defer src="app/analysis.js?v=20260923-04"></script>
+    <script defer src="app/smart-filters.js?v=20260923-04"></script>
+    <script defer src="app/workbook.js?v=20260923-04"></script>
+    <script defer src="app/xlsx-patch.js?v=20260923-04"></script>
+    <script defer src="app/table.js?v=20260923-04"></script>
+    <script defer src="app/conditional-formatting.js?v=20260923-04"></script>
+    <script defer src="app/data-validation.js?v=20260923-04"></script>
+    <script defer src="app/derived-columns.js?v=20260923-04"></script>
+    <script defer src="app/formulas.js?v=20260923-04"></script>
+    <script defer src="app/edit-tools.js?v=20260923-04"></script>
+    <script defer src="app/ui-controls.js?v=20260923-04"></script>
+    <script defer src="app/filter-bar.js?v=20260923-04"></script>
+    <script defer src="app/transcribe.js?v=20260923-04"></script>
+    <script defer src="app/freeze-pane.js?v=20260923-04"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260923-03"></script>
-    <script defer src="app/bootstrap.js?v=20260923-03"></script>
+    <script defer src="app/debug-loaders.js?v=20260923-04"></script>
+    <script defer src="app/bootstrap.js?v=20260923-04"></script>
   </body>
 </html>

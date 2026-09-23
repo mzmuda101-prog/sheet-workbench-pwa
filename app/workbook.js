@@ -810,7 +810,7 @@ function unquoteTerm(s) {
 }
 // → { term, indexes, negated, column } — term gotowy do dopasowania komórek.
 function resolveScopedTerm(q, criterion) {
-  const out = { term: q, indexes: criterion.indexes, negated: false, column: null };
+  const out = { term: q, indexes: criterion.indexes, negated: false, exact: false, column: null };
   if (!criterion.operatorsEnabled) return out;
   if (q.length >= 2 && q.startsWith('"') && q.endsWith('"')) {
     out.term = q.slice(1, -1);
@@ -836,6 +836,12 @@ function resolveScopedTerm(q, criterion) {
     out.negated = true;
     value = value.slice(1).trim();
   }
+  // „Kolumna:=wartość" = CAŁA komórka równa (niezależnie od trybu Filtra 1);
+  // „Kolumna:=""" = pusta, „Kolumna:!=""" = niepusta. „=<<50" / „=>>5" zostają porównaniem.
+  if (value.startsWith("=") && !/^=(<<|>>)/.test(value)) {
+    out.exact = true;
+    value = value.slice(1).trim();
+  }
   out.term = unquoteTerm(value);
   return out;
 }
@@ -851,6 +857,14 @@ function normalizeTermForMode(term, mode) {
 // Zwraca null, gdy term jest pusty (np. samo „Status:" w trakcie pisania).
 function scopedTermMatcher(term, criterion) {
   const scoped = resolveScopedTerm(normalizeTermForMode(term, criterion.mode), criterion);
+  if (scoped.exact) {
+    const want = scoped.term.trim().toLowerCase();
+    scoped.cellHit = want
+      ? (row, i) => i < row.values.length
+        && (String(getDisplayValue(row, i)).trim().toLowerCase() === want || cellMatchesTerm(row, i, want, "equals"))
+      : (row, i) => i >= row.values.length || String(getDisplayValue(row, i)).trim() === "";
+    return scoped;
+  }
   if (!scoped.term) return null;
   const cmp = (criterion.mode !== "regex" && criterion.operatorsEnabled) ? parseComparisonTerm(scoped.term) : null;
   const q = scoped.term;
@@ -1301,7 +1315,8 @@ function collectMatchingCellsForRow(row, criteria, dateFilter) {
     const positiveTerms = gatherPositiveTermStrings(parsed);
     for (const q of positiveTerms) {
       const m = scopedTermMatcher(q, criterion);
-      if (!m || m.negated) continue; // „Status:!Anulowana" nie wskazuje komórki-dowodu
+      // „Status:!Anulowana" ani „Uwagi:=""" (pusta) nie wskazują komórki-dowodu
+      if (!m || m.negated || (m.exact && !m.term)) continue;
       for (const i of m.indexes) {
         if (m.cellHit(row, i)) cols.add(i);
       }
@@ -1438,6 +1453,15 @@ function applyFilters() {
       collectCells(row);
     });
   }
+  // Migawka dla paska „co teraz filtruje" (filter-bar.js) — liczby z TEGO przebiegu.
+  lastAppliedFilters = {
+    filtering: shouldFilterRows,
+    marking: !shouldFilterRows && (quickSearchHighlightMode || quickSearchCellsMode),
+    matched: shouldFilterRows ? viewRows.length
+      : (quickSearchHighlightMode ? matchedRowIndexes.size : matchedCellsByRow.size),
+    total: baseRows.length,
+  };
+  if (typeof renderActiveFilters === "function") renderActiveFilters();
 }
 
 function sortRows() {
