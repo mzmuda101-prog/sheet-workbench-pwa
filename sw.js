@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260923-05";
+const CACHE_VERSION = "20260923-06";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -7,6 +7,8 @@ const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
 // instalacyjny celuje wtedy w URL-e, których strona już nie prosi (cache miss na
 // starcie, offline-first dla JS/CSS realnie nie działa do pierwszego online-visit).
 const ASSET_V = CACHE_VERSION;
+// Po tylu ms bez odpowiedzi sieci start idzie z cache (patrz handler nawigacji).
+const NAVIGATION_TIMEOUT_MS = 3000;
 
 const SHELL_ASSETS = [
   "./",
@@ -61,6 +63,13 @@ function isStaticAsset(url) {
 function isHeavyAsset(url) {
   return /\/lib\/(?:xlsx\.full\.min|jszip\.min)\.js$/i.test(url.pathname)
     || /\/assets\/media\/mateusz-intro\.mp4$/i.test(url.pathname);
+}
+
+// Lokalnie (npm run dev) pliki zmieniają się bez podbicia ?v=, więc tam zostaje
+// stale-while-revalidate — inaczej po edycji widać by było stary kod aż do release.
+function isImmutableAsset(url) {
+  if (/^(?:localhost|127\.0\.0\.1|\[::1\])$/.test(self.location.hostname)) return false;
+  return url.searchParams.has("v");
 }
 
 function cacheNameForUrl(url) {
@@ -127,17 +136,52 @@ self.addEventListener("fetch", (event) => {
   const sameOrigin = reqUrl.origin === self.location.origin;
 
   if (request.mode === "navigate") {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
-          return response;
-        })
+    // Sieć najpierw (świeży index.html, gdy jest zasięg), ale z LIMITEM czasu. Bez niego
+    // przy słabym zasięgu („jest kreska, a nic nie przechodzi") start apki z ikony wisiał
+    // na białym ekranie aż przeglądarka sama porzuci żądanie — nawet kilkadziesiąt sekund,
+    // choć cała apka leży w cache. Po limicie podajemy stronę z cache; żądanie sieciowe
+    // leci dalej w tle i jeśli dojdzie, odświeża cache na następne otwarcie.
+    const network = fetch(request).then((response) => {
+      if (response && response.ok) {
+        const copy = response.clone();
+        caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, copy)).catch(() => {});
+      }
+      return response;
+    });
+    const fromCache = async () => (await caches.match(request)) || caches.match("./index.html");
+    event.respondWith(new Promise((resolve) => {
+      let settled = false;
+      const finish = (res) => { if (!settled && res) { settled = true; resolve(res); } };
+      const timer = setTimeout(async () => {
+        const cached = await fromCache();
+        if (cached) finish(cached);
+      }, NAVIGATION_TIMEOUT_MS);
+      network
+        .then((res) => { clearTimeout(timer); finish(res); })
         .catch(async () => {
-          const cachedPage = await caches.match(request);
-          return cachedPage || caches.match("./index.html");
-        })
+          clearTimeout(timer);
+          const cached = await fromCache();
+          if (cached) finish(cached);
+          else finish(Response.error());
+        });
+    }));
+    event.waitUntil(network.catch(() => {}));
+    return;
+  }
+
+  if (sameOrigin && isStaticAsset(reqUrl) && isImmutableAsset(reqUrl)) {
+    // Plik z numerem wersji w adresie (?v=…) nigdy się nie zmienia — nowa wersja apki
+    // to nowy adres. Dawniej każdy start i tak dopytywał sieć o ~25 takich plików
+    // (stale-while-revalidate), czyli komplet zapytań na telefonie przy KAŻDYM otwarciu,
+    // w samym środku startu. Teraz: z cache, a sieć tylko gdy pliku w cache brak.
+    event.respondWith(
+      caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(cacheNameForUrl(reqUrl)).then((cache) => cache.put(request, copy)).catch(() => {});
+        }
+        return response;
+      }))
     );
     return;
   }

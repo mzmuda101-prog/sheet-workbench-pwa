@@ -398,7 +398,7 @@ async function buildConditionalFormatting(bytes, wb) {
       const xml = path ? await readSharedZipText(zip, path) : undefined;
       if (xml == null) continue;
       if (xml.indexOf("conditionalFormatting") === -1) continue;
-      const blocks = parseSheetCF(xml);
+      const blocks = parseSheetCF(sheetXmlWithoutData(xml));
       if (blocks.length) rules.set(name, blocks);
     }
     currentCFRules = rules.size ? rules : null;

@@ -217,7 +217,7 @@ async function buildDataValidations(bytes, wb) {
       const xml = path ? await readSharedZipText(zip, path) : undefined;
       if (xml == null) continue;
       if (xml.indexOf("dataValidation") === -1) continue;
-      const rules = parseSheetDataValidations(xml);
+      const rules = parseSheetDataValidations(sheetXmlWithoutData(xml));
       if (rules.length) map.set(name, rules);
     }
     dvRulesBySheet = map.size ? map : null;

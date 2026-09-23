@@ -497,6 +497,30 @@ async function readSharedZipText(zip, entryPath) {
   perZip.set(entryPath, text);
   return text;
 }
+// XML arkusza BEZ <sheetData> — do DOMParsera w czytnikach formatowania warunkowego
+// i walidacji danych. Obie sekcje (i extLst z x14:*) leżą ZA sheetData (kolejność
+// wymusza schemat OOXML), a sheetData to prawie cały plik: parsowanie go do DOM tylko
+// po to, żeby go pominąć, kosztowało ~1 s na realnym arkuszu przy CPU ×6.
+// Zostaje znacznik otwierający korzeń (wszystkie xmlns) + ogon po sheetData, więc
+// dokument jest poprawny, a prefiksy x14:/xm: rozwiązują się jak wcześniej.
+// Gdy struktura jest nietypowa — zwracamy pełny XML (dawne zachowanie).
+function sheetXmlWithoutData(xml) {
+  if (typeof xml !== "string") return xml;
+  const rootMatch = /<([A-Za-z_][\w.-]*:)?worksheet\b[^>]*>/.exec(xml);
+  if (!rootMatch) return xml;
+  const prefix = rootMatch[1] || "";
+  const closeTag = `</${prefix}sheetData>`;
+  let tailStart = xml.indexOf(closeTag, rootMatch.index);
+  if (tailStart !== -1) {
+    tailStart += closeTag.length;
+  } else {
+    const selfClosing = new RegExp(`<${prefix}sheetData\\b[^>]*/>`).exec(xml);
+    if (!selfClosing) return xml;
+    tailStart = selfClosing.index + selfClosing[0].length;
+  }
+  return rootMatch[0] + xml.slice(tailStart);
+}
+
 function bumpSheetDataStamp() { sheetDataStamp += 1; }
 let currentHeaders = [];
 let baseRows = [];
@@ -631,7 +655,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260923-05";
+const APP_BUILD_VERSION = "20260923-06";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -729,11 +753,23 @@ const TOOLBAR_COLLAPSED_KEY = "excel-workbench-toolbar-collapsed-v2";
 let selectionKind = "row";
 const INTRO_PLAYED_KEY = "introPlayed";
 
+// Dziennik ma limit linii: wcześniej rósł bez końca (każde wczytanie, zapis, edycja
+// dopisywały węzeł DOM na całą sesję). toLocaleTimeString z locale budował przy każdym
+// wpisie nowy formater Intl — drogi w budowie, tani w użyciu — więc trzymamy jeden.
+const LOG_MAX_LINES = 200;
+let _logTimeFmt = null;
+let _logTimeFmtLocale = "";
 function log(msg, type = "info") {
+  const locale = I18N[currentLang].locale;
+  if (!_logTimeFmt || _logTimeFmtLocale !== locale) {
+    _logTimeFmt = new Intl.DateTimeFormat(locale, { timeStyle: "medium" }); // = toLocaleTimeString(locale)
+    _logTimeFmtLocale = locale;
+  }
   const line = document.createElement("div");
   line.className = `log-line log-${type}`;
-  line.textContent = `${new Date().toLocaleTimeString(I18N[currentLang].locale)} ${msg}`;
+  line.textContent = `${_logTimeFmt.format(new Date())} ${msg}`;
   logEl.prepend(line);
+  while (logEl.childElementCount > LOG_MAX_LINES) logEl.lastElementChild.remove();
 }
 
 // ── WYŁĄCZONE 2026-09-21 (decyzja Mateusza, po testach na iPhonie) ─────────────
