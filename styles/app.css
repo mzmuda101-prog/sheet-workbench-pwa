@@ -5340,6 +5340,25 @@ html.low-power .loading-overlay.is-file {
 }
 .monthly-note { font-size: 11px; color: var(--muted); margin-bottom: 8px; }
 .field-note { font-size: 11px; line-height: 1.4; color: var(--muted); margin: 2px 0 0; }
+/* Narzędzia edycji — lista grup „Ujednolić warianty" + podgląd zmian */
+.unify-list:empty { display: none; }
+.unify-list { display: grid; gap: 8px; max-height: 360px; overflow-y: auto; overscroll-behavior: contain; }
+.unify-group { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 6px 8px; display: grid; gap: 2px; }
+.unify-group.off { opacity: 0.55; }
+.unify-head { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--muted); cursor: pointer; }
+.unify-opt { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink); cursor: pointer; padding: 2px 0 2px 20px; }
+.unify-val { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.unify-ws { color: var(--warning); }
+.unify-count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.unify-more { font-size: 11px; color: var(--muted); }
+.edit-preview { font-size: 12px; line-height: 1.45; color: var(--ink-2); border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 6px 8px; display: grid; gap: 3px; max-height: 240px; overflow-y: auto; }
+.edit-preview-sum { font-weight: 600; color: var(--ink); }
+.edit-preview-row { display: flex; gap: 6px; align-items: baseline; overflow-wrap: anywhere; }
+.edit-preview-row .from { color: var(--muted); text-decoration: line-through; }
+.edit-preview-row .n { margin-left: auto; font-size: 11px; color: var(--muted); white-space: nowrap; }
+@media (pointer: coarse) {
+  .unify-opt, .unify-head { min-height: 36px; }
+}
 .monthly-list { display: grid; gap: 5px; }
 .monthly-row { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 8px; }
 .monthly-label { font-size: 11.5px; color: var(--ink-2); white-space: nowrap; }

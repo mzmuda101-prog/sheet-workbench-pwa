@@ -400,6 +400,22 @@ const I18N = {
     editErrNoSelection: "Najpierw zaznacz zakres komórek",
     editToolApplied: "Zmieniono {count} komórek",
     editToolNoChange: "Brak zmian do zastosowania",
+    editOpUnify: "Ujednolić warianty",
+    editUnifyModeLabel: "Za to samo uznaj",
+    editUnifyLoose: "Szeroko (+ . - / i ą→a)",
+    editUnifyCase: "Wąsko (litery i spacje)",
+    editUnifyScan: "Znajdź warianty",
+    editUnifyNote: "Działa na tekście w wybranym zakresie. Wybierz w każdej grupie, która pisownia ma zostać, i odznacz grupy, których nie chcesz ruszać.",
+    editUnifyNone: "Nie znaleziono wariantów — wartości w tym zakresie są już jednolite.",
+    editUnifyGroupHead: "Wariantów: {variants} · komórek: {count}",
+    editUnifyMoreGroups: "…i dalsze grupy: {count} (zawęź zakres, żeby je zobaczyć)",
+    editErrUnifyScan: "Najpierw kliknij „Znajdź warianty”",
+    editIgnoreCaseLabel: "Bez rozróżniania wielkości liter",
+    editWholeCellLabel: "Tylko cała komórka",
+    editPreview: "Podgląd",
+    editPreviewSum: "Komórek do zmiany: {count}",
+    editPreviewMore: "…i dalsze rodzaje zmian: {count}",
+    editEmptyValue: "(pusto)",
     sortRulesEmpty: "Brak aktywnych sortowań. Kliknij nagłówek tabeli albo dodaj regułę tutaj.",
     sectionHeaderSet: "Ustawiono wiersz nagłówka {row}",
     sectionOutsideLimit: "Ta sekcja nie mieści się w aktualnym limicie wierszy",
@@ -1135,6 +1151,22 @@ const I18N = {
     editErrNoSelection: "Select a cell range first",
     editToolApplied: "Changed {count} cells",
     editToolNoChange: "No changes to apply",
+    editOpUnify: "Unify variants",
+    editUnifyModeLabel: "Treat as the same",
+    editUnifyLoose: "Broad (+ . - / and ą→a)",
+    editUnifyCase: "Narrow (case and spaces)",
+    editUnifyScan: "Find variants",
+    editUnifyNote: "Works on text in the chosen range. In each group pick the spelling to keep, and untick groups you don’t want to touch.",
+    editUnifyNone: "No variants found — values in this range are already consistent.",
+    editUnifyGroupHead: "Variants: {variants} · cells: {count}",
+    editUnifyMoreGroups: "…and {count} more groups (narrow the range to see them)",
+    editErrUnifyScan: "Click “Find variants” first",
+    editIgnoreCaseLabel: "Ignore letter case",
+    editWholeCellLabel: "Whole cell only",
+    editPreview: "Preview",
+    editPreviewSum: "Cells to change: {count}",
+    editPreviewMore: "…and {count} other changes",
+    editEmptyValue: "(empty)",
     sortRulesEmpty: "No active sort rules. Click a table header or add a rule here.",
     sectionHeaderSet: "Header row set to {row}",
     sectionOutsideLimit: "This section is outside the current row limit",
@@ -2393,6 +2425,12 @@ function applyStaticTranslations() {
   setFieldLabel("editReplace", copy.editReplaceLabel);
   setText("#editReplaceNote", copy.editReplaceNote);
   setCheckboxText("editRegex", copy.editRegexLabel);
+  setCheckboxText("editIgnoreCase", copy.editIgnoreCaseLabel);
+  setCheckboxText("editWholeCell", copy.editWholeCellLabel);
+  setFieldLabel("editUnifyMode", copy.editUnifyModeLabel);
+  setText("#editUnifyScanBtn", copy.editUnifyScan);
+  setText("#editUnifyNote", copy.editUnifyNote);
+  setText("#previewEditToolBtn", copy.editPreview);
   setFieldLabel("editCaseMode", copy.editCaseLabel);
   setCheckboxText("editFilteredOnly", copy.editFilteredOnlyLabel);
   setFieldLabel("editTrimMode", copy.editTrimModeLabel);
@@ -2571,12 +2609,14 @@ function applySelectTranslations() {
     editOp: {
       pattern: "editOpPattern", replace: "editOpReplace", case: "editOpCase",
       trim: "editOpTrim", affix: "editOpAffix", pad: "editOpPad", convert: "editOpConvert",
+      unify: "editOpUnify",
     },
     editPatternMode: { pattern: "editPModePattern", fuzzy: "editPModeFuzzy" },
     editCaseMode: { upper: "editCaseUpper", lower: "editCaseLower", title: "editCaseTitle" },
     editTrimMode: { ends: "editTrimEnds", collapse: "editTrimCollapse", hard: "editTrimHard" },
     editPadSide: { start: "editPadStart", end: "editPadEnd" },
     editConvertTo: { number: "editConvertNumber", date: "editConvertDate", text: "editConvertText" },
+    editUnifyMode: { loose: "editUnifyLoose", case: "editUnifyCase" },
     filterMode: {
       contains: "contains",
       starts_with: "startsWith",
@@ -2680,7 +2720,7 @@ function applySelectTranslations() {
     "quickSearchAction", "quickSearchPopupAction",
     "sortDirectionSelect", "formulaFilter",
     "editScope", "editOp", "editPatternMode", "editCaseMode",
-    "editTrimMode", "editPadSide", "editConvertTo"
+    "editTrimMode", "editPadSide", "editConvertTo", "editUnifyMode"
   ];
 
   ids.forEach((id) => {

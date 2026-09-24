@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260924-10" />
+    <link rel="stylesheet" href="styles/app.css?v=20260924-11" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -488,6 +488,7 @@
                 <select id="editOp">
                   <option value="pattern">Zdejmij śmieć wzorcem</option>
                   <option value="replace">Znajdź i zamień</option>
+                  <option value="unify">Ujednolić warianty</option>
                   <option value="case">Zmiana wielkości</option>
                   <option value="trim">Przytnij / spacje</option>
                   <option value="affix">Prefiks / sufiks</option>
@@ -521,7 +522,27 @@
                   <input id="editRegex" type="checkbox" />
                   <span>Wyrażenie regularne</span>
                 </label>
+                <label class="field checkbox" data-hint data-hint-pl="Zaznaczone: „teren” znajdzie też „Teren” i „TEREN”." data-hint-en="Checked: “site” also finds “Site” and “SITE”." data-hint-delay="1.1">
+                  <input id="editIgnoreCase" type="checkbox" />
+                  <span>Bez rozróżniania wielkości liter</span>
+                </label>
+                <label class="field checkbox" data-hint data-hint-pl="Zamienia tylko komórki, których CAŁA zawartość to szukany tekst. Np. „C-03” nie ruszy „Teren C-03”." data-hint-en="Replaces only cells whose WHOLE content is the search text. E.g. “C-03” won’t touch “Site C-03”." data-hint-delay="1.1">
+                  <input id="editWholeCell" type="checkbox" />
+                  <span>Tylko cała komórka</span>
+                </label>
                 <p id="editReplaceNote" class="field-note">Wskazówka: datę wpisz tak, jak ją widzisz w tabeli; liczbę — jako wartość surową (kropka dziesiętna, bez spacji i symboli jak „zł” czy „%”).</p>
+              </div>
+              <div id="editUnifyFields" class="stack hidden">
+                <label class="field" data-hint data-hint-pl="Które różnice pomijać przy szukaniu wariantów. „Wąsko” pomija tylko wielkość liter i spacje. „Szeroko” dodatkowo kropki, myślniki, ukośniki, podkreślenia i polskie znaki — uzna za to samo np. „Teren C-03”, „teren c03” i „Teren C 03” albo „12.05.24” i „12-05-24” zapisane jako tekst." data-hint-en="Which differences to ignore when looking for variants. “Narrow” ignores only letter case and spaces. “Broad” also ignores dots, dashes, slashes, underscores and diacritics — it treats e.g. “Site C-03”, “site c03” and “Site C 03” as the same." data-hint-delay="1.1">
+                  Za to samo uznaj
+                  <select id="editUnifyMode">
+                    <option value="loose">Szeroko (+ . - / i ą→a)</option>
+                    <option value="case">Wąsko (litery i spacje)</option>
+                  </select>
+                </label>
+                <button class="btn ghost full" id="editUnifyScanBtn" type="button">Znajdź warianty</button>
+                <p id="editUnifyNote" class="field-note">Działa na tekście w wybranym zakresie. Wybierz w każdej grupie, która pisownia ma zostać, i odznacz grupy, których nie chcesz ruszać.</p>
+                <div id="editUnifyList" class="unify-list" aria-live="polite"></div>
               </div>
               <div id="editCaseFields" class="stack hidden">
                 <label class="field">
@@ -581,6 +602,8 @@
                 </label>
                 <p class="field-note">Wartości, których nie da się jednoznacznie przekształcić (np. „1 234,56 zł”), są pomijane.</p>
               </div>
+              <button class="btn ghost full" id="previewEditToolBtn" type="button" data-hint data-hint-pl="Pokazuje, ile komórek i jak się zmieni — bez zmieniania czegokolwiek." data-hint-en="Shows how many cells would change and how — without changing anything." data-hint-delay="1.1">Podgląd</button>
+              <div id="editPreview" class="edit-preview hidden" aria-live="polite"></div>
               <button class="btn full" id="applyEditToolBtn" type="button" data-hint data-hint-pl="Zastosuj operację. „Znajdź i zamień” obejmuje tekst, daty i liczby (liczbę wpisz jako wartość surową); „wzorzec” i „wielkość liter” — tylko tekst. Potem zapisz zmiany przyciskiem Zapisz / Zapisz jako." data-hint-en="Apply the operation. “Find & replace” covers text, dates and numbers (type a number as its raw value); “pattern” and “letter case” — text only. Then save with Save / Save as." data-hint-delay="1.1" data-hint-touch="on">Zastosuj</button>
             </div>
           </details>
@@ -1592,28 +1615,28 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260924-10"></script>
-    <script defer src="app/language.js?v=20260924-10"></script>
-    <script defer src="app/analysis.js?v=20260924-10"></script>
-    <script defer src="app/smart-filters.js?v=20260924-10"></script>
-    <script defer src="app/workbook.js?v=20260924-10"></script>
-    <script defer src="app/xlsx-patch.js?v=20260924-10"></script>
-    <script defer src="app/table.js?v=20260924-10"></script>
-    <script defer src="app/conditional-formatting.js?v=20260924-10"></script>
-    <script defer src="app/data-validation.js?v=20260924-10"></script>
-    <script defer src="app/derived-columns.js?v=20260924-10"></script>
-    <script defer src="app/formulas.js?v=20260924-10"></script>
-    <script defer src="app/edit-tools.js?v=20260924-10"></script>
-    <script defer src="app/ui-controls.js?v=20260924-10"></script>
-    <script defer src="app/filter-bar.js?v=20260924-10"></script>
-    <script defer src="app/qs-history.js?v=20260924-10"></script>
-    <script defer src="app/undo.js?v=20260924-10"></script>
-    <script defer src="app/transcribe.js?v=20260924-10"></script>
-    <script defer src="app/freeze-pane.js?v=20260924-10"></script>
+    <script defer src="app/core.js?v=20260924-11"></script>
+    <script defer src="app/language.js?v=20260924-11"></script>
+    <script defer src="app/analysis.js?v=20260924-11"></script>
+    <script defer src="app/smart-filters.js?v=20260924-11"></script>
+    <script defer src="app/workbook.js?v=20260924-11"></script>
+    <script defer src="app/xlsx-patch.js?v=20260924-11"></script>
+    <script defer src="app/table.js?v=20260924-11"></script>
+    <script defer src="app/conditional-formatting.js?v=20260924-11"></script>
+    <script defer src="app/data-validation.js?v=20260924-11"></script>
+    <script defer src="app/derived-columns.js?v=20260924-11"></script>
+    <script defer src="app/formulas.js?v=20260924-11"></script>
+    <script defer src="app/edit-tools.js?v=20260924-11"></script>
+    <script defer src="app/ui-controls.js?v=20260924-11"></script>
+    <script defer src="app/filter-bar.js?v=20260924-11"></script>
+    <script defer src="app/qs-history.js?v=20260924-11"></script>
+    <script defer src="app/undo.js?v=20260924-11"></script>
+    <script defer src="app/transcribe.js?v=20260924-11"></script>
+    <script defer src="app/freeze-pane.js?v=20260924-11"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260924-10"></script>
-    <script defer src="app/bootstrap.js?v=20260924-10"></script>
+    <script defer src="app/debug-loaders.js?v=20260924-11"></script>
+    <script defer src="app/bootstrap.js?v=20260924-11"></script>
   </body>
 </html>
