@@ -752,6 +752,23 @@ body.splashing {
   transform: translateY(-50%) scale(1);
   opacity: 1;
 }
+/* DOTYK: bez rozmytego cienia zewnętrznego na WŁĄCZONYM przełączniku (2026-09-24).
+   Zmierzone na fizycznym iPhonie panelem ?qsab: aktywny „Tryb szybkie szukanie"
+   zacinał przewijanie tabeli, tym mocniej, im więcej wierszy (120 — płynnie,
+   ~600 — lag); zdjęcie SAMEGO cienia usuwało lag, schowanie paska szukania — nie.
+   Symulator/Chromium/WebKit na Macu tego nie pokazują. Zostaje wewnętrzny refleks
+   (bez rozmycia, w obrysie przycisku). Dotyczy też :hover — na iOS „przykleja się”
+   po tapnięciu. Ten sam cień ma włączony zakres „Wszystkie arkusze”. */
+@media (pointer: coarse) {
+  .btn.ghost.toggle-pill[aria-pressed="true"],
+  .btn.ghost.toggle-pill.active,
+  .btn.ghost.toggle-pill[aria-pressed="true"]:hover:not(:disabled),
+  .btn.ghost.toggle-pill.active:hover:not(:disabled),
+  .btn.qs-scope-toggle[aria-pressed="true"],
+  .btn.qs-scope-toggle[aria-pressed="true"]:hover:not(:disabled) {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  }
+}
 
 /* (3) FAB „do góry" — handle przy dolnej krawędzi tabeli; jak handle sidebara
    rozwija się z kółka w pigułkę z etykietą na hover/focus. */
