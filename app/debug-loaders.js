@@ -27,6 +27,12 @@
         localStorage.getItem("perfhud") === "1") {
       loadScript("app/perf-hud.js?v=" + v);
     }
+    // A/B „co w pasku szybkiego szukania zacina przewijanie" — panel przełączników.
+    if (/(\?|&)qsab\b/.test(location.search) ||
+        /qsab/.test(location.hash) ||
+        localStorage.getItem("qsab") === "1") {
+      loadScript("app/qs-ab.js?v=" + v);
+    }
   } catch (e) {
     // [EN] localStorage may throw (private mode) — fall back to URL flags only
     if (/scrolltest/.test(location.search + location.hash)) {
@@ -37,6 +43,9 @@
     }
     if (/perfhud/.test(location.search + location.hash)) {
       loadScript("app/perf-hud.js?v=" + v);
+    }
+    if (/qsab/.test(location.search + location.hash)) {
+      loadScript("app/qs-ab.js?v=" + v);
     }
   }
 })();
