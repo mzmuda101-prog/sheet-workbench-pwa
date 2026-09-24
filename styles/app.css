@@ -5459,7 +5459,11 @@ body.tr-active { overflow: hidden; }
   padding: max(10px, env(safe-area-inset-top)) 14px 10px;
   border-bottom: 1px solid var(--border-subtle);
 }
-.tr-head-main { min-width: 0; }
+/* flex-wrap: na wąskim telefonie tytuł + 5 przycisków się nie mieści, a narzędzia nie
+   mogą się ścieśnić — wcześniej wychodziły NA tytuł („A+" leżało na „Spisywanie").
+   Teraz, gdy brakuje miejsca, narzędzia schodzą do drugiego rzędu, do prawej. */
+.tr-head { flex-wrap: wrap; row-gap: 8px; }
+.tr-head-main { min-width: 0; flex: 1 1 140px; }
 .tr-title { font-weight: 700; font-size: 15px; letter-spacing: .01em; }
 .tr-source {
   font-size: 11.5px;
@@ -5468,7 +5472,7 @@ body.tr-active { overflow: hidden; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.tr-head-tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.tr-head-tools { display: flex; align-items: center; gap: 6px; flex-shrink: 0; margin-left: auto; }
 /* Wskaźnik działającego Wake Locka — kropka przy tytule, bez dodatkowego napisu. */
 .tr-overlay.has-wakelock .tr-title::after {
   content: "";

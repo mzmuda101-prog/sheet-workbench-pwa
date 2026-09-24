@@ -195,6 +195,13 @@ const I18N = {
     trNoticeUnknown: "Ten arkusz wygląda inaczej niż przy ostatnim spisywaniu ({when}). Zapamiętane ✓ ({all}) pochodzą ze starszej wersji zapisu i mogą stać na niewłaściwych wierszach.",
     trNoticeReset: "Zacznij od nowa",
     trNoticeKeep: "Zostaw",
+    trSuggestText: "Znalazłem spisywanie z „{name}” · {sheet} ({done} ✓, {when}). Pasujące tu wiersze: {moved} (identyczne: {exact}). Przenieść odhaczenia{layout}?",
+    trSuggestLayout: " i układ pól",
+    trSuggestYes: "Przenieś",
+    trSuggestNo: "Nie, to inny plik",
+    trSuggestDismissed: "Dobrze — nie będę już proponować tego pliku. Przeniesiesz ręcznie w „Postęp”, gdyby co.",
+    trImportLayout: " Przeniesiony też układ pól.",
+    trFieldsMissing: "Brak kolumn z zapisanego układu pól: {names} — pominięte na karcie.",
     trScrollMore: "jeszcze {n} ↓",
     trScrollMoreMore: "przewiń niżej ↓",
     trUndoBurst: "↶ Cofnij {n}",
@@ -923,6 +930,13 @@ const I18N = {
     trNoticeUnknown: "This sheet looks different from the last session ({when}). The stored ✓ ({all}) come from an older record format and may sit on the wrong rows.",
     trNoticeReset: "Start over",
     trNoticeKeep: "Keep",
+    trSuggestText: "Found a transcription from “{name}” · {sheet} ({done} ✓, {when}). {moved} rows match here ({exact} identical). Bring the tick-offs{layout} over?",
+    trSuggestLayout: " and field layout",
+    trSuggestYes: "Bring over",
+    trSuggestNo: "No, different file",
+    trSuggestDismissed: "OK — I won't suggest that file again. You can still import it manually in “Progress”.",
+    trImportLayout: " Field layout carried over too.",
+    trFieldsMissing: "Columns from the saved field layout are missing: {names} — skipped on the card.",
     trScrollMore: "{n} more ↓",
     trScrollMoreMore: "scroll down ↓",
     trUndoBurst: "↶ Undo {n}",
@@ -2497,6 +2511,8 @@ function applyStaticTranslations() {
   setText("#trStoreClearAllBtn", t("trStoreClearAll"));
   setText("#trNoticeResetBtn", t("trNoticeReset"));
   setText("#trNoticeKeepBtn", t("trNoticeKeep"));
+  setText("#trSuggestYesBtn", t("trSuggestYes"));
+  setText("#trSuggestNoBtn", t("trSuggestNo"));
   setText("#trLockBtn", t("trLock"));
   setAttr("#trFontBtn", "aria-label", t("trFontAria"));
   setAttr("#trPrevBtn", "aria-label", t("trPrevAria"));

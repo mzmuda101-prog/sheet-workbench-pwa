@@ -13,7 +13,10 @@
 // SNAPSHOTOWANE przy otwarciu — widok pod spodem nie przesunie się pod ręką.
 
 const TR_STORE_KEY = "excel-workbench-transcribe";
-const TR_MAX_SCOPES = 12;      // ile plików/arkuszy pamiętamy (reszta wypada, najstarsze pierwsze)
+// Ile plików/arkuszy pamiętamy (reszta wypada, najstarsze pierwsze). Było 12 — przy kilku
+// wersjach tego samego pliku (V5, V5_edited…) i kilku arkuszach najstarszy postęp znikał
+// po cichu. Rozmiar i tak pilnuje trSaveStore (zrzuca odciski przy braku miejsca).
+const TR_MAX_SCOPES = 30;
 const TR_MAX_DONE = 20000;     // bezpiecznik na rozmiar localStorage
 const TR_DEFAULT_FIELDS = 10;  // ile pól proponujemy przy pierwszym otwarciu arkusza
 const TR_FONT_STEPS = [1, 2, 3];
@@ -64,6 +67,10 @@ const trNoticeEl = document.getElementById("trNotice");
 const trNoticeTextEl = document.getElementById("trNoticeText");
 const trNoticeResetBtn = document.getElementById("trNoticeResetBtn");
 const trNoticeKeepBtn = document.getElementById("trNoticeKeepBtn");
+const trSuggestEl = document.getElementById("trSuggest");
+const trSuggestTextEl = document.getElementById("trSuggestText");
+const trSuggestYesBtn = document.getElementById("trSuggestYesBtn");
+const trSuggestNoBtn = document.getElementById("trSuggestNoBtn");
 const trLiveEl = document.getElementById("trLive");
 const trUnmatchedEl = document.getElementById("trUnmatched");
 const trUnmatchedTitleEl = document.getElementById("trUnmatchedTitle");
@@ -100,6 +107,10 @@ let trSigCache = new Map();     // rowIndex0 -> odcisk (liczony leniwie)
 let trFingerprint = null;       // odcisk arkusza z TEJ sesji
 let trChangeInfo = null;        // { level, savedRows, rows, moved, lost, savedAt } albo null
 let trUnmatched = [];           // ✓ których nie dało się dopasować: [{ prev, best, score }]
+let trLayoutTouched = false;    // układ pól ustawiony w tym pliku (zapis albo ręczna zmiana) — import go nie nadpisze
+let trSuggest = null;           // propozycja przeniesienia z innej wersji pliku: { key, name, sheet, rec, remap }
+let trLayoutGhosts = [];        // pola z zapisanego układu, których kolumny CHWILOWO nie ma: [{ id, label, sel, pos }]
+let trImportDismissed = [];     // źródła, których user nie chce (per zakres — nie pytamy drugi raz)
 let trScrollRaf = 0;
 let trHoldTimer = 0;          // odliczanie do startu turbo (przytrzymanie)
 let trHoldProgressTimer = 0;  // animacja paska „ładowania" przytrzymania
@@ -171,6 +182,11 @@ function trPersist() {
   store.scopes[trScope] = {
     order: trFieldOrder.slice(),
     sel: Array.from(trSelected),
+    // Te same informacje po NAZWACH — to one są źródłem prawdy (patrz trLayoutFromRecord).
+    ...trLayoutNamesForSave(),
+    inheritNames: (() => { const ids = trLayoutIds(); return Array.from(trInheritCols).map((i) => ids[i]); })(),
+    importDismissed: trImportDismissed.slice(0, 20),
+    layoutSet: trLayoutTouched,
     auto: trAutoFields,
     inherit: trInheritOn,
     inheritCols: Array.from(trInheritCols),
@@ -307,6 +323,71 @@ function trSigHeaderNames() {
     seen.set(base, n);
     return n > 1 ? `${base}#${n}` : base;
   });
+}
+
+// ── Układ pól po NAZWACH kolumn ─────────────────────────────────────────────
+// Wybór i kolejność rubryk były zapisywane po NUMERZE kolumny. Wystarczyło wstawić
+// w Excelu kolumnę przed „Nr", a karta pokazywała INNE kolumny niż wybrane — bez słowa.
+// Przy przepisywaniu na papier to ciche przepisanie złej rubryki. Teraz zapisujemy nazwy
+// (duplikaty numerowane, jak w odciskach), a numery zostają tylko dla starych zapisów.
+function trLayoutIds() {
+  const seen = new Map();
+  return trHeaders.map((h, i) => {
+    const base = trNormHeaderName(h) || `#${i}`;
+    const n = (seen.get(base) || 0) + 1;
+    seen.set(base, n);
+    return n > 1 ? `${base}#${n}` : base;
+  });
+}
+
+// Układ do zapisu: nazwy bieżących pól + „czekające" pola bez kolumny, wstawione z powrotem
+// na ich dawne miejsce w kolejności.
+function trLayoutNamesForSave() {
+  const ids = trLayoutIds();
+  const orderNames = trFieldOrder.map((i) => ids[i]);
+  const selIdx = Array.from(trSelected);
+  const selNames = selIdx.map((i) => ids[i]);
+  const selLabels = selIdx.map((i) => String(trHeaders[i] ?? "").trim());
+  trLayoutGhosts.forEach((g) => {
+    if (orderNames.includes(g.id)) return; // kolumna wróciła
+    orderNames.splice(Math.min(g.pos, orderNames.length), 0, g.id);
+    if (g.sel) { selNames.push(g.id); selLabels.push(g.label); }
+  });
+  return { orderNames, selNames, selLabels };
+}
+
+// Układ z zapisu przetłumaczony na BIEŻĄCE numery kolumn. null = zapis nie ma nazw
+// (sprzed tej wersji) — wtedy wywołujący zostaje przy numerach.
+function trLayoutFromRecord(rec) {
+  if (!rec || !Array.isArray(rec.orderNames) || !rec.orderNames.length) return null;
+  const ids = trLayoutIds();
+  const idx = new Map(ids.map((id, i) => [id, i]));
+  const map = (list) => (Array.isArray(list) ? list : []).map((id) => idx.get(id)).filter((i) => i !== undefined);
+  const order = [];
+  map(rec.orderNames).forEach((i) => { if (!order.includes(i)) order.push(i); });
+  trHeaders.forEach((_, i) => { if (!order.includes(i)) order.push(i); }); // nowe kolumny — na koniec
+  const labels = Array.isArray(rec.selLabels) ? rec.selLabels : [];
+  const selNames = Array.isArray(rec.selNames) ? rec.selNames : [];
+  const missing = selNames
+    .map((id, k) => (idx.has(id) ? null : String(labels[k] || id)))
+    .filter(Boolean);
+  // Pola, których kolumny teraz nie ma, NIE mogą wypaść z zapisu — inaczej kolumna, która
+  // zniknęła na jedną wersję pliku, po powrocie nie wracałaby już na kartę.
+  const ghosts = rec.orderNames
+    .map((id, pos) => (idx.has(id) ? null : {
+      id,
+      pos,
+      sel: selNames.includes(id),
+      label: String(labels[selNames.indexOf(id)] || id),
+    }))
+    .filter(Boolean);
+  return {
+    order,
+    sel: new Set(map(rec.selNames)),
+    inheritCols: new Set(map(rec.inheritNames)),
+    missing,
+    ghosts,
+  };
 }
 
 // Wartość do odcisku: surowa (values), bo `display` zależy od ustawień wyświetlania.
@@ -1707,6 +1788,25 @@ function trImportFromScope(key) {
   }
   remap.keys.forEach((k) => trDone.add(k));
   trUnmatched = remap.unmatched;
+  // Układ pól jedzie razem z ✓ — ale tylko gdy w TYM pliku nikt go jeszcze nie ustawił
+  // (świeży plik = domyślne pola) i tylko z zapisu z nazwami kolumn (numery z innego
+  // pliku mogłyby wskazywać zupełnie inne kolumny).
+  const layout = trLayoutTouched ? null : trLayoutFromRecord(rec);
+  const layoutMoved = !!(layout && layout.sel.size);
+  if (layoutMoved) {
+    trLayoutGhosts = layout.ghosts;
+    trFieldOrder = layout.order;
+    trSelected = layout.sel;
+    trAutoFields = !!rec.auto;
+    if (!trLongMode) {
+      trInheritCols = layout.inheritCols;
+      trInheritOn = !!rec.inherit;
+    }
+    trLayoutTouched = true;
+    trSetAutoFields(trAutoFields);
+    trSetInherit(trInheritOn, { keepCols: true, silent: true });
+  }
+  trHideSuggest();
   trChangeInfo = {
     level: "import",
     rows: trFingerprint?.rows ?? trRows.length,
@@ -1724,7 +1824,82 @@ function trImportFromScope(key) {
   trRenderCard();
   trRenderProgressPanel();
   trPersist();
-  toast(t("trImportDone", { moved: remap.moved, all: savedDone.length, lost: remap.lost, name: sourceName }), "success");
+  toast(t("trImportDone", { moved: remap.moved, all: savedDone.length, lost: remap.lost, name: sourceName })
+    + (layoutMoved ? t("trImportLayout") : ""), "success");
+}
+
+// ── Propozycja: „to chyba nowsza wersja tamtego pliku" ──────────────────────
+// Zakres to plik::arkusz::tryb, więc plik zapisany pod NOWĄ nazwą startował od zera,
+// a przeniesienie trzeba było znaleźć samemu na liście w „Postęp". Tu apka sama szuka
+// kandydata: inny zapis w tym samym trybie, z ✓, o podobnych kolumnach — i sprawdza
+// NA SUCHO (trMatchDone niczego nie zmienia), ile wierszy by pasowało. Pyta tylko, gdy
+// pasuje co najmniej połowa, i zawsze czeka na decyzję człowieka.
+const TR_SUGGEST_MIN_COLS = 0.6;   // ile kolumn zapisu musi istnieć tutaj
+const TR_SUGGEST_MIN_MATCH = 0.5;  // jaka część ✓ musi się dopasować, żeby w ogóle pytać
+
+function trFindImportCandidate() {
+  if (!trScope) return null;
+  const mode = trScope.split("::")[2] || "wide";
+  const scopes = trLoadStore().scopes || {};
+  const namesNow = new Set(trSigHeaderNames());
+  const sheetNow = trScope.split("::")[1] || "";
+  const cands = [];
+  Object.entries(scopes).forEach(([key, rec]) => {
+    if (key === trScope || trImportDismissed.includes(key)) return;
+    const parts = key.split("::");
+    if ((parts[2] || "wide") !== mode) return;
+    const done = Array.isArray(rec?.done) ? rec.done.length : 0;
+    const hasSigs = (Array.isArray(rec?.doneSig) && rec.doneSig.some(Boolean))
+      || (Array.isArray(rec?.doneCells) && rec.doneCells.some(Boolean));
+    if (!done || !hasSigs) return;
+    const cols = Array.isArray(rec.cols) ? rec.cols : [];
+    const overlap = cols.length
+      ? cols.filter((c) => namesNow.has(c)).length / cols.length
+      : (parts[1] === sheetNow ? 1 : 0); // stary zapis bez nazw kolumn — tylko ten sam arkusz
+    if (overlap < TR_SUGGEST_MIN_COLS) return;
+    cands.push({ key, rec, overlap, parts });
+  });
+  cands.sort((a, b) => (b.overlap - a.overlap) || ((b.rec.ts || 0) - (a.rec.ts || 0)));
+  let best = null;
+  const passing = [];
+  for (const c of cands.slice(0, 3)) {
+    const remap = trMatchDone(c.rec);
+    const ratio = remap.moved / c.rec.done.length;
+    if (ratio < TR_SUGGEST_MIN_MATCH) continue;
+    passing.push(c.key);
+    if (!best || remap.moved > best.remap.moved) {
+      best = { key: c.key, name: c.parts[0] || c.key, sheet: c.parts[1] || "", rec: c.rec, remap };
+    }
+  }
+  // „Nie, to inny plik" dotyczy całej rodziny pasujących zapisów (V5, V5_edited…) —
+  // inaczej po odmowie apka proponowałaby od razu następną wersję tego samego pliku.
+  if (best) best.related = passing;
+  return best;
+}
+
+function trShowSuggest() {
+  if (!trSuggestEl) return;
+  const s = trSuggest;
+  // Baner zmiany pliku ma pierwszeństwo — dwa banery naraz to za dużo decyzji.
+  if (!s || trChangeInfo?.level === "hard") { trSuggestEl.classList.add("hidden"); return; }
+  const layout = !trLayoutTouched && trLayoutFromRecord(s.rec);
+  if (trSuggestTextEl) {
+    trSuggestTextEl.textContent = t("trSuggestText", {
+      name: s.name,
+      sheet: s.sheet,
+      done: s.rec.done.length,
+      when: trFormatWhen(s.rec.ts) || "—",
+      moved: s.remap.moved,
+      exact: s.remap.exact || 0,
+      layout: layout && layout.sel.size ? t("trSuggestLayout") : "",
+    });
+  }
+  trSuggestEl.classList.remove("hidden");
+}
+
+function trHideSuggest() {
+  trSuggest = null;
+  if (trSuggestEl) trSuggestEl.classList.add("hidden");
 }
 
 function trDeleteScope(key) {
@@ -1804,6 +1979,7 @@ function trRenderFields() {
     cb.addEventListener("change", () => {
       if (cb.checked) trSelected.add(colIdx);
       else trSelected.delete(colIdx);
+      trLayoutTouched = true;
       trRenderCard();
     });
 
@@ -1854,6 +2030,7 @@ function trMoveField(pos, delta) {
   if (next < 0 || next >= trFieldOrder.length) return;
   const [moved] = trFieldOrder.splice(pos, 1);
   trFieldOrder.splice(next, 0, moved);
+  trLayoutTouched = true;
   trRenderFields();
   trRenderCard();
   const list = trFieldsListEl.querySelectorAll(".tr-field-row");
@@ -1909,7 +2086,22 @@ function openTranscribe() {
   trHideDone = !!store.hideDone;
 
   const validCol = (i) => Number.isInteger(i) && i >= 0 && i < trHeaders.length;
-  if (saved && Array.isArray(saved.order) && saved.order.length) {
+  const layout = trLayoutFromRecord(saved);
+  // Zapis powstaje przy każdym zamknięciu (także z domyślnymi polami), więc „układ ustawiony"
+  // trzyma osobna flaga. Stare zapisy bez niej: jest kolejność = ktoś ją ustawiał.
+  trLayoutTouched = saved
+    ? (typeof saved.layoutSet === "boolean" ? saved.layoutSet : !!(Array.isArray(saved.order) && saved.order.length))
+    : false;
+  trImportDismissed = Array.isArray(saved?.importDismissed) ? saved.importDismissed.slice() : [];
+  trLayoutGhosts = layout ? layout.ghosts : [];
+  if (layout) {
+    trFieldOrder = layout.order;
+    trSelected = layout.sel;
+    if (!trSelected.size) trSelected = trDefaultSelection();
+    if (layout.missing.length) {
+      setTimeout(() => toast(t("trFieldsMissing", { names: layout.missing.map((n) => `„${n}”`).join(", ") }), "warning"), 400);
+    }
+  } else if (saved && Array.isArray(saved.order) && saved.order.length) {
     // Układ z poprzedniej sesji, ale arkusz mógł zmienić liczbę kolumn — dokładamy brakujące.
     trFieldOrder = saved.order.filter(validCol);
     trHeaders.forEach((_, i) => { if (!trFieldOrder.includes(i)) trFieldOrder.push(i); });
@@ -2007,10 +2199,13 @@ function openTranscribe() {
   }
   trAutoFields = !!saved?.auto;
   trLongMode = model.mode === "long";
+  trSuggest = trDone.size ? null : trFindImportCandidate();
   trMergeRanges = trDetectMergeRanges();
   trMergeCols = new Set(trMergeRanges.keys());
   const validCol2 = (i) => Number.isInteger(i) && i >= 0 && i < trHeaders.length;
-  trInheritCols = new Set(Array.isArray(saved?.inheritCols) ? saved.inheritCols.filter(validCol2) : []);
+  trInheritCols = layout
+    ? layout.inheritCols
+    : new Set(Array.isArray(saved?.inheritCols) ? saved.inheritCols.filter(validCol2) : []);
   trInheritOn = !!saved?.inherit && !trLongMode;
 
   trRebuildOrder(null);
@@ -2040,6 +2235,7 @@ function openTranscribe() {
   trHideUndo();
   trResetScroll();
   trShowChangeNotice();
+  trShowSuggest();
   trRenderCard();
   trRequestWakeLock();
   if (trMarkBtn) trMarkBtn.focus();
@@ -2057,6 +2253,7 @@ function closeTranscribe() {
   trDisarmAll();
   trHideUndo();
   trPersist();
+  trHideSuggest();
   trIsOpen = false;
   trSetLocked(false);
   trOverlayEl.classList.add("hidden");
@@ -2227,6 +2424,24 @@ if (trUnmatchedToggleEl) {
 }
 if (trStoreClearAllBtn) trStoreClearAllBtn.addEventListener("click", () => trArmDanger(trStoreClearAllBtn, t("trStoreClearAll"), trClearAllScopes));
 if (trNoticeKeepBtn) trNoticeKeepBtn.addEventListener("click", trHideChangeNotice);
+if (trSuggestYesBtn) {
+  trSuggestYesBtn.addEventListener("click", () => {
+    const key = trSuggest?.key;
+    trHideSuggest();
+    if (key) trImportFromScope(key);
+    if (trMarkBtn) trMarkBtn.focus();
+  });
+}
+if (trSuggestNoBtn) {
+  trSuggestNoBtn.addEventListener("click", () => {
+    const keys = trSuggest?.related?.length ? trSuggest.related : [trSuggest?.key].filter(Boolean);
+    trHideSuggest();
+    keys.forEach((key) => { if (!trImportDismissed.includes(key)) trImportDismissed.unshift(key); });
+    trPersist();
+    toast(t("trSuggestDismissed"), "info");
+    if (trMarkBtn) trMarkBtn.focus();
+  });
+}
 if (trNoticeResetBtn) {
   trNoticeResetBtn.addEventListener("click", () => {
     trResetProgress();
@@ -2236,6 +2451,7 @@ if (trNoticeResetBtn) {
 if (trFieldsAllBtn) {
   trFieldsAllBtn.addEventListener("click", () => {
     trFieldOrder.forEach((i) => trSelected.add(i));
+    trLayoutTouched = true;
     trRenderFields();
     trRenderCard();
   });
@@ -2243,6 +2459,7 @@ if (trFieldsAllBtn) {
 if (trFieldsNoneBtn) {
   trFieldsNoneBtn.addEventListener("click", () => {
     trSelected.clear();
+    trLayoutTouched = true;
     trRenderFields();
     trRenderCard();
   });
