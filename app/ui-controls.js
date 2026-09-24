@@ -2956,6 +2956,32 @@ if (quickSearchColumnsBtn) {
   });
 }
 
+// „Więcej" w pasku szukania — tylko telefon (CSS chowa przycisk >768px). Pasek ma być
+// jednym wierszem, bo zawinięty w 4 rzędy zjadał okno tabeli (lag przewijania na iPhonie).
+// Kropka na przycisku: schowana opcja odbiega od domyślnej (akcja ≠ Filtruj, operatory,
+// wszystkie arkusze) — inaczej zmieniony tryb byłby niewidoczny po zwinięciu.
+(function wireQsMore() {
+  const btn = document.getElementById("qsMoreBtn");
+  if (!btn || !quickSearchWrap) return;
+  const scopeBtn = document.getElementById("qsAllSheets");
+  const syncBadge = () => {
+    const custom = (quickSearchActionEl && quickSearchActionEl.value !== "filter")
+      || (quickSearchOperatorsEl && quickSearchOperatorsEl.checked)
+      || (scopeBtn && scopeBtn.getAttribute("aria-pressed") === "true");
+    btn.classList.toggle("has-custom", !!custom);
+  };
+  btn.addEventListener("click", () => {
+    const open = !quickSearchWrap.classList.contains("qs-expanded");
+    quickSearchWrap.classList.toggle("qs-expanded", open);
+    btn.setAttribute("aria-expanded", String(open));
+    syncTableViewportHeight();
+  });
+  if (quickSearchActionEl) quickSearchActionEl.addEventListener("change", syncBadge);
+  if (quickSearchOperatorsEl) quickSearchOperatorsEl.addEventListener("change", syncBadge);
+  if (scopeBtn) new MutationObserver(syncBadge).observe(scopeBtn, { attributes: true, attributeFilter: ["aria-pressed"] });
+  syncBadge();
+})();
+
 // Klawiatura: cały zestaw ikonek to JEDEN przystanek Tab (roving tabindex, ←/→),
 // jak segmenty — cztery osobne przystanki rozciągałyby obieg Tab w oknie szukania.
 document.querySelectorAll(".qs-flags").forEach((group) => {

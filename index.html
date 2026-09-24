@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260924-06" />
+    <link rel="stylesheet" href="styles/app.css?v=20260924-07" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1182,12 +1182,18 @@
                 <button class="btn btn-sm ghost" id="quickSearchColumnsBtn" type="button" data-hint="Wybierz kolumny dla szybkiego szukania" data-hint-delay="1.1" data-hint-touch="on">
                   Kolumny
                 </button>
-                <button class="btn btn-sm ghost" id="quickSearchBtn" type="button">
+                <button class="btn btn-sm ghost" id="quickSearchBtn" type="button" aria-label="Szukaj">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="11" cy="11" r="8"></circle>
                     <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                   </svg>
-                  Szukaj
+                  <span class="qs-btn-text">Szukaj</span>
+                </button>
+                <button class="btn btn-sm ghost icon-only qs-more-toggle" id="qsMoreBtn" type="button" aria-expanded="false" aria-label="Więcej opcji szukania" data-hint="Więcej opcji szukania" data-hint-delay="1.1" data-hint-touch="on">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <line x1="4" y1="7" x2="20" y2="7"></line><circle cx="9" cy="7" r="2" fill="var(--surface)"></circle>
+                    <line x1="4" y1="17" x2="20" y2="17"></line><circle cx="15" cy="17" r="2" fill="var(--surface)"></circle>
+                  </svg>
                 </button>
                 <div class="qs-live hidden" id="qsLiveResults" role="listbox" aria-label="Podgląd wyników szukania"></div>
               </div>
@@ -1586,28 +1592,28 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260924-06"></script>
-    <script defer src="app/language.js?v=20260924-06"></script>
-    <script defer src="app/analysis.js?v=20260924-06"></script>
-    <script defer src="app/smart-filters.js?v=20260924-06"></script>
-    <script defer src="app/workbook.js?v=20260924-06"></script>
-    <script defer src="app/xlsx-patch.js?v=20260924-06"></script>
-    <script defer src="app/table.js?v=20260924-06"></script>
-    <script defer src="app/conditional-formatting.js?v=20260924-06"></script>
-    <script defer src="app/data-validation.js?v=20260924-06"></script>
-    <script defer src="app/derived-columns.js?v=20260924-06"></script>
-    <script defer src="app/formulas.js?v=20260924-06"></script>
-    <script defer src="app/edit-tools.js?v=20260924-06"></script>
-    <script defer src="app/ui-controls.js?v=20260924-06"></script>
-    <script defer src="app/filter-bar.js?v=20260924-06"></script>
-    <script defer src="app/qs-history.js?v=20260924-06"></script>
-    <script defer src="app/undo.js?v=20260924-06"></script>
-    <script defer src="app/transcribe.js?v=20260924-06"></script>
-    <script defer src="app/freeze-pane.js?v=20260924-06"></script>
+    <script defer src="app/core.js?v=20260924-07"></script>
+    <script defer src="app/language.js?v=20260924-07"></script>
+    <script defer src="app/analysis.js?v=20260924-07"></script>
+    <script defer src="app/smart-filters.js?v=20260924-07"></script>
+    <script defer src="app/workbook.js?v=20260924-07"></script>
+    <script defer src="app/xlsx-patch.js?v=20260924-07"></script>
+    <script defer src="app/table.js?v=20260924-07"></script>
+    <script defer src="app/conditional-formatting.js?v=20260924-07"></script>
+    <script defer src="app/data-validation.js?v=20260924-07"></script>
+    <script defer src="app/derived-columns.js?v=20260924-07"></script>
+    <script defer src="app/formulas.js?v=20260924-07"></script>
+    <script defer src="app/edit-tools.js?v=20260924-07"></script>
+    <script defer src="app/ui-controls.js?v=20260924-07"></script>
+    <script defer src="app/filter-bar.js?v=20260924-07"></script>
+    <script defer src="app/qs-history.js?v=20260924-07"></script>
+    <script defer src="app/undo.js?v=20260924-07"></script>
+    <script defer src="app/transcribe.js?v=20260924-07"></script>
+    <script defer src="app/freeze-pane.js?v=20260924-07"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260924-06"></script>
-    <script defer src="app/bootstrap.js?v=20260924-06"></script>
+    <script defer src="app/debug-loaders.js?v=20260924-07"></script>
+    <script defer src="app/bootstrap.js?v=20260924-07"></script>
   </body>
 </html>

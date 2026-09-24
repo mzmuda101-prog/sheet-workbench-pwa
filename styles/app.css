@@ -4222,6 +4222,45 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   .qs-scope-toggle { padding-inline: 8px; }
 }
 
+/* ── Pasek szukania na telefonie: JEDEN wiersz (pole + ikonki + Szukaj + „więcej") ──
+   PO CO (2026-09-24): pełny pasek zawijał się na telefonie w 4 rzędy (~176 px) i okno
+   tabeli spadało do ~5 wierszy (przy rozwiniętym nagłówku nawet do 2 px). Na prawdziwym
+   iPhonie przewijanie tak małego okna zacinało się — zwinięcie paska (tryb dalej włączony,
+   pasek nadal w DOM) usuwało lag, więc winne było MIEJSCE, nie logika szukania.
+   Rzadsze opcje (akcja, operatory, zakres arkuszy, kolumny) chowają się pod „więcej";
+   kropka na przycisku = któraś z nich odbiega od domyślnej, żeby nie była „niewidzialna". */
+.btn.qs-more-toggle { display: none; position: relative; }
+@media (max-width: 768px) {
+  .quick-search { gap: 6px; padding: 5px 6px 5px 10px; }
+  .quick-search > svg { display: none; }
+  .quick-search .qs-field { order: 1; flex: 1 1 0; }
+  .quick-search #quickSearchBtn { order: 2; padding-inline: 9px; }
+  .quick-search .qs-btn-text { display: none; }
+  .btn.qs-more-toggle { display: inline-flex; order: 3; flex-shrink: 0; }
+  .quick-search > select,
+  .quick-search > .qs-operators-toggle,
+  .quick-search > .qs-scope-toggle,
+  .quick-search > #quickSearchColumnsBtn { order: 5; }
+  /* łamanie wiersza: opcje zawsze POD polem, nie wciśnięte obok niego */
+  .quick-search.qs-expanded::after { content: ""; order: 4; flex-basis: 100%; height: 0; }
+  .quick-search:not(.qs-expanded) > select,
+  .quick-search:not(.qs-expanded) > .qs-operators-toggle,
+  .quick-search:not(.qs-expanded) > .qs-scope-toggle,
+  .quick-search:not(.qs-expanded) > #quickSearchColumnsBtn { display: none; }
+  .qs-more-toggle[aria-expanded="true"] { color: var(--accent); background: var(--accent-light); border-color: var(--accent-border); }
+  .qs-more-toggle.has-custom::after {
+    content: "";
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+}
+
 /* Kotwica live-podglądu w wyskakującym oknie szybkiego szukania */
 .quick-search-popup-row { position: relative; }
 
