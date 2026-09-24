@@ -1088,11 +1088,13 @@ body.splashing {
   transition: transform var(--t-slow), opacity var(--t), width var(--t-slow);
 }
 
-/* [EN] Skip paint/layout for collapsed panels off-screen while scrolling sidebar */
-.sidebar .panel {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 52px;
-}
+/* BEZ content-visibility na sekcjach panelu (usunięte 2026-09-24): na iOS sekcje
+   bywały po wysunięciu panelu BIAŁE (rozwinięte, a puste — pomagało dopiero zwinięcie
+   i rozwinięcie). Panel wjeżdża transformem spoza ekranu, a WebKit nie sprawdzał
+   ponownie widoczności pominiętych sekcji i trzymał zapamiętany stary rozmiar
+   (contain-intrinsic-size: auto). Odtworzone w symulatorze iOS, bez reguły znika.
+   Zysk był pomijalny: otwarcie panelu 32 vs 38 ms przy CPU×6.
+   Strażnik: scripts/sidebar-render-guard-playwright.js. */
 
 /* [EN] Pre-warm: jednorazowe wymuszenie rasteryzacji panelu po starcie (w bezczynności),
    żeby PIERWSZE otwarcie nie zacinało się na malowaniu dziesiątek paneli/SVG.

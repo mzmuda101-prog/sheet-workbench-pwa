@@ -238,14 +238,95 @@ function combineWithCurrentQuery(term) {
   return { query: `${prev} && ${term}`, replaced: false };
 }
 
+// ── Menu dla zaznaczenia WIELU komórek ───────────────────────────────────────
+// Wiersz zaznaczenia = kombinacja wartości w zaznaczonych kolumnach. „Pokaż" = wiersze,
+// które mają KTÓRĄKOLWIEK z tych kombinacji; „Ukryj" = wiersze, które nie mają żadnej.
+// Parser szukania zna ||, && oraz grupy {…} jednego poziomu (także !{…}), więc:
+//   jedna kolumna:  pokaż {K:="a" || K:="b"}          ukryj K:!="a" && K:!="b"
+//   kilka kolumn:   pokaż {A:="x" && B:="y"} || {…}   ukryj !{A:="x" && B:="y"} && !{…}
+const CELL_MENU_MULTI_MAX = 40; // więcej różnych kombinacji = nieczytelne zapytanie
+
+// Prostokąt zaznaczenia, jeśli komórka pod menu leży W NIM i ma on > 1 komórkę.
+function cellMenuSelectionRect(td) {
+  const rect = typeof getSelectionRectangle === "function" ? getSelectionRectangle() : null;
+  if (!rect || rect.rowCount * rect.colCount < 2) return null;
+  const rowKey = td.parentElement?.dataset.rowKey || "";
+  const col = parseInt(td.dataset.colIndex || "", 10);
+  if (!rect.rowKeys.has(rowKey) || !(col >= rect.colMin && col <= rect.colMax)) return null;
+  return rect;
+}
+
+function collectSelectionCombos(rect) {
+  const headers = [];
+  for (let c = rect.colMin; c <= rect.colMax; c++) headers.push({ col: c, header: rect.model.headers[c] });
+  const seen = new Set();
+  const combos = [];
+  for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
+    const row = rect.model.rows[r];
+    if (!row) continue;
+    const values = headers.map(({ col }) => String(getDisplayValue(row, col) ?? "").replace(/\s+/g, " ").trim());
+    const key = values.join("\u0000").toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    combos.push(values);
+  }
+  return { headers, combos };
+}
+
+// Zwraca { term, andChain } albo { error }. andChain = da się dokleić do bieżącego
+// zapytania przez && (bez zagnieżdżania nawiasów).
+function buildMultiCellFilterQuery(target, exclude) {
+  const { headers, combos } = target;
+  if (headers.some((h) => !String(h.header ?? "").trim())) return { error: t("cellMenuNoHeader") };
+  if (combos.length > CELL_MENU_MULTI_MAX) {
+    return { error: t("cellMenuMultiTooMany", { count: combos.length, max: CELL_MENU_MULTI_MAX }) };
+  }
+  const parts = [];
+  for (const values of combos) {
+    const terms = values.map((v, i) => buildCellFilterTerm(headers[i].header, v, false));
+    if (terms.some((x) => !x)) return { error: t("cellMenuUnsupported") };
+    parts.push(terms);
+  }
+  if (headers.length === 1) {
+    if (exclude) {
+      const term = combos.map((values) => buildCellFilterTerm(headers[0].header, values[0], true)).join(" && ");
+      return { term, andChain: true };
+    }
+    const flat = parts.map((terms) => terms[0]);
+    return { term: flat.length === 1 ? flat[0] : `{${flat.join(" || ")}}`, andChain: true };
+  }
+  if (exclude) return { term: parts.map((terms) => `!{${terms.join(" && ")}}`).join(" && "), andChain: true };
+  if (parts.length === 1) return { term: parts[0].join(" && "), andChain: true };
+  return { term: parts.map((terms) => `{${terms.join(" && ")}}`).join(" || "), andChain: false };
+}
+
 function applyCellFilter(exclude) {
   const target = cellMenuTarget;
   closeCellMenu({ restoreFocus: false });
   if (!target) return;
-  if (!String(target.header ?? "").trim()) { toast(t("cellMenuNoHeader"), "warning"); return; }
-  const term = buildCellFilterTerm(target.header, target.value, exclude);
-  if (!term) { toast(t("cellMenuUnsupported"), "warning"); return; }
-  const { query, replaced } = combineWithCurrentQuery(term);
+  let term;
+  let andChain = true;
+  if (target.multi) {
+    const built = buildMultiCellFilterQuery(target, exclude);
+    if (built.error) { toast(built.error, "warning"); return; }
+    ({ term, andChain } = built);
+  } else {
+    if (!String(target.header ?? "").trim()) { toast(t("cellMenuNoHeader"), "warning"); return; }
+    term = buildCellFilterTerm(target.header, target.value, exclude);
+    if (!term) { toast(t("cellMenuUnsupported"), "warning"); return; }
+  }
+  // Suma kombinacji (…) || (…) nie da się dokleić przez && bez zagnieżdżania nawiasów,
+  // których parser nie zna — wtedy bieżące szukanie jest zastępowane (z komunikatem).
+  const hadQuery = !!String(searchQueryEl.value || "").trim()
+    && !!(lastAppliedFilters && (lastAppliedFilters.filtering || lastAppliedFilters.marking));
+  // Warunki, które bieżące szukanie JUŻ zawiera, nie są doklejane drugi raz
+  // (np. zaznaczenie wiersza po wcześniejszym „Pokaż tylko takie" na jednej z jego komórek).
+  if (target.multi && andChain && hadQuery && !/[{}]/.test(term)) {
+    const prevLower = String(searchQueryEl.value || "").toLowerCase();
+    const fresh = term.split(" && ").filter((part) => !prevLower.includes(part.toLowerCase()));
+    if (fresh.length) term = fresh.join(" && ");
+  }
+  const { query, replaced } = andChain ? combineWithCurrentQuery(term) : { query: term, replaced: hadQuery };
 
   if (replaced && filterNegateEl.checked) filterNegateEl.checked = false;
   // Składnia „Kolumna:" działa tylko z operatorami — włączamy je wszędzie naraz.
@@ -263,6 +344,13 @@ function applyCellFilter(exclude) {
 }
 
 function cellMenuItems(target) {
+  if (target.multi) {
+    return [
+      { id: "show", label: t("cellMenuMultiShow"), run: () => applyCellFilter(false) },
+      { id: "hide", label: t("cellMenuMultiHide"), run: () => applyCellFilter(true) },
+      { id: "copy", label: t("cellMenuMultiCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
+    ];
+  }
   const empty = !String(target.value ?? "").trim();
   return [
     { id: "show", label: t(empty ? "cellMenuShowEmpty" : "cellMenuShowOnly"), run: () => applyCellFilter(false) },
@@ -279,24 +367,33 @@ function openCellMenu(td, point, { viaKeyboard = false } = {}) {
   if (!rowKey || !Number.isFinite(colIndex0)) return false;
   const row = currentDisplayModel.rows.find((r) => getRowSelectionKey(r) === rowKey);
   if (!row) return false;
-  // Komórka pod menu staje się aktywną (Kopiuj kopiuje właśnie ją, widać, o co chodzi).
-  setSelectionKind("cell", { repaint: false });
-  setFocusedCell(rowKey, colIndex0, { scroll: false });
   hideCellTooltip();
-
-  const header = currentDisplayModel.headers[colIndex0];
-  const value = String(getDisplayValue(row, colIndex0) ?? "");
-  cellMenuTarget = { header, value, td };
-  cellMenuReturnFocus = viaKeyboard ? td : null;
 
   const head = document.createElement("div");
   head.className = "cell-menu-head";
   const h = document.createElement("span");
   h.className = "cell-menu-col";
-  h.textContent = afShort(header || "—", 28);
   const v = document.createElement("span");
   v.className = "cell-menu-val";
-  v.textContent = value.trim() ? `„${afShort(value, 34)}”` : t("cellMenuEmptyValue");
+
+  // Klik W OBRĘBIE zaznaczenia wielu komórek: zaznaczenie zostaje, menu działa na całość.
+  const selRect = cellMenuSelectionRect(td);
+  if (selRect) {
+    const { headers, combos } = collectSelectionCombos(selRect);
+    cellMenuTarget = { multi: true, rect: selRect, headers, combos, td };
+    h.textContent = afShort(headers.map((x) => x.header || "—").join(", "), 34);
+    v.textContent = t("cellMenuMultiHead", { cells: selRect.rowCount * selRect.colCount, distinct: combos.length });
+  } else {
+    // Komórka pod menu staje się aktywną (Kopiuj kopiuje właśnie ją, widać, o co chodzi).
+    setSelectionKind("cell", { repaint: false });
+    setFocusedCell(rowKey, colIndex0, { scroll: false });
+    const header = currentDisplayModel.headers[colIndex0];
+    const value = String(getDisplayValue(row, colIndex0) ?? "");
+    cellMenuTarget = { header, value, td };
+    h.textContent = afShort(header || "—", 28);
+    v.textContent = value.trim() ? `„${afShort(value, 34)}”` : t("cellMenuEmptyValue");
+  }
+  cellMenuReturnFocus = viaKeyboard ? td : null;
   head.append(h, v);
 
   const frag = document.createDocumentFragment();
@@ -312,7 +409,7 @@ function openCellMenu(td, point, { viaKeyboard = false } = {}) {
     frag.appendChild(btn);
   });
   cellMenuEl.replaceChildren(frag);
-  cellMenuEl.setAttribute("aria-label", t("cellMenuAria"));
+  cellMenuEl.setAttribute("aria-label", t(cellMenuTarget.multi ? "cellMenuMultiAria" : "cellMenuAria"));
   cellMenuEl.classList.remove("hidden");
 
   // Pozycja: przy punkcie kliknięcia/palca, a z klawiatury pod komórką; zawsze w oknie.
