@@ -798,7 +798,7 @@ async function handleFile(file, fileHandle = null) {
 // but header/status colors are no longer embedded since the CVE-driven lib swap.
 // Pokazuje: powtarzalne bloki (od/do/Długość ×3) → Wide-to-Long, analizę czasu,
 // agregacje, filtry dat oraz KPI (wiersze podsumowania nad nagłówkiem).
-// Lekki (kilkanaście wierszy) — generacja jest natychmiastowa, nic nie jest wysyłane.
+// 120 wierszy (?sample=N zmienia) — generacja jest natychmiastowa, nic nie jest wysyłane.
 function buildSampleWorkbookArrayBuffer() {
   // Przykładowy plik celowo naśladuje układ prawdziwych arkuszy obiegowych:
   //   • wiersz tytułu + wiersz KPI (żeby autodetekcja nagłówka miała co pomijać),
@@ -871,11 +871,12 @@ function buildSampleWorkbookArrayBuffer() {
     { closed: 3, open: true, openAgeDays: 21 },
   ];
 
-  // Przy ?sample=N powtarzamy wzorce scenariuszy w kółko, żeby zachować proporcje
-  // stanów (w toku / zakończone / bez startu / nie zaczęte) niezależnie od rozmiaru.
-  const planRows = sampleRowsParam
-    ? Array.from({ length: sampleRowsParam }, (_, i) => plan[i % plan.length])
-    : plan;
+  // Wzorce scenariuszy powtarzamy w kółko, żeby zachować proporcje stanów (w toku /
+  // zakończone / bez startu / nie zaczęte) niezależnie od rozmiaru. Domyślnie 120 wierszy
+  // (decyzja Mateusza 2026-09-24): przy samych 18 nie było czego przewijać, filtrować
+  // ani sprawdzić, jak apka zachowuje się na normalnym arkuszu. ?sample=N nadpisuje.
+  const SAMPLE_DEFAULT_ROWS = 120;
+  const planRows = Array.from({ length: sampleRowsParam || SAMPLE_DEFAULT_ROWS }, (_, i) => plan[i % plan.length]);
 
   const rows = [];
   let closedTotal = 0, openTotal = 0, untouchedTotal = 0;
@@ -2683,7 +2684,9 @@ if (toolbarToggleEl) {
 // Na desktopie (>768px) cały mechanizm jest bezczynny (CSS chowa uchwyt, JS wymusza off).
 //
 // REGUŁA ROZWIJANIA (świadoma, bez „migotania"): hero rozwija się TYLKO gdy:
-//   1) przewiniesz tabelę do samej GÓRY (scrollTop ≈ 0),
+//   1) przy samej GÓRZE tabeli pociągniesz palcem DALEJ w dół („na siłę", jak
+//      pull-to-refresh) — samo dojechanie do góry już NIE rozwija (decyzja Mateusza
+//      2026-09-24: rozwijało się niechcący przy każdym dojechaniu do góry),
 //   2) klikniesz w uchwyt, albo
 //   3) pociągniesz uchwyt palcem w dół.
 // Zwija się przy scrollu w dół poza próg. Rozwijanie „przy każdym ruchu w górę"
@@ -2699,7 +2702,9 @@ let heroAnimTimer = null;
 let heroSyncRaf = null;          // pętla rAF goniąca wysokość panelu tabeli w trakcie animacji
 let heroUserCollapsed = false;   // user JAWNIE zwinął uchwytem → nie rozwijaj auto przy górze
 const HERO_COLLAPSE_AFTER = 48;  // zwijaj dopiero po zejściu poniżej tylu px
-const HERO_EXPAND_AT_TOP = 6;    // rozwijaj dopiero przy samej górze widoku
+const HERO_EXPAND_AT_TOP = 6;    // „przy samej górze" dla gestu pociągnięcia
+const HERO_PULL_TO_EXPAND = 72;  // o tyle px trzeba pociągnąć palcem w dół PONAD górę tabeli
+const HERO_WHEEL_TO_EXPAND = 160; // to samo kółkiem/gładzikiem (wąskie okno na komputerze)
 
 function heroIsNarrow() { return !heroNarrowMQ || heroNarrowMQ.matches; }
 
@@ -2757,11 +2762,66 @@ function handleHeroScroll(scrollTop) {
   const collapsed = document.body.classList.contains("hero-collapsed");
   if (!collapsed && y > heroScrollLast + 4 && y > HERO_COLLAPSE_AFTER) {
     setHeroCollapsed(true);                 // scroll w dół poza próg → zwiń
-  } else if (collapsed && y <= HERO_EXPAND_AT_TOP && !heroUserCollapsed) {
-    setHeroCollapsed(false);                // dotarcie do góry → rozwiń (chyba że user jawnie zwinął)
   }
+  // Rozwijanie NIE jest tutaj — tylko świadomym gestem (heroPullToExpand niżej).
   heroScrollLast = y;
 }
+
+// „Pociągnij, żeby rozwinąć": zwinięty nagłówek wraca, gdy przy samej górze tabeli
+// palec jedzie DALEJ w dół o HERO_PULL_TO_EXPAND px. Punkt odniesienia to miejsce, w którym
+// palec był, gdy tabela dotarła do góry — więc jeden ciągły ruch „z dołu do góry i jeszcze
+// trochę" też działa, ale samo dojechanie do góry (ani rozpęd po puszczeniu palca) nie.
+// Nasłuchy pasywne i bez preventDefault — nie wolno dotykać przewijania (patrz
+// hero-scroll-guard: każda ingerencja w scroller w trakcie gestu zrywa go na iOS).
+// Uchwyt rośnie razem z pociągnięciem, żeby było widać, że gest „łapie".
+function setHeroPullProgress(p) {
+  if (!heroGripEl) return;
+  heroGripEl.classList.toggle("pulling", p > 0);
+  heroGripEl.style.setProperty("--pull", p > 0 ? p.toFixed(3) : "0");
+}
+(function heroPullToExpand() {
+  if (!heroEl || !tableWrapEl) return;
+  let topAnchorY = null; // clientY palca w chwili, gdy tabela była na samej górze
+  let fired = false;
+  const isCollapsed = () => document.body.classList.contains("hero-collapsed");
+  const reset = () => { topAnchorY = null; fired = false; setHeroPullProgress(0); };
+  tableWrapEl.addEventListener("touchstart", (e) => {
+    reset();
+    if (e.touches.length !== 1) return;
+    if (tableWrapEl.scrollTop <= HERO_EXPAND_AT_TOP) topAnchorY = e.touches[0].clientY;
+  }, { passive: true });
+  tableWrapEl.addEventListener("touchmove", (e) => {
+    if (fired || e.touches.length !== 1 || !isCollapsed() || !heroIsNarrow() || heroAnimating) return;
+    const y = e.touches[0].clientY;
+    if (tableWrapEl.scrollTop > HERO_EXPAND_AT_TOP) { topAnchorY = null; setHeroPullProgress(0); return; }
+    if (topAnchorY == null || y < topAnchorY) topAnchorY = y; // palec w górę = nowy punkt odniesienia
+    const pull = y - topAnchorY;
+    setHeroPullProgress(Math.min(1, pull / HERO_PULL_TO_EXPAND));
+    if (pull >= HERO_PULL_TO_EXPAND) {
+      fired = true;
+      setHeroPullProgress(0);
+      heroUserCollapsed = false;
+      setHeroCollapsed(false);
+    }
+  }, { passive: true });
+  tableWrapEl.addEventListener("touchend", reset, { passive: true });
+  tableWrapEl.addEventListener("touchcancel", reset, { passive: true });
+  // Kółko/gładzik (wąskie okno na komputerze): suma przewinięć w górę NA samej górze.
+  let wheelPull = 0;
+  let wheelTimer = null;
+  tableWrapEl.addEventListener("wheel", (e) => {
+    if (!isCollapsed() || !heroIsNarrow() || heroAnimating) return;
+    if (tableWrapEl.scrollTop > HERO_EXPAND_AT_TOP || e.deltaY >= 0) { wheelPull = 0; return; }
+    wheelPull += -e.deltaY * (e.deltaMode === 1 ? 16 : 1);
+    clearTimeout(wheelTimer);
+    wheelTimer = setTimeout(() => { wheelPull = 0; }, 300);
+    if (wheelPull >= HERO_WHEEL_TO_EXPAND) {
+      wheelPull = 0;
+      heroUserCollapsed = false;
+      setHeroCollapsed(false);
+    }
+  }, { passive: true });
+})();
 
 if (heroEl) {
   measureHeroHeight();

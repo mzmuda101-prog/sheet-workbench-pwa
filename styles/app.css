@@ -315,13 +315,11 @@ body.splashing {
   /* Podpowiedź dla kompozytora TYLKO w trakcie animacji (zdejmowane po niej w JS),
      żeby nie trzymać warstwy bez potrzeby. */
   body.hero-animating .hero { will-change: max-height; }
-  /* Tabela na czas zwijania dostaje WŁASNĄ warstwę: panel przesuwa się co klatkę,
-     a bez warstwy każda klatka przemalowywała całą tabelę razem z dokumentem.
-     Pomiar (Chromium, CPU×6, 200 w., 5 rund na przemian): mediana klatki 83–91 → 58–66 ms,
-     z zablokowaną kolumną 100–108 → 83–84 ms. Wygląd bez zmian (test pikselowy
-     w scripts/hero-layer-playwright.js). Warstwa znika razem z .hero-animating (340 ms).
-     scroll-position zostaje — to bazowa wartość .table-wrap, nie wolno jej zgubić. */
-  body.hero-animating .table-wrap { will-change: scroll-position, transform; }
+  /* NIE dokładać tu warstwy/will-change na .table-wrap (sprawdzone 2026-09-24):
+     zmiana warstwy PRZEWIJANEGO elementu w trakcie gestu przebudowuje na iOS natywny
+     scroller pod palcem → iOS zrywa gest (tabela staje, trzeba podnieść palec).
+     W Chromium dawało to 91→59 ms/klatkę, ale na iPhonie psuło przewijanie.
+     Strażnik: scripts/hero-scroll-guard-playwright.js. */
 
   /* Cienki uchwyt-„pigułka" (drawer handle) — tap toggluje, czytelny affordance */
   .hero-grip {
@@ -350,6 +348,14 @@ body.splashing {
   .hero-grip:active .hero-grip-bar,
   body.hero-collapsed .hero-grip .hero-grip-bar { background: color-mix(in srgb, var(--accent) 55%, var(--border)); }
   body.hero-collapsed .hero-grip .hero-grip-bar { width: 52px; } /* zwinięte = trochę szerszy, „chwytniejszy" */
+  /* „Pociągnij, żeby rozwinąć": pasek rośnie razem z pociągnięciem (--pull 0…1 z JS,
+     ustawiane na samym uchwycie). Tylko transform — nic nie przelicza układu. */
+  .hero-grip-bar { transition: background var(--t), width var(--t), transform 120ms ease-out; }
+  .hero-grip.pulling .hero-grip-bar {
+    transform: scaleX(calc(1 + var(--pull, 0) * 0.7)) scaleY(calc(1 + var(--pull, 0) * 0.5));
+    background: var(--accent);
+    transition: background var(--t), width var(--t);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
