@@ -293,7 +293,9 @@
     }
     let date = value instanceof Date ? value : null;
     if (!date && typeof value === "number" && Number.isFinite(value)) {
-      date = new Date((value - 25569) * 86400000);
+      // numer seryjny = czas „ścienny" — lokalna data z komponentów UTC (bez przesunięcia strefy)
+      const u = new Date(Math.round((value - 25569) * 86400000));
+      date = new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate());
     }
     if (!date || Number.isNaN(date.getTime())) return shown;
     try {

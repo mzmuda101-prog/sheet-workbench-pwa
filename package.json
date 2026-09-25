@@ -26,6 +26,7 @@
     "test:qsflags": "node scripts/quick-search-flags-playwright.js && ENGINE=webkit node scripts/quick-search-flags-playwright.js",
     "test:filterbar": "node scripts/filter-bar-playwright.js && ENGINE=webkit node scripts/filter-bar-playwright.js",
     "test:unify": "node scripts/edit-unify-playwright.js",
+    "test:edit:audit": "FILES=\"scripts/Kosztorys Renault Laguna 3 .xlsx,scripts/RODO Obieg terenów 2026 V5.xlsx::2025-2026,scripts/RODO Obieg terenów 2026 V5.xlsx::Dashboard,scripts/stress-test-workbench.xlsx::WideToLong_Kwartaly,scripts/stress-test-workbench.xlsx::SuffixCycle_Osoba123,scripts/stress-test-workbench.xlsx::EdgeCases_Klucze\" node scripts/edit-tools-audit-playwright.js",
     "test:undo": "node scripts/undo-history-playwright.js && ENGINE=webkit node scripts/undo-history-playwright.js",
     "test:smart": "node scripts/smart-filters-playwright.js",
     "test:freeze": "node scripts/freeze-col-playwright.js && node scripts/freeze-pane-playwright.js",

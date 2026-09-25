@@ -12,6 +12,7 @@ const sandbox = {
   DOMParser: null,
   JSZip: null,
   TextEncoder,
+  Date, // ten sam konstruktor co w teście — inaczej `instanceof Date` w xlsx-patch zawodzi (inny realm)
   XLSX: { utils: { decode_cell: (ref) => {
     const m = ref.match(/^([A-Z]+)(\d+)$/);
     let c = 0;
@@ -19,8 +20,8 @@ const sandbox = {
     return { r: parseInt(m[2], 10) - 1, c: c - 1 };
   } } },
 };
-vm.runInNewContext(patchSrc + "\nmodule.exports = { patchSheetXml, splitSheetData, indexCells, zipWriteUtf8Xml };", sandbox);
-const { patchSheetXml, splitSheetData, zipWriteUtf8Xml } = sandbox.module.exports;
+vm.runInNewContext(patchSrc + "\nmodule.exports = { patchSheetXml, splitSheetData, indexCells, zipWriteUtf8Xml, createDateStyler };", sandbox);
+const { patchSheetXml, splitSheetData, zipWriteUtf8Xml, createDateStyler } = sandbox.module.exports;
 
 const shield = "🛡️";
 const fEsc = `IF(A1&gt;0,"ok${shield}","")`;
@@ -50,11 +51,47 @@ if (hasSurrogate) fails.push("UTF-16 surrogate bytes in output");
 if (!hasShield) fails.push("emoji lost in untouched formula");
 if (!out.includes("Gr8 G. Choiński")) fails.push("F66 edit missing");
 
+// EDYTOWANA komórka z emoji: emoji (poprawne pary UTF-16) muszą przetrwać zapis,
+// a samotna połówka pary (bug XMLSerializer) — zniknąć. Dawniej sanitizeXmlText
+// wycinał KAŻDĄ połówkę, więc „EMOJI 🔥🎉” zapisywało się jako „EMOJI ”.
+{
+  const edited = patchSheetXml(xml, {
+    F66: { v: "EMOJI 🔥🎉 🛡️", t: "s" },
+    H66: { v: "zly\uD83D koniec", t: "s" },
+  });
+  if (!edited.includes("EMOJI 🔥🎉 🛡️")) fails.push("emoji lost in EDITED cell");
+  if (!edited.includes("zly koniec")) fails.push("lone surrogate not stripped");
+  if (/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(edited)) fails.push("lone surrogate left in output");
+}
+
+// DATA zapisana do komórki bez formatu daty (pusta / „Ogólny” / tekst „@”) musi dostać
+// styl z formatem daty — inaczej Excel pokaże „45424”. Styl już datowy zostaje bez zmian.
+{
+  const styles = '<styleSheet><numFmts count="1"><numFmt numFmtId="164" formatCode="[$-415]d\\ mmm\\ yy;@"/></numFmts>' +
+    '<cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="164" fontId="1" fillId="0" borderId="2" xfId="0" applyNumberFormat="1"/>' +
+    '<xf numFmtId="49" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1"><alignment horizontal="center"/></xf></cellXfs></styleSheet>';
+  const st = createDateStyler(styles);
+  const sheetXml = '<worksheet><sheetData><row r="1"><c r="A1" s="2" t="s"><v>0</v></c><c r="B1" s="1"><v>1</v></c><c r="C1"/></row></sheetData></worksheet>';
+  const d = (day) => new Date(2024, 4, day);
+  const outXml = patchSheetXml(sheetXml, { A1: { v: d(12), t: "d" }, B1: { v: d(13), t: "d" }, C1: { v: d(14), t: "d" } }, null, st);
+  const newStyles = st.apply(styles);
+  const sOf = (ref) => Number((outXml.match(new RegExp(`<c r="${ref}"[^>]*`))[0].match(/ s="(\d+)"/) || [0, 0])[1]);
+  const xfs = newStyles.match(/<xf\b(?:[^>]*?\/>|[^>]*?>[\s\S]*?<\/xf>)/g);
+  const fmt = (i) => Number((xfs[i].match(/numFmtId="(\d+)"/) || [])[1]);
+  if (!outXml.includes('<v>45424</v>')) fails.push("date serial wrong (want 45424 for 2024-05-12)");
+  if (sOf("B1") !== 1) fails.push("already-date style must stay (B1)");
+  if (fmt(sOf("A1")) !== 14 || !/fillId="3"/.test(xfs[sOf("A1")]) || !/alignment/.test(xfs[sOf("A1")])) fails.push("A1 (text style) must get date clone keeping fill/alignment");
+  if (fmt(sOf("C1")) !== 14) fails.push("C1 (no style) must get date style");
+  if (!/<cellXfs count="5">/.test(newStyles)) fails.push("cellXfs count not updated");
+  if (/ t="/.test(outXml.match(/<c r="A1"[^>]*/)[0])) fails.push("A1 still has t= attribute");
+}
+
 if (fails.length) {
   console.error("❌ xlsx-patch-unit FAIL:", fails.join("; "));
   process.exit(1);
 }
-console.log("✅ xlsx-patch-unit OK (double save, emoji, H66, dataValidations)");
+console.log("✅ xlsx-patch-unit OK (double save, emoji, emoji w edytowanej komórce, format daty, H66, dataValidations)");
 
 // Regresja 2026-07-16: edycja pustej samozamykającej H (przed formułą I) nie może
 // zostawić <c r="H.." s="17"/><v>…</v></c> ani skasować I.

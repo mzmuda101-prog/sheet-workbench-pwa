@@ -468,13 +468,27 @@ const DATE_MONTH_MAP = {
 const _dateParseCache = new Map();
 const DATE_PARSE_CACHE_LIMIT = 20000;
 
+// Numer seryjny Excela to czas „ścienny" (bez strefy): 45369 = 18.03.2024 00:00.
+// Budujemy LOKALNĄ datę z komponentów UTC — dawniej new Date(ms) dawał północ UTC,
+// czyli 01:00/02:00 w Polsce, a przy zapisie komórka dostawała ułamek (45369,0417).
+function excelSerialToLocalDate(serial) {
+  const u = new Date(Math.round((serial - 25569) * 86400000));
+  if (Number.isNaN(u.getTime())) return null;
+  return new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate(),
+    u.getUTCHours(), u.getUTCMinutes(), u.getUTCSeconds());
+}
+
+// Data z komponentów TYLKO gdy istnieje naprawdę — new Date(2024, 12, 1) „przelewa się"
+// na 2025-01-01, więc „01.13.2024” czy „31.02.24” dawały inną, prawdziwą datę.
+function makeValidDate(y, m, d) {
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d ? dt : null;
+}
+
 function parseDateFlexible(value) {
   if (value instanceof Date) return value;
-  if (typeof value === "number" && Number.isFinite(value)) {
-    const ms = (value - 25569) * 86400000;
-    const d = new Date(ms);
-    return Number.isNaN(d.getTime()) ? null : d;
-  }
+  if (typeof value === "number" && Number.isFinite(value)) return excelSerialToLocalDate(value);
   if (typeof value !== "string") return null;
   let v = value.trim();
   if (!v) return null;
@@ -487,11 +501,7 @@ function parseDateFlexible(value) {
 
   if (/^\d+(\.\d+)?$/.test(v)) {
     const numeric = Number(v);
-    if (Number.isFinite(numeric)) {
-      const ms = (numeric - 25569) * 86400000;
-      const d = new Date(ms);
-      return Number.isNaN(d.getTime()) ? null : d;
-    }
+    if (Number.isFinite(numeric)) return excelSerialToLocalDate(numeric);
   }
 
   // UWAGA: dawniej /T.*$/ (bez kotwiczenia do cyfry) obcinał WSZYSTKO od pierwszej
@@ -513,12 +523,12 @@ function parseDateFlexible(value) {
   let m = normalized.match(/^(\d{1,2})-(\d{1,2})-(\d{2}|\d{4})$/);
   if (m) {
     const y = m[3].length === 2 ? Number(`20${m[3]}`) : Number(m[3]);
-    return memo(new Date(y, Number(m[2]) - 1, Number(m[1])));
+    return memo(makeValidDate(y, Number(m[2]), Number(m[1])));
   }
 
   m = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (m) {
-    return memo(new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    return memo(makeValidDate(Number(m[1]), Number(m[2]), Number(m[3])));
   }
 
   const words = v.toLowerCase()
@@ -531,7 +541,7 @@ function parseDateFlexible(value) {
     const monthKey = wm[2].replace(/\.$/, "");
     const month = DATE_MONTH_MAP[monthKey];
     const year = wm[3].length === 2 ? Number(`20${wm[3]}`) : Number(wm[3]);
-    if (month) return memo(new Date(year, month - 1, day));
+    if (month) return memo(makeValidDate(year, month, day));
   }
   wm = words.match(/^([a-ząćęłńóśźż\.]+)\s+(\d{1,2})\s+(\d{4}|\d{2})$/i);
   if (wm) {
@@ -539,7 +549,7 @@ function parseDateFlexible(value) {
     const month = DATE_MONTH_MAP[monthKey];
     const day = Number(wm[2]);
     const year = wm[3].length === 2 ? Number(`20${wm[3]}`) : Number(wm[3]);
-    if (month) return memo(new Date(year, month - 1, day));
+    if (month) return memo(makeValidDate(year, month, day));
   }
 
   // Fallback: natywny Date.parse jest skrajnie pobłażliwy — z adresu "Mariańska 27, 29"

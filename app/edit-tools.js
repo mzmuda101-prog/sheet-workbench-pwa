@@ -197,6 +197,10 @@ function collectEditTargets() {
   return { targets };
 }
 
+// Wiarygodny zakres numeru seryjnego daty przy „Konwersji → Data": 1950-01-01 … 2100-12-31.
+const EDIT_SERIAL_MIN = 18264;
+const EDIT_SERIAL_MAX = 73415;
+
 function editLocale() {
   return (typeof I18N !== "undefined" && I18N[currentLang] && I18N[currentLang].locale) || "pl-PL";
 }
@@ -230,6 +234,10 @@ function planEditChanges() {
         newVal = n; newType = "number";
       } else if (to === "date") {
         if (raw instanceof Date) return; // już data
+        // Goła liczba to numer seryjny Excela TYLKO w wiarygodnym zakresie dat —
+        // inaczej kwota 1500 zamieniłaby się w 1904-02-08, a rok 2024 w 1905-07-16.
+        const bare = typeof raw === "number" ? raw : (/^\d+(\.\d+)?$/.test(String(shown).trim()) ? Number(shown) : null);
+        if (bare !== null && !(bare >= EDIT_SERIAL_MIN && bare <= EDIT_SERIAL_MAX)) return;
         const d = parseDateFlexible(shown);
         if (!(d instanceof Date) || Number.isNaN(d.getTime())) return;
         newVal = d; newType = "date";

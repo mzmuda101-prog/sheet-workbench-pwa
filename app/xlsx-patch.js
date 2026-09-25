@@ -41,12 +41,14 @@ function escapeXmlText(s) {
     .replace(/>/g, "&gt;");
 }
 
-// Usuwa znaki niedozwolone w XML 1.0 (tab/LF/CR zostają). Lone UTF-16 surrogates
+// Usuwa znaki niedozwolone w XML 1.0 (tab/LF/CR zostają). SAMOTNE połówki UTF-16
 // (bug XMLSerializer przy emoji) też wyrzucamy — inaczej Excel odmawia otwarcia.
+// UWAGA: tylko samotne! Poprawna PARA (emoji 🔥, 🎉) zostaje — dawniej zakres
+// [\uD800-\uDFFF] bez sprawdzania pary zjadał każde emoji z edytowanej komórki.
 function sanitizeXmlText(s) {
   return String(s)
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, "")
-    .replace(/[\uD800-\uDFFF]/g, "");
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 }
 
 function escapeFormulaXml(text) {
@@ -170,7 +172,10 @@ function normalizeCellAttrs(attrs, payload) {
   return a ? " " + a : "";
 }
 
-function buildCellXml(ref, payload, attrs) {
+function buildCellXml(ref, payload, attrs, dateStyler) {
+  // Data zapisuje się jako liczba seryjna — bez formatu daty w stylu Excel pokazałby
+  // „45424”. Styler podmienia s= na wariant tego samego stylu z formatem daty.
+  if (dateStyler && payload.t === "d") attrs = withDateStyle(attrs, dateStyler);
   const attrStr = normalizeCellAttrs(attrs, payload);
   if (payload.t === "s") {
     const t = escapeXmlText(sanitizeXmlText(payload.v));
@@ -231,7 +236,7 @@ function insertNewCell(inner, ref, cellXml) {
   return insertRowWithCell(inner, ref, cellXml);
 }
 
-function patchSheetDataInner(inner, cells, formulaMap) {
+function patchSheetDataInner(inner, cells, formulaMap, dateStyler) {
   if (!cells || Object.keys(cells).length === 0) return inner;
 
   let cellMap = indexCells(inner);
@@ -251,7 +256,7 @@ function patchSheetDataInner(inner, cells, formulaMap) {
       return;
     }
 
-    const cellXml = buildCellXml(ref, payload, existing ? existing.attrs : "");
+    const cellXml = buildCellXml(ref, payload, existing ? existing.attrs : "", dateStyler);
     if (existing) {
       replacements.push({ start: existing.start, len: existing.full.length, text: cellXml });
     } else {
@@ -273,12 +278,100 @@ function patchSheetDataInner(inner, cells, formulaMap) {
 }
 
 // Nanosi edycje na arkusz — poza <sheetData> XML jest bajt-identyczny z oryginałem.
-function patchSheetXml(xml, cells, formulaMap) {
+function patchSheetXml(xml, cells, formulaMap, dateStyler) {
   const parts = splitSheetData(xml);
   if (!parts) return xml;
-  const patchedInner = patchSheetDataInner(parts.inner, cells, formulaMap);
+  const patchedInner = patchSheetDataInner(parts.inner, cells, formulaMap, dateStyler);
   if (patchedInner === parts.inner) return xml;
   return parts.before + patchedInner + parts.after;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FORMAT DATY dla zapisywanych dat (styles.xml, stringowo — bez serializera).
+// Komórka z datą w pliku to liczba + styl z formatem daty. Gdy data trafia do
+// komórki, której styl NIE jest datą (pusta, „Ogólny”, tekst po konwersji), dokładamy
+// na końcu <cellXfs> KOPIĘ jej stylu z numFmtId="14" (krótka data wg ustawień Excela)
+// — obramowanie/czcionka/wypełnienie zostają. Jedna kopia na styl źródłowy.
+// Wbudowane formaty dat/czasu Excela (ECMA-376 18.8.30 + warianty azjatyckie).
+const BUILTIN_DATE_FMT_IDS = new Set([14, 15, 16, 17, 18, 19, 20, 21, 22, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+  45, 46, 47, 50, 51, 52, 53, 54, 55, 56, 57, 58]);
+const XF_RE = /<((?:[\w-]+:)?)xf\b(?:[^>]*?\/>|[^>]*?>[\s\S]*?<\/\1xf>)/g;
+
+function isDateFormatCode(code) {
+  const c = String(code || "")
+    .replace(/"[^"]*"/g, "")      // teksty w cudzysłowie („ d”)
+    .replace(/\\./g, "")          // znaki poprzedzone \
+    .replace(/\[[^\]]*\]/g, "");   // [$-415], [Red], [h] itp.
+  return /[dmyhs]/i.test(c) && !/^general$/i.test(c.trim());
+}
+
+function createDateStyler(stylesXml) {
+  const m = stylesXml.match(/<((?:[\w-]+:)?)cellXfs\b([^>]*)>([\s\S]*?)<\/\1cellXfs>/);
+  if (!m) return null;
+  const prefix = m[1];
+  const xfs = m[3].match(XF_RE) || [];
+  if (!xfs.length) return null;
+  const customFmts = {};
+  (stylesXml.match(/<(?:[\w-]+:)?numFmt\b[^>]*\/?>/g) || []).forEach((tag) => {
+    const id = (tag.match(/\bnumFmtId="(\d+)"/) || [])[1];
+    const code = (tag.match(/\bformatCode="([^"]*)"/) || [])[1];
+    if (id != null) customFmts[id] = (code || "").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+  });
+  const fmtOf = (xf) => Number((xf.match(/\bnumFmtId="(\d+)"/) || [])[1] || 0);
+  const isDateXf = (xf) => {
+    const id = fmtOf(xf);
+    return BUILTIN_DATE_FMT_IDS.has(id) || (customFmts[id] != null && isDateFormatCode(customFmts[id]));
+  };
+  const added = [];
+  const cache = new Map();
+  return {
+    ensure(sIdx) {
+      const i = Number.isFinite(sIdx) && sIdx >= 0 && sIdx < xfs.length ? sIdx : 0;
+      if (isDateXf(xfs[i])) return i;
+      if (cache.has(i)) return cache.get(i);
+      let clone = xfs[i];
+      const head = clone.match(/^<(?:[\w-]+:)?xf\b[^>]*?(?=\/?>)/)[0];
+      let newHead = /\bnumFmtId="/.test(head) ? head.replace(/\bnumFmtId="\d+"/, 'numFmtId="14"') : head + ' numFmtId="14"';
+      newHead = /\bapplyNumberFormat="/.test(newHead) ? newHead.replace(/\bapplyNumberFormat="[^"]*"/, 'applyNumberFormat="1"') : newHead + ' applyNumberFormat="1"';
+      clone = newHead + clone.slice(head.length);
+      const idx = xfs.length + added.length;
+      added.push(clone);
+      cache.set(i, idx);
+      return idx;
+    },
+    get changed() { return added.length > 0; },
+    apply(xml) {
+      if (!added.length) return xml;
+      return xml.replace(/<((?:[\w-]+:)?)cellXfs\b([^>]*)>([\s\S]*?)<\/\1cellXfs>/, (all, p, attrs, body) => {
+        const total = xfs.length + added.length;
+        const newAttrs = /\bcount="/.test(attrs) ? attrs.replace(/\bcount="\d+"/, `count="${total}"`) : `${attrs} count="${total}"`;
+        return `<${p}cellXfs${newAttrs}>${body}${added.join("")}</${p}cellXfs>`;
+      });
+    },
+    prefix,
+  };
+}
+
+function withDateStyle(attrs, dateStyler) {
+  const a = String(attrs || "");
+  const cur = a.match(/\bs="(\d+)"/);
+  const next = dateStyler.ensure(cur ? Number(cur[1]) : 0);
+  if (cur) return a.replace(/\bs="\d+"/, `s="${next}"`);
+  return next === 0 ? a : `${a} s="${next}"`;
+}
+
+async function resolveStylesPath(zip) {
+  const rels = zip.file("xl/_rels/workbook.xml.rels");
+  if (rels) {
+    const xml = await rels.async("string");
+    const rel = (xml.match(/<Relationship\b[^>]*relationships\/styles"[^>]*>/) || [])[0];
+    const target = rel && (rel.match(/\bTarget="([^"]+)"/) || [])[1];
+    if (target) {
+      const path = target.startsWith("/") ? target.slice(1) : "xl/" + target.replace(/^\.\//, "");
+      if (zip.file(path)) return path;
+    }
+  }
+  return zip.file("xl/styles.xml") ? "xl/styles.xml" : null;
 }
 
 // Wymusza pełne przeliczenie formuł przy otwarciu (Excel pokaże aktualne wyniki
@@ -334,6 +427,19 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
   const zip = await JSZip.loadAsync(originalBytes);
   const sheetPaths = await resolveSheetPaths(zip);
 
+  // Styler dat tylko gdy jakaś edycja zapisuje datę (zwykły zapis tekstu nie rusza styles.xml).
+  const hasDateEdit = Object.values(edits || {}).some((cells) => cells && Object.values(cells).some((p) => p && p.t === "d"));
+  let dateStyler = null;
+  let stylesPath = null;
+  let stylesXml = null;
+  if (hasDateEdit) {
+    stylesPath = await resolveStylesPath(zip);
+    if (stylesPath) {
+      stylesXml = await zip.file(stylesPath).async("string");
+      dateStyler = createDateStyler(stylesXml);
+    }
+  }
+
   let touched = false;
   for (const sheetName of Object.keys(edits || {})) {
     const cells = edits[sheetName];
@@ -341,10 +447,12 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
     const path = sheetPaths[sheetName];
     if (!path || !zip.file(path)) continue;
     const xml = await zip.file(path).async("string");
-    const patched = patchSheetXml(xml, cells, (formulaMaps && formulaMaps[sheetName]) || null);
+    const patched = patchSheetXml(xml, cells, (formulaMaps && formulaMaps[sheetName]) || null, dateStyler);
     zipWriteUtf8Xml(zip, path, patched);
     touched = true;
   }
+
+  if (dateStyler && dateStyler.changed) zipWriteUtf8Xml(zip, stylesPath, dateStyler.apply(stylesXml));
 
   if (touched) {
     await forceRecalcOnLoad(zip);
@@ -364,5 +472,7 @@ if (typeof module !== "undefined" && module.exports) {
     sanitizeXmlText,
     buildCellXml,
     zipWriteUtf8Xml,
+    createDateStyler,
+    isDateFormatCode,
   };
 }
