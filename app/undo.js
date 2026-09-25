@@ -72,9 +72,15 @@ function undoCloseStep() {
   const step = undoOpenStep;
   undoOpenStep = null;
   if (!step || !step.changes.length) return;
-  // Odrzuć komórki, które po całej operacji wyglądają jak przedtem (np. formuła odrzucona).
+  // Odrzuć komórki, które po całej operacji wyglądają jak przedtem (np. formuła odrzucona)
+  // — ale TYLKO gdy nie przybył im też wpis w pendingEdits. Wklejenie tej samej wartości
+  // nie zmienia komórki, a jednak oznacza ją do zapisu; bez tego warunku Cofnij zostawiało
+  // takie „ciche" wpisy i zapis przepisywał komórkę, której user już nie chciał ruszać.
   const sheet = workbook?.Sheets?.[step.sheet];
-  step.changes = step.changes.filter((ch) => undoValueKey(ch.snap.cell) !== undoValueKey(sheet ? sheet[ch.cellRef] : null));
+  const pendNow = pendingEdits[step.sheet];
+  step.changes = step.changes.filter((ch) =>
+    undoValueKey(ch.snap.cell) !== undoValueKey(sheet ? sheet[ch.cellRef] : null)
+    || ch.snap.pendingHas !== (!!pendNow && Object.prototype.hasOwnProperty.call(pendNow, ch.cellRef)));
   delete step.seen;
   delete step.rowMap;
   if (!step.changes.length) return;

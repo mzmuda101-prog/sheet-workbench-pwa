@@ -587,17 +587,29 @@ async function readClipboardTsv() {
   return null;
 }
 
-async function pasteClipboardToSelection() {
+// Wklejanie = ZAWSZE same wartości (tekst/liczba/data przez parseInputValue): styl
+// komórki zostaje, formuły są pomijane — ta sama bezpieczna ścieżka zapisu co edycja.
+// opts.source === "app" → tylko własny bufor (menu komórki pokazuje w etykiecie, CO
+// wklei, więc musi wkleić dokładnie to; przy okazji iOS nie pyta o zgodę na schowek).
+async function pasteClipboardToSelection(opts = {}) {
   if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") {
     toast(t("editWideOnly"), "info");
     return;
   }
   if (!focusedCellState) return;
   const model = currentDisplayModel;
-  const anchorRowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
+  // Zaznaczony zakres → wklejamy od jego LEWEGO GÓRNEGO rogu (jak Excel), niezależnie
+  // od tego, z której strony user zaczął zaznaczać.
+  const rect = getSelectionRectangle();
+  const isRange = !!(rect && (rect.rowCount > 1 || rect.colCount > 1));
+  const anchorRowIdx = isRange
+    ? rect.rowStart
+    : model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
   if (anchorRowIdx < 0) return;
 
-  const got = await readClipboardTsv();
+  const got = opts.source === "app"
+    ? (internalClipboard?.tsv ? { text: internalClipboard.tsv, source: "app" } : null)
+    : await readClipboardTsv();
   if (!got) {
     toast(t("clipboardUnavailable"), "warning");
     return;
@@ -605,18 +617,25 @@ async function pasteClipboardToSelection() {
   const grid = parseTsvClipboard(got.text);
   if (!grid.length || !grid[0].length) return;
 
-  const startCol = focusedCellState.colIndex0;
+  const startCol = isRange ? rect.colMin : focusedCellState.colIndex0;
   let changed = 0;
   let skippedFormula = 0;
+  const bump = (res) => {
+    if (res === "ok") changed += 1;
+    else if (res === "formula") skippedFormula += 1;
+  };
 
-  grid.forEach((cells, rOff) => {
-    const row = model.rows[anchorRowIdx + rOff];
-    cells.forEach((raw, cOff) => {
-      const res = writeCellFromInput(model, row, startCol + cOff, raw);
-      if (res === "ok") changed += 1;
-      else if (res === "formula") skippedFormula += 1;
+  if (isRange && grid.length === 1 && grid[0].length === 1) {
+    // Jedna wartość w schowku + zaznaczony zakres → wartość trafia do KAŻDEJ komórki zakresu.
+    for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
+      for (let c = rect.colMin; c <= rect.colMax; c++) bump(writeCellFromInput(model, model.rows[r], c, grid[0][0]));
+    }
+  } else {
+    grid.forEach((cells, rOff) => {
+      const row = model.rows[anchorRowIdx + rOff];
+      cells.forEach((raw, cOff) => bump(writeCellFromInput(model, row, startCol + cOff, raw)));
     });
-  });
+  }
 
   if (changed > 0) {
     setDirtyState(true);

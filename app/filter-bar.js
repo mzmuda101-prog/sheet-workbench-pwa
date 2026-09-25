@@ -343,20 +343,42 @@ function applyCellFilter(exclude) {
   if (replaced) toast(t("cellMenuReplaced"), "info");
 }
 
+// „Wklej" pojawia się dopiero, gdy coś skopiowano W TEJ APCE — etykieta mówi, CO się
+// wklei (wartość albo rozmiar bloku), a przy jednej wartości i zakresie: do ilu komórek.
+// Schowka systemu nie podglądamy (iOS pytałby o zgodę przy każdym otwarciu menu);
+// skopiowane gdzie indziej wkleja Ctrl/⌘+V albo „Wklej" w pasku akcji.
+function cellMenuPasteItem(target) {
+  const clip = typeof internalClipboard !== "undefined" ? internalClipboard : null;
+  if (!clip || !clip.tsv || !workbook || currentDisplayModel?.mode !== "wide") return null;
+  const cells = target.multi ? target.rect.rowCount * target.rect.colCount : 1;
+  let label;
+  if (clip.rows === 1 && clip.cols === 1) {
+    const val = parseTsvClipboard(clip.tsv)[0][0];
+    const shown = val.trim() ? `„${afShort(val, 22)}”` : t("cellMenuEmptyValue");
+    label = cells > 1 ? t("cellMenuPasteFill", { value: shown, count: cells }) : t("cellMenuPaste", { value: shown });
+  } else {
+    label = t("cellMenuPasteBlock", { rows: clip.rows, cols: clip.cols });
+  }
+  return { id: "paste", label, run: () => { closeCellMenu(); pasteClipboardToSelection({ source: "app" }); } };
+}
+
 function cellMenuItems(target) {
+  const paste = cellMenuPasteItem(target);
   if (target.multi) {
     return [
       { id: "show", label: t("cellMenuMultiShow"), run: () => applyCellFilter(false) },
       { id: "hide", label: t("cellMenuMultiHide"), run: () => applyCellFilter(true) },
       { id: "copy", label: t("cellMenuMultiCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
-    ];
+      paste,
+    ].filter(Boolean);
   }
   const empty = !String(target.value ?? "").trim();
   return [
     { id: "show", label: t(empty ? "cellMenuShowEmpty" : "cellMenuShowOnly"), run: () => applyCellFilter(false) },
     { id: "hide", label: t(empty ? "cellMenuHideEmpty" : "cellMenuHide"), run: () => applyCellFilter(true) },
     { id: "copy", label: t("cellMenuCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
-  ];
+    paste,
+  ].filter(Boolean);
 }
 
 function openCellMenu(td, point, { viaKeyboard = false } = {}) {
