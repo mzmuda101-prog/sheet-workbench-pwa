@@ -31,3 +31,6 @@ output
 *.pem
 *.key
 *.p12
+
+# czasy kroków testów (runner równoległy układa kolejność)
+.test-timings.json

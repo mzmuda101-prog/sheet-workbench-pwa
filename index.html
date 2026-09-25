@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260925-02" />
+    <link rel="stylesheet" href="styles/app.css?v=20260925-03" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -152,8 +152,8 @@
                 </label>
                 <label class="field">
                   Limit wierszy
-                  <input id="maxRows" type="number" min="1" value="200" data-hint-pl="Limit dotyczy tylko wyświetlania — filtry, szukanie i agregacje /| zawsze działają na wszystkich wierszach pliku."
-                  data-hint-en="The limit applies only to display — filters, search and aggregations /| always run on all rows of the file." data-hint-touch="on" />
+                  <input id="maxRows" type="number" min="1" value="200" data-hint-pl="Limit dotyczy tylko wyświetlania — filtry, szukanie i agregacje /| zawsze działają na wszystkich wierszach pliku. /| Domyślnie dobierany do szybkości urządzenia; wyczyść pole, żeby wrócić do automatu."
+                  data-hint-en="The limit applies only to display — filters, search and aggregations /| always run on all rows of the file. /| By default it is tuned to this device's speed; clear the field to go back to auto." data-hint-touch="on" />
                 </label>
               </div>
               <button class="btn full" id="loadBtn">
@@ -1615,28 +1615,29 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260925-02"></script>
-    <script defer src="app/language.js?v=20260925-02"></script>
-    <script defer src="app/analysis.js?v=20260925-02"></script>
-    <script defer src="app/smart-filters.js?v=20260925-02"></script>
-    <script defer src="app/workbook.js?v=20260925-02"></script>
-    <script defer src="app/xlsx-patch.js?v=20260925-02"></script>
-    <script defer src="app/table.js?v=20260925-02"></script>
-    <script defer src="app/conditional-formatting.js?v=20260925-02"></script>
-    <script defer src="app/data-validation.js?v=20260925-02"></script>
-    <script defer src="app/derived-columns.js?v=20260925-02"></script>
-    <script defer src="app/formulas.js?v=20260925-02"></script>
-    <script defer src="app/edit-tools.js?v=20260925-02"></script>
-    <script defer src="app/ui-controls.js?v=20260925-02"></script>
-    <script defer src="app/filter-bar.js?v=20260925-02"></script>
-    <script defer src="app/qs-history.js?v=20260925-02"></script>
-    <script defer src="app/undo.js?v=20260925-02"></script>
-    <script defer src="app/transcribe.js?v=20260925-02"></script>
-    <script defer src="app/freeze-pane.js?v=20260925-02"></script>
+    <script defer src="app/core.js?v=20260925-03"></script>
+    <script defer src="app/render-budget.js?v=20260925-03"></script>
+    <script defer src="app/language.js?v=20260925-03"></script>
+    <script defer src="app/analysis.js?v=20260925-03"></script>
+    <script defer src="app/smart-filters.js?v=20260925-03"></script>
+    <script defer src="app/workbook.js?v=20260925-03"></script>
+    <script defer src="app/xlsx-patch.js?v=20260925-03"></script>
+    <script defer src="app/table.js?v=20260925-03"></script>
+    <script defer src="app/conditional-formatting.js?v=20260925-03"></script>
+    <script defer src="app/data-validation.js?v=20260925-03"></script>
+    <script defer src="app/derived-columns.js?v=20260925-03"></script>
+    <script defer src="app/formulas.js?v=20260925-03"></script>
+    <script defer src="app/edit-tools.js?v=20260925-03"></script>
+    <script defer src="app/ui-controls.js?v=20260925-03"></script>
+    <script defer src="app/filter-bar.js?v=20260925-03"></script>
+    <script defer src="app/qs-history.js?v=20260925-03"></script>
+    <script defer src="app/undo.js?v=20260925-03"></script>
+    <script defer src="app/transcribe.js?v=20260925-03"></script>
+    <script defer src="app/freeze-pane.js?v=20260925-03"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260925-02"></script>
-    <script defer src="app/bootstrap.js?v=20260925-02"></script>
+    <script defer src="app/debug-loaders.js?v=20260925-03"></script>
+    <script defer src="app/bootstrap.js?v=20260925-03"></script>
   </body>
 </html>

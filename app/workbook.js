@@ -79,6 +79,14 @@ function loadMaxRowsPreference() {
 }
 
 function saveMaxRowsPreference() {
+  // Puste pole = wróć do automatu (limit dobierany do szybkości urządzenia).
+  if (!String(maxRowsEl.value || "").trim()) {
+    localStorage.removeItem(MAX_ROWS_KEY);
+    maxRowsEl.value = String(typeof renderBudget !== "undefined"
+      ? renderBudget.recommendedRows(currentHeaders.length)
+      : 200);
+    return;
+  }
   const value = Math.max(1, parseInt(maxRowsEl.value || "200", 10));
   localStorage.setItem(MAX_ROWS_KEY, String(value));
 }

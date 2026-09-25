@@ -2003,6 +2003,7 @@ function renderTable(modelOrHeaders, maybeRows) {
         editable: true,
       }
     : (modelOrHeaders || { headers: [], rows: [] });
+  const renderStartedAt = performance.now();
   const headers = Array.isArray(model.headers) ? model.headers : [];
   const rows = Array.isArray(model.rows) ? model.rows : [];
   // Konsumuj sygnał pulsu trafień raz (żeby nie odpalał się przy zwykłych re-renderach).
@@ -2118,6 +2119,8 @@ function renderTable(modelOrHeaders, maybeRows) {
 
   const limit = Math.max(1, parseInt(maxRowsEl.value || "200", 10));
   const rowsShown = rows.slice(0, limit);
+  // Pomiar kosztu tej przebudowy (do następnej klatki) → limit wierszy na miarę urządzenia.
+  if (typeof renderBudget !== "undefined") renderBudget.measureRender(rowsShown.length * (headers.length + 1), renderStartedAt);
   const mergeLayout = model.mode === "wide" ? computeMergeLayout(rowsShown, headers.length) : null;
 
   // Formatowanie warunkowe: mapa kolor/tło per ref (tylko widok „wide" — w „long"

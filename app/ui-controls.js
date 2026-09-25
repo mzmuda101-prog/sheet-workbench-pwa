@@ -1937,6 +1937,8 @@ loadBtn.addEventListener("click", () => {
       updateSheetTabActive(sheetName);
       const data = await buildRowsAsync(sheet, headerRow, workbook);
       currentHeaders = data.headers;
+      // Limit wierszy dobrany do zmierzonej szybkości urządzenia (chyba że wpisany ręcznie).
+      if (typeof renderBudget !== "undefined") renderBudget.applyToSheet(currentHeaders.length);
       currentStartCol = data.startCol || 0;
       currentMerges = Array.isArray(data.merges) ? data.merges : [];
       currentHeaderStyles = Array.isArray(data.headerStyles) ? data.headerStyles : [];

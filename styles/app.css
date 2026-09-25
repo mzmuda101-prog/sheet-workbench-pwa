@@ -4406,19 +4406,11 @@ tbody td.cell-active {
 }
 
 
-/* [EN] Lazy paint off-screen rows — Chrome/large views win; WebKit feeling unchanged in practice */
-#dataTable tbody tr {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 34px;
-}
-/* WCZEŚNIEJ: `html.low-power` WYŁĄCZAŁO tu content-visibility. To było odwrotnie
-   niż trzeba — telefon Mateusza zgłasza 4 rdzenie (czyli „low-power"), a miał
-   17 500 komórek w tabeli, więc akurat tam najbardziej opłaca się nie malować
-   wierszy poza ekranem. Reguła usunięta; wsparcie silnika i tak jest sprawdzane
-   przez samą właściwość. */
-@media print {
-  #dataTable tbody tr { content-visibility: visible; }
-}
+/* BEZ content-visibility na wierszach tabeli (usunięte 2026-09-25). Zawieranie
+   (containment) z definicji NIE dotyczy wewnętrznych elementów tabeli (<tr>), więc
+   reguła nic nie pomijała — A/B przy 800 wierszach, CPU ×4: z nią 279–361 ms stylu
+   i layoutu, bez niej 266–295 ms. Każdy wiersz w DOM jest liczony przy każdej
+   przebudowie; dlatego limit wierszy dobiera app/render-budget.js z pomiaru. */
 
 /* Podświetlenie pod kursorem i przejście tła mają sens tylko przy prawdziwym
    wskaźniku. Na dotyku iOS potrafi zostawić stan :hover po tapnięciu, a przejście

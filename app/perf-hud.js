@@ -145,7 +145,8 @@
     if (frozen && frozen.classList.contains("freeze-first-col")) flags.push("blokada kol.");
     if (frozen && frozen.classList.contains("freeze-headers")) flags.push("blokada nagł.");
     return "tabela " + rows + " wierszy · " + cells + " komórek"
-      + (flags.length ? "\n" + flags.join(" · ") : "");
+      + (flags.length ? "\n" + flags.join(" · ") : "")
+      + (typeof renderBudget !== "undefined" ? "\n" + renderBudget.describe() : "");
   }
 
   setInterval(function () {

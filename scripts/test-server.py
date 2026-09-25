@@ -23,6 +23,15 @@ class Handler(SimpleHTTPRequestHandler):
         pass  # cisza — logi żądań zalewałyby wyjście testów
 
 
+class Server(ThreadingHTTPServer):
+    # Domyślna kolejka połączeń w socketserver to 5. Przy testach puszczanych
+    # równolegle (scripts/run-tests.mjs) kilka przeglądarek naraz otwiera po kilka
+    # połączeń — nadmiar był odrzucany (ERR_CONNECTION_RESET), strona wstawała bez
+    # części skryptów i losowe testy padały „w tłoku".
+    request_queue_size = 256
+    daemon_threads = True
+
+
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 4175
-    ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
+    Server(("127.0.0.1", port), Handler).serve_forever()
