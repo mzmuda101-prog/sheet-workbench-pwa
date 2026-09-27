@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260925-03";
+const CACHE_VERSION = "20260927-01";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -27,6 +27,7 @@ const SHELL_ASSETS = [
   `./app/workbook.js?v=${ASSET_V}`,
   `./app/xlsx-patch.js?v=${ASSET_V}`,
   `./app/table.js?v=${ASSET_V}`,
+  `./app/virt-rows.js?v=${ASSET_V}`,
   `./app/conditional-formatting.js?v=${ASSET_V}`,
   `./app/data-validation.js?v=${ASSET_V}`,
   `./app/derived-columns.js?v=${ASSET_V}`,

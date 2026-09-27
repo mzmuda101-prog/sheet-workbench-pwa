@@ -90,6 +90,7 @@ const showCellFillsEl = document.getElementById("showCellFills");
 const showCellFontsEl = document.getElementById("showCellFonts");
 const showCellBordersEl = document.getElementById("showCellBorders");
 const wrapCellsEl = document.getElementById("wrapCells");
+const virtRowsEl = document.getElementById("virtRows");
 const showConditionalFormattingEl = document.getElementById("showConditionalFormatting");
 const showSubheadersEl = document.getElementById("showSubheaders");
 const recalcDatesEl = document.getElementById("recalcDates");
@@ -655,7 +656,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260925-03";
+const APP_BUILD_VERSION = "20260927-01";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

@@ -20,11 +20,12 @@
 //   7. skok z panelu analiz (focusSection „scroll-row”) do dalekiego wiersza,
 //   8. zmienne wysokości (zawijanie + ręczne wysokości): dół osiągalny, bez dziur,
 //   9. blokada 1. kolumny: na dole zamrożona komórka ostatniego wiersza jest przy lewej,
-//  10. dokładnie jedna komórka siatki z tabindex=0 (roving) po przewinięciach.
+//  10. dokładnie jedna komórka siatki z tabindex=0 (roving) po przewinięciach,
+//  11. przewijanie w górę bez podskoków (kotwica) przy różnych wysokościach wierszy.
 //
 // ROWS (domyślnie 600) = limit wierszy ustawiany ręcznie, żeby było co przewijać.
-// ENGINE=webkit — te same asercje w silniku Safari. VIRT_QUERY — dopisek do adresu
-// (np. "&virt=1"), żeby w kolejnych etapach puścić ten sam test po nowym silniku.
+// ENGINE=webkit — te same asercje w silniku Safari. VIRT=1 (albo VIRT_QUERY="&virt=1")
+// — ten sam test po nowym silniku tabeli (app/virt-rows.js).
 //
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
 
@@ -34,7 +35,8 @@ const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
 const ENGINE = process.env.ENGINE || "chromium";
 const ROWS = parseInt(process.env.ROWS || "600", 10);
 const SAMPLE = parseInt(process.env.SAMPLE || "3000", 10);
-const VIRT_QUERY = process.env.VIRT_QUERY || "";
+// VIRT=1 = to samo co VIRT_QUERY="&virt=1" (bez znaku & — ten w łańcuchu npm oznaczałby tło)
+const VIRT_QUERY = process.env.VIRT_QUERY || (process.env.VIRT === "1" ? "&virt=1" : "");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // Narzędzia wstrzykiwane do strony (jako window.__vg).
@@ -44,7 +46,10 @@ function installHelpers() {
     requestAnimationFrame(step);
   });
   const limit = () => Math.max(1, parseInt(maxRowsEl.value || "200", 10));
-  const reachable = () => Math.min(currentDisplayModel.rows.length, limit());
+  // Nowy silnik pokazuje wszystkie wiersze; stary — do limitu.
+  const reachable = () => (typeof swbVirt !== "undefined" && swbVirt.isActive())
+    ? currentDisplayModel.rows.length
+    : Math.min(currentDisplayModel.rows.length, limit());
   const keyAt = (i) => getRowSelectionKey(currentDisplayModel.rows[i]);
   const indexOfKey = (() => {
     let cacheModel = null; let map = null;
@@ -126,7 +131,8 @@ async function run() {
   const check = (name, ok, detail = "") => results.push({ name, ok: !!ok, detail });
 
   const { context, page, errors } = await openApp(browser);
-  const info = await page.evaluate(() => ({ reachable: __vg.reachable(), total: currentDisplayModel.rows.length, limit: __vg.limit() }));
+  const info = await page.evaluate(() => ({ reachable: __vg.reachable(), total: currentDisplayModel.rows.length, limit: __vg.limit(), virtual: typeof swbVirt !== "undefined" && swbVirt.isActive() }));
+  if (VIRT_QUERY.includes("virt=1")) check("przygotowanie: nowy silnik rzeczywiście działa", info.virtual, JSON.stringify(info));
   check("przygotowanie: jest co przewijać", info.reachable >= Math.min(ROWS, 300), JSON.stringify(info));
   const last = info.reachable - 1;
 
@@ -167,8 +173,17 @@ async function run() {
   await page.evaluate(async () => { tableWrapEl.scrollTop = 0; await __vg.frames(2); });
   await page.click("#dataTable tbody tr[data-row-key] td[data-col-index='1']");
   await sleep(150);
-  for (let i = 0; i < 40; i++) await page.keyboard.press("ArrowDown");
+  // Strzałka przewija jak w Excelu: najwyżej o wiersz–dwa, bez skoku na środek.
+  let maxJump = 0;
+  let prevTop = await page.evaluate(() => tableWrapEl.scrollTop);
+  for (let i = 0; i < 40; i++) {
+    await page.keyboard.press("ArrowDown");
+    const top = await page.evaluate(() => tableWrapEl.scrollTop);
+    maxJump = Math.max(maxJump, Math.abs(top - prevTop));
+    prevTop = top;
+  }
   await sleep(250);
+  check("3. ↓×40: widok przesuwa się po wierszu, bez skoków", maxJump <= 90, `największy skok ${maxJump} px`);
   const arrow = await page.evaluate(() => {
     const idx = focusedCellState ? __vg.indexOfKey(focusedCellState.rowKey) : -1;
     const td = findCellElement(focusedCellState);
@@ -176,6 +191,28 @@ async function run() {
   });
   check("3. ↓×40: fokus w wierszu 40", arrow.idx === 40, JSON.stringify(arrow));
   check("3. ↓×40: fokus widoczny i w DOM", arrow.visible && arrow.active, JSON.stringify(arrow));
+
+  // 3b. to samo, ale 120 strzałek w JEDNYM zadaniu (bez klatek pomiędzy) — deterministycznie
+  //     odtwarza wyścig „zdarzenie scroll jeszcze nie dotarło”, w którym nowy silnik
+  //     potrafił skoczyć na środek i zgubić fokus DOM.
+  const burst = await page.evaluate(async () => {
+    tableWrapEl.scrollTop = 0;
+    await __vg.frames(2);
+    const td0 = document.querySelector("#dataTable tbody tr[data-row-key] td[data-col-index='1']");
+    setFocusedCell(td0.parentElement.dataset.rowKey, 1, { scroll: false, focusDom: true });
+    focusGridCell(findCellElement(focusedCellState));
+    const startIdx = __vg.indexOfKey(focusedCellState.rowKey);
+    let prev = tableWrapEl.scrollTop; let maxJump = 0;
+    for (let i = 0; i < 120; i++) { // 120 > okno nowego silnika (~50 wierszy) — musi dorysować
+      document.activeElement.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", code: "ArrowDown", bubbles: true, cancelable: true }));
+      maxJump = Math.max(maxJump, Math.abs(tableWrapEl.scrollTop - prev));
+      prev = tableWrapEl.scrollTop;
+    }
+    await __vg.frames(2);
+    const td = findCellElement(focusedCellState);
+    return { moved: __vg.indexOfKey(focusedCellState.rowKey) - startIdx, maxJump, active: document.activeElement === td, visible: __vg.isCellVisible(td) };
+  });
+  check("3b. 120 strzałek naraz: bez skoku, fokus w DOM i widoczny", burst.moved === 120 && burst.maxJump <= 90 && burst.active && burst.visible, JSON.stringify(burst));
 
   // 4. edycja daleko w arkuszu
   const editIdx = Math.max(0, last - 8);
@@ -310,14 +347,62 @@ async function run() {
       const m = __vg.sampleColumn();
       if (m.holes.length || m.gap) mid.push({ f, ...m });
     }
+    const lastNow = __vg.reachable() - 1; // przy zawijaniu nowy silnik oddaje render staremu (limit)
     wrapCellsEl.checked = false;
     tall.forEach((ri) => { delete manualRowHeights[ri]; });
     wrapCellsEl.dispatchEvent(new Event("change", { bubbles: true }));
     renderActiveTable();
     await __vg.frames(2);
-    return { distinctHeights: heights.size, bottomLast: s.last, bottomHoles: s.holes.length, gap: s.gap, mid };
+    return { distinctHeights: heights.size, bottomLast: s.last, lastNow, bottomHoles: s.holes.length, gap: s.gap, mid };
   });
-  check("8. zmienne wysokości: dół osiągalny, bez dziur", wrap.skipped || (wrap.distinctHeights > 1 && wrap.bottomLast === last && !wrap.bottomHoles && !wrap.gap && !wrap.mid.length), JSON.stringify(wrap));
+  check("8. zmienne wysokości: dół osiągalny, bez dziur", wrap.skipped || (wrap.distinctHeights > 1 && wrap.bottomLast === wrap.lastNow && !wrap.bottomHoles && !wrap.gap && !wrap.mid.length), JSON.stringify(wrap));
+
+  // 11. bez podskoków: przewijanie W GÓRĘ krokami — każdy widoczny wiersz ma przesunąć się
+  //     dokładnie o krok (kotwica nowego silnika przy dorysowywaniu wierszy nad widokiem),
+  //     także gdy co 5. wiersz jest wyższy (wysokości ręczne, bez zawijania).
+  const smooth = await page.evaluate(async () => {
+    const tall = currentDisplayModel.rows.filter((_, i) => i % 5 === 2).map((r) => r.rowIndex0);
+    tall.forEach((ri) => { manualRowHeights[ri] = 52; });
+    renderActiveTable();
+    await __vg.frames(2);
+    const bad = [];
+    const step = 97;
+    for (const startF of [1, 0.5]) {
+      tableWrapEl.scrollTop = Math.round((tableWrapEl.scrollHeight - tableWrapEl.clientHeight) * startF);
+      await new Promise((r) => setTimeout(r, 400)); // spoczynek (wyrównanie driftu)
+      await __vg.frames(2);
+      for (let k = 0; k < 70 && tableWrapEl.scrollTop > 0; k++) {
+        const b = __vg.band();
+        const probeTr = document.elementFromPoint(b.left + 60, (b.top + b.bottom) / 2)?.closest("tr[data-row-key]");
+        const key = probeTr && probeTr.dataset.rowKey;
+        const before = probeTr ? probeTr.getBoundingClientRect().top : null;
+        const st0 = tableWrapEl.scrollTop;
+        tableWrapEl.scrollTop = st0 - step;
+        await __vg.frames(1);
+        const moved = st0 - tableWrapEl.scrollTop;
+        const after = key ? document.querySelector(`#dataTable tbody tr[data-row-key="${CSS.escape(key)}"]`) : null;
+        if (before != null && after) {
+          const d = after.getBoundingClientRect().top - before;
+          if (Math.abs(d - moved) > 1.5) { bad.push({ startF, k, key, expected: moved, got: Math.round(d * 10) / 10 }); if (bad.length > 4) break; }
+        }
+        const s = __vg.sampleColumn();
+        if (s.holes.length || s.gap) { bad.push({ startF, k, holes: s.holes.slice(0, 2), gap: s.gap }); break; }
+      }
+    }
+    // na samej górze pierwszy wiersz ma być tuż pod nagłówkiem (żadnej szczeliny)
+    tableWrapEl.scrollTop = 0;
+    await new Promise((r) => setTimeout(r, 400));
+    await __vg.frames(2);
+    const first = document.querySelector("#dataTable tbody tr[data-row-key]");
+    const gapTop = first ? Math.round(first.getBoundingClientRect().top - theadEl.getBoundingClientRect().bottom) : null;
+    const firstIdx = first ? __vg.indexOfKey(first.dataset.rowKey) : -1;
+    tall.forEach((ri) => { delete manualRowHeights[ri]; });
+    renderActiveTable();
+    await __vg.frames(2);
+    return { bad, gapTop, firstIdx };
+  });
+  check("11. przewijanie w górę bez podskoków (także przy różnych wysokościach)", smooth.bad.length === 0, JSON.stringify(smooth.bad).slice(0, 500));
+  check("11. na górze pierwszy wiersz tuż pod nagłówkiem", smooth.firstIdx === 0 && Math.abs(smooth.gapTop) <= 1, JSON.stringify(smooth));
 
   // 9. blokada 1. kolumny
   const freeze = await page.evaluate(async () => {

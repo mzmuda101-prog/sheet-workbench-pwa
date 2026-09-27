@@ -50,6 +50,10 @@
     && !focusInFrozen()
     && !tableWrapEl.classList.contains("hidden")
     && tbodyEl.rows.length > 0
+    // Nowy silnik tabeli dorysowuje wiersze W TRAKCIE przewijania — szyba (kopia
+    // kolumn z chwili startu) by się rozjeżdżała. Tam i tak w DOM jest ~kilkadziesiąt
+    // wierszy zamiast setek, więc zwykłe sticky wystarcza.
+    && !tbodyEl.classList.contains("is-virtual")
     && !tbodyEl.querySelector("input.cell-editor, td[colspan], td[rowspan]");
 
   function cloneCell(td) {

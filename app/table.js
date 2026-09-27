@@ -118,12 +118,18 @@ function getRowSelectionKey(row) {
   return `wide:${row.rowIndex0 ?? ""}`;
 }
 
+// Ile wierszy faktycznie da się obejrzeć: nowy silnik (virt-rows.js) pokazuje wszystkie,
+// stary render — do limitu z pola „Limit wierszy”.
+function effectiveRowLimit() {
+  if (typeof swbVirt !== "undefined" && swbVirt.isActive()) return Infinity;
+  return Math.max(1, parseInt(maxRowsEl.value || "200", 10));
+}
+
 function buildFocusedRowStatusSuffix(model) {
   if (!focusedCellState || !model?.rows?.length) return "";
   const idx = model.rows.findIndex((row) => getRowSelectionKey(row) === focusedCellState.rowKey);
   if (idx < 0) return "";
-  const limit = Math.max(1, parseInt(maxRowsEl.value || "200", 10));
-  if (idx >= limit) return "";
+  if (idx >= effectiveRowLimit()) return "";
   return t("statusFocusedRow", { pos: idx + 1 });
 }
 
@@ -131,7 +137,7 @@ function updateTableStatus(model) {
   if (!model?.headers?.length) return;
   const rows = Array.isArray(model.rows) ? model.rows : [];
   if (!rows.length) return;
-  const limit = Math.max(1, parseInt(maxRowsEl.value || "200", 10));
+  const limit = effectiveRowLimit();
   const modeLabel = model.mode === "long" ? t("statusLongMode") : "";
   const focusedSuffix = buildFocusedRowStatusSuffix(model);
   setStatus(t("statusTableRows", {
@@ -251,11 +257,20 @@ function syncFocusedCellInDom(options = {}) {
   // jak druga, konkurencyjna selekcja („wiersz podświetlony, a w nim jeszcze jedna
   // komórka w ramce") — wiersz ma być wierszem, komórka komórką.
   tbodyEl.classList.toggle("sel-cell", isCellSelectionMode());
+  // Czy fokus DOM jest w siatce — czytane NA SAMYM POCZĄTKU. Dorysowanie okna nowego
+  // silnika (ensureRowRendered niżej) przestawia roving tabindex, a zdjęcie tabindex
+  // z ofokusowanej komórki od razu gubi fokus (activeElement → <body>).
+  const hadGridFocus = gridHasDomFocus();
   tbodyEl.querySelectorAll("tr.row-focused").forEach((row) => row.classList.remove("row-focused"));
   tbodyEl.querySelectorAll("td.cell-active").forEach((td) => td.classList.remove("cell-active"));
-  const rowEl = findFocusedRowElement();
+  let rowEl = findFocusedRowElement();
+  // Nowy silnik: wiersz może istnieć w danych, ale leżeć poza oknem DOM. Przy jawnym
+  // przewinięciu do niego (strzałki, Enter w edytorze) dorysuj okno; w przeciwnym razie
+  // NIE kasuj fokusu — wiersz jest, tylko go nie widać.
+  const virtKeeps = typeof swbVirt !== "undefined" && focusedCellState && swbVirt.hasKey(focusedCellState.rowKey);
+  if (!rowEl && virtKeeps && options.scroll) rowEl = swbVirt.ensureRowRendered(focusedCellState.rowKey);
   if (!rowEl) {
-    if (options.clearMissing !== false) focusedCellState = null;
+    if (options.clearMissing !== false && !virtKeeps) focusedCellState = null;
     syncGridRovingTabindex();
     return null;
   }
@@ -264,8 +279,10 @@ function syncFocusedCellInDom(options = {}) {
   // UWAGA: czytamy fokus PRZED syncGridRovingTabindex. Zdjęcie tabindex z komórki,
   // która ma właśnie fokus, natychmiast go gubi (activeElement → <body>) — sprawdzane
   // po tej linii dawałoby zawsze false i strzałki zostawiałyby fokus na body.
-  const keepDomFocus = options.focusDom || gridHasDomFocus();
-  if (options.scroll) {
+  // passive = odświeżenie po dorysowaniu okna w trakcie przewijania: same klasy i tabindex,
+  // bez focus() i bez przewijania (inaczej walczylibyśmy z palcem użytkownika).
+  const keepDomFocus = !options.passive && (options.focusDom || hadGridFocus);
+  if (options.scroll && !options.passive) {
     (cell || rowEl).scrollIntoView({ block: "nearest", inline: "nearest" });
   }
   syncGridRovingTabindex(cell);
@@ -282,9 +299,13 @@ function syncFocusedCellInDom(options = {}) {
 
 function syncSelectedCellInDom(options = {}) {
   tbodyEl.querySelectorAll("td.cell-selected").forEach((cell) => cell.classList.remove("cell-selected"));
-  const cell = findCellElement(selectedCellState);
+  let cell = findCellElement(selectedCellState);
+  const virtKeeps = typeof swbVirt !== "undefined" && selectedCellState && swbVirt.hasKey(selectedCellState.rowKey);
+  if (!cell && virtKeeps && options.scroll && swbVirt.ensureRowRendered(selectedCellState.rowKey)) {
+    cell = findCellElement(selectedCellState);
+  }
   if (!cell) {
-    if (options.clearMissing !== false) selectedCellState = null;
+    if (options.clearMissing !== false && !virtKeeps) selectedCellState = null;
     return null;
   }
   cell.classList.add("cell-selected");
@@ -718,11 +739,24 @@ function syncRangeHighlightInDom() {
   }
   // jest zakres → stłum pas wiersza fokusu, by nie kolidował z prostokątem zaznaczenia
   tbodyEl.classList.add("has-cell-range");
-  for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
-    const row = rect.model.rows[r];
-    if (!row) continue;
-    const tr = tbodyEl.querySelector(`tr[data-row-key="${CSS.escape(getRowSelectionKey(row))}"]`);
-    if (!tr) continue;
+  // Nowy silnik: zakres może liczyć tysiące wierszy, a w DOM jest tylko okno — idziemy
+  // po narysowanych wierszach zamiast szukać każdego wiersza zakresu osobno.
+  const virtual = typeof swbVirt !== "undefined" && swbVirt.isActive() && rect.model === currentDisplayModel;
+  const targets = [];
+  if (virtual) {
+    tbodyEl.querySelectorAll("tr[data-row-key]").forEach((tr) => {
+      const r = swbVirt.indexOfKey(tr.dataset.rowKey);
+      if (r >= rect.rowStart && r <= rect.rowEnd) targets.push([r, tr]);
+    });
+  } else {
+    for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
+      const row = rect.model.rows[r];
+      if (!row) continue;
+      const tr = tbodyEl.querySelector(`tr[data-row-key="${CSS.escape(getRowSelectionKey(row))}"]`);
+      if (tr) targets.push([r, tr]);
+    }
+  }
+  for (const [r, tr] of targets) {
     for (let c = rect.colMin; c <= rect.colMax; c++) {
       const td = tr.querySelector(`td[data-col-index="${c}"]`);
       if (!td) continue; // np. komórka pokryta przez scalenie — obwódka może mieć tam lukę
@@ -1991,6 +2025,112 @@ function refreshReusedRow(tr, row, rowPos, model, useExcelLayout, pulseMatches) 
   return tr;
 }
 
+// Buduje (albo bierze z pamięci i odświeża) JEDEN wiersz tabeli. Wspólne dla zwykłego
+// renderu i wirtualnego (virt-rows.js), żeby oba silniki rysowały wiersz identycznie.
+// ctx = { model, headers, useExcelLayout, pulseMatches, mergeLayout, cfMapForRender,
+//         canReuse, reuseMap, nextRowNodes }
+function buildTableRow(ctx, row, rowPos) {
+  const { model, headers, useExcelLayout, pulseMatches, mergeLayout, cfMapForRender, canReuse, nextRowNodes } = ctx;
+  const reuseKey = getRowSelectionKey(row);
+  if (canReuse) {
+    const cached = ctx.reuseMap.get(reuseKey);
+    // Liczba komórek musi się zgadzać — inaczej to wiersz z innego układu.
+    if (cached && cached.childElementCount === headers.length + 1) {
+      refreshReusedRow(cached, row, rowPos, model, useExcelLayout, pulseMatches);
+      nextRowNodes.set(reuseKey, cached);
+      return cached;
+    }
+  }
+  const tr = document.createElement("tr");
+  tr.dataset.rowKey = reuseKey;
+  if (focusedCellState && focusedCellState.rowKey === tr.dataset.rowKey
+    && !isSingleCellSelection() && !isCellSelectionMode()) tr.classList.add("row-focused");
+  if (cellStyleShowSubheaders && row.isSubheader) tr.classList.add("row-subheader");
+  if (quickSearchHighlightMode && matchedRowIndexes.size > 0) {
+    if (matchedRowIndexes.has(row.rowIndex0)) {
+      tr.classList.add("row-matched");
+      if (pulseMatches) tr.classList.add("search-match-pulse");
+    } else {
+      tr.classList.add("row-unmatched");
+    }
+  }
+  if (typeof row.rowIndex0 === "number") {
+    tr.dataset.rowIndex = String(row.rowIndex0);
+  }
+  // Wysokość wiersza: ręczne przeciąganie > jednolita z pola > z pliku (Wymiary z Excela).
+  let rowH = manualRowHeights[row.rowIndex0] || (manualRowHeightAll > 0 ? manualRowHeightAll : 0);
+  if (!rowH && useExcelLayout) rowH = toPixelHeight(currentSheetRowHeights[row.rowIndex0]) || 0;
+  if (rowH) {
+    tr.style.height = `${rowH}px`;
+    tr.classList.add("row-fixed-height");
+  }
+  const rowHead = document.createElement("td");
+  rowHead.className = "row-head";
+  rowHead.textContent = model.rowHeadFormatter ? model.rowHeadFormatter(row, rowPos) : String(row.rowIndex0 + 1);
+  if (typeof row.rowIndex0 === "number") {
+    const rowResizer = document.createElement("div");
+    rowResizer.className = "row-resizer";
+    rowResizer.dataset.rowIndex = String(row.rowIndex0);
+    rowHead.appendChild(rowResizer);
+  }
+  tr.appendChild(rowHead);
+  const matchedCols = highlightMatchedCells ? matchedCellsByRow.get(row.rowIndex0) : null;
+  row.values.forEach((v, i) => {
+    const mergeKey = `${rowPos}:${i}`;
+    if (mergeLayout && mergeLayout.covered.has(mergeKey)) return;
+    const td = document.createElement("td");
+    const displayValue = getDisplayValue(row, i);
+    td.textContent = displayValue;
+    // BEZ `data-full-text` na komórkach danych: ten atrybut trzymał DRUGĄ kopię tekstu
+    // każdej komórki (przy 563×33 to 19 000 zdublowanych łańcuchów w DOM), a czytające
+    // go miejsca i tak mają fallback na textContent — który dla <td> jest pełną treścią
+    // (CSS przycina tylko wizualnie). Na nagłówkach atrybut ZOSTAJE, bo tam textContent
+    // zawiera doklejoną strzałkę sortowania.
+    td.dataset.colIndex = String(i);
+    if (selectedCellState && selectedCellState.rowKey === tr.dataset.rowKey && selectedCellState.colIndex0 === i) {
+      td.classList.add("cell-selected");
+    }
+    if (matchedCols && matchedCols.has(i)) td.classList.add("cell-filter-match");
+    // Znacznik przeliczenia na dziś: róg komórki + treść dla podpowiedzi (hover/tap).
+    // Powstaje wyłącznie w buildRows przy włączonym „Przeliczaj formuły z datą",
+    // więc odznaczenie opcji (= przebudowa danych) sprząta go automatycznie.
+    if (row.recalcCells) {
+      const fromFile = row.recalcCells[i];
+      if (fromFile !== undefined) {
+        td.classList.add("cell-recalced");
+        td.dataset.recalcWas = String(fromFile);
+      }
+    }
+
+    if (mergeLayout) {
+      const anchor = mergeLayout.anchors.get(mergeKey);
+      if (anchor) {
+        if (anchor.rowspan > 1) td.rowSpan = anchor.rowspan;
+        if (anchor.colspan > 1) td.colSpan = anchor.colspan;
+        td.classList.add("cell-merged");
+        if (anchor.ref) td.title = `Scalona komórka: ${anchor.ref}`;
+      }
+    }
+
+    if (row.cellStyles && row.cellStyles[i]) applyCellStyle(td, row.cellStyles[i]);
+    if (cfMapForRender) {
+      const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
+      if (cf) {
+        if (cf.fontColor) { td.style.color = cf.fontColor; if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); else if (isDarkNeutralColor(cf.fontColor)) td.classList.add("cell-dark-text"); }
+        if (cf.fillColor) { td.classList.add("cell-has-fill"); const cbg = hexToRgba(cf.fillColor, cf.fontColor ? 1 : 0.28); if (cbg) td.style.background = cbg; }
+      }
+    }
+    tr.appendChild(td);
+  });
+  // punkt odniesienia dla różnicowego odświeżania przy kolejnym renderze
+  tr._swbMatched = matchedCols ? Array.from(matchedCols) : null;
+  tr._swbSelectedCol = (selectedCellState && selectedCellState.rowKey === reuseKey)
+    ? selectedCellState.colIndex0
+    : -1;
+  nextRowNodes.set(reuseKey, tr);
+  return tr;
+}
+
 function renderTable(modelOrHeaders, maybeRows) {
   const model = Array.isArray(modelOrHeaders)
     ? {
@@ -2119,8 +2259,6 @@ function renderTable(modelOrHeaders, maybeRows) {
 
   const limit = Math.max(1, parseInt(maxRowsEl.value || "200", 10));
   const rowsShown = rows.slice(0, limit);
-  // Pomiar kosztu tej przebudowy (do następnej klatki) → limit wierszy na miarę urządzenia.
-  if (typeof renderBudget !== "undefined") renderBudget.measureRender(rowsShown.length * (headers.length + 1), renderStartedAt);
   const mergeLayout = model.mode === "wide" ? computeMergeLayout(rowsShown, headers.length) : null;
 
   // Formatowanie warunkowe: mapa kolor/tło per ref (tylko widok „wide" — w „long"
@@ -2138,109 +2276,22 @@ function renderTable(modelOrHeaders, maybeRows) {
   const canReuse = !reuseBlocked && envKey === _rowNodeEnvKey && _rowNodeCache.size > 0;
   const nextRowNodes = new Map();
 
-  const tbodyFragment = document.createDocumentFragment();
-  rowsShown.forEach((row, rowPos) => {
-    const reuseKey = getRowSelectionKey(row);
-    if (canReuse) {
-      const cached = _rowNodeCache.get(reuseKey);
-      // Liczba komórek musi się zgadzać — inaczej to wiersz z innego układu.
-      if (cached && cached.childElementCount === headers.length + 1) {
-        refreshReusedRow(cached, row, rowPos, model, useExcelLayout, pulseMatches);
-        nextRowNodes.set(reuseKey, cached);
-        tbodyFragment.appendChild(cached);
-        return;
-      }
-    }
-    const tr = document.createElement("tr");
-    tr.dataset.rowKey = reuseKey;
-    if (focusedCellState && focusedCellState.rowKey === tr.dataset.rowKey
-      && !isSingleCellSelection() && !isCellSelectionMode()) tr.classList.add("row-focused");
-    if (cellStyleShowSubheaders && row.isSubheader) tr.classList.add("row-subheader");
-    if (quickSearchHighlightMode && matchedRowIndexes.size > 0) {
-      if (matchedRowIndexes.has(row.rowIndex0)) {
-        tr.classList.add("row-matched");
-        if (pulseMatches) tr.classList.add("search-match-pulse");
-      } else {
-        tr.classList.add("row-unmatched");
-      }
-    }
-    if (typeof row.rowIndex0 === "number") {
-      tr.dataset.rowIndex = String(row.rowIndex0);
-    }
-    // Wysokość wiersza: ręczne przeciąganie > jednolita z pola > z pliku (Wymiary z Excela).
-    let rowH = manualRowHeights[row.rowIndex0] || (manualRowHeightAll > 0 ? manualRowHeightAll : 0);
-    if (!rowH && useExcelLayout) rowH = toPixelHeight(currentSheetRowHeights[row.rowIndex0]) || 0;
-    if (rowH) {
-      tr.style.height = `${rowH}px`;
-      tr.classList.add("row-fixed-height");
-    }
-    const rowHead = document.createElement("td");
-    rowHead.className = "row-head";
-    rowHead.textContent = model.rowHeadFormatter ? model.rowHeadFormatter(row, rowPos) : String(row.rowIndex0 + 1);
-    if (typeof row.rowIndex0 === "number") {
-      const rowResizer = document.createElement("div");
-      rowResizer.className = "row-resizer";
-      rowResizer.dataset.rowIndex = String(row.rowIndex0);
-      rowHead.appendChild(rowResizer);
-    }
-    tr.appendChild(rowHead);
-    const matchedCols = highlightMatchedCells ? matchedCellsByRow.get(row.rowIndex0) : null;
-    row.values.forEach((v, i) => {
-      const mergeKey = `${rowPos}:${i}`;
-      if (mergeLayout && mergeLayout.covered.has(mergeKey)) return;
-      const td = document.createElement("td");
-      const displayValue = getDisplayValue(row, i);
-      td.textContent = displayValue;
-      // BEZ `data-full-text` na komórkach danych: ten atrybut trzymał DRUGĄ kopię tekstu
-      // każdej komórki (przy 563×33 to 19 000 zdublowanych łańcuchów w DOM), a czytające
-      // go miejsca i tak mają fallback na textContent — który dla <td> jest pełną treścią
-      // (CSS przycina tylko wizualnie). Na nagłówkach atrybut ZOSTAJE, bo tam textContent
-      // zawiera doklejoną strzałkę sortowania.
-      td.dataset.colIndex = String(i);
-      if (selectedCellState && selectedCellState.rowKey === tr.dataset.rowKey && selectedCellState.colIndex0 === i) {
-        td.classList.add("cell-selected");
-      }
-      if (matchedCols && matchedCols.has(i)) td.classList.add("cell-filter-match");
-      // Znacznik przeliczenia na dziś: róg komórki + treść dla podpowiedzi (hover/tap).
-      // Powstaje wyłącznie w buildRows przy włączonym „Przeliczaj formuły z datą",
-      // więc odznaczenie opcji (= przebudowa danych) sprząta go automatycznie.
-      if (row.recalcCells) {
-        const fromFile = row.recalcCells[i];
-        if (fromFile !== undefined) {
-          td.classList.add("cell-recalced");
-          td.dataset.recalcWas = String(fromFile);
-        }
-      }
-
-      if (mergeLayout) {
-        const anchor = mergeLayout.anchors.get(mergeKey);
-        if (anchor) {
-          if (anchor.rowspan > 1) td.rowSpan = anchor.rowspan;
-          if (anchor.colspan > 1) td.colSpan = anchor.colspan;
-          td.classList.add("cell-merged");
-          if (anchor.ref) td.title = `Scalona komórka: ${anchor.ref}`;
-        }
-      }
-
-      if (row.cellStyles && row.cellStyles[i]) applyCellStyle(td, row.cellStyles[i]);
-      if (cfMapForRender) {
-        const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
-        if (cf) {
-          if (cf.fontColor) { td.style.color = cf.fontColor; if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); else if (isDarkNeutralColor(cf.fontColor)) td.classList.add("cell-dark-text"); }
-          if (cf.fillColor) { td.classList.add("cell-has-fill"); const cbg = hexToRgba(cf.fillColor, cf.fontColor ? 1 : 0.28); if (cbg) td.style.background = cbg; }
-        }
-      }
-      tr.appendChild(td);
-    });
-    // punkt odniesienia dla różnicowego odświeżania przy kolejnym renderze
-    tr._swbMatched = matchedCols ? Array.from(matchedCols) : null;
-    tr._swbSelectedCol = (selectedCellState && selectedCellState.rowKey === reuseKey)
-      ? selectedCellState.colIndex0
-      : -1;
-    nextRowNodes.set(reuseKey, tr);
-    tbodyFragment.appendChild(tr);
-  });
-  tbodyEl.appendChild(tbodyFragment);
+  const rowCtx = {
+    model, headers, useExcelLayout, pulseMatches, mergeLayout, cfMapForRender,
+    canReuse, reuseMap: _rowNodeCache, nextRowNodes,
+  };
+  // Nowy silnik tabeli (virt-rows.js): w DOM tylko okno widocznych wierszy + zapas.
+  // Sam decyduje, czy może przejąć ten render (włączony, dość wierszy, bez scaleń
+  // i zawijania); jeśli nie — rysujemy wszystko po staremu.
+  const virtual = typeof swbVirt !== "undefined" && swbVirt.mount(rowCtx, rows, envKey);
+  if (!virtual) {
+    const tbodyFragment = document.createDocumentFragment();
+    rowsShown.forEach((row, rowPos) => tbodyFragment.appendChild(buildTableRow(rowCtx, row, rowPos)));
+    tbodyEl.appendChild(tbodyFragment);
+    // Pomiar kosztu tej przebudowy (do następnej klatki) → limit wierszy na miarę urządzenia.
+    // Tylko stary render: w nowym koszt nie zależy od liczby wierszy.
+    if (typeof renderBudget !== "undefined") renderBudget.measureRender(rowsShown.length * (headers.length + 1), renderStartedAt);
+  }
   // Pamiętamy TYLKO wiersze faktycznie narysowane — żeby nie hodować odłączonych węzłów.
   _rowNodeCache = nextRowNodes;
   _rowNodeEnvKey = reuseBlocked ? "" : envKey;

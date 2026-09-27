@@ -3472,6 +3472,32 @@ thead th {
   left: var(--row-head-w, 44px);
   box-shadow: 6px 0 8px -6px rgba(20, 30, 20, 0.16); /* delikatny cień odcinający zamrożoną kolumnę */
 }
+/* ── Nowy silnik tabeli (app/virt-rows.js) ──
+   W <tbody> jest tylko okno wierszy; resztę wysokości udają dwa wiersze-wypełniacze.
+   Mają w tle linie siatki, żeby przy bardzo szybkim machnięciu (zanim dorysujemy
+   wiersze) było widać pustą siatkę, a nie białą dziurę. Muszą być ZWYKŁE: bez sticky
+   z blokady kolumny (łapałby je td:first-child), bez paddingu i obramowań, które
+   zmieniłyby ich wysokość. */
+.table-wrap.virt-on { overflow-anchor: none; }
+#dataTable tbody tr.vr-spacer td,
+.table-wrap.freeze-first-col #dataTable tbody tr.vr-spacer td {
+  position: static;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background-color: var(--panel);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(var(--vr-row-h, 28px) - 1px),
+    var(--border-subtle) calc(var(--vr-row-h, 28px) - 1px),
+    var(--border-subtle) var(--vr-row-h, 28px)
+  );
+}
+@media (hover: hover) {
+  #dataTable tbody tr.vr-spacer:hover td { background-color: var(--panel); }
+}
+
 .table-wrap.freeze-first-col thead th:first-child,
 .table-wrap.freeze-first-col thead th:nth-child(2) {
   position: sticky;

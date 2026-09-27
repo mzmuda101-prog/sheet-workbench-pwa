@@ -1,0 +1,60 @@
+{
+  "date": "2026-09-27T20:13:02.992Z",
+  "cpu": 4,
+  "sample": 5000,
+  "virt": "&virt=1",
+  "results": [
+    {
+      "rows": 200,
+      "load": 3405,
+      "shown": 54,
+      "cols": 19,
+      "domNodes": 3300,
+      "sort": 140,
+      "filter": 313,
+      "rerender": 110,
+      "scrollAvg": 24.1,
+      "scrollP95": 49.5,
+      "scrollJank": 10
+    },
+    {
+      "rows": 600,
+      "load": 3402,
+      "shown": 54,
+      "cols": 19,
+      "domNodes": 3300,
+      "sort": 139,
+      "filter": 273,
+      "rerender": 99,
+      "scrollAvg": 24.6,
+      "scrollP95": 58.1,
+      "scrollJank": 17
+    },
+    {
+      "rows": 2000,
+      "load": 3381,
+      "shown": 54,
+      "cols": 19,
+      "domNodes": 3300,
+      "sort": 150,
+      "filter": 295,
+      "rerender": 114,
+      "scrollAvg": 23.7,
+      "scrollP95": 58.5,
+      "scrollJank": 27
+    },
+    {
+      "rows": 5000,
+      "load": 3318,
+      "shown": 54,
+      "cols": 19,
+      "domNodes": 3300,
+      "sort": 141,
+      "filter": 322,
+      "rerender": 113,
+      "scrollAvg": 25.2,
+      "scrollP95": 58.7,
+      "scrollJank": 25
+    }
+  ]
+}

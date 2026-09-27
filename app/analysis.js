@@ -453,7 +453,9 @@ function focusSection(section) {
   }
 
   if (section.action === "scroll-row" && Number.isFinite(section.rowIndex0)) {
-    const rowEl = tbodyEl.querySelector(`tr[data-row-index="${section.rowIndex0}"]`);
+    // Nowy silnik tabeli: wiersz poza oknem DOM trzeba najpierw dorysować.
+    const rowEl = tbodyEl.querySelector(`tr[data-row-index="${section.rowIndex0}"]`)
+      || (typeof swbVirt !== "undefined" ? swbVirt.ensureRowByIndex0(section.rowIndex0) : null);
     if (rowEl) {
       rowEl.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
       return;
@@ -2259,7 +2261,8 @@ function renderKpiExtractor() {
 function focusKpiEntry(address) {
   const entry = currentKpiEntries.find((item) => item.address === address);
   if (!entry) return;
-  const rowEl = tbodyEl.querySelector(`tr[data-row-index="${entry.rowIndex0}"]`);
+  const rowEl = tbodyEl.querySelector(`tr[data-row-index="${entry.rowIndex0}"]`)
+    || (typeof swbVirt !== "undefined" ? swbVirt.ensureRowByIndex0(entry.rowIndex0) : null);
   if (rowEl) {
     rowEl.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
   } else {

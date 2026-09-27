@@ -350,6 +350,7 @@ const I18N = {
     dvRejected: "Wartość spoza listy dozwolonych (reguła z pliku) — wpisz jedną z podpowiedzi",
     dvWarning: "Uwaga: wartość spoza listy dozwolonych — zapisuję mimo to",
     editWideOnly: "Edycja komórek działa tylko w trybie szerokim (wide).",
+    virtForcedByUrl: "Adres strony wymusza silnik tabeli (?virt=…) — ustawienie zadziała po jego usunięciu.",
     editBlockedRow: "Tej komórki nie można edytować (wiersz pochodny lub podnagłówek).",
     editCellAria: "Edycja komórki",
     editToolsPanel: "Narzędzia edycji",
@@ -1104,6 +1105,7 @@ const I18N = {
     dvRejected: "Value not in the allowed list (rule from the file) — pick one of the suggestions",
     dvWarning: "Heads up: value not in the allowed list — saving anyway",
     editWideOnly: "Cell editing works only in wide mode.",
+    virtForcedByUrl: "The page address forces the table engine (?virt=…) — the setting applies once it is removed.",
     editBlockedRow: "This cell can't be edited (derived row or subheader).",
     editCellAria: "Edit cell",
     editToolsPanel: "Edit tools",
@@ -1621,6 +1623,7 @@ const STATIC_TRANSLATIONS = {
     recalcDates: "Przeliczaj formuły z datą (na dziś)",
     smartColWidths: "Inteligentne dopasowanie szerokości",
     wrapCells: "Zawijaj tekst w komórkach",
+    virtRows: "Nowy silnik tabeli (beta)",
     smartPanelTitle: "Tryby auto",
     smartDaysLabel: "Dłużej niż (dni)",
     smartConfigTitle: "Kolumny cyklu",
@@ -1866,6 +1869,7 @@ const STATIC_TRANSLATIONS = {
     recalcDates: "Recalculate date formulas (today)",
     smartColWidths: "Smart column widths",
     wrapCells: "Wrap cell text",
+    virtRows: "New table engine (beta)",
     smartPanelTitle: "Auto modes",
     smartDaysLabel: "Longer than (days)",
     smartConfigTitle: "Cycle columns",
@@ -2382,6 +2386,7 @@ function applyStaticTranslations() {
   setCheckboxText("recalcDates", copy.recalcDates);
   setCheckboxText("smartColWidths", copy.smartColWidths);
   setCheckboxText("wrapCells", copy.wrapCells);
+  setCheckboxText("virtRows", copy.virtRows);
   setText("#filter2BlockTitle", copy.filterBlock2);
   setButtonLabel("#addFilter2Btn", copy.addSecondFilter);
   setButtonLabel("#removeFilter2Btn", copy.removeFilter);

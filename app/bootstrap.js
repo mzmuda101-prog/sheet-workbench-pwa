@@ -351,6 +351,17 @@ if (wrapCellsEl) {
   wrapCellsEl.addEventListener("change", () => {
     applyWrapCells();
     saveCellStylePreferences();
+    // Nowy silnik nie obsługuje (jeszcze) zmiennych wysokości z zawijania — przełączenie
+    // zmienia, który silnik rysuje tabelę, więc trzeba ją przerysować.
+    if (typeof swbVirt !== "undefined" && swbVirt.enabled() && currentHeaders.length) renderActiveTable();
+  });
+}
+if (virtRowsEl && typeof swbVirt !== "undefined") {
+  virtRowsEl.checked = swbVirt.enabled();
+  virtRowsEl.addEventListener("change", () => {
+    swbVirt.setEnabled(virtRowsEl.checked);
+    if (swbVirt.isForcedByUrl()) toast(t("virtForcedByUrl"), "info");
+    if (currentHeaders.length) renderActiveTable();
   });
 }
 if (rowHeightAllEl) {
