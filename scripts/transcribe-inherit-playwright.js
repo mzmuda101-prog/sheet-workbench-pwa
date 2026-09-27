@@ -208,9 +208,7 @@ async function run() {
   // Gdyby dziedziczenie liczyło się po widoku, wartość by zniknęła albo się przesunęła.
   await page.keyboard.press("Escape");
   await sleep(200);
-  // Pasek szybkiego szukania jest widoczny dopiero w trybie „szybkie szukanie”.
-  await page.click("#readingToggle");
-  await sleep(250);
+  // Pasek szybkiego szukania jest zawsze widoczny (rama ekranu, 2026-09-27).
   await page.evaluate(() => {
     document.getElementById("quickSearchAction").value = "filter";
     document.getElementById("quickSearch").value = "A2";

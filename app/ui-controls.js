@@ -289,7 +289,7 @@ function setSidebarOpen(open) {
   if (sidebarScrim) sidebarScrim.classList.toggle("hidden", !shouldOpen);
   if (panelToggle) {
     panelToggle.setAttribute("aria-expanded", shouldOpen ? "true" : "false");
-    panelToggle.textContent = shouldOpen ? t("panelOpen") : t("panelClosed");
+    setPanelToggleLabel(shouldOpen);
   }
   if (stateChanged) replayPop(panelHandle, "handle-pop");
   requestAnimationFrame(() => syncSidebarHandle());
@@ -776,6 +776,7 @@ async function handleFile(file, fileHandle = null) {
     currentSheetRowHeights = {};
     fileNameTextEl.textContent = file.name;
     fileNameEl.classList.remove("hidden");
+    if (typeof appFrame !== "undefined") appFrame.syncFile();
     dropZone.classList.add("has-file");
     setDirtyState(false);
     setStatus(t("statusFileLoaded"));
@@ -1935,6 +1936,7 @@ loadBtn.addEventListener("click", () => {
       }
       currentSheetName = sheetName;
       updateSheetTabActive(sheetName);
+      if (typeof appFrame !== "undefined") appFrame.syncFile();
       const data = await buildRowsAsync(sheet, headerRow, workbook);
       currentHeaders = data.headers;
       // Limit wierszy dobrany do zmierzonej szybkości urządzenia (chyba że wpisany ręcznie).
@@ -1998,7 +2000,8 @@ loadBtn.addEventListener("click", () => {
       if (currentSheetStats?.duplicateHeaderCount) {
         toast(t("duplicatedHeaders", { count: currentSheetStats.duplicateHeaderCount }), "warning");
       }
-      toast(t("sheetLoaded"), "success");
+      // Jedno zbiorcze powiadomienie (toast() scala je z „Plik wczytany” sprzed chwili).
+      toast(t("sheetLoadedRows", { sheet: sheetName, rows: formatRowCount(baseRows.length) }), "success");
       log(`Wczytano arkusz: ${sheetName}`, "success");
     } finally {
       setLoading(false);
@@ -4239,27 +4242,17 @@ if (brandRefreshBtn) {
     hardRefreshApp();
   });
 
-  const expandLogo = () => {
-    brandRefreshBtn.classList.add("expanded");
-    if (heroRightEl) heroRightEl.classList.add("expanded");
-  };
-  const collapseLogo = () => {
-    brandRefreshBtn.classList.remove("expanded");
-    if (heroRightEl) heroRightEl.classList.remove("expanded");
-  };
+  // (Dawny efekt „rozwijania logo” przy najechaniu zdjęty razem z przeniesieniem
+  // przycisku do menu ⋯ — tam to zwykła pozycja menu z podpisem.)
+}
 
-  brandRefreshBtn.addEventListener("mouseenter", expandLogo);
-  brandRefreshBtn.addEventListener("mouseleave", collapseLogo);
-  brandRefreshBtn.addEventListener("pointerenter", expandLogo);
-  brandRefreshBtn.addEventListener("pointerleave", collapseLogo);
-  brandRefreshBtn.addEventListener("focus", expandLogo);
-  brandRefreshBtn.addEventListener("blur", collapseLogo);
-  brandRefreshBtn.addEventListener("touchstart", expandLogo, { passive: true });
-
-  window.addEventListener("pageshow", collapseLogo);
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") collapseLogo();
-  });
+// Napis przycisku „Narzędzia” siedzi we własnym <span> — obok jest licznik filtrów,
+// więc nie wolno nadpisywać textContent całego przycisku.
+function setPanelToggleLabel(open) {
+  if (!panelToggle) return;
+  const label = panelToggle.querySelector(".panel-toggle-label");
+  if (label) label.textContent = open ? t("panelOpen") : t("panelClosed");
+  else panelToggle.textContent = open ? t("panelOpen") : t("panelClosed");
 }
 
 function toggleSidebar() {
@@ -4270,7 +4263,7 @@ function toggleSidebar() {
 function syncSidebarHandle() {
   if (panelToggle) {
     panelToggle.setAttribute("aria-expanded", isSidebarOpen() ? "true" : "false");
-    panelToggle.textContent = isSidebarOpen() ? t("panelOpen") : t("panelClosed");
+    setPanelToggleLabel(isSidebarOpen());
   }
   if (panelHandle) {
     panelHandle.textContent = "";
@@ -4297,7 +4290,9 @@ function setReadingMode(enabled) {
   if (readingToggle) readingToggle.setAttribute("aria-pressed", String(enabled));
   if (enabled) {
     if (quickSearchWrap) quickSearchWrap.classList.remove("hidden");
-    if (readingToggle) readingToggle.textContent = t("readingStandard");
+    // Napis stały — stan (wł./wył.) pokazuje sam przełącznik. Wcześniej włączony
+    // przycisk zmieniał się na „Tryb standardowy”, czyli pokazywał tryb, w którym NIE jesteś.
+    if (readingToggle) readingToggle.textContent = t("readingQuick");
   } else {
     if (quickSearchWrap) quickSearchWrap.classList.add("hidden");
     if (readingToggle) readingToggle.textContent = t("readingQuick");

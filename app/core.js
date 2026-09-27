@@ -66,7 +66,6 @@ const emptyStateEl = document.getElementById("emptyState");
 const emptyTitleEl = document.getElementById("emptyTitle");
 const emptySubEl = document.getElementById("emptySub");
 const DEFAULT_EMPTY_TITLE = emptyTitleEl.textContent;
-const DEFAULT_EMPTY_SUB = emptySubEl.textContent;
 const tablePanelEl = document.querySelector(".table-panel");
 
 const fileInput = document.getElementById("fileInput");
@@ -656,7 +655,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260927-01";
+const APP_BUILD_VERSION = "20260928-10";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -793,7 +792,21 @@ const CELL_ACTIONS_ENABLED = (() => {
   }
 })();
 
+// Dwa powiadomienia o sukcesie tuż po sobie (np. „Plik wczytany”, a zaraz „Wczytano
+// arkusz”) nie piętrzą się jeden na drugim — drugi PODMIENIA treść pierwszego.
+let _lastSuccessToast = null; // { el, label, timer, at }
+const TOAST_MERGE_MS = 2000;
+
 function toast(msg, type = "info") {
+  const last = _lastSuccessToast;
+  if (type === "success" && last && last.el.isConnected && !last.el.classList.contains("out")
+    && performance.now() - last.at < TOAST_MERGE_MS) {
+    last.label.textContent = msg;
+    last.at = performance.now();
+    clearTimeout(last.timer);
+    last.timer = scheduleToastOut(last.el);
+    return;
+  }
   const toastEl = document.createElement("div");
   toastEl.className = `toast ${type}`;
 
@@ -808,7 +821,12 @@ function toast(msg, type = "info") {
   toastEl.appendChild(label);
   toastContainerEl.appendChild(toastEl);
 
-  setTimeout(() => {
+  const timer = scheduleToastOut(toastEl);
+  if (type === "success") _lastSuccessToast = { el: toastEl, label, timer, at: performance.now() };
+}
+
+function scheduleToastOut(toastEl) {
+  return setTimeout(() => {
     toastEl.classList.add("out");
     setTimeout(() => toastEl.remove(), 200);
   }, 2800);
@@ -911,6 +929,7 @@ function setDirtyState(isDirty) {
   hasUnsavedChanges = !!isDirty;
   statusEl.classList.toggle("unsaved", hasUnsavedChanges);
   document.title = hasUnsavedChanges ? `* ${BASE_TITLE}` : BASE_TITLE;
+  if (typeof appFrame !== "undefined") appFrame.syncSave(); // „Zapisz” w nagłówku + liczba zmian
 }
 
 function updateExcelLayoutButtonLabel() {
@@ -960,7 +979,16 @@ function readTableViewportHeight() {
   if (!tablePanelEl) return;
   const rect = tablePanelEl.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 720;
-  const bottomGap = window.matchMedia("(max-width: 768px)").matches ? 14 : 24;
+  const narrow = window.matchMedia("(max-width: 768px)").matches;
+  // Desktop: odstęp pod tabelą = dolny padding .app (48 px). Stałe 24 px sprawiało, że
+  // strona wystawała o 24 px i dawała się przewinąć — a wtedy scrollIntoView komórki
+  // przesuwał CAŁĄ stronę, która chwilę później wracała (tabela skakała pod kursorem).
+  let bottomGap = narrow ? 14 : 24;
+  if (!narrow) {
+    const appEl = tablePanelEl.closest(".app");
+    const pad = appEl ? parseFloat(getComputedStyle(appEl).paddingBottom) || 0 : 0;
+    bottomGap = Math.max(bottomGap, Math.ceil(pad));
+  }
   const available = Math.floor(viewportHeight - rect.top - bottomGap);
   const minHeight = window.matchMedia("(max-width: 768px)").matches ? 320 : 420;
   tablePanelEl.style.setProperty("--table-panel-height", `${Math.max(minHeight, available)}px`);

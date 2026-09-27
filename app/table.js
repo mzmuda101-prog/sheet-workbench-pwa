@@ -140,9 +140,11 @@ function updateTableStatus(model) {
   const limit = effectiveRowLimit();
   const modeLabel = model.mode === "long" ? t("statusLongMode") : "";
   const focusedSuffix = buildFocusedRowStatusSuffix(model);
+  const shown = Math.min(rows.length, limit);
   setStatus(t("statusTableRows", {
-    total: rows.length,
-    shown: Math.min(rows.length, limit),
+    rows: formatRowCount(rows.length),
+    // „pokazano N” tylko gdy limit faktycznie coś ukrywa — inaczej to powtórzenie liczby
+    limitNote: shown < rows.length ? t("statusRowsLimited", { shown: shown.toLocaleString(currentLang === "en" ? "en-US" : "pl-PL") }) : "",
     mode: modeLabel,
     focused: focusedSuffix,
   }));
@@ -2154,7 +2156,7 @@ function renderTable(modelOrHeaders, maybeRows) {
   if (!headers.length) {
     setStatus(t("tableNoData"));
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
-    setEmptyState(DEFAULT_EMPTY_TITLE, DEFAULT_EMPTY_SUB);
+    setEmptyState(DEFAULT_EMPTY_TITLE, defaultEmptySub());
     updateCellStats();
     return;
   }

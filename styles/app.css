@@ -752,6 +752,20 @@ body.splashing {
   transform: translateY(-50%) scale(1);
   opacity: 1;
 }
+/* Wyłączony przełącznik też ma znacznik stanu — pusty pierścień w miejscu kropki.
+   Bez niego przełączniki („Wymiary z Excela”, „Szybkie szukanie”) wyglądały
+   identycznie jak zwykłe akcje („Spisywanie”, „Eksport”), więc nie było widać,
+   co jest stanem, a co jednorazowym kliknięciem. Stały padding = brak skoku
+   szerokości przy przełączaniu. */
+.btn.ghost.toggle-pill:not([aria-pressed="true"]):not(.active) {
+  padding-left: 25px;
+}
+.toggle-pill:not([aria-pressed="true"]):not(.active)::before {
+  transform: translateY(-50%) scale(1);
+  opacity: 0.6;
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
 /* DOTYK: bez rozmytego cienia zewnętrznego na WŁĄCZONYM przełączniku (2026-09-24).
    Zmierzone na fizycznym iPhonie panelem ?qsab: aktywny „Tryb szybkie szukanie"
    zacinał przewijanie tabeli, tym mocniej, im więcej wierszy (120 — płynnie,
@@ -5337,10 +5351,37 @@ html.low-power .loading-overlay.is-file {
    po lewej stronie pasków z przyciskami — ale TYLKO gdy pasek jest rozwinięty
    i tylko na wąskim dotyku (desktop i tablet z myszą zostają bez zmian). */
 @media (max-width: 768px) and (pointer: coarse) {
-  .table-panel:not(.toolbar-collapsed) .table-actions,
-  .table-panel:not(.toolbar-collapsed) .quick-search:not(.hidden) {
-    padding-left: 46px;
+  /* (pole szukania stoi teraz w 1. rzędzie, wysoko nad uchwytem — wcięcie tylko dla przycisków) */
+  .table-panel:not(.toolbar-collapsed) .table-actions {
+    padding-left: 24px;
   }
+}
+
+/* Zamknięty uchwyt przy samej krawędzi ekranu i wąski (22 px) — NA KAŻDEJ szerokości
+   (2026-09-28: na desktopie 40–52 px uchwytu też zasłaniało kolumnę numerów; Mateuszowi
+   wąski wariant „mega się podoba”, więc jeden wygląd wszędzie). Na telefonie miał 39 px
+   od x=8, czyli kończył się na x=47 — a cyfry numerów wierszy zaczynają się na x≈43,
+   więc zasłaniał numery 5–10 wierszy na środku ekranu. Teraz mieści się w marginesie
+   i ramce karty tabeli. Wysokość 96 px zostaje, więc łatwo go trafić kciukiem.
+   Bez backdrop-filter: rozmycie na stałym elemencie NAD przewijaną tabelą jest
+   przeliczane co klatkę (na iOS to podejrzany nr 1 przy zacinaniu przewijania). */
+:root:not(.sidebar-open) .sidebar-handle {
+  left: 0 !important;
+  width: 22px;
+  border-left: 0;
+  border-radius: 0 14px 14px 0;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--panel) 94%, transparent);
+}
+:root:not(.sidebar-open) .sidebar-handle::before {
+  min-width: 16px;
+  height: 16px;
+  padding: 0;
+  font-size: 12px;
+}
+:root:not(.sidebar-open) .sidebar-handle::after {
+  font-size: 9px;
 }
 
 /* ===================== Podsumowanie miesięczne ===================== */
@@ -6499,3 +6540,357 @@ body.tr-active .toast-container {
 @media (pointer: coarse) {
   .qs-hist-btn { width: 38px; height: 38px; font-size: 17px; opacity: 1; }
 }
+
+/* =====================================================================
+   RAMA EKRANU (paczka B, 2026-09-27) — app/app-frame.js
+   Nagłówek: plik + arkusz, „Zapisz”, menu ⋯. Pasek nad tabelą: szukanie zawsze
+   widoczne, „Narzędzia” z liczbą filtrów, drugi rząd: przełączniki | akcje | ostatnie.
+   Blok celowo NA KOŃCU arkusza: nadpisuje dawne reguły nagłówka/paska przy tej samej
+   wadze selektorów, więc cała zmiana jest w jednym miejscu.
+   ===================================================================== */
+
+/* ── nagłówek ── */
+.hero-left { flex: 1 1 auto; min-width: 0; }
+.hero-info { min-width: 0; }
+.hero-right { flex: 0 0 auto; gap: 8px; }
+.hero-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+.hero.has-file .hero-title { font-size: 16px; letter-spacing: -0.01em; }
+.hero.has-file .hero-sub { display: none; }
+
+.hero-sheet {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  text-align: left;
+  cursor: pointer;
+}
+.hero-sheet[hidden] { display: none; }
+.hero-sheet-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hero-sheet:disabled { cursor: default; color: var(--muted-strong); }
+.hero-sheet:not(.is-multi) .hero-sheet-caret { display: none; }
+.hero-sheet:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 3px; border-radius: 6px; }
+
+/* Zakładki arkuszy w nagłówku (desktop). Jeden rząd; nadmiar przewija się w bok
+   z wygaszeniem krawędzi (.overflow-fade niżej). */
+.hero-tabs-slot { flex: 1 1 auto; min-width: 0; display: flex; }
+.hero-tabs-slot .sheet-tabs {
+  min-width: 0;
+  background: transparent;
+  border-top: 0;
+  padding: 2px 0;
+}
+@media (min-width: 769px) {
+  /* przy kilku arkuszach nazwę bieżącego pokazują zakładki */
+  .hero-sheet.is-multi { display: none; }
+}
+@media (max-width: 768px) {
+  .hero-tabs-slot { display: none; }
+  .hero-logo svg { width: 32px; height: 32px; }
+  .hero { flex-wrap: nowrap; padding: 10px 12px; gap: 10px; }
+  .hero-left { gap: 10px; min-width: 88px; }
+  /* dawna reguła mobilna dawała .hero-right width:100% + zawijanie — wypychało nazwę pliku */
+  .hero-right { width: auto; flex-wrap: nowrap; justify-content: flex-end; gap: 6px; }
+  .hero-save { padding: 0 12px; }
+  .app-update-btn { padding-inline: 10px; }
+}
+
+/* „Zapisz” */
+.hero-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted-strong);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: background var(--t), border-color var(--t), color var(--t);
+  flex-shrink: 0;
+}
+.hero-save[hidden] { display: none; }
+.hero-save:hover { border-color: var(--accent-border); color: var(--accent); }
+.hero-save.is-dirty { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hero-save.is-dirty:hover { background: var(--accent-h); color: #fff; }
+.hero-save-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: #fff;
+  color: var(--accent);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+.hero-save-count[hidden] { display: none; }
+.hero-save:focus-visible,
+.app-menu-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+
+/* ⋯ */
+.app-menu-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink-2);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  flex-shrink: 0;
+}
+.app-menu-btn:hover,
+.app-menu-btn[aria-expanded="true"] { color: var(--accent); border-color: var(--accent-border); background: var(--accent-light); }
+
+/* Menu ⋯ (przeniesione do <body> przez app-frame.js, pozycja z przycisku). Pełne tło
+   bez backdrop-filter — to popover nad tabelą, rozmycie nic tu nie wnosi. */
+.app-menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: 0 18px 40px rgba(18, 30, 23, 0.22);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.app-menu[hidden] { display: none; }
+.app-menu-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.app-menu-row .theme-toggle { width: 32px; height: 32px; }
+.app-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.app-menu-item img { width: 18px; height: 18px; border-radius: 5px; object-fit: contain; flex: none; }
+.app-menu-item-text { flex: 1; min-width: 0; }
+.app-menu-item > span[aria-hidden="true"] { color: var(--muted); }
+.app-menu-item:hover,
+.app-menu-item:focus-visible { background: var(--accent-light); color: var(--accent); outline: none; }
+.app-menu-item.is-busy { pointer-events: none; opacity: 0.55; }
+.app-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-subtle); }
+.app-menu-cap {
+  padding: 6px 8px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.app-menu-state.hero-badges {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 4px;
+}
+.app-menu-build { margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (pointer: coarse) {
+  .app-menu-item { min-height: 44px; }
+}
+
+/* ── pasek nad tabelą ── */
+.table-toolbar { flex-wrap: wrap; justify-content: flex-start; }
+.table-toolbar > .quick-search { order: 1; flex: 1 1 420px; min-width: 0; }
+.table-toolbar > .panel-toggle { order: 2; }
+.table-toolbar > .status-badge { order: 3; }
+.table-toolbar > .toolbar-toggle { order: 4; }
+.table-toolbar > .table-actions {
+  order: 10;
+  flex: 1 1 100%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  padding: 2px; /* miejsce na obwódkę fokusu przycisków (inaczej ucięta przez overflow) */
+  margin: -2px;
+  min-width: 0;
+}
+.table-toolbar > .table-actions::-webkit-scrollbar { display: none; }
+/* Desktop: rząd 1 = [szukanie][Narzędzia], rząd 2 = [przyciski | ostatnie …][status].
+   Status NIE może stać w rzędzie z szukaniem: po zaznaczeniu wiersza wydłuża się
+   („• rekord N”), ścieśniał pole szukania, a ono zawijało swoje przyciski do drugiej
+   linii — cała tabela skakała o ~50 px przy KAŻDYM kliknięciu wiersza. */
+@media (min-width: 769px) {
+  .table-toolbar::before { content: ""; order: 5; flex-basis: 100%; height: 0; }
+  .table-toolbar > .status-badge { order: 11; flex: 0 0 auto; }
+  .table-toolbar > .table-actions { flex: 1 1 0; }
+}
+.table-actions > * { flex-shrink: 0; }
+/* bez pliku: nie ma czego szukać ani przełączać — zostaje status i „Narzędzia” (tam wczytanie) */
+.table-panel.no-data .quick-search,
+.table-panel.no-data .table-actions,
+.table-panel.no-data .toolbar-toggle { display: none !important; }
+
+.panel-toggle { display: inline-flex; align-items: center; gap: 6px; height: 34px; }
+.panel-toggle-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--r-full);
+  background: var(--warning); /* bursztyn = filtr (paleta apki) */
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.panel-toggle-count[hidden] { display: none; }
+
+.toolbar-sep { width: 1px; height: 20px; background: var(--border); flex: none; margin: 0 2px; }
+.toolbar-sep[hidden] { display: none; }
+
+/* „Ostatnie” — jeden rząd chipów, przewijany w bok */
+.recent-strip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 0;
+  min-width: 160px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  white-space: nowrap;
+}
+.recent-strip::-webkit-scrollbar { display: none; }
+.recent-strip[hidden] { display: none; }
+.table-actions > .recent-strip { flex-shrink: 1; }
+.recent-label { flex: none; font-size: 11.5px; color: var(--muted); }
+.recent-chip {
+  flex: none;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recent-chip.is-pinned::before { content: "★ "; color: var(--warning); }
+.recent-chip:hover,
+.recent-chip:focus-visible { border-color: var(--accent-border); color: var(--accent); background: var(--accent-light); outline: none; }
+
+/* Bezpiecznik przepełnienia (attachOverflowFade w app-frame.js): krawędź wygasa tylko
+   wtedy, gdy w tę stronę jest jeszcze co przewinąć. */
+.overflow-fade.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+.overflow-fade.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
+.overflow-fade.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+
+@media (max-width: 768px) {
+  /* telefon: [szukaj — cała szerokość] / [status …… Narzędzia ▾] / (zwijany) przyciski.
+     Pole obok „Narzędzia” było za wąskie — ikonki ≠ = a… .* nachodziły na siebie. */
+  .table-toolbar > .quick-search { flex: 1 1 100%; max-height: none; }
+  .table-toolbar > .status-badge { order: 2; flex: 1 1 auto; min-width: 0; }
+  .table-toolbar > .panel-toggle { order: 3; }
+  .table-toolbar > .toolbar-toggle { order: 4; margin-left: 0; }
+  .table-panel.toolbar-collapsed .quick-search {
+    max-height: none;
+    opacity: 1;
+    margin: 0;
+    overflow: visible;
+    pointer-events: auto;
+  }
+  .recent-strip { min-width: 140px; }
+  /* arkusz zmienia przycisk z nazwą w nagłówku — pływający przycisk nie jest potrzebny */
+  .sheet-picker-fab { display: none !important; }
+}
+
+/* Opcja „Pokaż uchwyt panelu” wyłączona: zamknięty uchwyt znika (otwarty — przycisk
+   „Schowaj panel” na telefonie — zostaje, bo zamyka panel). */
+:root.no-panel-handle:not(.sidebar-open) .sidebar-handle { display: none; }
+
+/* ── poprawki z adnotacji Mateusza (iPhone, jasny motyw, 2026-09-28) ── */
+
+/* „Narzędzia” jak sąsiednie przyciski paska (szukaj, więcej, zwiń): zaokrąglony kwadrat
+   8 px, bez tła i cienia pigułki, ta sama waga tekstu. */
+.table-toolbar > .panel-toggle {
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  font-weight: 600;
+  padding: 0 12px;
+}
+.table-toolbar > .panel-toggle[aria-expanded="true"] { color: var(--accent); border-color: var(--accent-border); background: var(--accent-light); }
+
+/* „120 wierszy” — tekst na środku pigułki (na telefonie pigułka jest szeroka) */
+.table-toolbar > .status-badge { text-align: center; }
+
+/* Cieńsza przerwa między nagłówkiem a tabelą na telefonie (odstęp + uchwyt zwijania
+   zajmowały ~34 px). Zwinięty nagłówek ma własne marginesy (body.hero-collapsed …). */
+@media (max-width: 768px) {
+  body:not(.hero-collapsed) .hero { margin-bottom: 4px; }
+  .hero-grip { height: 14px; margin: 0 0 4px; }
+}
+
+/* Przycisk zamykania OTWARTEGO panelu: pełny akcent, biały napis, bez przezroczystości.
+   Reguła „bez szkła na dotyku” (html:not(.force-glass) .sidebar-handle → tło panelu)
+   miała wyższą wagę niż zielone tło przycisku — w jasnym motywie wychodził biały napis
+   na białym tle przy opacity 0.78, czyli przycisk prawie znikał. */
+:root.sidebar-open .sidebar-handle {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  opacity: 1;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent) 38%, transparent), 0 2px 6px rgba(18, 30, 23, 0.18);
+}
+:root.sidebar-open .sidebar-handle:hover { background: var(--accent-h); border-color: var(--accent-h); }
+:root.sidebar-open .sidebar-handle::before {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+:root.sidebar-open .sidebar-handle:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }

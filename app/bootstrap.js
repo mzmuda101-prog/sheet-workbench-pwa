@@ -840,7 +840,7 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-setEmptyState(DEFAULT_EMPTY_TITLE, DEFAULT_EMPTY_SUB);
+setEmptyState(DEFAULT_EMPTY_TITLE, defaultEmptySub());
 updateDateChipsActive();
 updateQuickSearchColumnButtons();
 updateSortControls();

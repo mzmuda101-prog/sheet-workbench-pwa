@@ -90,7 +90,9 @@ async function run() {
     check(`${label}: szyba wygląda jak przyklejone komórki`, ok, diff || "szyba się nie włączyła");
   };
 
-  await page.addStyleTag({ content: ".scroll-top-fab,.clear-sel-fab,.sheet-picker-fab,.cell-actions{visibility:hidden!important}" });
+  // Powiadomienia (toasty) też poza porównaniem — na telefonie stoją u góry i potrafią
+  // zahaczyć o górną krawędź tabeli, a to nie jest różnica między szybą a sticky.
+  await page.addStyleTag({ content: ".scroll-top-fab,.clear-sel-fab,.sheet-picker-fab,.cell-actions,.toast-container{visibility:hidden!important}" });
   await page.evaluate(() => { document.body.classList.add("cursor-hint-off"); });
 
   // 6a. bez blokady szyby nie ma

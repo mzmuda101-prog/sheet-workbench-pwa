@@ -36,10 +36,14 @@ const I18N = {
     withError: "Z błędem",
     online: "Online",
     offline: "Offline",
-    panelOpen: "Zamknij filtry",
-    panelClosed: "Filtry",
+    panelOpen: "Zamknij narzędzia",
+    panelClosed: "Narzędzia",
+    heroSave: "Zapisz",
+    heroSaveDirty: "Zapisz — {changes}",
+    heroSheetSwitch: "Zmień arkusz",
+    recentLabel: "Ostatnie:",
     readingStandard: "Tryb standardowy",
-    readingQuick: "Tryb szybkie szukanie",
+    readingQuick: "Szybkie szukanie",
     quickSearchColumns: "Kolumny",
     quickSearchActionFilter: "Filtruj",
     quickSearchActionHighlight: "Zaznacz",
@@ -65,6 +69,7 @@ const I18N = {
     fileLoaded: "Plik wczytany",
     guideChooseSheet: "Wybierz arkusz i kliknij „Wczytaj arkusz”",
     sheetLoaded: "Arkusz wczytany",
+    sheetLoadedRows: "Wczytano „{sheet}” · {rows}",
     filtersApplied: "Zastosowano filtry",
     filtersReset: "Reset filtrów",
     firstLoadSheet: "Najpierw wczytaj arkusz",
@@ -342,8 +347,9 @@ const I18N = {
     tableNoData: "Brak danych",
     tableNoResults: "Brak wyników",
     tableNoResultsHint: "Zmień filtry albo wybierz inny arkusz.",
-    statusTableRows: "Wierszy: {total} (pokazano: {shown}){mode}{focused}",
-    statusTableRowsEmpty: "Wierszy: 0",
+    statusTableRows: "{rows}{limitNote}{mode}{focused}",
+    statusRowsLimited: " · pokazano {shown}",
+    statusTableRowsEmpty: "0 wierszy",
     statusFocusedRow: " • rekord {pos}",
     statusLongMode: " • tryb long",
     formulaEditBlocked: "Edycja formuł jest zablokowana",
@@ -486,6 +492,7 @@ const I18N = {
     sidebarHandleLabel: "Wysuń",
     emptyTitle: "Wczytaj plik Excel, aby zacząć",
     emptySub: "wybierz plik poniżej albo przeciągnij go do strefy w panelu bocznym",
+    emptySubTouch: "wybierz plik z urządzenia albo wypróbuj na przykładzie",
     openFileBtn: "Wybierz plik z dysku",
     sampleBtn: "Wypróbuj na przykładowym pliku",
     measureOccurrences: "Liczba rekordów / wystąpień",
@@ -789,10 +796,14 @@ const I18N = {
     withError: "With error",
     online: "Online",
     offline: "Offline",
-    panelOpen: "Close filters",
-    panelClosed: "Filters",
+    panelOpen: "Close tools",
+    panelClosed: "Tools",
+    heroSave: "Save",
+    heroSaveDirty: "Save — {changes}",
+    heroSheetSwitch: "Switch sheet",
+    recentLabel: "Recent:",
     readingStandard: "Standard mode",
-    readingQuick: "Quick search mode",
+    readingQuick: "Quick search",
     quickSearchColumns: "Columns",
     quickSearchActionFilter: "Filter",
     quickSearchActionHighlight: "Highlight",
@@ -820,6 +831,7 @@ const I18N = {
     fileLoaded: "File loaded",
     guideChooseSheet: "Pick a sheet and click “Load sheet”",
     sheetLoaded: "Sheet loaded",
+    sheetLoadedRows: "Loaded “{sheet}” · {rows}",
     filtersApplied: "Filters applied",
     filtersReset: "Filters reset",
     firstLoadSheet: "Load a sheet first",
@@ -1097,8 +1109,9 @@ const I18N = {
     tableNoData: "No data",
     tableNoResults: "No results",
     tableNoResultsHint: "Change filters or choose another sheet.",
-    statusTableRows: "Rows: {total} (shown: {shown}){mode}{focused}",
-    statusTableRowsEmpty: "Rows: 0",
+    statusTableRows: "{rows}{limitNote}{mode}{focused}",
+    statusRowsLimited: " · showing {shown}",
+    statusTableRowsEmpty: "0 rows",
     statusFocusedRow: " • record {pos}",
     statusLongMode: " • long mode",
     formulaEditBlocked: "Formula editing is blocked",
@@ -1241,6 +1254,7 @@ const I18N = {
     sidebarHandleLabel: "Open",
     emptyTitle: "Load an Excel file to get started",
     emptySub: "choose a file below or drag it into the drop zone in the sidebar",
+    emptySubTouch: "pick a file from your device or try the example",
     openFileBtn: "Choose a file from disk",
     sampleBtn: "Try a sample file",
     measureOccurrences: "Record / occurrence count",
@@ -1517,6 +1531,40 @@ const I18N = {
   },
 };
 
+// Polska odmiana liczebnika: 1 → one, 2–4 (poza 12–14) → few, reszta → many.
+function plPluralForm(num) {
+  if (num === 1) return "one";
+  const last = num % 10;
+  const last2 = num % 100;
+  return (last >= 2 && last <= 4 && !(last2 >= 12 && last2 <= 14)) ? "few" : "many";
+}
+
+// „1 niezapisana zmiana / 2 niezapisane zmiany / 5 niezapisanych zmian” (PL), „1 unsaved change / 5 unsaved changes” (EN).
+function formatUnsavedCount(n) {
+  const num = Number(n) || 0;
+  if (currentLang === "en") return `${num} unsaved ${num === 1 ? "change" : "changes"}`;
+  const form = plPluralForm(num);
+  return `${num} ${form === "one" ? "niezapisana zmiana" : form === "few" ? "niezapisane zmiany" : "niezapisanych zmian"}`;
+}
+
+// „1 wiersz / 2 wiersze / 5 wierszy” (PL) albo „1 row / 5 rows” (EN), z separatorem tysięcy.
+function formatRowCount(n) {
+  const num = Number(n) || 0;
+  const shown = num.toLocaleString(currentLang === "en" ? "en-US" : "pl-PL");
+  if (currentLang === "en") return `${shown} ${num === 1 ? "row" : "rows"}`;
+  if (num === 1) return `${shown} wiersz`;
+  const last = num % 10;
+  const last2 = num % 100;
+  const few = last >= 2 && last <= 4 && !(last2 >= 12 && last2 <= 14);
+  return `${shown} ${few ? "wiersze" : "wierszy"}`;
+}
+
+// Podpis pustego ekranu: na dotyku nie ma przeciągania pliku, więc bez wzmianki o nim.
+function defaultEmptySub() {
+  const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  return t(touch ? "emptySubTouch" : "emptySub");
+}
+
 function t(key, vars = {}) {
   const lang = currentLang;
   // Jedno źródło prawdy z fallbackiem: I18N bieżącego języka → STATIC bieżącego →
@@ -1623,6 +1671,14 @@ const STATIC_TRANSLATIONS = {
     recalcDates: "Przeliczaj formuły z datą (na dziś)",
     smartColWidths: "Inteligentne dopasowanie szerokości",
     wrapCells: "Zawijaj tekst w komórkach",
+    showPanelHandle: "Pokaż uchwyt panelu",
+    appMenuLang: "Język",
+    appMenuTheme: "Motyw",
+    appMenuApps: "Moje inne aplikacje",
+    appMenuAria: "Menu aplikacji",
+    brandRefreshText: "Odśwież aplikację",
+    link1Text: "Formularz i eksport Excel",
+    link2Text: "Portal ogłoszeniowy",
     virtRows: "Nowy silnik tabeli (beta)",
     smartPanelTitle: "Tryby auto",
     smartDaysLabel: "Dłużej niż (dni)",
@@ -1775,7 +1831,8 @@ const STATIC_TRANSLATIONS = {
     hintQuickApply: "Uruchom szybkie szukanie",
     hintExportCsv: "Wyeksportuj widok do CSV",
     statusNoData: "Brak danych",
-    quickSearchPlaceholder: "Szybkie szukanie...",
+    quickSearchPlaceholder: "Szukaj w arkuszu…",
+    quickSearchPlaceholderShort: "Szukaj…",
     qsFlagsAria: "Opcje dopasowania",
     qsFlagNegate: "Odwróć",
     qsFlagEquals: "Dokładnie",
@@ -1783,7 +1840,7 @@ const STATIC_TRANSLATIONS = {
     qsFlagRegex: "Regex",
     quickSearchColumnsTitle: "Wybierz kolumny dla szybkiego szukania",
     resetSort: "Domyślne sortowanie",
-    exportCsv: "Eksport",
+    exportCsv: "Eksport…",
     sidebarScrimAria: "Zamknij panel filtrów",
     chooseColumns: "Wybierz kolumny",
     close: "Zamknij",
@@ -1869,6 +1926,14 @@ const STATIC_TRANSLATIONS = {
     recalcDates: "Recalculate date formulas (today)",
     smartColWidths: "Smart column widths",
     wrapCells: "Wrap cell text",
+    showPanelHandle: "Show panel handle",
+    appMenuLang: "Language",
+    appMenuTheme: "Theme",
+    appMenuApps: "My other apps",
+    appMenuAria: "App menu",
+    brandRefreshText: "Refresh app",
+    link1Text: "Form and Excel export",
+    link2Text: "Listings portal",
     virtRows: "New table engine (beta)",
     smartPanelTitle: "Auto modes",
     smartDaysLabel: "Longer than (days)",
@@ -2021,7 +2086,8 @@ const STATIC_TRANSLATIONS = {
     hintQuickApply: "Run quick search",
     hintExportCsv: "Export the view to CSV",
     statusNoData: "No data",
-    quickSearchPlaceholder: "Quick search...",
+    quickSearchPlaceholder: "Search the sheet…",
+    quickSearchPlaceholderShort: "Search…",
     qsFlagsAria: "Match options",
     qsFlagNegate: "Invert",
     qsFlagEquals: "Exact",
@@ -2029,7 +2095,7 @@ const STATIC_TRANSLATIONS = {
     qsFlagRegex: "Regex",
     quickSearchColumnsTitle: "Choose columns for quick search",
     resetSort: "Default sort",
-    exportCsv: "Export",
+    exportCsv: "Export…",
     sidebarScrimAria: "Close filters panel",
     chooseColumns: "Choose columns",
     close: "Close",
@@ -2330,10 +2396,16 @@ function applyStaticTranslations() {
   // #panelToggle bez aria-label — nazwa dostępna to widoczny tekst (panelOpen/panelClosed)
   /* Podpowiedzi przez data-hint (silnik cursor-hint), nie natywne title */
   setAttr("#link1", "data-hint", copy.link1Title);
-  setAttr("#link1", "aria-label", copy.link1Title);
   setAttr("#link2", "data-hint", copy.link2Title);
-  setAttr("#link2", "aria-label", copy.link2Title);
-  setAttr("#brandRefresh", "aria-label", t("brandRefreshAria"));
+  // Pozycje menu ⋯ — nazwą dostępną jest widoczny podpis (bez osobnego aria-label).
+  setText("#link1Text", copy.link1Text);
+  setText("#link2Text", copy.link2Text);
+  setText("#brandRefreshText", copy.brandRefreshText);
+  setText("#appMenuLangLabel", copy.appMenuLang);
+  setText("#appMenuThemeLabel", copy.appMenuTheme);
+  setText("#appMenuAppsCap", copy.appMenuApps);
+  setAttr("#appMenuBtn", "aria-label", copy.appMenuAria);
+  // #brandRefresh: nazwa = widoczny podpis w menu (brandRefreshText)
   setText("#appUpdateBtn", t("updateNow"));
   setAttr("#themeToggle", "aria-label", t("themeToggleAria"));
   setAttr("#heroGrip", "aria-label", t("heroGripAria"));
@@ -2387,6 +2459,7 @@ function applyStaticTranslations() {
   setCheckboxText("smartColWidths", copy.smartColWidths);
   setCheckboxText("wrapCells", copy.wrapCells);
   setCheckboxText("virtRows", copy.virtRows);
+  setCheckboxText("showPanelHandle", copy.showPanelHandle);
   setText("#filter2BlockTitle", copy.filterBlock2);
   setButtonLabel("#addFilter2Btn", copy.addSecondFilter);
   setButtonLabel("#removeFilter2Btn", copy.removeFilter);
@@ -2506,7 +2579,7 @@ function applyStaticTranslations() {
   if (heroStatus) setStatus(copy.statusNoData);
 
   const emptyStateVisible = emptyStateEl && !emptyStateEl.classList.contains("hidden");
-  if (emptyStateVisible) setEmptyState(t("emptyTitle"), t("emptySub"));
+  if (emptyStateVisible) setEmptyState(t("emptyTitle"), defaultEmptySub());
 
   setAttr("#sidebarScrim", "aria-label", copy.sidebarScrimAria);
   setAttr("#quickSearchPopup", "aria-label", copy.quickSearchDialogAria);
@@ -2528,7 +2601,8 @@ function applyStaticTranslations() {
   setAttr("#quickSearchPopupInput", "placeholder", copy.quickSearchPopupPlaceholder);
   setText(".quick-search-popup-hint", copy.quickSearchHint);
   setAttr("#tableSkeleton", "aria-label", t("skeletonAria"));
-  setAttr("#quickSearch", "placeholder", copy.quickSearchPlaceholder);
+  // Na wąskim ekranie pole dzieli rząd z ikonkami ≠ = a… .* — długi napis był ucięty.
+  setAttr("#quickSearch", "placeholder", (typeof matchMedia === "function" && matchMedia("(max-width: 768px)").matches) ? copy.quickSearchPlaceholderShort : copy.quickSearchPlaceholder);
   setText("#exportCsvBtn", copy.exportCsv);
   setText("#exportModalTitle", t("exportModalTitle"));
   setText("#exportModalSub", t("exportModalSub"));

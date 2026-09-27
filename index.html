@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260927-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260928-10" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -43,39 +43,64 @@
             </svg>
           </div>
           <div class="hero-info">
-            <div class="hero-title">Sheet Workbench</div>
+            <!-- Przed wczytaniem: nazwa apki + opis. Po wczytaniu (klasa has-file na .hero):
+                 nazwa PLIKU i bieżący arkusz — od razu widać, co jest otwarte. -->
+            <div class="hero-title" id="heroTitle">Sheet Workbench</div>
             <div class="hero-sub">Lokalne przeglądanie, filtrowanie i analiza arkuszy</div>
+            <button class="hero-sheet" id="heroSheetBtn" type="button" aria-haspopup="dialog" hidden>
+              <span class="hero-sheet-name" id="heroSheetName"></span><span class="hero-sheet-caret" aria-hidden="true">▾</span>
+            </button>
           </div>
+          <!-- Desktop: tu trafiają zakładki arkuszy (#sheetTabs przenoszony z JS). -->
+          <div class="hero-tabs-slot" id="heroTabsSlot"></div>
         </div>
         <div class="hero-right" id="heroRight">
-          <!-- Bez aria-label: nazwą dostępną jest widoczny tekst (Filtry / Zamknij filtry) —
-               osobny aria-label nie zawierał widocznego tekstu (label-content-name-mismatch) -->
-          <button class="panel-toggle" id="panelToggle" type="button" data-hint data-hint-pl="Pokaż lub ukryj panel narzędzi" data-hint-en="Show or hide the tools panel" data-hint-delay="1.1">
-            Panel
-          </button>
-          <div class="lang-switch" role="group" aria-label="Przełącznik języka" id="langSwitch">
-            <span class="lang-switch-indicator" aria-hidden="true"></span>
-            <button class="lang-button is-active" type="button" data-lang="pl" aria-pressed="true">PL</button>
-            <button class="lang-button" type="button" data-lang="en" aria-pressed="false">EN</button>
-          </div>
-          <div class="hero-badges">
-            <span class="hero-badge pwa-badge" data-hint-pl=" Progressive Web App (PWA) to nowoczesna strona internetowa, która działa i wygląda jak klasyczna aplikacja mobilna lub desktopowa. " data-hint-en="Progressive Web App(PWA) is a modern website that works and looks like a classic mobile or desktop application." data-hint-delay="1" data-hint-touch>PWA</span>
-            <span class="hero-badge network-badge" id="networkBadge" aria-live="polite" data-hint data-hint-delay="1.1" data-hint-touch>Online</span>
-          </div>
-          
-          <a href="https://strona-6.vercel.app" target="_blank" rel="noopener"><button class="logo-badge" id="link1" aria-label="Przejdź do strony Mateusz App | formularz i eksport Excel" data-hint="Przejdź do strony Mateusz App | formularz i eksport Excel" data-hint-delay="1.1">
-            <img src="assets/images/logo-mateusz-transparent.webp" alt="Logo Mateusz" />
-          </button></a>
-          <a href="https://portal-ogloszeniowy.vercel.app" target="_blank" rel="noopener"><button class="logo-badge" id="link2" aria-label="Przejdź do strony Mateusz App | Portal Ogłoszeniowy" data-hint="Przejdź do strony Mateusz App | Portal Ogłoszeniowy" data-hint-delay="1.1">
-            <img src="assets/images/logo-mateusz-orange.webp" alt="Logo Mateusz" />
-          </button></a>
-          <button class="logo-badge" id="brandRefresh" aria-label="Odśwież aplikację" data-hint data-hint-pl="Odśwież aplikację i cache" data-hint-en="Refresh the app and cache" data-hint-delay="1.1">
-            <img src="assets/images/logo-refresh.webp" alt="Logo Mateusz" />
-          </button>
           <button class="app-update-btn hidden" id="appUpdateBtn" type="button" aria-live="polite" data-hint data-hint-pl="Wgraj nową wersję aplikacji" data-hint-en="Install the new app version" data-hint-delay="1.1">
             Aktualizuj
           </button>
-          <button class="theme-toggle" id="themeToggle" aria-label="Zmień motyw" data-hint data-hint-pl="Zmień motyw jasny / ciemny" data-hint-en="Switch light / dark theme" data-hint-delay="1.1"></button>
+          <!-- Zapisz na wierzchu: szary bez zmian, akcent + liczba zmian po edycji.
+               Klik = ten sam zapis co „Zapisz” w panelu (albo „Zapisz jako…”, gdy nadpisanie
+               oryginału nie jest dostępne w tej przeglądarce). -->
+          <button class="hero-save" id="heroSaveBtn" type="button" hidden data-hint data-hint-pl="Zapisz zmiany w pliku (Ctrl/⌘+S)" data-hint-en="Save changes to the file (Ctrl/⌘+S)" data-hint-delay="0.8" data-hint-touch="on">
+            <span class="hero-save-label">Zapisz</span><span class="hero-save-count" id="heroSaveCount" hidden></span>
+          </button>
+          <button class="app-menu-btn" id="appMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="appMenu" aria-label="Menu aplikacji" data-hint data-hint-pl="Język, motyw, odświeżenie, inne aplikacje" data-hint-en="Language, theme, refresh, other apps" data-hint-delay="0.8">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+          </button>
+          <!-- Menu ⋯ — rzadko używane rzeczy, które dotąd stały na wierzchu (7 kontrolek
+               w 2 rzędach na telefonie). Elementy zachowują swoje id, więc cała ich
+               dotychczasowa obsługa (język, motyw, odświeżenie, stan sieci) działa bez zmian. -->
+          <div class="app-menu" id="appMenu" hidden>
+            <div class="app-menu-row">
+              <span class="app-menu-label" id="appMenuLangLabel">Język</span>
+              <div class="lang-switch" role="group" aria-label="Przełącznik języka" id="langSwitch">
+                <span class="lang-switch-indicator" aria-hidden="true"></span>
+                <button class="lang-button is-active" type="button" data-lang="pl" aria-pressed="true">PL</button>
+                <button class="lang-button" type="button" data-lang="en" aria-pressed="false">EN</button>
+              </div>
+            </div>
+            <div class="app-menu-row">
+              <span class="app-menu-label" id="appMenuThemeLabel">Motyw</span>
+              <button class="theme-toggle" id="themeToggle" aria-label="Zmień motyw" data-hint data-hint-pl="Zmień motyw jasny / ciemny" data-hint-en="Switch light / dark theme" data-hint-delay="1.1"></button>
+            </div>
+            <button class="app-menu-item" id="brandRefresh" type="button" data-hint data-hint-pl="Odśwież aplikację i cache" data-hint-en="Refresh the app and cache" data-hint-delay="1.1">
+              <span class="app-menu-item-text" id="brandRefreshText">Odśwież aplikację</span><span aria-hidden="true">↻</span>
+            </button>
+            <div class="app-menu-sep" role="separator"></div>
+            <div class="app-menu-cap" id="appMenuAppsCap">Moje inne aplikacje</div>
+            <a class="app-menu-item" id="link1" href="https://strona-6.vercel.app" target="_blank" rel="noopener" data-hint="Przejdź do strony Mateusz App | formularz i eksport Excel" data-hint-delay="1.1">
+              <img src="assets/images/logo-mateusz-transparent.webp" alt="" width="18" height="18" /><span class="app-menu-item-text" id="link1Text">Formularz i eksport Excel</span><span aria-hidden="true">↗</span>
+            </a>
+            <a class="app-menu-item" id="link2" href="https://portal-ogloszeniowy.vercel.app" target="_blank" rel="noopener" data-hint="Przejdź do strony Mateusz App | Portal Ogłoszeniowy" data-hint-delay="1.1">
+              <img src="assets/images/logo-mateusz-orange.webp" alt="" width="18" height="18" /><span class="app-menu-item-text" id="link2Text">Portal ogłoszeniowy</span><span aria-hidden="true">↗</span>
+            </a>
+            <div class="app-menu-sep" role="separator"></div>
+            <div class="app-menu-state hero-badges">
+              <span class="hero-badge pwa-badge" data-hint-pl=" Progressive Web App (PWA) to nowoczesna strona internetowa, która działa i wygląda jak klasyczna aplikacja mobilna lub desktopowa. " data-hint-en="Progressive Web App(PWA) is a modern website that works and looks like a classic mobile or desktop application." data-hint-delay="1" data-hint-touch>PWA</span>
+              <span class="hero-badge network-badge" id="networkBadge" aria-live="polite" data-hint data-hint-delay="1.1" data-hint-touch>Online</span>
+              <span class="app-menu-build" id="appMenuBuild"></span>
+            </div>
+          </div>
         </div>
       </header>
 
@@ -752,6 +777,10 @@
                 <input id="virtRows" type="checkbox" />
                 Nowy silnik tabeli (beta)
               </label>
+              <label class="field checkbox" data-hint data-hint-pl="Wąski uchwyt przy lewej krawędzi ekranu, który wysuwa panel narzędzi. Bez niego panel otwiera przycisk „Narzędzia” nad tabelą." data-hint-en="Narrow handle at the left screen edge that slides the tools panel out. Without it, the “Tools” button above the table opens the panel." data-hint-delay="1.1" data-hint-touch="on">
+                <input id="showPanelHandle" type="checkbox" checked />
+                Pokaż uchwyt panelu
+              </label>
             </div>
           </details>
           </section>
@@ -1167,20 +1196,13 @@
           </button>
           <section class="panel table-panel">
             <div class="table-toolbar">
-              <div class="status-badge" id="status" data-hint-pl="Limit dotyczy tylko wyświetlania — filtry, szukanie i agregacje /| zawsze działają na wszystkich wierszach pliku."
-              data-hint-en="The limit applies only to display — filters, search and aggregations /| always run on all rows of the file." data-hint-touch="on">Brak danych</div>
-              <button class="btn btn-sm ghost icon-only toolbar-toggle" id="toolbarToggle" type="button" aria-expanded="true" aria-controls="tableActions quickSearchWrap" aria-label="Zwiń pasek narzędzi" data-hint="Zwiń pasek narzędzi" data-hint-delay="1.1" data-hint-touch="on">
-                <svg class="toolbar-toggle-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="18 15 12 9 6 15" />
-                </svg>
-              </button>
-              <div class="quick-search hidden" id="quickSearchWrap">
+              <div class="quick-search" id="quickSearchWrap">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
                 </svg>
                 <div class="qs-field">
-                <input id="quickSearch" type="text" placeholder="Szybkie szukanie..." />
+                <input id="quickSearch" type="text" enterkeyhint="search" placeholder="Szukaj w arkuszu…" aria-label="Szukaj w arkuszu" />
                 <div class="qs-flags" id="qsFlags" role="toolbar" aria-label="Opcje dopasowania">
                   <button class="qs-flag qs-flag-negate" type="button" data-qs-flag="negate" aria-pressed="false" aria-label="Odwróć" data-hint-pl="Odwróć — pokaż wiersze, które NIE pasują do zapytania" data-hint-en="Invert — show rows that do NOT match the query" data-hint-delay="0.6" data-hint-touch="on">≠</button>
                   <button class="qs-flag" type="button" data-qs-flag="equals" aria-pressed="false" aria-label="Dokładnie" data-hint-pl="Dokładnie — cała komórka równa się zapytaniu" data-hint-en="Exact — the whole cell equals the query" data-hint-delay="0.6" data-hint-touch="on">=</button>
@@ -1224,6 +1246,18 @@
                 </button>
                 <div class="qs-live hidden" id="qsLiveResults" role="listbox" aria-label="Podgląd wyników szukania"></div>
               </div>
+              <!-- „Narzędzia” = cały panel boczny (filtry, widok, edycja, analizy). Kropka z liczbą
+                   = ile filtrów działa teraz (te same, co pigułki w pasku aktywnych filtrów). -->
+              <button class="panel-toggle" id="panelToggle" type="button" data-hint data-hint-pl="Panel narzędzi: filtry, widok, edycja, analizy" data-hint-en="Tools panel: filters, view, editing, analyses" data-hint-delay="1.1">
+                <span class="panel-toggle-label" id="panelToggleLabel">Narzędzia</span><span class="panel-toggle-count" id="panelToggleCount" hidden></span>
+              </button>
+              <div class="status-badge" id="status" data-hint-pl="Limit dotyczy tylko wyświetlania — filtry, szukanie i agregacje /| zawsze działają na wszystkich wierszach pliku."
+              data-hint-en="The limit applies only to display — filters, search and aggregations /| always run on all rows of the file." data-hint-touch="on">Brak danych</div>
+              <button class="btn btn-sm ghost icon-only toolbar-toggle" id="toolbarToggle" type="button" aria-expanded="true" aria-controls="tableActions" aria-label="Zwiń pasek narzędzi" data-hint="Zwiń pasek narzędzi" data-hint-delay="1.1" data-hint-touch="on">
+                <svg class="toolbar-toggle-chevron" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="18 15 12 9 6 15" />
+                </svg>
+              </button>
               <div class="table-actions" id="tableActions">
                 <button class="btn btn-sm ghost icon-only undo-btn hidden" id="undoBtn" type="button" aria-label="Cofnij" data-hint data-hint-pl="Cofnij ostatnią zmianę w arkuszu (Ctrl/⌘+Z)" data-hint-en="Undo the last change in the sheet (Ctrl/⌘+Z)" data-hint-delay="0.8" data-hint-touch="on">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
@@ -1238,9 +1272,13 @@
                   Wymiary z Excela
                 </button>
                 <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
-                <button class="btn btn-sm ghost toggle-pill" id="readingToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Tryb pracy z szybkim szukaniem" data-hint-en="Quick search working mode" data-hint-delay="1.1">Tryb szybkie szukanie</button>
+                <span class="toolbar-sep" aria-hidden="true"></span>
                 <button class="btn btn-sm ghost" id="transcribeBtn" type="button" data-hint data-hint-pl="Tryb spisywania — jeden wiersz naraz, dużą czcionką, z odhaczaniem. Do przepisywania danych ręcznie na papier." data-hint-en="Transcribe mode — one row at a time, large type, with tick-off. For copying data onto paper by hand." data-hint-delay="1.1" data-hint-touch="on">Spisywanie</button>
-                <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport</button>
+                <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport…</button>
+                <!-- Ostatnie i przypięte zapytania (z historii szukania) — klik = szukaj ponownie.
+                     Jeden rząd; gdy się nie mieszczą, przewija się w bok z miękkim wygaszeniem krawędzi. -->
+                <span class="toolbar-sep recent-sep" aria-hidden="true" hidden></span>
+                <div class="recent-strip" id="recentStrip" role="group" aria-label="Ostatnie zapytania" hidden></div>
               </div>
             </div>
 
@@ -1619,30 +1657,31 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260927-01"></script>
-    <script defer src="app/render-budget.js?v=20260927-01"></script>
-    <script defer src="app/language.js?v=20260927-01"></script>
-    <script defer src="app/analysis.js?v=20260927-01"></script>
-    <script defer src="app/smart-filters.js?v=20260927-01"></script>
-    <script defer src="app/workbook.js?v=20260927-01"></script>
-    <script defer src="app/xlsx-patch.js?v=20260927-01"></script>
-    <script defer src="app/table.js?v=20260927-01"></script>
-    <script defer src="app/virt-rows.js?v=20260927-01"></script>
-    <script defer src="app/conditional-formatting.js?v=20260927-01"></script>
-    <script defer src="app/data-validation.js?v=20260927-01"></script>
-    <script defer src="app/derived-columns.js?v=20260927-01"></script>
-    <script defer src="app/formulas.js?v=20260927-01"></script>
-    <script defer src="app/edit-tools.js?v=20260927-01"></script>
-    <script defer src="app/ui-controls.js?v=20260927-01"></script>
-    <script defer src="app/filter-bar.js?v=20260927-01"></script>
-    <script defer src="app/qs-history.js?v=20260927-01"></script>
-    <script defer src="app/undo.js?v=20260927-01"></script>
-    <script defer src="app/transcribe.js?v=20260927-01"></script>
-    <script defer src="app/freeze-pane.js?v=20260927-01"></script>
+    <script defer src="app/core.js?v=20260928-10"></script>
+    <script defer src="app/render-budget.js?v=20260928-10"></script>
+    <script defer src="app/language.js?v=20260928-10"></script>
+    <script defer src="app/analysis.js?v=20260928-10"></script>
+    <script defer src="app/smart-filters.js?v=20260928-10"></script>
+    <script defer src="app/workbook.js?v=20260928-10"></script>
+    <script defer src="app/xlsx-patch.js?v=20260928-10"></script>
+    <script defer src="app/table.js?v=20260928-10"></script>
+    <script defer src="app/virt-rows.js?v=20260928-10"></script>
+    <script defer src="app/conditional-formatting.js?v=20260928-10"></script>
+    <script defer src="app/data-validation.js?v=20260928-10"></script>
+    <script defer src="app/derived-columns.js?v=20260928-10"></script>
+    <script defer src="app/formulas.js?v=20260928-10"></script>
+    <script defer src="app/edit-tools.js?v=20260928-10"></script>
+    <script defer src="app/ui-controls.js?v=20260928-10"></script>
+    <script defer src="app/filter-bar.js?v=20260928-10"></script>
+    <script defer src="app/qs-history.js?v=20260928-10"></script>
+    <script defer src="app/undo.js?v=20260928-10"></script>
+    <script defer src="app/transcribe.js?v=20260928-10"></script>
+    <script defer src="app/freeze-pane.js?v=20260928-10"></script>
+    <script defer src="app/app-frame.js?v=20260928-10"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260927-01"></script>
-    <script defer src="app/bootstrap.js?v=20260927-01"></script>
+    <script defer src="app/debug-loaders.js?v=20260928-10"></script>
+    <script defer src="app/bootstrap.js?v=20260928-10"></script>
   </body>
 </html>

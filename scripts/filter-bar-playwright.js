@@ -70,6 +70,11 @@ async function run() {
       const v = String(getDisplayValue(row, col) ?? "").trim();
       if (wantEmpty ? v === "" : v !== "") {
         td.scrollIntoView({ block: "center", inline: "center" });
+        // Przy niskim oknie tabeli „center” potrafi zostawić komórkę pod przyklejonym
+        // nagłówkiem (klik trafiłby w nagłówek) — wtedy przewiń ją spod nagłówka.
+        const headBottom = document.querySelector("#dataTable thead").getBoundingClientRect().bottom;
+        const r0 = td.getBoundingClientRect();
+        if (r0.top < headBottom + 2) tableWrapEl.scrollTop -= (headBottom + 4 - r0.top);
         const r = td.getBoundingClientRect();
         return { rowKey: tr.dataset.rowKey, header: currentDisplayModel.headers[col], value: v, x: r.left + r.width / 2, y: r.top + r.height / 2 };
       }
