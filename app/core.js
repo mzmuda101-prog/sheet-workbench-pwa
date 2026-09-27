@@ -655,7 +655,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20260928-10";
+const APP_BUILD_VERSION = "20260928-12";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -983,11 +983,11 @@ function readTableViewportHeight() {
   // Desktop: odstęp pod tabelą = dolny padding .app (48 px). Stałe 24 px sprawiało, że
   // strona wystawała o 24 px i dawała się przewinąć — a wtedy scrollIntoView komórki
   // przesuwał CAŁĄ stronę, która chwilę później wracała (tabela skakała pod kursorem).
-  let bottomGap = narrow ? 14 : 24;
+  let bottomGap = 14;
   if (!narrow) {
     const appEl = tablePanelEl.closest(".app");
     const pad = appEl ? parseFloat(getComputedStyle(appEl).paddingBottom) || 0 : 0;
-    bottomGap = Math.max(bottomGap, Math.ceil(pad));
+    bottomGap = Math.max(12, Math.ceil(pad));
   }
   const available = Math.floor(viewportHeight - rect.top - bottomGap);
   const minHeight = window.matchMedia("(max-width: 768px)").matches ? 320 : 420;

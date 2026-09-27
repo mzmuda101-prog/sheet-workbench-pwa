@@ -834,9 +834,10 @@ function buildSampleWorkbookArrayBuffer() {
   // gołe obiekty Date przy zapisie, a parseDateFlexible aplikacji i tak parsuje ISO.
   const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
-  // Nagłówek: prefiks (Nr./Teren/Status) + CYCLES × blok. Powtórzenia dostają sufiks
+  // Nagłówek: prefiks (Nr./Zakres/Status) + CYCLES × blok. Powtórzenia dostają sufiks
   // cyfrowy (od2, do2…), bo tak wyglądają realne pliki i tak je rozpoznaje parser nagłówków.
-  const prefixHeaders = ["Nr.", "Teren", "Status"];
+  // „Zakres” zamiast „Teren” — przykład ma być ogólny (2026-09-28, prośba Mateusza).
+  const prefixHeaders = ["Nr.", "Zakres", "Status"];
   const headerRow = prefixHeaders.slice();
   for (let c = 0; c < CYCLES; c++) {
     BLOCK.forEach((name) => headerRow.push(c === 0 ? name : `${name}${c + 1}`));
@@ -883,8 +884,8 @@ function buildSampleWorkbookArrayBuffer() {
   let closedTotal = 0, openTotal = 0, untouchedTotal = 0;
 
   planRows.forEach((spec, i) => {
-    const teren = `Teren ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
-    const cells = [i + 1, teren, ""];
+    const zakres = `Zakres ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
+    const cells = [i + 1, zakres, ""];
     const closedCount = Math.min(spec.closed, spec.open ? CYCLES - 1 : CYCLES);
     // Cykle zamknięte układamy chronologicznie wstecz od dziś, żeby „ostatni cykl"
     // faktycznie był tym najświeższym.
@@ -921,8 +922,8 @@ function buildSampleWorkbookArrayBuffer() {
   });
 
   const aoa = [
-    ["Raport: Obieg terenów 2026"],
-    ["Terenów łącznie", rows.length, "", "Cykli zamkniętych", closedTotal, "", "Cykli w toku", openTotal, "", "Nie zaczętych", untouchedTotal],
+    ["Raport: Obieg zakresów 2026"],
+    ["Zakresów łącznie", rows.length, "", "Cykli zamkniętych", closedTotal, "", "Cykli w toku", openTotal, "", "Nie zaczętych", untouchedTotal],
     [],
     cycleRow,
     headerRow,
@@ -965,7 +966,7 @@ function buildSampleWorkbookArrayBuffer() {
   });
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Obieg terenów");
+  XLSX.utils.book_append_sheet(wb, ws, "Obieg zakresów");
   return XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: true });
 }
 

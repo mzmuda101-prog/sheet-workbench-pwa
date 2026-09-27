@@ -141,20 +141,20 @@ async function run() {
 
   // 6. „Ostatnie”
   const recent = await page.evaluate(async () => {
-    quickSearchEl.value = "Teren A";
+    quickSearchEl.value = "Zakres A";
     commitQuickSearch();
     await new Promise((r) => setTimeout(r, 300));
     quickSearchEl.value = "";
     commitQuickSearch();
     await new Promise((r) => setTimeout(r, 300));
     const chips = [...document.querySelectorAll("#recentStrip .recent-chip")].map((c) => c.textContent);
-    const chip = [...document.querySelectorAll("#recentStrip .recent-chip")].find((c) => c.textContent.includes("Teren A"));
+    const chip = [...document.querySelectorAll("#recentStrip .recent-chip")].find((c) => c.textContent.includes("Zakres A"));
     if (chip) chip.click();
     await new Promise((r) => setTimeout(r, 300));
     return { chips, visible: !document.getElementById("recentStrip").hidden, q: quickSearchEl.value, rows: viewRows.length, total: baseRows.length };
   });
-  check("6. zapytanie trafia do „Ostatnie”", recent.visible && recent.chips.some((c) => c.includes("Teren A")), JSON.stringify(recent));
-  check("6. klik w chip szuka ponownie", recent.q === "Teren A" && recent.rows < recent.total, JSON.stringify(recent));
+  check("6. zapytanie trafia do „Ostatnie”", recent.visible && recent.chips.some((c) => c.includes("Zakres A")), JSON.stringify(recent));
+  check("6. klik w chip szuka ponownie", recent.q === "Zakres A" && recent.rows < recent.total, JSON.stringify(recent));
 
   // 7. licznik przy „Narzędzia”
   const count = await page.evaluate(() => ({

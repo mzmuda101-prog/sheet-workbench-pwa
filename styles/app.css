@@ -6864,6 +6864,13 @@ body.tr-active .toast-container {
 }
 .table-toolbar > .panel-toggle[aria-expanded="true"] { color: var(--accent); border-color: var(--accent-border); background: var(--accent-light); }
 
+/* Desktop: tabela sięga do dołu ekranu. Dolny padding .app (48 px) pochodził z czasów
+   przewijanej strony — teraz był tylko pustym pasem pod tabelą na laptopie. Wysokość
+   tabeli liczy readTableViewportHeight() z tego samego paddingu, więc strona nie wystaje. */
+@media (min-width: 769px) {
+  .app { padding-bottom: 16px; }
+}
+
 /* „120 wierszy” — tekst na środku pigułki (na telefonie pigułka jest szeroka) */
 .table-toolbar > .status-badge { text-align: center; }
 
