@@ -1,0 +1,64 @@
+{
+  "date": "2026-09-27T19:42:44.937Z",
+  "cpu": 4,
+  "sample": 5000,
+  "virt": "off",
+  "results": [
+    {
+      "rows": 200,
+      "load": 3327,
+      "shown": 200,
+      "cols": 19,
+      "domNodes": 6505,
+      "heapMB": 38,
+      "sort": 273,
+      "filter": 477,
+      "rerender": 329,
+      "scrollAvg": 19.4,
+      "scrollP95": 41.6,
+      "scrollJank": 8
+    },
+    {
+      "rows": 600,
+      "load": 3613,
+      "shown": 600,
+      "cols": 19,
+      "domNodes": 15305,
+      "heapMB": 38,
+      "sort": 621,
+      "filter": 1003,
+      "rerender": 471,
+      "scrollAvg": 24.5,
+      "scrollP95": 42.3,
+      "scrollJank": 17
+    },
+    {
+      "rows": 2000,
+      "load": 4600,
+      "shown": 2000,
+      "cols": 19,
+      "domNodes": 46105,
+      "heapMB": 38,
+      "sort": 1347,
+      "filter": 1223,
+      "rerender": 1049,
+      "scrollAvg": 29.4,
+      "scrollP95": 83,
+      "scrollJank": 21
+    },
+    {
+      "rows": 5000,
+      "load": 7340,
+      "shown": 5000,
+      "cols": 19,
+      "domNodes": 112105,
+      "heapMB": 38,
+      "sort": 3040,
+      "filter": 3156,
+      "rerender": 2836,
+      "scrollAvg": 45.6,
+      "scrollP95": 150.2,
+      "scrollJank": 26
+    }
+  ]
+}
