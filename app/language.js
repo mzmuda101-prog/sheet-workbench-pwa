@@ -218,7 +218,7 @@ const I18N = {
     validationAllValid: "Wszystko zgodne — 0 wartości spoza listy ({total} wierszy)",
     validationSummaryText: "{bad} z {total} wierszy poza listą · {values} różnych wartości spoza listy",
     validationBadValuesTitle: "Wartości spoza listy:",
-    validationPanelTitle: "Walidacja listą",
+    validationPanelTitle: "Sprawdzanie wartości",
     validationHintText: "Wskaż kolumnę i listę dozwolonych wartości (wpisaną albo wziętą z innej kolumny). Pokażę, które wiersze mają wartości SPOZA listy — to szybka kontrola jakości danych.",
     validationColumnLabel: "Kolumna do sprawdzenia",
     validationSourceLabel: "Źródło dozwolonych wartości",
@@ -485,8 +485,8 @@ const I18N = {
     networkSafety: "Pliki Excel są wczytywane i przetwarzane lokalnie na Twoim urządzeniu.",
     networkOnlineTitle: "Połączenie aktywne. {note}",
     networkOfflineTitle: "Brak połączenia sieciowego. {note}",
-    sidebarCloseAria: "Zamknij panel filtrów",
-    sidebarOpenAria: "Otwórz panel filtrów",
+    sidebarCloseAria: "Schowaj panel narzędzi",
+    sidebarOpenAria: "Otwórz panel narzędzi",
     sidebarHideTitle: "Schowaj filtry",
     sidebarShowTitle: "Pokaż filtry",
     sidebarHandleLabel: "Wysuń",
@@ -980,7 +980,7 @@ const I18N = {
     validationAllValid: "All valid — 0 values outside the list ({total} rows)",
     validationSummaryText: "{bad} of {total} rows outside the list · {values} distinct off-list values",
     validationBadValuesTitle: "Values outside the list:",
-    validationPanelTitle: "List validation",
+    validationPanelTitle: "Value check",
     validationHintText: "Pick a column and a list of allowed values (typed or taken from another column). I'll show which rows hold values OUTSIDE the list — a quick data-quality check.",
     validationColumnLabel: "Column to check",
     validationSourceLabel: "Source of allowed values",
@@ -1247,8 +1247,8 @@ const I18N = {
     networkSafety: "Excel files are loaded and processed locally on your device.",
     networkOnlineTitle: "Connection active. {note}",
     networkOfflineTitle: "No network connection. {note}",
-    sidebarCloseAria: "Close filters panel",
-    sidebarOpenAria: "Open filters panel",
+    sidebarCloseAria: "Hide the tools panel",
+    sidebarOpenAria: "Open the tools panel",
     sidebarHideTitle: "Hide filters",
     sidebarShowTitle: "Show filters",
     sidebarHandleLabel: "Open",
@@ -1626,11 +1626,17 @@ const STATIC_TRANSLATIONS = {
     panelToggleAria: "Zwin/rozwin panel",
     link1Title: "Przejdź do strony Mateusz App | formularz i eksport Excel",
     link2Title: "Przejdź do strony Mateusz App | Portal Ogloszeniowy",
-    groupData: "Dane",
-    groupWork: "Filtry i widok roboczy",
-    groupInspect: "Inspekcja arkusza",
-    groupAnalyze: "Agregacje i formuły",
+    groupData: "Plik",
+    groupFilters: "Filtry",
+    groupView: "Widok",
+    groupEdit: "Edycja",
+    groupAnalyze: "Analizy",
     groupHelp: "Pomoc",
+    formulaPanelTitle: "Formuły w arkuszu",
+    sidebarFinderPlaceholder: "Znajdź ustawienie…",
+    sidebarFinderAria: "Znajdź ustawienie w panelu",
+    sidebarFinderEmpty: "Nic nie pasuje — spróbuj innego słowa.",
+    sidebarFinderClear: "Wyczyść",
     fileAndSheet: "Plik i arkusz",
     dropText: "Przeciągnij plik <strong>.xlsx</strong>",
     dropOr: "lub",
@@ -1645,7 +1651,7 @@ const STATIC_TRANSLATIONS = {
     loadSheet: "Wczytaj arkusz",
     textFilter1: "Filtr tekstowy 1",
     textFilter2: "Filtr tekstowy 2",
-    textFilters: "Filtry tekstowe",
+    textFilters: "Szukanie i filtry tekstowe",
     filterBlock1: "Filtr 1",
     filterBlock2: "Filtr 2",
     addSecondFilter: "+ Dodaj drugi filtr",
@@ -1712,11 +1718,11 @@ const STATIC_TRANSLATIONS = {
     rowHeightLabel: "Wysokość wierszy (px)",
     colWidthLabel: "Szerokość kolumn (px)",
     freezeFirstColLabel: "Zablokuj pierwszą kolumnę",
-    workbenchAnalysis: "Analiza workbench",
+    workbenchAnalysis: "Przegląd arkusza",
     file: "Plik",
     sheetSection: "Arkusz",
     flags: "Flagi",
-    kpiSummary: "KPI / Podsumowanie",
+    kpiSummary: "Kluczowe liczby",
     kpiHint: "Pomocnicze wyciąganie najważniejszych liczb i wskaźników z górnej części arkusza.",
     sheetLayout: "Układ arkusza",
     sheetLayoutHint: "Jedno miejsce na orientację w arkuszu: sekcje, kolumny, powtarzalne bloki i szybkie sygnały o układzie danych.",
@@ -1737,9 +1743,9 @@ const STATIC_TRANSLATIONS = {
     formulaPlaceholder: "np. XLOOKUP, SUMIFS, A1, kwota",
     formulaFilter: "Filtr",
     function: "Funkcja",
-    log: "Log",
+    log: "Dziennik zdarzeń",
     logAria: "Log zdarzeń",
-    shortcuts: "Skróty i info",
+    shortcuts: "Skróty i informacje",
     quickSearchActionFilter: "Filtruj",
     quickSearchActionHighlight: "Zaznacz",
     quickSearchActionCells: "Podświetl pasujące",
@@ -1881,11 +1887,17 @@ const STATIC_TRANSLATIONS = {
     panelToggleAria: "Collapse/expand panel",
     link1Title: "Go to Mateusz App | form and Excel export",
     link2Title: "Go to Mateusz App | Listings Portal",
-    groupData: "Data",
-    groupWork: "Filters & working view",
-    groupInspect: "Sheet inspection",
-    groupAnalyze: "Aggregation & formulas",
+    groupData: "File",
+    groupFilters: "Filters",
+    groupView: "View",
+    groupEdit: "Editing",
+    groupAnalyze: "Analyses",
     groupHelp: "Help",
+    formulaPanelTitle: "Formulas in the sheet",
+    sidebarFinderPlaceholder: "Find a setting…",
+    sidebarFinderAria: "Find a setting in the panel",
+    sidebarFinderEmpty: "Nothing matches — try another word.",
+    sidebarFinderClear: "Clear",
     fileAndSheet: "File and sheet",
     dropText: "Drag a <strong>.xlsx</strong> file",
     dropOr: "or",
@@ -1900,7 +1912,7 @@ const STATIC_TRANSLATIONS = {
     loadSheet: "Load sheet",
     textFilter1: "Text filter 1",
     textFilter2: "Text filter 2",
-    textFilters: "Text filters",
+    textFilters: "Search and text filters",
     filterBlock1: "Filter 1",
     filterBlock2: "Filter 2",
     addSecondFilter: "+ Add a second filter",
@@ -1967,11 +1979,11 @@ const STATIC_TRANSLATIONS = {
     rowHeightLabel: "Row height (px)",
     colWidthLabel: "Column width (px)",
     freezeFirstColLabel: "Freeze first column",
-    workbenchAnalysis: "Workbench analysis",
+    workbenchAnalysis: "Sheet overview",
     file: "File",
     sheetSection: "Sheet",
     flags: "Flags",
-    kpiSummary: "KPI / Summary",
+    kpiSummary: "Key figures",
     kpiHint: "A helper extraction of the most important numbers and indicators from the upper part of the sheet.",
     sheetLayout: "Sheet layout",
     sheetLayoutHint: "One place for orienting yourself in the sheet: sections, columns, repeating blocks, and quick layout signals.",
@@ -1992,9 +2004,9 @@ const STATIC_TRANSLATIONS = {
     formulaPlaceholder: "e.g. XLOOKUP, SUMIFS, A1, amount",
     formulaFilter: "Filter",
     function: "Function",
-    log: "Log",
+    log: "Event log",
     logAria: "Event log",
-    shortcuts: "Shortcuts & info",
+    shortcuts: "Shortcuts and info",
     quickSearchActionFilter: "Filter",
     quickSearchActionHighlight: "Highlight",
     quickSearchActionCells: "Highlight matches",
@@ -2412,8 +2424,15 @@ function applyStaticTranslations() {
 
   setText("#skipToTable", copy.skipToTable);
   setText("#group-data-title", copy.groupData);
-  setText("#group-work-title", copy.groupWork);
-  setText("#group-inspect-title", copy.groupInspect);
+  setText("#group-filters-title", copy.groupFilters);
+  setText("#group-view-title", copy.groupView);
+  setText("#group-edit-title", copy.groupEdit);
+  setAttr("#sidebarFinder", "placeholder", copy.sidebarFinderPlaceholder);
+  setAttr("#sidebarFinder", "aria-label", copy.sidebarFinderAria);
+  setAttr("#sidebarFinderClear", "aria-label", copy.sidebarFinderClear);
+  setText("#sidebarFinderEmpty", copy.sidebarFinderEmpty);
+  setText("#formulaPanelTitle", copy.formulaPanelTitle);
+  setAttr("#sidebarCloseBtn", "aria-label", t("sidebarCloseAria"));
   setText("#group-analyze-title", copy.groupAnalyze);
   setText("#group-help-title", copy.groupHelp);
   setText("#panel-file-sheet .panel-title", copy.fileAndSheet);
@@ -2490,7 +2509,6 @@ function applyStaticTranslations() {
   setText("#datePick", copy.choose);
   setFieldLabel("dateEmptyMode", copy.emptyOrNot);
   setCheckboxText("dateNegate", copy.invert);
-  setText("#panel-actions .panel-title", copy.actions);
   setButtonLabel("#applyFilterBtn", copy.filter);
   setButtonLabel("#resetFiltersBtn", copy.resetFilters);
   setButtonLabel("#resetWidthsBtn", copy.resetWidths);

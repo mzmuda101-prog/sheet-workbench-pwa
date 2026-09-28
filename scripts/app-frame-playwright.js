@@ -178,6 +178,70 @@ async function run() {
   check("brak błędów strony (desktop)", errors.length === 0, errors.join(" | "));
   await context.close();
 
+  // ── paczka C: panel obok tabeli (≥1024 px) ──
+  ({ context, page, errors } = await open(browser, { width: 1440, height: 860 }));
+  const dock = async () => page.evaluate(() => {
+    const side = document.querySelector(".sidebar").getBoundingClientRect();
+    const main = document.querySelector(".table-panel").getBoundingClientRect();
+    return {
+      open: isSidebarOpen(), docked: document.documentElement.classList.contains("sidebar-docked"),
+      sideRight: Math.round(side.right), mainLeft: Math.round(main.left), mainRight: Math.round(main.right),
+      scrim: getComputedStyle(document.getElementById("sidebarScrim")).display,
+      docH: document.scrollingElement.scrollHeight, vh: innerHeight, vw: innerWidth,
+    };
+  });
+  await page.evaluate(() => setSidebarOpen(true));
+  await sleep(500);
+  const d1 = await dock();
+  check("C1. ≥1024: panel obok tabeli, bez nachodzenia i bez zasłony", d1.docked && d1.open && d1.sideRight <= d1.mainLeft && d1.scrim === "none", JSON.stringify(d1));
+  check("C1. strona nie wystaje z otwartym panelem", d1.docH <= d1.vh + 1 && d1.mainRight <= d1.vw, JSON.stringify(d1));
+  // Esc w tabeli nie zamyka panelu obok tabeli
+  await page.evaluate(() => { const td = document.querySelector("#dataTable tbody tr[data-row-key] td[data-col-index='1']"); td.click(); });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await sleep(200);
+  check("C2. Esc w tabeli nie zamyka panelu obok tabeli", (await dock()).open, "");
+  // ‹ w panelu zamyka i zapamiętuje
+  await page.click("#sidebarCloseBtn");
+  await sleep(500);
+  const d2 = await dock();
+  const stored = await page.evaluate(() => localStorage.getItem("swb-panel-docked-open-v1"));
+  check("C3. ‹ zamyka panel, tabela wraca na całą szerokość", !d2.open && d2.mainLeft < 100, JSON.stringify(d2));
+  check("C3. zamknięcie jest zapamiętane", stored === "0", String(stored));
+  // szukajka ustawień
+  await page.evaluate(() => setSidebarOpen(true));
+  await sleep(300);
+  await page.fill("#sidebarFinder", "zawijaj");
+  await sleep(200);
+  const f1 = await page.evaluate(() => ({
+    visible: [...document.querySelectorAll(".sidebar details.panel")].filter((d) => !d.hidden).map((d) => d.id),
+    hit: !!document.querySelector("#wrapCells")?.closest("label")?.classList.contains("finder-hit"),
+  }));
+  check("C4. „Znajdź ustawienie”: zostaje sekcja Widok z podświetloną opcją", f1.visible.length === 1 && f1.visible[0] === "panel-view" && f1.hit, JSON.stringify(f1));
+  await page.fill("#sidebarFinder", "");
+  await sleep(200);
+  const f2 = await page.evaluate(() => [...document.querySelectorAll(".sidebar details.panel")].filter((d) => d.hidden).length);
+  check("C4. wyczyszczenie przywraca wszystkie sekcje", f2 === 0, String(f2));
+  // przegrupowanie: brak „Akcji”, przyciski w nowych miejscach
+  const g = await page.evaluate(() => ({
+    actions: !!document.getElementById("panel-actions"),
+    save: document.getElementById("saveBtn")?.closest("details")?.id,
+    apply: !!document.getElementById("applyFilterBtn")?.closest("#group-filters"),
+    reset: document.getElementById("resetWidthsBtn")?.closest("details")?.id,
+    groups: [...document.querySelectorAll(".sidebar-group-title")].map((e) => e.textContent.trim()),
+  }));
+  check("C5. nowe grupy i przeniesione przyciski", !g.actions && g.save === "panel-file-sheet" && g.apply && g.reset === "panel-view" && g.groups.join("|") === "Plik|Filtry|Widok|Edycja|Analizy|Pomoc", JSON.stringify(g));
+  // < 1024: nakładka z lekką zasłoną
+  await page.setViewportSize({ width: 900, height: 800 });
+  await sleep(500);
+  await page.evaluate(() => setSidebarOpen(true));
+  await sleep(400);
+  const d3 = await dock();
+  const blur = await page.evaluate(() => getComputedStyle(document.getElementById("sidebarScrim")).backdropFilter || getComputedStyle(document.getElementById("sidebarScrim")).webkitBackdropFilter);
+  check("C6. <1024: nakładka z lekkim rozmyciem (jak dotąd, słabsze)", !d3.docked && d3.scrim !== "none" && /blur\(2px\)/.test(String(blur)), JSON.stringify({ ...d3, blur }));
+  check("brak błędów strony (panel obok tabeli)", errors.length === 0, errors.join(" | "));
+  await context.close();
+
   // ── telefon ──
   ({ context, page, errors } = await open(browser, { width: 375, height: 812 }, { hasTouch: true, isMobile: ENGINE === "chromium" }));
   const phone = await page.evaluate(async () => {

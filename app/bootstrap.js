@@ -835,8 +835,11 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
+  // Esc zamyka panel-nakładkę. Panel OBOK tabeli (≥1024 px) jest częścią układu —
+  // Esc zamyka go tylko, gdy fokus jest w nim samym.
   if (e.key === "Escape" && isSidebarOpen()) {
-    setSidebarOpen(false);
+    const docked = typeof appFrame !== "undefined" && appFrame.isDocked();
+    if (!docked || (sidebarEl && sidebarEl.contains(document.activeElement))) setSidebarOpen(false);
   }
 });
 
@@ -850,7 +853,8 @@ syncQuickSearchInputs();
 // cały widok, a jego późniejsze domknięcie + przeskok uchwytu na dolny pasek
 // generowały duży layout shift (CLS) przy ładowaniu. Plik można wczytać
 // przyciskiem w pustym stanie — sidebar nie jest potrzebny od pierwszej klatki.
-setSidebarOpen(window.matchMedia("(min-width: 769px)").matches);
+// Od 1024 px panel stoi obok tabeli i pamięta, czy był otwarty (app-frame.js).
+setSidebarOpen(typeof appFrame !== "undefined" ? appFrame.dockedInitialOpen() : window.matchMedia("(min-width: 769px)").matches);
 syncSidebarHandle();
 // Bez wczytanego arkusza panele analiz zostają „brudne" — dorenderują się przy
 // otwarciu <details> (renderDirtyAnalysesForPanel) lub po loadBtn. Oszczędza boot.

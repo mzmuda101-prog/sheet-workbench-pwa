@@ -294,14 +294,151 @@ const appFrame = (() => {
     else if (typeof narrowMq.addListener === "function") narrowMq.addListener(placeStatus);
   }
 
+  // ── panel narzędzi OBOK tabeli (paczka C, ≥1024 px) ─────────────────────────
+  // Poniżej 1024 px panel zostaje wysuwaną nakładką (jak dotąd). Od 1024 px staje obok:
+  // tabela dostaje lewy margines = szerokość panelu (CSS, klasa sidebar-docked),
+  // a panel (dalej position:fixed — własne przewijanie) ustawiamy na wysokości tabeli.
+  // Otwarty/zamknięty — zapamiętane (tylko świadome kliknięcia, nie start aplikacji).
+  const DOCK_KEY = "swb-panel-docked-open-v1";
+  const dockMq = typeof matchMedia === "function" ? matchMedia("(min-width: 1024px)") : null;
+  const sidebarNode = document.querySelector(".sidebar");
+  const tablePanelNode = document.querySelector(".table-panel");
+  function isDocked() { return !!(dockMq && dockMq.matches); }
+  function syncDock() {
+    const docked = isDocked();
+    rootEl.classList.toggle("sidebar-docked", docked);
+    if (!sidebarNode) return;
+    if (!docked) {
+      rootEl.style.removeProperty("--dock-top");
+      return;
+    }
+    rootEl.style.setProperty("--sidebar-w", `${Math.round(sidebarNode.getBoundingClientRect().width) || 320}px`);
+    if (tablePanelNode) {
+      const top = Math.round(tablePanelNode.getBoundingClientRect().top + (window.scrollY || 0));
+      rootEl.style.setProperty("--dock-top", `${top}px`);
+    }
+  }
+  function dockedInitialOpen() {
+    if (!isDocked()) return typeof matchMedia === "function" && matchMedia("(min-width: 769px)").matches;
+    try { return localStorage.getItem(DOCK_KEY) !== "0"; } catch (_) { return true; }
+  }
+  // Świadome przełączenie (🔧, uchwyt, ✕ w panelu) — zapamiętaj przy dokowaniu.
+  if (typeof window.toggleSidebar === "function") {
+    const origToggle = window.toggleSidebar;
+    window.toggleSidebar = function toggleSidebarAndRemember(...args) {
+      const r = origToggle.apply(this, args);
+      if (isDocked()) { try { localStorage.setItem(DOCK_KEY, isSidebarOpen() ? "1" : "0"); } catch (_) {} }
+      return r;
+    };
+  }
+  if (typeof window.setSidebarOpen === "function") {
+    const origSet = window.setSidebarOpen;
+    window.setSidebarOpen = function setSidebarOpenDocked(open, ...rest) {
+      syncDock();
+      const r = origSet.call(this, open, ...rest);
+      // Szerokość tabeli zmienia się bez zmiany okna — przelicz pasek przewijania w bok
+      // i metryki nagłówków po przejściu (transition marginesu ~300 ms).
+      if (isDocked()) {
+        setTimeout(() => {
+          if (typeof syncHorizontalScrollbar === "function") syncHorizontalScrollbar();
+          if (typeof syncFrozenHeaderMetrics === "function") syncFrozenHeaderMetrics();
+          if (typeof swbVirt !== "undefined" && swbVirt.isActive()) swbVirt.update(true);
+        }, 340);
+      }
+      return r;
+    };
+  }
+  const closeBtn = document.getElementById("sidebarCloseBtn");
+  if (closeBtn) closeBtn.addEventListener("click", () => {
+    if (typeof toggleSidebar === "function" && isSidebarOpen()) window.toggleSidebar();
+    const back = document.getElementById("panelToggle");
+    if (back) back.focus();
+  });
+  if (dockMq) {
+    const onDockChange = () => { syncDock(); if (typeof syncSidebarHandle === "function") syncSidebarHandle(); };
+    if (typeof dockMq.addEventListener === "function") dockMq.addEventListener("change", onDockChange);
+    else if (typeof dockMq.addListener === "function") dockMq.addListener(onDockChange);
+  }
+  window.addEventListener("resize", () => syncDock(), { passive: true });
+  if (typeof ResizeObserver === "function" && heroEl) new ResizeObserver(() => syncDock()).observe(heroEl);
+
+  // ── „Znajdź ustawienie…” ───────────────────────────────────────────────────
+  // Filtruje sekcje panelu po tekście (tytuł sekcji, etykiety pól, przyciski, opisy).
+  // Pasujące sekcje rozwija, resztę chowa; po wyczyszczeniu przywraca poprzedni stan.
+  const finder = document.getElementById("sidebarFinder");
+  const finderClear = document.getElementById("sidebarFinderClear");
+  const finderEmpty = document.getElementById("sidebarFinderEmpty");
+  const normTxt = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/ł/g, "l");
+  let finderSnapshot = null; // Map<details, open> sprzed szukania
+  function sectionText(det) {
+    if (det._swbFindText) return det._swbFindText;
+    const parts = [det.textContent];
+    det.querySelectorAll("[data-hint-pl],[data-hint-en],[placeholder],[aria-label]").forEach((el) => {
+      parts.push(el.getAttribute("data-hint-pl") || "", el.getAttribute("data-hint-en") || "", el.getAttribute("placeholder") || "", el.getAttribute("aria-label") || "");
+    });
+    det._swbFindText = normTxt(parts.join(" "));
+    return det._swbFindText;
+  }
+  function runFinder() {
+    if (!finder || !sidebarNode) return;
+    const q = normTxt(finder.value.trim());
+    const panels = Array.from(sidebarNode.querySelectorAll("details.panel"));
+    if (finderClear) finderClear.hidden = !q;
+    sidebarNode.querySelectorAll(".finder-hit").forEach((el) => el.classList.remove("finder-hit"));
+    if (!q) {
+      panels.forEach((d) => { d.hidden = false; });
+      sidebarNode.querySelectorAll(".sidebar-group").forEach((g) => { g.hidden = false; });
+      if (finderSnapshot) { finderSnapshot.forEach((open, d) => { d.open = open; }); finderSnapshot = null; }
+      if (finderEmpty) finderEmpty.hidden = true;
+      return;
+    }
+    if (!finderSnapshot) finderSnapshot = new Map(panels.map((d) => [d, d.open]));
+    const words = q.split(/\s+/).filter(Boolean);
+    let any = 0;
+    panels.forEach((d) => {
+      const txt = sectionText(d);
+      const hit = words.every((w) => txt.includes(w));
+      d.hidden = !hit;
+      if (hit) {
+        any++;
+        d.open = true;
+        // podświetl konkretne pola, które pasują (etykiety / przyciski)
+        d.querySelectorAll("label, button, .field-subtitle, summary").forEach((el) => {
+          if (words.every((w) => normTxt(el.textContent + " " + (el.getAttribute("data-hint-pl") || "")).includes(w))) el.classList.add("finder-hit");
+        });
+      }
+    });
+    sidebarNode.querySelectorAll(".sidebar-group").forEach((g) => {
+      g.hidden = !g.querySelector("details.panel:not([hidden])");
+    });
+    if (finderEmpty) finderEmpty.hidden = any > 0;
+  }
+  if (finder) {
+    finder.addEventListener("input", runFinder);
+    finder.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && finder.value) { e.preventDefault(); e.stopPropagation(); finder.value = ""; runFinder(); }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const hit = sidebarNode.querySelector(".finder-hit:not(summary)") || sidebarNode.querySelector("details.panel:not([hidden]) summary");
+        if (hit) { hit.scrollIntoView({ block: "center" }); const f = hit.matches("label") ? hit.querySelector("input,select,textarea,button") : hit; if (f) f.focus(); }
+      }
+    });
+  }
+  if (finderClear) finderClear.addEventListener("click", () => { finder.value = ""; runFinder(); finder.focus(); });
+  // zmiana języka = inne teksty sekcji → wyczyść pamięć tekstów
+  document.querySelectorAll(".lang-button").forEach((b) => b.addEventListener("click", () => {
+    sidebarNode && sidebarNode.querySelectorAll("details.panel").forEach((d) => { d._swbFindText = null; });
+  }));
+
   // ── start ──────────────────────────────────────────────────────────────────
   // Szukanie zawsze widoczne: dawny „tryb szybkiego szukania” jest teraz stanem stałym.
   if (typeof setReadingMode === "function") setReadingMode(true);
   mountSheetTabs();
   placeStatus();
+  syncDock();
   attachOverflowFade(tableActions);
   syncFile();
   renderRecent();
 
-  return { syncFile, syncSave, syncPanelCount, renderRecent, setMenuOpen };
+  return { syncFile, syncSave, syncPanelCount, renderRecent, setMenuOpen, syncDock, isDocked, dockedInitialOpen, runFinder };
 })();
