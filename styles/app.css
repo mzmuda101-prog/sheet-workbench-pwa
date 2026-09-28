@@ -6592,10 +6592,9 @@ body.tr-active .toast-container {
   border-top: 0;
   padding: 2px 0;
 }
-@media (min-width: 769px) {
-  /* przy kilku arkuszach nazwę bieżącego pokazują zakładki */
-  .hero-sheet.is-multi { display: none; }
-}
+/* Zakładki arkuszy wyłączone na każdej szerokości — arkusz zmienia przycisk z nazwą
+   pod tytułem pliku (lista rozwijana na tablecie/laptopie, arkusz od dołu na telefonie). */
+.hero-tabs-slot, .hero-tabs-slot .sheet-tabs { display: none !important; }
 @media (max-width: 768px) {
   .hero-tabs-slot { display: none; }
   .hero-logo svg { width: 32px; height: 32px; }
@@ -7085,3 +7084,20 @@ body.tr-active .toast-container {
   box-shadow: 0 18px 44px rgba(18, 30, 23, 0.18);
 }
 :root:not(.sidebar-docked) .sidebar-top { background: linear-gradient(color-mix(in srgb, var(--bg) 96%, transparent) 75%, transparent); }
+
+/* Przycisk arkusza przy kilku arkuszach: widać, że się go klika — delikatna pigułka
+   w kolorze akcentu z ▾ (przy jednym arkuszu zostaje zwykły tekst). */
+.hero-sheet.is-multi {
+  padding: 2px 8px 2px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  background: var(--accent-light);
+  transition: background var(--t), border-color var(--t);
+}
+.hero-sheet.is-multi:hover,
+.hero-sheet.is-multi[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); border-color: var(--accent); }
+.hero-sheet.is-multi .hero-sheet-caret { font-size: 10px; transition: transform var(--t); }
+.hero-sheet.is-multi[aria-expanded="true"] .hero-sheet-caret { transform: rotate(180deg); }
+.sheet-menu .sheet-menu-item[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+.sheet-menu .app-menu-item-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-menu .sheet-menu-item > span[aria-hidden="true"] { color: var(--accent); min-width: 12px; text-align: right; }

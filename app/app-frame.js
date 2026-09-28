@@ -47,6 +47,7 @@ const appFrame = (() => {
   const heroEl = document.querySelector(".hero");
   const heroTitleEl = document.getElementById("heroTitle");
   const heroSheetBtn = document.getElementById("heroSheetBtn");
+  const narrowMqSheet = typeof matchMedia === "function" ? matchMedia("(max-width: 768px)") : null;
   const heroSheetName = document.getElementById("heroSheetName");
   const heroTabsSlot = document.getElementById("heroTabsSlot");
   const heroSaveBtn = document.getElementById("heroSaveBtn");
@@ -79,6 +80,8 @@ const appFrame = (() => {
       heroSheetBtn.classList.toggle("is-multi", !!multi);
       if (heroSheetName) heroSheetName.textContent = sheet;
       heroSheetBtn.setAttribute("aria-label", multi ? `${t("heroSheetSwitch")}: ${sheet}` : sheet);
+      if (multi) heroSheetBtn.setAttribute("aria-expanded", heroSheetBtn.getAttribute("aria-expanded") || "false");
+      else heroSheetBtn.removeAttribute("aria-expanded");
     }
     syncSave();
   }
@@ -92,11 +95,88 @@ const appFrame = (() => {
     attachOverflowFade(sheetTabsEl);
   }
 
+  // Przełączanie arkusza: przycisk z nazwą pod tytułem pliku — na KAŻDEJ szerokości
+  // (Mateusz: „na telefonie idealnie, zrób to też na innych”). Telefon: dotychczasowy
+  // arkusz od dołu (openSheetPicker). Szerzej: mała lista tuż pod przyciskiem.
+  const sheetMenu = document.createElement("div");
+  sheetMenu.className = "app-menu sheet-menu";
+  sheetMenu.id = "sheetMenu";
+  sheetMenu.setAttribute("role", "listbox");
+  sheetMenu.hidden = true;
+  document.body.appendChild(sheetMenu);
+  function sheetMenuItems() { return Array.from(sheetMenu.querySelectorAll(".sheet-menu-item")); }
+  function closeSheetMenu(returnFocus) {
+    if (sheetMenu.hidden) return;
+    sheetMenu.hidden = true;
+    heroSheetBtn.setAttribute("aria-expanded", "false");
+    if (returnFocus) heroSheetBtn.focus();
+  }
+  function openSheetMenu(focusCurrent) {
+    const names = (typeof workbook !== "undefined" && workbook && workbook.SheetNames) || [];
+    sheetMenu.setAttribute("aria-label", t("heroSheetSwitch"));
+    sheetMenu.replaceChildren(...names.map((name) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "app-menu-item sheet-menu-item";
+      b.setAttribute("role", "option");
+      const current = name === currentSheetName;
+      b.setAttribute("aria-selected", String(current));
+      const label = document.createElement("span");
+      label.className = "app-menu-item-text";
+      label.textContent = name;
+      label.title = name;
+      const mark = document.createElement("span");
+      mark.setAttribute("aria-hidden", "true");
+      mark.textContent = current ? "✓" : "";
+      b.append(label, mark);
+      b.addEventListener("click", () => {
+        closeSheetMenu(false);
+        if (name === currentSheetName) return;
+        sheetSelect.value = name;
+        loadBtn.click();
+      });
+      return b;
+    }));
+    const r = heroSheetBtn.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const width = Math.min(300, vw - 16);
+    sheetMenu.style.width = `${width}px`;
+    sheetMenu.style.left = `${Math.round(Math.max(8, Math.min(vw - width - 8, r.left - 6)))}px`;
+    sheetMenu.style.top = `${Math.round(r.bottom + 6)}px`;
+    sheetMenu.style.maxHeight = `${Math.max(160, window.innerHeight - r.bottom - 24)}px`;
+    sheetMenu.hidden = false;
+    heroSheetBtn.setAttribute("aria-expanded", "true");
+    if (focusCurrent) {
+      const cur = sheetMenu.querySelector('[aria-selected="true"]') || sheetMenuItems()[0];
+      if (cur) cur.focus();
+    }
+  }
   if (heroSheetBtn) {
-    heroSheetBtn.addEventListener("click", () => {
+    heroSheetBtn.addEventListener("click", (e) => {
       if (heroSheetBtn.disabled) return;
-      if (typeof openSheetPicker === "function") openSheetPicker();
+      if (narrowMqSheet && narrowMqSheet.matches) {
+        if (typeof openSheetPicker === "function") openSheetPicker();
+        return;
+      }
+      e.stopPropagation();
+      if (sheetMenu.hidden) openSheetMenu(e.detail === 0); else closeSheetMenu(false);
     });
+    document.addEventListener("pointerdown", (e) => {
+      if (sheetMenu.hidden || sheetMenu.contains(e.target) || heroSheetBtn.contains(e.target)) return;
+      closeSheetMenu(false);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (sheetMenu.hidden) return;
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeSheetMenu(true); return; }
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const items = sheetMenuItems();
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement);
+      const next = items[i < 0 ? 0 : (i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length];
+      e.preventDefault();
+      next.focus();
+    }, true);
+    window.addEventListener("resize", () => closeSheetMenu(false), { passive: true });
   }
 
   // ── Zapisz ─────────────────────────────────────────────────────────────────
@@ -282,7 +362,7 @@ const appFrame = (() => {
   const heroMeta = document.querySelector(".hero-meta");
   const toolbarEl = document.querySelector(".table-toolbar");
   const toolbarToggleBtn = document.getElementById("toolbarToggle");
-  const narrowMq = typeof matchMedia === "function" ? matchMedia("(max-width: 768px)") : null;
+  const narrowMq = narrowMqSheet;
   function placeStatus() {
     if (typeof statusEl === "undefined" || !statusEl || !heroMeta || !toolbarEl) return;
     const narrow = !!(narrowMq && narrowMq.matches);

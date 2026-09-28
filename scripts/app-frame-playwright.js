@@ -242,6 +242,54 @@ async function run() {
   check("brak błędów strony (panel obok tabeli)", errors.length === 0, errors.join(" | "));
   await context.close();
 
+  // ── przełączanie arkusza z nagłówka (plik z kilkoma arkuszami) ──
+  {
+    const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 860 } });
+    await ctx.addInitScript(() => localStorage.setItem("introPlayed", "true"));
+    const pg = await ctx.newPage();
+    const errs = [];
+    pg.on("pageerror", (e) => errs.push(e.message));
+    await pg.goto(APP_URL, { waitUntil: "load" });
+    await pg.evaluate(() => { document.getElementById("heroSplash")?.remove(); try { ensureXlsxLibs && ensureXlsxLibs(false); } catch (_) {} });
+    await pg.setInputFiles("#fileInput", require("path").join(__dirname, "stress-test-workbench.xlsx"));
+    await pg.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 1, null, { timeout: 20000 });
+    await pg.click("#loadBtn");
+    await pg.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
+    await sleep(600);
+    const before = await pg.evaluate(() => ({ sheet: currentSheetName, names: workbook.SheetNames, multi: document.getElementById("heroSheetBtn").classList.contains("is-multi"), tabsVisible: !!document.getElementById("sheetTabs")?.offsetParent }));
+    check("S1. kilka arkuszy: przycisk arkusza klikalny, bez zakładek", before.multi && !before.tabsVisible, JSON.stringify(before));
+    await pg.click("#heroSheetBtn");
+    await sleep(200);
+    const menu = await pg.evaluate(() => {
+      const m = document.getElementById("sheetMenu");
+      const r = m.getBoundingClientRect();
+      return { open: !m.hidden, items: [...m.querySelectorAll(".sheet-menu-item")].map((b) => b.textContent.replace("✓", "").trim()), current: m.querySelector('[aria-selected="true"]')?.textContent.replace("✓", "").trim(), inView: r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight };
+    });
+    check("S2. lista arkuszy pod nazwą: wszystkie arkusze, bieżący zaznaczony, w ekranie", menu.open && menu.items.length === before.names.length && menu.current === before.sheet && menu.inView, JSON.stringify(menu));
+    const target = before.names.find((n) => n !== before.sheet);
+    await pg.evaluate((name) => [...document.querySelectorAll("#sheetMenu .sheet-menu-item")].find((b) => b.textContent.includes(name)).click(), target);
+    await pg.waitForFunction((name) => currentSheetName === name, target, { timeout: 20000 });
+    await sleep(500);
+    const after = await pg.evaluate(() => ({ sheet: currentSheetName, hero: document.getElementById("heroSheetName").textContent, open: !document.getElementById("sheetMenu").hidden }));
+    check("S3. wybór z listy przełącza arkusz i zamyka listę", after.sheet === target && after.hero === target && !after.open, JSON.stringify(after));
+    // klawiatura: Enter otwiera z fokusem na bieżącym, Esc zamyka i wraca na przycisk
+    await pg.focus("#heroSheetBtn");
+    await pg.keyboard.press("Enter");
+    await sleep(150);
+    const kb1 = await pg.evaluate(() => document.activeElement?.getAttribute("aria-selected"));
+    await pg.keyboard.press("Escape");
+    await sleep(150);
+    const kb2 = await pg.evaluate(() => ({ hidden: document.getElementById("sheetMenu").hidden, focus: document.activeElement?.id }));
+    check("S4. klawiatura: Enter → fokus na bieżącym arkuszu, Esc → zamyka", kb1 === "true" && kb2.hidden && kb2.focus === "heroSheetBtn", JSON.stringify({ kb1, kb2 }));
+    if (process.env.SHOTS) {
+      await pg.click("#heroSheetBtn");
+      await sleep(250);
+      await pg.screenshot({ path: `${process.env.SHOTS}/sheet-menu.png`, clip: { x: 0, y: 0, width: 700, height: 420 } });
+    }
+    check("brak błędów strony (arkusze)", errs.length === 0, errs.join(" | "));
+    await ctx.close();
+  }
+
   // ── telefon ──
   ({ context, page, errors } = await open(browser, { width: 375, height: 812 }, { hasTouch: true, isMobile: ENGINE === "chromium" }));
   const phone = await page.evaluate(async () => {
