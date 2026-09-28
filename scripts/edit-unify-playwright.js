@@ -20,7 +20,12 @@ const os = require("os");
 const path = require("path");
 
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// SLEEP_SCALE (run-tests.mjs): skraca przerwy „odczekaj po kroku” w szybkim przebiegu;
+// powtórka porażki idzie ze skalą 1 (pełne przerwy). sleepFixed = przerwa, która MUSI
+// przeczekać timer aplikacji (debounce, opóźnienie podpowiedzi, bezczynność) — bez skali.
+const SLEEP_SCALE = Math.min(1, Math.max(0.1, Number(process.env.SLEEP_SCALE || 1)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, Math.round(ms * SLEEP_SCALE)));
+const sleepFixed = (ms) => new Promise((r) => setTimeout(r, ms)); // eslint-disable-line no-unused-vars
 
 // Plik testowy budujemy sami (SheetJS z lib/), żeby znać każdy wariant.
 function buildFixture() {

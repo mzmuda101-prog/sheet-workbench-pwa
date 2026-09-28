@@ -37,7 +37,12 @@ const ROWS = parseInt(process.env.ROWS || "600", 10);
 const SAMPLE = parseInt(process.env.SAMPLE || "3000", 10);
 // VIRT=1 = to samo co VIRT_QUERY="&virt=1" (bez znaku & — ten w łańcuchu npm oznaczałby tło)
 const VIRT_QUERY = process.env.VIRT_QUERY || (process.env.VIRT === "1" ? "&virt=1" : "");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// SLEEP_SCALE (run-tests.mjs): skraca przerwy „odczekaj po kroku” w szybkim przebiegu;
+// powtórka porażki idzie ze skalą 1 (pełne przerwy). sleepFixed = przerwa, która MUSI
+// przeczekać timer aplikacji (debounce, opóźnienie podpowiedzi, bezczynność) — bez skali.
+const SLEEP_SCALE = Math.min(1, Math.max(0.1, Number(process.env.SLEEP_SCALE || 1)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, Math.round(ms * SLEEP_SCALE)));
+const sleepFixed = (ms) => new Promise((r) => setTimeout(r, ms)); // eslint-disable-line no-unused-vars
 
 // Narzędzia wstrzykiwane do strony (jako window.__vg).
 function installHelpers() {
@@ -361,8 +366,15 @@ async function run() {
   //     dokładnie o krok (kotwica nowego silnika przy dorysowywaniu wierszy nad widokiem),
   //     także gdy co 5. wiersz jest wyższy (wysokości ręczne, bez zawijania).
   const smooth = await page.evaluate(async () => {
-    const tall = currentDisplayModel.rows.filter((_, i) => i % 5 === 2).map((r) => r.rowIndex0);
-    tall.forEach((ri) => { manualRowHeights[ri] = 52; });
+    // Wyższe wiersze z CSS (numer wiersza kończy się na 3 lub 7), a NIE z ręcznej wysokości:
+    // ręczne wysokości silnik zna z góry, więc kotwica nie miałaby czego korygować (tak było
+    // do 2026-09-28 — scenariusz przechodził nawet z wyłączoną kotwicą). Wysokość z CSS
+    // poznaje dopiero po narysowaniu wiersza — przy przewijaniu w górę to dokładnie
+    // przypadek, w którym bez kotwicy widoczne wiersze podskakują.
+    const tallCss = document.createElement("style");
+    tallCss.id = "vg-tall-rows";
+    tallCss.textContent = '#dataTable tbody tr[data-row-index$="3"] td, #dataTable tbody tr[data-row-index$="7"] td { padding-top: 14px; padding-bottom: 14px; }';
+    document.head.appendChild(tallCss);
     renderActiveTable();
     await __vg.frames(2);
     const bad = [];
@@ -371,7 +383,10 @@ async function run() {
       tableWrapEl.scrollTop = Math.round((tableWrapEl.scrollHeight - tableWrapEl.clientHeight) * startF);
       await new Promise((r) => setTimeout(r, 400)); // spoczynek (wyrównanie driftu)
       await __vg.frames(2);
-      for (let k = 0; k < 70 && tableWrapEl.scrollTop > 0; k++) {
+      // 40 kroków × 97 px ≈ 6–7 ekranów: wiele dorysowań okna nad widokiem. Podskok
+      // sprawdzamy w KAŻDYM kroku (tanie); pełne próbkowanie dziur co 3. krok (drogie —
+      // ~40 × elementFromPoint; przy 70 krokach i każdym próbkowaniu scenariusz trwał 14 s).
+      for (let k = 0; k < 40 && tableWrapEl.scrollTop > 0; k++) {
         const b = __vg.band();
         const probeTr = document.elementFromPoint(b.left + 60, (b.top + b.bottom) / 2)?.closest("tr[data-row-key]");
         const key = probeTr && probeTr.dataset.rowKey;
@@ -385,8 +400,10 @@ async function run() {
           const d = after.getBoundingClientRect().top - before;
           if (Math.abs(d - moved) > 1.5) { bad.push({ startF, k, key, expected: moved, got: Math.round(d * 10) / 10 }); if (bad.length > 4) break; }
         }
-        const s = __vg.sampleColumn();
-        if (s.holes.length || s.gap) { bad.push({ startF, k, holes: s.holes.slice(0, 2), gap: s.gap }); break; }
+        if (k % 3 === 0) {
+          const s = __vg.sampleColumn();
+          if (s.holes.length || s.gap) { bad.push({ startF, k, holes: s.holes.slice(0, 2), gap: s.gap }); break; }
+        }
       }
     }
     // na samej górze pierwszy wiersz ma być tuż pod nagłówkiem (żadnej szczeliny)
@@ -396,7 +413,7 @@ async function run() {
     const first = document.querySelector("#dataTable tbody tr[data-row-key]");
     const gapTop = first ? Math.round(first.getBoundingClientRect().top - theadEl.getBoundingClientRect().bottom) : null;
     const firstIdx = first ? __vg.indexOfKey(first.dataset.rowKey) : -1;
-    tall.forEach((ri) => { delete manualRowHeights[ri]; });
+    tallCss.remove();
     renderActiveTable();
     await __vg.frames(2);
     return { bad, gapTop, firstIdx };

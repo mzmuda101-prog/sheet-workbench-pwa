@@ -20,7 +20,12 @@ const PORT = 4190;
 const HOST = "pwa.localhost"; // *.localhost = bezpieczny kontekst (SW działa), ale nie „localhost" z sw.js
 const ORIGIN = `http://${HOST}:${PORT}`;
 const FILE = path.join(__dirname, "stress-test-workbench.xlsx");
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// SLEEP_SCALE (run-tests.mjs): skraca przerwy „odczekaj po kroku” w szybkim przebiegu;
+// powtórka porażki idzie ze skalą 1 (pełne przerwy). sleepFixed = przerwa, która MUSI
+// przeczekać timer aplikacji (debounce, opóźnienie podpowiedzi, bezczynność) — bez skali.
+const SLEEP_SCALE = Math.min(1, Math.max(0.1, Number(process.env.SLEEP_SCALE || 1)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, Math.round(ms * SLEEP_SCALE)));
+const sleepFixed = (ms) => new Promise((r) => setTimeout(r, ms)); // eslint-disable-line no-unused-vars
 
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".json": "application/json", ".png": "image/png", ".webp": "image/webp", ".woff2": "font/woff2", ".mp4": "video/mp4", ".svg": "image/svg+xml" };
 let log = [];

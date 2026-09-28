@@ -17,6 +17,7 @@
 //          npm run test:fast         (5 naraz — szybciej, ale komputer mocniej pracuje)
 //          npm test -- freeze hero   (tylko kroki, których komenda zawiera któreś słowo)
 //          JOBS=1 npm test           (po kolei, jak dawniej)
+//          SLEEP_SCALE=1 npm test    (pełne przerwy w testach, jak przed 2026-09-28)
 
 import { spawn } from "node:child_process";
 import fs from "node:fs";
@@ -58,6 +59,11 @@ steps.sort((a, b) => (timings[b.raw] || 30000) - (timings[a.raw] || 30000));
 // = 5 naraz (~1 min). Dodatkowo każdy test dostaje niższy priorytet (nice), więc
 // reszta systemu ma pierwszeństwo.
 const JOBS = Math.max(1, parseInt(process.env.JOBS || 2, 10));
+// Krótsze przerwy „odczekaj po kroku” w testach (helper sleep w scripts/*-playwright.js):
+// 0.5 = połowa. Testy czekające na timery aplikacji mają w sobie SLEEP_SCALE = 1.
+// Powtórka porażki idzie ze skalą 1 — test, który przechodzi dopiero wtedy, jest
+// wypisany jako „niestabilny” (widoczny, nie ukryty). SLEEP_SCALE=1 npm test = jak dawniej.
+const SLEEP_SCALE = process.env.SLEEP_SCALE || "0.5";
 const NICE = 10;
 
 function serverUp() {
@@ -82,7 +88,7 @@ async function ensureServer() {
 function runStep(step) {
   return new Promise((resolve) => {
     const t0 = Date.now();
-    const child = spawn(step.cmd, step.args, { cwd: ROOT, env: { ...process.env, ...step.env } });
+    const child = spawn(step.cmd, step.args, { cwd: ROOT, env: { ...process.env, ...step.env, SLEEP_SCALE: step.retry ? "1" : SLEEP_SCALE } });
     try { os.setPriority(child.pid, NICE); } catch {} // przeglądarki odpalone przez test dziedziczą priorytet
     let out = "";
     child.stdout.on("data", (d) => { out += d; });
@@ -125,7 +131,7 @@ async function main() {
   if (failed.length) {
     console.log(`\nPowtarzam ${failed.length} pojedynczo…`);
     for (const r of failed) {
-      const again = await runStep(r.step);
+      const again = await runStep({ ...r.step, retry: true }); // pełne przerwy
       if (again.ok) {
         flaky.push(r);
         console.log(`⚠️  ${r.step.label} — przeszedł za drugim razem (niestabilny w tłoku). Pierwsza porażka:`);

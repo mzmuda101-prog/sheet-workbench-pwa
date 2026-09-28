@@ -21,7 +21,14 @@
 const playwright = require("playwright");
 const { chromium } = playwright;
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// SLEEP_SCALE (run-tests.mjs): skraca przerwy „odczekaj po kroku” w szybkim przebiegu;
+// powtórka porażki idzie ze skalą 1 (pełne przerwy). sleepFixed = przerwa, która MUSI
+// przeczekać timer aplikacji (debounce, opóźnienie podpowiedzi, bezczynność) — bez skali.
+// Ten test czeka na timery aplikacji (powiadomienia, bezczynność, schowek) — przy krótszych
+// przerwach padał (sprawdzone SLEEP_SCALE=0.5, 2026-09-28), więc zawsze pełne przerwy.
+const SLEEP_SCALE = 1;
+const sleep = (ms) => new Promise((r) => setTimeout(r, Math.round(ms * SLEEP_SCALE)));
+const sleepFixed = (ms) => new Promise((r) => setTimeout(r, ms)); // eslint-disable-line no-unused-vars
 
 // Arkusz: Data | Rejon | Uwagi — „Data" i „Rejon" powtarzają się, czyli dokładnie ten
 // przypadek, w którym przepisywanie tej samej wartości w kółko jest najbardziej męczące.

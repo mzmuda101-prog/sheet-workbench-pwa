@@ -14,7 +14,12 @@
 const { chromium } = require("playwright");
 
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// SLEEP_SCALE (run-tests.mjs): skraca przerwy „odczekaj po kroku” w szybkim przebiegu;
+// powtórka porażki idzie ze skalą 1 (pełne przerwy). sleepFixed = przerwa, która MUSI
+// przeczekać timer aplikacji (debounce, opóźnienie podpowiedzi, bezczynność) — bez skali.
+const SLEEP_SCALE = Math.min(1, Math.max(0.1, Number(process.env.SLEEP_SCALE || 1)));
+const sleep = (ms) => new Promise((r) => setTimeout(r, Math.round(ms * SLEEP_SCALE)));
+const sleepFixed = (ms) => new Promise((r) => setTimeout(r, ms)); // eslint-disable-line no-unused-vars
 
 async function openWith(browser, { cost, manual, query = "" }) {
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 850 } });

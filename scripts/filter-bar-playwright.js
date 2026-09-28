@@ -20,7 +20,14 @@ const path = require("path");
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
 const FILE = path.join(__dirname, "stress-test-workbench.xlsx");
 const ENGINE = process.env.ENGINE === "webkit" ? webkit : chromium;
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// SLEEP_SCALE (run-tests.mjs): skraca przerwy „odczekaj po kroku” w szybkim przebiegu;
+// powtórka porażki idzie ze skalą 1 (pełne przerwy). sleepFixed = przerwa, która MUSI
+// przeczekać timer aplikacji (debounce, opóźnienie podpowiedzi, bezczynność) — bez skali.
+// Ten test czeka na timery aplikacji (powiadomienia, bezczynność, schowek) — przy krótszych
+// przerwach padał (sprawdzone SLEEP_SCALE=0.5, 2026-09-28), więc zawsze pełne przerwy.
+const SLEEP_SCALE = 1;
+const sleep = (ms) => new Promise((r) => setTimeout(r, Math.round(ms * SLEEP_SCALE)));
+const sleepFixed = (ms) => new Promise((r) => setTimeout(r, ms)); // eslint-disable-line no-unused-vars
 
 async function run() {
   const browser = await ENGINE.launch({ headless: true });
