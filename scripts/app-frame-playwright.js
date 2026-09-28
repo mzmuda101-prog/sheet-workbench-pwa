@@ -288,6 +288,25 @@ async function run() {
     }
     check("brak błędów strony (arkusze)", errs.length === 0, errs.join(" | "));
     await ctx.close();
+
+    // tablet (dotyk, 1024 px): bez pływającej pigułki arkusza — tylko przycisk w nagłówku
+    const tctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1024, height: 768 }, hasTouch: true, isMobile: ENGINE === "chromium" });
+    await tctx.addInitScript(() => localStorage.setItem("introPlayed", "true"));
+    const tp = await tctx.newPage();
+    await tp.goto(APP_URL, { waitUntil: "load" });
+    await tp.evaluate(() => { document.getElementById("heroSplash")?.remove(); try { ensureXlsxLibs && ensureXlsxLibs(false); } catch (_) {} });
+    await tp.setInputFiles("#fileInput", require("path").join(__dirname, "stress-test-workbench.xlsx"));
+    await tp.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 1, null, { timeout: 20000 });
+    await tp.evaluate(() => loadBtn.click());
+    await tp.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
+    await sleep(500);
+    const tab = await tp.evaluate(() => ({
+      coarse: matchMedia("(pointer: coarse)").matches,
+      fab: getComputedStyle(document.getElementById("sheetPickerFab")).display,
+      hero: !document.getElementById("heroSheetBtn").hidden && document.getElementById("heroSheetBtn").classList.contains("is-multi"),
+    }));
+    check("S5. tablet: bez pływającej pigułki arkusza, przełącznik w nagłówku", tab.fab === "none" && tab.hero, JSON.stringify(tab));
+    await tctx.close();
   }
 
   // ── telefon ──

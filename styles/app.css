@@ -6840,8 +6840,6 @@ body.tr-active .toast-container {
     pointer-events: auto;
   }
   .recent-strip { min-width: 140px; }
-  /* arkusz zmienia przycisk z nazwą w nagłówku — pływający przycisk nie jest potrzebny */
-  .sheet-picker-fab { display: none !important; }
 }
 
 /* Opcja „Pokaż uchwyt panelu” wyłączona: zamknięty uchwyt znika (otwarty — przycisk
@@ -7101,3 +7099,9 @@ body.tr-active .toast-container {
 .sheet-menu .sheet-menu-item[aria-selected="true"] { color: var(--accent); font-weight: 600; }
 .sheet-menu .app-menu-item-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sheet-menu .sheet-menu-item > span[aria-hidden="true"] { color: var(--accent); min-width: 12px; text-align: right; }
+
+/* Pływająca pigułka z nazwą arkusza (dawny przełącznik na dotyku) — wyłączona na KAŻDEJ
+   szerokości: arkusz zmienia przycisk z nazwą w nagłówku. Wcześniej chowana tylko do
+   768 px, więc na tablecie (dotyk, szerszy ekran) dalej pływała nad tabelą. */
+.sheet-picker-fab,
+.sheet-picker-fab:not(.hidden) { display: none !important; }
