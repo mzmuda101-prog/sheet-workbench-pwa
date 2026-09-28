@@ -275,10 +275,30 @@ const appFrame = (() => {
     });
   }
 
+  // ── status („120 wierszy • rekord N”): gdzie mieszka ──────────────────────
+  // Szeroki ekran: w nagłówku, obok nazwy arkusza. Telefon: w nagłówku brakowało
+  // miejsca („120 wie…”), a w pasku między 🔧 a ▾ była wolna luka — tam trafia
+  // (pomysł Mateusza, 2026-09-28). Ten sam element (#status), tylko przenoszony.
+  const heroMeta = document.querySelector(".hero-meta");
+  const toolbarEl = document.querySelector(".table-toolbar");
+  const toolbarToggleBtn = document.getElementById("toolbarToggle");
+  const narrowMq = typeof matchMedia === "function" ? matchMedia("(max-width: 768px)") : null;
+  function placeStatus() {
+    if (typeof statusEl === "undefined" || !statusEl || !heroMeta || !toolbarEl) return;
+    const narrow = !!(narrowMq && narrowMq.matches);
+    if (narrow && statusEl.parentElement !== toolbarEl) toolbarEl.insertBefore(statusEl, toolbarToggleBtn);
+    if (!narrow && statusEl.parentElement !== heroMeta) heroMeta.appendChild(statusEl);
+  }
+  if (narrowMq) {
+    if (typeof narrowMq.addEventListener === "function") narrowMq.addEventListener("change", placeStatus);
+    else if (typeof narrowMq.addListener === "function") narrowMq.addListener(placeStatus);
+  }
+
   // ── start ──────────────────────────────────────────────────────────────────
   // Szukanie zawsze widoczne: dawny „tryb szybkiego szukania” jest teraz stanem stałym.
   if (typeof setReadingMode === "function") setReadingMode(true);
   mountSheetTabs();
+  placeStatus();
   attachOverflowFade(tableActions);
   syncFile();
   renderRecent();

@@ -6737,8 +6737,7 @@ body.tr-active .toast-container {
 .table-toolbar { flex-wrap: wrap; justify-content: flex-start; }
 .table-toolbar > .quick-search { order: 1; flex: 1 1 420px; min-width: 0; }
 .table-toolbar > .panel-toggle { order: 2; }
-.table-toolbar > .status-badge { order: 3; }
-.table-toolbar > .toolbar-toggle { order: 4; }
+.table-toolbar > .toolbar-toggle { order: 3; }
 .table-toolbar > .table-actions {
   order: 10;
   flex: 1 1 100%;
@@ -6752,14 +6751,12 @@ body.tr-active .toast-container {
   min-width: 0;
 }
 .table-toolbar > .table-actions::-webkit-scrollbar { display: none; }
-/* Desktop: rząd 1 = [szukanie][Narzędzia], rząd 2 = [przyciski | ostatnie …][status].
-   Status NIE może stać w rzędzie z szukaniem: po zaznaczeniu wiersza wydłuża się
-   („• rekord N”), ścieśniał pole szukania, a ono zawijało swoje przyciski do drugiej
-   linii — cała tabela skakała o ~50 px przy KAŻDYM kliknięciu wiersza. */
+/* Desktop: rząd 1 = [szukanie][🔧][▴], rząd 2 = przyciski | ostatnie (chowany ▴).
+   Status („120 wierszy • rekord N”) mieszka w nagłówku pod nazwą pliku — w rzędzie
+   z szukaniem wydłużał się po kliknięciu wiersza, ścieśniał pole i tabela skakała. */
 @media (min-width: 769px) {
   .table-toolbar::before { content: ""; order: 5; flex-basis: 100%; height: 0; }
-  .table-toolbar > .status-badge { order: 11; flex: 0 0 auto; }
-  .table-toolbar > .table-actions { flex: 1 1 0; }
+  .table-panel.toolbar-collapsed .table-toolbar::before { display: none; }
 }
 .table-actions > * { flex-shrink: 0; }
 /* bez pliku: nie ma czego szukać ani przełączać — zostaje status i „Narzędzia” (tam wczytanie) */
@@ -6831,9 +6828,10 @@ body.tr-active .toast-container {
 @media (max-width: 768px) {
   /* telefon: [szukaj — cała szerokość] / [status …… Narzędzia ▾] / (zwijany) przyciski.
      Pole obok „Narzędzia” było za wąskie — ikonki ≠ = a… .* nachodziły na siebie. */
+  /* rząd 2: [🔧][przyciski — przewijane w bok][▴]; po schowaniu zostają same ikony */
   .table-toolbar > .quick-search { flex: 1 1 100%; max-height: none; }
-  .table-toolbar > .status-badge { order: 2; flex: 1 1 auto; min-width: 0; }
-  .table-toolbar > .panel-toggle { order: 3; }
+  .table-toolbar > .panel-toggle { order: 2; }
+  .table-toolbar > .table-actions { order: 3; flex: 1 1 0; }
   .table-toolbar > .toolbar-toggle { order: 4; margin-left: 0; }
   .table-panel.toolbar-collapsed .quick-search {
     max-height: none;
@@ -6901,3 +6899,67 @@ body.tr-active .toast-container {
   color: #fff;
 }
 :root.sidebar-open .sidebar-handle:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+
+/* ── nagłówek: arkusz · liczba wierszy; „Narzędzia” jako ikona; ▴ chowa rząd przycisków
+   (adnotacje Mateusza, desktop, 2026-09-28) ── */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.hero-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hero .status-badge {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  font-size: 12.5px;
+  color: var(--muted-strong);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hero-sheet:not([hidden]) + .status-badge { border-left: 1px solid var(--border); padding-left: 8px; }
+.hero .status-badge.unsaved { background: none; box-shadow: none; }
+.hero:not(.has-file) .hero-meta { display: none; }
+
+.table-toolbar > .panel-toggle {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  justify-content: center;
+  flex: none;
+}
+.table-toolbar > .panel-toggle .panel-toggle-count {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  box-shadow: 0 0 0 2px var(--panel);
+}
+/* ▴ także na desktopie: chowa rząd przycisków (Wide-to-Long, Wymiary z Excela, …) */
+.btn.toolbar-toggle { display: inline-flex; width: 36px; height: 36px; justify-content: center; flex: none; }
+.table-panel.toolbar-collapsed .toolbar-toggle-chevron { transform: rotate(180deg); }
+.table-panel.toolbar-collapsed .table-actions { display: none; }
+@media (max-width: 768px) {
+  .table-panel.toolbar-collapsed .table-toolbar > .toolbar-toggle { margin-left: auto; }
+}
+
+/* Telefon: status stoi w pasku między 🔧 a ▾ (app-frame.js placeStatus), na całą
+   szerokość luki, tekst na środku; rozwinięty rząd przycisków idzie pod spód. */
+@media (max-width: 768px) {
+  .table-toolbar > .status-badge {
+    order: 3;
+    flex: 1 1 0;
+    min-width: 0;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .table-toolbar > .table-actions { order: 10; flex: 1 1 100%; }
+  .table-panel.toolbar-collapsed .table-toolbar > .toolbar-toggle { margin-left: 0; }
+}

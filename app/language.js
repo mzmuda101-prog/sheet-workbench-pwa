@@ -764,8 +764,8 @@ const I18N = {
     cellStatsAvg: "Średnia",
     cellStatsMin: "Min",
     cellStatsMax: "Maks",
-    toolbarCollapse: "Zwiń pasek narzędzi",
-    toolbarExpand: "Rozwiń pasek narzędzi",
+    toolbarCollapse: "Schowaj pasek przycisków",
+    toolbarExpand: "Pokaż pasek przycisków",
   },
   en: {
     locale: "en-US",
@@ -1526,8 +1526,8 @@ const I18N = {
     cellStatsAvg: "Average",
     cellStatsMin: "Min",
     cellStatsMax: "Max",
-    toolbarCollapse: "Collapse toolbar",
-    toolbarExpand: "Expand toolbar",
+    toolbarCollapse: "Hide button row",
+    toolbarExpand: "Show button row",
   },
 };
 
