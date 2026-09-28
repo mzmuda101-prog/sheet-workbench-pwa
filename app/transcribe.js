@@ -71,6 +71,10 @@ const trSuggestEl = document.getElementById("trSuggest");
 const trSuggestTextEl = document.getElementById("trSuggestText");
 const trSuggestYesBtn = document.getElementById("trSuggestYesBtn");
 const trSuggestNoBtn = document.getElementById("trSuggestNoBtn");
+const trViewEl = document.getElementById("trView");
+const trViewTextEl = document.getElementById("trViewText");
+const trViewRestoreBtn = document.getElementById("trViewRestoreBtn");
+const trViewKeepBtn = document.getElementById("trViewKeepBtn");
 const trLiveEl = document.getElementById("trLive");
 const trUnmatchedEl = document.getElementById("trUnmatched");
 const trUnmatchedTitleEl = document.getElementById("trUnmatchedTitle");
@@ -111,6 +115,12 @@ let trLayoutTouched = false;    // układ pól ustawiony w tym pliku (zapis albo
 let trSuggest = null;           // propozycja przeniesienia z innej wersji pliku: { key, name, sheet, rec, remap }
 let trLayoutGhosts = [];        // pola z zapisanego układu, których kolumny CHWILOWO nie ma: [{ id, label, sel, pos }]
 let trImportDismissed = [];     // źródła, których user nie chce (per zakres — nie pytamy drugi raz)
+// Widok (filtry + sortowanie), przy którym powstawały ✓ — patrz „Widok spisywania" niżej.
+let trViewNow = null;           // migawka widoku z chwili otwarcia (na nim stoją trRows)
+let trViewSaved = null;         // widok z zapisu (albo z pliku, z którego przeniesiono ✓)
+let trViewRec = null;           // co zapisać: widok, przy którym faktycznie odhaczano
+let trViewKeys = new Set();     // klucze wierszy na BIEŻĄCEJ liście
+let trViewOutside = 0;          // ile ✓ leży poza bieżącą listą
 let trScrollRaf = 0;
 let trHoldTimer = 0;          // odliczanie do startu turbo (przytrzymanie)
 let trHoldProgressTimer = 0;  // animacja paska „ładowania" przytrzymania
@@ -202,6 +212,7 @@ function trPersist() {
     doneCells: doneList.length <= TR_SIG_MAX_ROWS ? doneList.map((key) => trDoneCells.get(key) || "") : [],
     donePrev: doneList.length <= TR_SIG_MAX_ROWS ? doneList.map((key) => trDonePrev.get(key) || "") : [],
     sig: trFingerprint,
+    view: trViewRec,
     volCols: Array.from(trVolatileCols),
     rowsTotal: trRows.length,
     cursor: trCurrentKey(),
@@ -1065,7 +1076,7 @@ function trRenderCard() {
       } else if (noFields) {
         title.textContent = t("trNoFields");
         sub.textContent = t("trNoFieldsSub");
-      } else if (trDone.size >= trRows.length && trRows.length) {
+      } else if (trDoneInView() >= trRows.length && trRows.length) {
         title.textContent = t("trAllDone");
         sub.textContent = t("trAllDoneSub");
       } else {
@@ -1127,9 +1138,10 @@ function trRenderCard() {
   // Licznik, pasek postępu, stan ✓ bieżącego wiersza
   const pos = total ? trPos + 1 : 0;
   if (trCounterEl) trCounterEl.textContent = t("trCounter", { pos, total });
-  if (trDoneCountEl) trDoneCountEl.textContent = t("trDoneCount", { done: trDone.size, all: trRows.length });
+  const doneInView = trDoneInView();
+  if (trDoneCountEl) trDoneCountEl.textContent = t("trDoneCount", { done: doneInView, all: trRows.length });
   if (trProgressBarEl) {
-    const pct = trRows.length ? Math.round((trDone.size / trRows.length) * 100) : 0;
+    const pct = trRows.length ? Math.round((doneInView / trRows.length) * 100) : 0;
     trProgressBarEl.style.width = `${pct}%`;
   }
   const isDone = !!row && trDone.has(trKeyOf(row));
@@ -1173,7 +1185,7 @@ function trToggleDone() {
   if (!row) return;
   const key = trKeyOf(row);
   if (trDone.has(key)) trDone.delete(key);
-  else { trDone.add(key); trMarkSig(key, row); }
+  else { trDone.add(key); trMarkSig(key, row); trViewUsed(); }
   if (trHideDone) {
     const keep = trPos;
     trRebuildOrder(null);
@@ -1193,6 +1205,7 @@ function trMarkAndNext(options = {}) {
   const wasDone = trDone.has(key);
   trDone.add(key);
   trMarkSig(key, row);
+  trViewUsed();
   const before = trPos;
   if (trHideDone) {
     const keep = trPos;
@@ -1204,7 +1217,7 @@ function trMarkAndNext(options = {}) {
   const moved = trHideDone ? true : trPos !== before;
   trResetScroll();
   trRenderCard();
-  if (!options.quiet && trDone.size >= trRows.length && trRows.length) toast(t("trAllDone"), "success");
+  if (!options.quiet && trDoneInView() >= trRows.length && trRows.length) toast(t("trAllDone"), "success");
   return { key, wasDone, moved };
 }
 
@@ -1353,6 +1366,7 @@ function trResetProgress() {
   trUnmatched = [];
   trChangeInfo = null;   // czyścimy też powód ostrzeżenia — nie ma już czego ratować
   trHideChangeNotice();
+  trViewForget();
   trRebuildOrder(null);
   trPos = 0;
   trRenderCard();
@@ -1569,7 +1583,7 @@ function trStatTile(label, value, tone = "") {
 function trRenderProgressPanel() {
   if (!trStatsEl) return;
   const all = trRows.length;
-  const done = Math.min(trDone.size, all);
+  const done = Math.min(trDoneInView(), all);
   const left = Math.max(0, all - done);
   const pct = all ? Math.round((done / all) * 100) : 0;
   trStatsEl.replaceChildren(
@@ -1606,6 +1620,8 @@ function trRenderProgressPanel() {
       if (trChangeInfo.similar) parts.push(t("trMatchSimilar", { n: trChangeInfo.similar }));
       lines.push(`${t("trMatchHow")} ${parts.join(" · ")}`);
     }
+    const viewLine = trViewProgressLine();
+    if (viewLine) lines.push(viewLine);
     trScopeNoteEl.replaceChildren();
     lines.forEach((text) => {
       const div = document.createElement("div");
@@ -1820,10 +1836,18 @@ function trImportFromScope(key) {
     savedAt: rec?.ts || 0,
     remapped: true,
   };
+  // ✓ powstały przy widoku TAMTEGO pliku — to on jest teraz „widokiem spisywania".
+  // Jeśli różni się od bieżącego, baner zaproponuje przywrócenie (tylko zaproponuje).
+  if (rec.view) {
+    trViewSaved = rec.view;
+    trViewRec = rec.view;
+  }
+  trCountOutside();
   trRebuildOrder(trCurrentKey());
   trRenderCard();
   trRenderProgressPanel();
   trPersist();
+  trShowViewNotice();
   toast(t("trImportDone", { moved: remap.moved, all: savedDone.length, lost: remap.lost, name: sourceName })
     + (layoutMoved ? t("trImportLayout") : ""), "success");
 }
@@ -1893,6 +1917,12 @@ function trShowSuggest() {
       exact: s.remap.exact || 0,
       layout: layout && layout.sel.size ? t("trSuggestLayout") : "",
     });
+    // Tamten plik spisywano przy innym widoku → mówimy to od razu, żeby decyzja
+    // „przenieś" nie była ślepa. Samo przywrócenie i tak zaproponuje osobny baner.
+    const d = s.rec.view && trViewNow && typeof viewStatesDiffer === "function" ? viewStatesDiffer(s.rec.view, trViewNow) : null;
+    if (d && (d.filter || d.sort)) {
+      trSuggestTextEl.textContent += ` ${t("trSuggestView", { view: describeViewState(s.rec.view) })}`;
+    }
   }
   trSuggestEl.classList.remove("hidden");
 }
@@ -1900,6 +1930,133 @@ function trShowSuggest() {
 function trHideSuggest() {
   trSuggest = null;
   if (trSuggestEl) trSuggestEl.classList.add("hidden");
+}
+
+// ── Widok spisywania: „wtedy był inny filtr" ────────────────────────────────
+// Karta pokazuje wiersze z BIEŻĄCEGO widoku tabeli. Gdy ktoś wraca do spisywania
+// (albo wczytuje „…_V2.xlsx") i zapomni ustawić ten sam filtr, lista jest inna:
+// za szeroka (licznik „37 z 3000" traci sens) albo — gorzej — węższa, i część wierszy
+// do przepisania po prostu się nie pojawia. Nic by o tym nie mówiło.
+// Dlatego: (1) zapamiętujemy widok, przy którym odhaczano, (2) przy różnicy baner
+// z „wtedy / teraz" i przyciskiem przywrócenia, (3) niezależnie od zapisu liczymy,
+// ile ✓ leży poza bieżącą listą — to łapie też stare zapisy i zmiany wartości w pliku.
+// Nic nie dzieje się samo: przywrócenie jest zawsze kliknięciem.
+
+function trDoneInView() {
+  if (!trDone.size) return 0;
+  let n = 0;
+  if (trDone.size <= trViewKeys.size) trDone.forEach((k) => { if (trViewKeys.has(k)) n += 1; });
+  else trViewKeys.forEach((k) => { if (trDone.has(k)) n += 1; });
+  return n;
+}
+
+function trCountOutside() {
+  trViewOutside = Math.max(0, trDone.size - trDoneInView());
+}
+
+// Pierwsze ✓ w tej sesji = od teraz odhacza się przy TYM widoku.
+function trViewUsed() {
+  trViewRec = trViewNow;
+}
+
+function trViewForget() {
+  trViewSaved = null;
+  trViewRec = trViewNow;
+  trViewOutside = 0;
+  trHideViewNotice();
+}
+
+function trViewDiff() {
+  if (!trViewSaved || !trViewNow || typeof viewStatesDiffer !== "function") return null;
+  const d = viewStatesDiffer(trViewSaved, trViewNow);
+  return d.filter || d.sort ? d : null;
+}
+
+function trShowViewNotice() {
+  if (!trViewEl) return;
+  // Baner zmiany pliku ma pierwszeństwo (dwa naraz to za dużo decyzji) — ten pokaże się
+  // po jego zamknięciu. Bez ✓ nie ma czego pilnować.
+  const hardVisible = trNoticeEl && !trNoticeEl.classList.contains("hidden");
+  const diff = trDone.size ? trViewDiff() : null;
+  if (hardVisible || (!diff && !trViewOutside)) { trHideViewNotice(); return; }
+
+  const lines = [];
+  if (diff) {
+    lines.push(t("trViewThen", { view: describeViewState(trViewSaved, { withSort: true }) }));
+    lines.push(t("trViewNowLine", { view: describeViewState(trViewNow, { withSort: true }) }));
+    if (!diff.filter && diff.sort) lines.push(t("trViewOnlySort"));
+  }
+  if (trViewOutside) {
+    const key = diff ? "trViewOutside" : (trViewSaved ? "trViewOutsideSameView" : "trViewOutsideUnknown");
+    lines.push(t(key, { n: trViewOutside, all: trDone.size }));
+  }
+  if (trViewTextEl) {
+    trViewTextEl.replaceChildren();
+    lines.forEach((text, i) => {
+      const div = document.createElement("div");
+      if (diff && i < 2) div.className = "tr-view-line";
+      div.textContent = text;
+      trViewTextEl.appendChild(div);
+    });
+  }
+  // Przywrócić da się tylko to, co zapisano. Stary zapis bez widoku: sam komunikat.
+  if (trViewRestoreBtn) trViewRestoreBtn.classList.toggle("hidden", !diff);
+  if (trViewKeepBtn) trViewKeepBtn.textContent = diff ? t("trViewKeep") : t("trViewOk");
+  trViewEl.classList.remove("hidden");
+}
+
+function trHideViewNotice() {
+  if (trViewEl) trViewEl.classList.add("hidden");
+}
+
+// „Zostaw jak jest" = świadomie spisuję przy tym widoku; nie pytamy znowu.
+function trViewKeep() {
+  trViewSaved = trViewNow;
+  trViewRec = trViewNow;
+  trHideViewNotice();
+  trPersist();
+  if (trMarkBtn) trMarkBtn.focus();
+}
+
+// Przywrócenie: sprawdź → ustaw filtry w tabeli → otwórz spisywanie na nowo (z nową
+// listą wierszy). Dwa bezpieczniki: brak kolumny = nic nie ruszamy i mówimy, której;
+// przywrócony widok daje zero wierszy (choć wtedy były) = wracamy do poprzedniego.
+function trViewRestore() {
+  const target = trViewSaved;
+  if (!target || typeof applyViewState !== "function") return;
+  const problems = viewStateProblems(target);
+  if (problems.length) {
+    toast(t("trViewRestoreBlocked", { why: problems.join(" ") }), "warning");
+    return;
+  }
+  const before = captureViewState();
+  // ✓ zapisujemy z widokiem, przy którym powstały — po ponownym otwarciu widoki się zgodzą.
+  trViewRec = target;
+  trPersist();
+  const res = applyViewState(target);
+  if (!res.ok) {
+    toast(t("trViewRestoreBlocked", { why: res.problems.join(" ") }), "warning");
+    return;
+  }
+  if (!res.shown && (target.shown || 0) > 0) {
+    applyViewState(before);
+    trViewRec = trViewSaved;
+    trPersist();
+    toast(t("trViewRestoreEmpty"), "warning");
+    return;
+  }
+  const shown = res.shown;
+  trWithoutPersist(() => closeTranscribe());
+  openTranscribe();
+  toast(t("trViewRestored", { n: shown }), "success");
+}
+
+function trViewProgressLine() {
+  const rec = trViewRec || trViewNow;
+  if (!rec || typeof describeViewState !== "function") return "";
+  const line = t("trScopeView", { view: describeViewState(rec) });
+  const d = trDone.size && trViewSaved ? trViewDiff() : null;
+  return d ? `${line} ${t("trScopeViewDiffers", { view: describeViewState(trViewNow) })}` : line;
 }
 
 function trDeleteScope(key) {
@@ -1915,6 +2072,7 @@ function trDeleteScope(key) {
       trUnmatched = [];
       trChangeInfo = null;
       trHideChangeNotice();
+      trViewForget();
       trRebuildOrder(null);
       trPos = 0;
       trRenderCard();
@@ -1935,6 +2093,7 @@ function trClearAllScopes() {
     trUnmatched = [];
     trChangeInfo = null;
     trHideChangeNotice();
+    trViewForget();
     trRebuildOrder(null);
     trPos = 0;
     trRenderCard();
@@ -2200,6 +2359,13 @@ function openTranscribe() {
   trAutoFields = !!saved?.auto;
   trLongMode = model.mode === "long";
   trSuggest = trDone.size ? null : trFindImportCandidate();
+  trViewKeys = new Set(trRows.map((r) => trKeyOf(r)));
+  trViewNow = typeof captureViewState === "function" ? captureViewState() : null;
+  trViewSaved = saved?.view || null;
+  // Bez ✓ nie ma „tamtego" widoku — obowiązuje bieżący. Stary zapis bez widoku: nie
+  // wiemy, przy czym odhaczano, więc NIE zgadujemy — widok dopisze pierwsze nowe ✓.
+  trViewRec = trViewSaved || (trDone.size ? null : trViewNow);
+  trCountOutside();
   trMergeRanges = trDetectMergeRanges();
   trMergeCols = new Set(trMergeRanges.keys());
   const validCol2 = (i) => Number.isInteger(i) && i >= 0 && i < trHeaders.length;
@@ -2236,13 +2402,14 @@ function openTranscribe() {
   trResetScroll();
   trShowChangeNotice();
   trShowSuggest();
+  trShowViewNotice();
   trRenderCard();
   trRequestWakeLock();
   if (trMarkBtn) trMarkBtn.focus();
   // Przy twardej zmianie pliku mówi baner — i to on ma przyciski decyzji. Toast tylko
   // zasłaniałby te przyciski przez pierwsze sekundy, czyli dokładnie wtedy, gdy są potrzebne.
-  if (trChangeInfo?.level !== "hard" && trDone.size) {
-    toast(t("trResumed", { done: trDone.size }), "info");
+  if (trChangeInfo?.level !== "hard" && trDoneInView()) {
+    toast(t("trResumed", { done: trDoneInView() }), "info");
   }
 }
 
@@ -2254,6 +2421,7 @@ function closeTranscribe() {
   trHideUndo();
   trPersist();
   trHideSuggest();
+  trHideViewNotice();
   trIsOpen = false;
   trSetLocked(false);
   trOverlayEl.classList.add("hidden");
@@ -2423,7 +2591,7 @@ if (trUnmatchedToggleEl) {
   });
 }
 if (trStoreClearAllBtn) trStoreClearAllBtn.addEventListener("click", () => trArmDanger(trStoreClearAllBtn, t("trStoreClearAll"), trClearAllScopes));
-if (trNoticeKeepBtn) trNoticeKeepBtn.addEventListener("click", trHideChangeNotice);
+if (trNoticeKeepBtn) trNoticeKeepBtn.addEventListener("click", () => { trHideChangeNotice(); trShowViewNotice(); });
 if (trSuggestYesBtn) {
   trSuggestYesBtn.addEventListener("click", () => {
     const key = trSuggest?.key;
@@ -2442,6 +2610,8 @@ if (trSuggestNoBtn) {
     if (trMarkBtn) trMarkBtn.focus();
   });
 }
+if (trViewRestoreBtn) trViewRestoreBtn.addEventListener("click", trViewRestore);
+if (trViewKeepBtn) trViewKeepBtn.addEventListener("click", trViewKeep);
 if (trNoticeResetBtn) {
   trNoticeResetBtn.addEventListener("click", () => {
     trResetProgress();
@@ -2508,6 +2678,12 @@ window.__transcribe = {
     turbo: !!trTurboTimer,
     volatileCols: Array.from(trVolatileCols),
     changed: trChangeInfo ? { ...trChangeInfo } : null,
+    doneInView: trDoneInView(),
+    outside: trViewOutside,
+    viewSaved: trViewSaved,
+    viewNow: trViewNow,
+    viewRec: trViewRec,
+    viewNotice: !!(trViewEl && !trViewEl.classList.contains("hidden")),
     unmatched: trUnmatched.map((u) => ({ prev: u.prev, best: u.best, score: u.score })),
     sigCols: trSigCols.map((c) => c.name),
     undoVisible: !!(trUndoBtn && !trUndoBtn.classList.contains("hidden")),
@@ -2532,6 +2708,7 @@ window.__transcribe = {
   setInherit: (on) => trSetInherit(on),
   toggleInheritCol: trToggleInheritCol,
   reset: trResetProgress,
+  importFrom: trImportFromScope,
   setFields: (cols) => {
     trSelected = new Set(cols);
     trRenderCard();

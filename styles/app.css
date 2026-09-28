@@ -5900,6 +5900,10 @@ body.tr-active { overflow: hidden; }
 .tr-notice.hidden { display: none; }
 .tr-notice-text { flex: 1; min-width: 220px; }
 .tr-notice-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.tr-notice-actions .hidden { display: none; }
+/* „Wtedy / Teraz” — dwie linie do porównania wzrokiem, więc każda osobno. */
+.tr-view .tr-view-line { font-weight: 600; }
+.tr-view .tr-view-line + .tr-view-line { font-weight: 400; }
 
 /* Panel „Postęp” dzieli układ z panelem „Pola” — te same marginesy i ta sama
    pozycja od dołu, żeby przełączanie między nimi nie skakało. */
@@ -6967,16 +6971,29 @@ body.tr-active .toast-container {
 
 /* Górny pasek panelu: „Znajdź ustawienie…” (+ ‹ schowaj na desktopie). Przyklejony,
    bo panel przewija się sam, a szukajka ma być zawsze pod ręką. */
+/* Panel = [pasek ze szukajką — stoi w miejscu] + [.sidebar-scroll — przewija się].
+   Bez position:sticky: sticky w przewijanym, fixed+transform panelu rozjeżdżał na iOS
+   trafianie dotykiem (~35 pt obok widocznego pola po przewinięciu, 2026-09-28). */
+.sidebar { overflow: hidden; }
 .sidebar-top {
-  position: sticky;
-  top: 0;
-  z-index: 3;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 0 6px;
-  background: linear-gradient(var(--bg) 70%, transparent);
+  padding: 2px 2px 4px 0;
 }
+.sidebar > .sidebar-scroll {
+  flex: 1 1 auto;
+  flex-shrink: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+}
+.sidebar-scroll > * { flex-shrink: 0; }
 .sidebar-finder {
   flex: 1;
   min-width: 0;
@@ -7078,10 +7095,10 @@ body.tr-active .toast-container {
 :root:not(.sidebar-docked) .sidebar {
   background: color-mix(in srgb, var(--bg) 96%, transparent);
   border-radius: 20px;
-  padding: 8px 8px 72px; /* dół: miejsce na pływający „Schowaj panel” */
+  padding: 8px;
   box-shadow: 0 18px 44px rgba(18, 30, 23, 0.18);
 }
-:root:not(.sidebar-docked) .sidebar-top { background: linear-gradient(color-mix(in srgb, var(--bg) 96%, transparent) 75%, transparent); }
+:root:not(.sidebar-docked) .sidebar-scroll { padding-bottom: 72px; } /* miejsce na pływający „Schowaj panel” */
 
 /* Przycisk arkusza przy kilku arkuszach: widać, że się go klika — delikatna pigułka
    w kolorze akcentu z ▾ (przy jednym arkuszu zostaje zwykły tekst). */
@@ -7105,3 +7122,10 @@ body.tr-active .toast-container {
    768 px, więc na tablecie (dotyk, szerszy ekran) dalej pływała nad tabelą. */
 .sheet-picker-fab,
 .sheet-picker-fab:not(.hidden) { display: none !important; }
+
+/* iOS/iPadOS (WebKit): przyklejony (sticky) element w przewijanym panelu, który sam jest
+   position:fixed i wjeżdża transformem, rozjeżdża TRAFIANIE DOTYKIEM — po przewinięciu
+   panelu tap trafiał ~35 pt obok tego, co widać (np. „Auto wykryj” → lista „Wartości”).
+   Odtworzone w symulatorze iPhone'a 2026-09-28. Na dotyku pasek „Znajdź ustawienie…”
+   więc NIE jest przyklejony (przewija się z panelem); na myszy zostaje sticky. */
+/* (pasek już nie jest sticky na żadnym urządzeniu — patrz .sidebar-scroll wyżej) */

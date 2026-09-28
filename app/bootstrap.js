@@ -144,7 +144,8 @@ if (monthlySummaryEl) {
 if (aggregationWorkbenchSummaryEl) {
   aggregationWorkbenchSummaryEl.addEventListener("change", (e) => {
     e.stopPropagation();
-    const sidebarEl = document.querySelector(".sidebar");
+    // przewija się wewnętrzny .sidebar-scroll (pasek szukajki nad nim stoi w miejscu)
+    const sidebarEl = document.querySelector(".sidebar-scroll") || document.querySelector(".sidebar");
     const savedSidebarScroll = sidebarEl ? sidebarEl.scrollTop : 0;
     const control = e.target.closest("[data-aggregation-control]");
     if (!control) return;

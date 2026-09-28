@@ -553,3 +553,284 @@ if (cellMenuEl && tbodyEl) {
   if (tableWrapEl) tableWrapEl.addEventListener("scroll", () => closeCellMenu({ restoreFocus: false }), { passive: true });
   window.addEventListener("resize", () => closeCellMenu({ restoreFocus: false }));
 }
+
+// ── 3. Migawka widoku: „przy jakim filtrze to robiłem?" ─────────────────────────
+// Tryb spisywania bierze wiersze z BIEŻĄCEGO widoku (filtry, szukanie, sortowanie).
+// Żeby po powrocie — albo w nowej wersji pliku — dało się stwierdzić, że widok jest
+// inny, i jednym ruchem przywrócić tamten, zapisujemy stan kontrolek w postaci
+// niezależnej od DOM i od numerów kolumn (wszędzie NAZWY nagłówków).
+//
+// Liczy się tylko to, co faktycznie zawęża listę wierszy: przy trybach „wyróżnij"
+// (bez filtrowania) widać wszystkie wiersze, więc filtr = brak. Sortowanie zapisujemy
+// zawsze, bo zmienia kolejność kart, a ta ma się zgadzać z kartką.
+
+// Kolumny, do których odwołuje się zapytanie („Status:=W toku”). Rozpoznajemy je TAK
+// SAMO jak parser (resolveScopedTerm): prefiks jest kolumną tylko, gdy równa się nazwie
+// nagłówka. Zapisujemy je, bo przy braku kolumny parser po cichu szukałby tekstu
+// „Status:=W toku” w całym wierszu — i filtr dawałby zero wierszy bez słowa wyjaśnienia.
+function vsQueryColumns(query, opsEnabled) {
+  if (!opsEnabled || !String(query || "").includes(":")) return [];
+  const known = new Set(currentHeaders.map((h) => normalizeHeaderKey(h)).filter(Boolean));
+  const out = new Set();
+  String(query).split(/&&|\|\||[{}]/).forEach((raw) => {
+    const q = raw.trim().replace(/^!\s*/, "");
+    if (!q || (q.startsWith('"') && q.endsWith('"'))) return;
+    let best = "";
+    for (let k = q.indexOf(":"); k > 0; k = q.indexOf(":", k + 1)) {
+      const key = normalizeHeaderKey(q.slice(0, k));
+      if (known.has(key)) best = q.slice(0, k).trim();
+    }
+    if (best) out.add(best);
+  });
+  return Array.from(out).sort();
+}
+
+function vsTextPart(queryEl, modeEl, negateEl, emptyEl, opsEl, colSet) {
+  const q = String(queryEl?.value || "").trim();
+  const empty = emptyEl ? getNormalizedSelectValue(emptyEl) || "all" : "all";
+  if (!q && empty === "all") return null;
+  const ops = !!opsEl?.checked;
+  return {
+    q,
+    mode: modeEl ? getNormalizedSelectValue(modeEl) || "contains" : "contains",
+    neg: !!negateEl?.checked,
+    empty,
+    ops,
+    cols: Array.from(colSet || []).sort(),
+    qcols: vsQueryColumns(q, ops),
+  };
+}
+
+function vsDatePart() {
+  const mode = getNormalizedSelectValue(dateModeEl) || "between";
+  const empty = getNormalizedSelectValue(dateEmptyModeEl) || "all";
+  const from = dateFromEl.value.trim();
+  const to = dateToEl.value.trim();
+  const days = lastDaysEl.value.trim();
+  const hasRange = mode === "last_n_days" || (from && mode !== "before") || (to && mode !== "after");
+  if (!hasRange && empty === "all") return null;
+  return { mode, from, to, days, empty, neg: !!dateNegateEl.checked, cols: Array.from(columnSelections.date).sort() };
+}
+
+function captureViewState() {
+  const snap = lastAppliedFilters;
+  const filtering = !!(snap && snap.filtering);
+  let filter = null;
+  if (filtering) {
+    const f = {};
+    const f1 = vsTextPart(searchQueryEl, filterModeEl, filterNegateEl, filterEmptyModeEl, filterOperatorsEl, columnSelections.filter1);
+    if (f1) f.f1 = f1;
+    const f2 = vsTextPart(searchQuery2El, filterMode2El, filterNegate2El, filterEmptyMode2El, filterOperators2El, columnSelections.filter2);
+    if (f2) f.f2 = f2;
+    const d = vsDatePart();
+    if (d) f.date = d;
+    if (onlyNonEmptyEl.checked) f.onlyData = true;
+    if (typeof smartActiveCount === "function" && smartActiveCount() > 0) {
+      f.smart = {
+        states: smartFilterState.states.slice().sort(),
+        rowFlags: smartFilterState.rowFlags.slice().sort(),
+        only: smartFilterState.only || "",
+        minDays: Number.isFinite(smartFilterState.minDays) ? smartFilterState.minDays : null,
+      };
+    }
+    if (validationState && validationState.showOnly) f.validation = true;
+    if (Object.keys(f).length) filter = f;
+  }
+  normalizeSortState();
+  const total = Array.isArray(baseRows) ? baseRows.length : 0;
+  return {
+    v: 1,
+    filter,
+    sort: multiSortState.map((r) => ({ col: r.col, dir: r.dir })),
+    shown: filtering && snap ? snap.matched : total,
+    total,
+  };
+}
+
+// Porównanie: te same klucze w tej samej kolejności niezależnie od tego, skąd przyszedł
+// obiekt (JSON z localStorage vs świeża migawka).
+function vsCanonText(p) {
+  return p ? [p.q, p.mode, !!p.neg, p.empty, !!p.ops, (p.cols || []).slice().sort()] : null;
+}
+function viewFilterKey(vs) {
+  const f = vs && vs.filter;
+  if (!f) return "null";
+  const d = f.date;
+  return JSON.stringify([
+    vsCanonText(f.f1),
+    vsCanonText(f.f2),
+    d ? [d.mode, d.from, d.to, d.mode === "last_n_days" ? d.days : "", d.empty, !!d.neg, (d.cols || []).slice().sort()] : null,
+    !!f.onlyData,
+    f.smart ? [f.smart.states, f.smart.rowFlags, f.smart.only, f.smart.minDays] : null,
+    !!f.validation,
+  ]);
+}
+function viewSortKey(vs) {
+  return JSON.stringify((vs && Array.isArray(vs.sort) ? vs.sort : []).map((r) => [r.col, r.dir === "desc" ? "desc" : "asc"]));
+}
+function viewStatesDiffer(a, b) {
+  return { filter: viewFilterKey(a) !== viewFilterKey(b), sort: viewSortKey(a) !== viewSortKey(b) };
+}
+
+// ── Opis po ludzku (baner w spisywaniu, panel „Postęp") ──
+
+function vsOptionText(select, value) {
+  const opt = select && Array.from(select.options || []).find((o) => o.value === value);
+  return opt ? String(opt.textContent || "").trim() : value;
+}
+
+function vsDescribeText(p, modeEl, emptyEl) {
+  const bits = [];
+  if (p.neg) bits.push(t("activeFiltersNot"));
+  if (p.q) bits.push(afPrettyQuery(p.q) || `„${afShort(p.q)}”`);
+  if (p.q && p.mode && p.mode !== "contains") bits.push(`(${vsOptionText(modeEl, p.mode)})`);
+  if (p.empty && p.empty !== "all") bits.push(`(${vsOptionText(emptyEl, p.empty)})`);
+  if (p.cols && p.cols.length) bits.push(t("vsInCols", { cols: afShort(p.cols.join(", "), 40) }));
+  return bits.join(" ");
+}
+
+function describeViewFilter(vs) {
+  const f = vs && vs.filter;
+  if (!f) return [];
+  const out = [];
+  if (f.f1) out.push(vsDescribeText(f.f1, filterModeEl, filterEmptyModeEl));
+  if (f.f2) out.push(`${t("activeFiltersFilter2")}: ${vsDescribeText(f.f2, filterMode2El, filterEmptyMode2El)}`);
+  if (f.date) {
+    const d = f.date;
+    const bits = [];
+    if (d.neg) bits.push(t("activeFiltersNot"));
+    if (d.mode === "last_n_days") bits.push(t("activeFiltersLastDays", { n: Math.max(1, parseInt(d.days || "30", 10)) }));
+    else {
+      if (d.from && d.mode !== "before") bits.push(t("activeFiltersFrom", { d: d.from }));
+      if (d.to && d.mode !== "after") bits.push(t("activeFiltersTo", { d: d.to }));
+    }
+    if (d.empty && d.empty !== "all") bits.push(`(${vsOptionText(dateEmptyModeEl, d.empty)})`);
+    out.push(`${t("activeFiltersDates")}: ${bits.join(" ")}`);
+  }
+  if (f.onlyData) out.push(t("activeFiltersOnlyData"));
+  if (f.smart) {
+    const chips = typeof SMART_CHIPS !== "undefined" ? SMART_CHIPS : [];
+    const label = (key) => {
+      const chip = chips.find((c) => c.key === key);
+      return chip ? t(chip.label) : key;
+    };
+    const names = [...f.smart.states, ...f.smart.rowFlags, ...(f.smart.only ? [f.smart.only] : [])].map(label);
+    if (Number.isFinite(f.smart.minDays)) names.push(t("vsSmartDays", { n: f.smart.minDays }));
+    out.push(`${t("vsSmart")}: ${names.join(", ")}`);
+  }
+  if (f.validation) out.push(t("activeFiltersValidation"));
+  return out;
+}
+
+function describeViewSort(vs) {
+  const sort = vs && Array.isArray(vs.sort) ? vs.sort : [];
+  if (!sort.length) return "";
+  return sort.map((r) => `${r.col} ${r.dir === "desc" ? "↓" : "↑"}`).join(", ");
+}
+
+// Jedno zdanie: „Status = W toku · sortowanie: Data ↑” albo „bez filtra”.
+function describeViewState(vs, { withSort = true } = {}) {
+  const parts = describeViewFilter(vs);
+  const text = parts.length ? parts.join(" · ") : t("vsNoFilter");
+  const sort = withSort ? describeViewSort(vs) : "";
+  return sort ? `${text} · ${t("vsSortLabel", { sort })}` : text;
+}
+
+// ── Przywracanie ──
+// Najpierw sprawdzamy WSZYSTKO, dopiero potem ruszamy kontrolki. Brak którejkolwiek
+// kolumny = nie przywracamy nic: pół filtra jest gorsze niż żaden, bo daje inną
+// listę wierszy, która WYGLĄDA na tamtą (np. filtr bez kolumn = szukanie po wszystkich).
+function viewStateProblems(vs) {
+  const problems = [];
+  const have = new Set(currentHeaders.map((h) => normalizeHeaderKey(h)));
+  const missing = new Set();
+  const need = (name) => { if (name && !have.has(normalizeHeaderKey(name))) missing.add(name); };
+  const f = vs && vs.filter;
+  if (f) {
+    [f.f1, f.f2].forEach((p) => {
+      if (!p) return;
+      (p.cols || []).forEach(need);
+      (p.qcols || []).forEach(need);
+    });
+    if (f.date) (f.date.cols || []).forEach(need);
+    if (f.smart && !(typeof getSmartModel === "function" && getSmartModel())) problems.push(t("vsProblemSmart"));
+    if (f.validation && !(validationState && validationState.colIdx >= 0)) problems.push(t("vsProblemValidation"));
+  }
+  (vs && Array.isArray(vs.sort) ? vs.sort : []).forEach((r) => need(r.col));
+  if (missing.size) problems.unshift(t("vsProblemColumns", { names: Array.from(missing).map((n) => `„${n}”`).join(", ") }));
+  return problems;
+}
+
+function vsSetText(p, queryEl, modeEl, negateEl, emptyEl, opsEl, colSet) {
+  queryEl.value = p ? p.q || "" : "";
+  if (modeEl) modeEl.value = p ? p.mode || "contains" : "contains";
+  if (negateEl) negateEl.checked = !!(p && p.neg);
+  if (emptyEl) emptyEl.value = p ? p.empty || "all" : "all";
+  if (opsEl) opsEl.checked = !!(p && p.ops);
+  colSet.clear();
+  // Nazwy z zapisu mapujemy na DOKŁADNĄ pisownię nagłówków tego pliku (resolveIndexes
+  // porównuje dosłownie, a sprawdzenie brakujących kolumn szło bez wielkości liter).
+  const byKey = new Map(currentHeaders.map((h) => [normalizeHeaderKey(h), h]));
+  (p ? p.cols || [] : []).forEach((name) => {
+    const h = byKey.get(normalizeHeaderKey(name));
+    if (h !== undefined) colSet.add(h);
+  });
+}
+
+// { ok: true, shown } albo { ok: false, problems } — w tym drugim przypadku NIC nie zmieniono.
+function applyViewState(vs) {
+  const problems = viewStateProblems(vs);
+  if (problems.length) return { ok: false, problems };
+  const f = (vs && vs.filter) || null;
+  resetFilterInputs();
+  vsSetText(f && f.f1, searchQueryEl, filterModeEl, filterNegateEl, filterEmptyModeEl, filterOperatorsEl, columnSelections.filter1);
+  vsSetText(f && f.f2, searchQuery2El, filterMode2El, filterNegate2El, filterEmptyMode2El, filterOperators2El, columnSelections.filter2);
+  if (f && f.date) {
+    const d = f.date;
+    dateModeEl.value = d.mode || "between";
+    dateFromEl.value = d.from || "";
+    dateToEl.value = d.to || "";
+    lastDaysEl.value = d.days || "";
+    dateEmptyModeEl.value = d.empty || "all";
+    dateNegateEl.checked = !!d.neg;
+    const byKey = new Map(currentHeaders.map((h) => [normalizeHeaderKey(h), h]));
+    (d.cols || []).forEach((name) => {
+      const h = byKey.get(normalizeHeaderKey(name));
+      if (h !== undefined) columnSelections.date.add(h);
+    });
+  }
+  onlyNonEmptyEl.checked = !!(f && f.onlyData);
+  if (f && f.smart) {
+    smartFilterState = {
+      states: (f.smart.states || []).slice(),
+      rowFlags: (f.smart.rowFlags || []).slice(),
+      only: f.smart.only || "",
+      minDays: Number.isFinite(f.smart.minDays) ? f.smart.minDays : null,
+    };
+  }
+  if (f && f.validation) {
+    validationState.showOnly = true;
+    const cb = document.getElementById("validationShowOnly");
+    if (cb) cb.checked = true;
+  }
+  const byKey = new Map(currentHeaders.map((h) => [normalizeHeaderKey(h), h]));
+  multiSortState = (vs && Array.isArray(vs.sort) ? vs.sort : [])
+    .map((r) => ({ col: byKey.get(normalizeHeaderKey(r.col)), dir: r.dir === "desc" ? "desc" : "asc" }))
+    .filter((r) => r.col !== undefined);
+  normalizeSortState();
+
+  if (typeof setSecondFilterVisible === "function") setSecondFilterVisible(!!(f && f.f2));
+  syncQuickSearchInputs();
+  syncQuickSearchModeControls();
+  syncQuickSearchOperatorsControls();
+  updateColumnSummary();
+  updateDateChipsActive();
+  filtersCommitted = !!f;
+  applyFilters();
+  sortRows();
+  if (typeof updateSortControls === "function") updateSortControls();
+  if (typeof renderSmartFilterUi === "function") renderSmartFilterUi();
+  // Synchronicznie: wywołujący (spisywanie) od razu czyta nowy model widoku.
+  scheduleViewRefresh({ table: true, analyses: true, filterBadge: true, immediate: true });
+  return { ok: true, shown: viewRows.length };
+}
