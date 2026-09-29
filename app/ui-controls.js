@@ -1001,48 +1001,40 @@ async function loadSampleFile() {
   }
 }
 
-function escapeCsv(value) {
-  const raw = String(value ?? "");
-  if (raw.includes("\"") || raw.includes(",") || raw.includes("\n")) {
-    return `"${raw.replace(/\"/g, '""')}"`;
-  }
-  return raw;
-}
-
-function exportCsv() {
-  const model = currentDisplayModel || getDisplayModel();
-  if (!model.headers.length || !model.rows.length) {
-    toast(t("noDataForExport"), "warning");
-    return;
-  }
-  const rows = [
-    model.headers,
-    ...model.rows.map((row) => row.values.map((v, i) => getDisplayValue(row, i))),
-  ];
-  const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-  const base = currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : "excel-workbench";
-  const sheet = sheetSelect.value ? sheetSelect.value.replace(/\s+/g, "_") : "arkusz";
-  const suffix = model.mode === "long" ? "long" : "wide";
-  const filename = `${base}_${sheet}_${suffix}.csv`;
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  toast(t("csvExported"), "success");
-}
-
-// ── Eksport / Raport: wybór kolumn + CSV + Drukuj/PDF ──
+// ── Eksport: CSV / Excel (.xlsx) / PDF-druk ──
 // Działa na BIEŻĄCYM (przefiltrowanym, posortowanym) modelu widoku — eksportujesz to,
-// co widzisz. Wybór kolumn ogranicza wynik do zaznaczonych (po INDEKSIE, bo nagłówki
-// bywają puste/zduplikowane). Druk buduje czysty #printArea (tylko wybrane kolumny)
-// i woła window.print() → użytkownik zapisuje jako PDF systemowym dialogiem.
+// co widzisz; okno mówi to wprost (zakres + liczba wierszy). Wybór kolumn po INDEKSIE
+// (nagłówki bywają puste/zduplikowane).
+//  • CSV pod polskiego Excela: separator „;” (Excel w PL dzieli po średniku — z przecinkiem
+//    wszystko lądowało w jednej kolumnie) i BOM UTF-8 (bez niego „ą/ę/ś” to krzaki).
+//    Wartości = to, co widać w tabeli (także polski przecinek dziesiętny).
+//  • Excel: liczby i daty jako prawdziwe liczby/daty, autofiltr, szerokości kolumn,
+//    arkusz „Info” z opisem zakresu.
+//  • PDF / druk: ten sam podgląd stron co Raport (marginesy, orientacja, „Pobierz PDF”).
 const exportModalEl = document.getElementById("exportModal");
 const exportColumnListEl = document.getElementById("exportColumnList");
+const EXPORT_PREFS_KEY = "swb-export-prefs";
+const EXPORT_FORMATS = ["csv", "xlsx", "pdf"];
+const EXPORT_SEPARATORS = { semicolon: ";", comma: ",", tab: "\t" };
+
+function loadExportPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(EXPORT_PREFS_KEY) || "{}");
+    return {
+      format: EXPORT_FORMATS.includes(p.format) ? p.format : "csv",
+      sep: p.sep === "auto" || EXPORT_SEPARATORS[p.sep] ? p.sep : "auto",
+      bom: p.bom !== false,
+    };
+  } catch {
+    return { format: "csv", sep: "auto", bom: true };
+  }
+}
+
+function saveExportPrefs(prefs) {
+  try { localStorage.setItem(EXPORT_PREFS_KEY, JSON.stringify(prefs)); } catch { /* bez pamięci */ }
+}
+
+let exportPrefs = loadExportPrefs();
 
 function exportModelOrNull() {
   const model = currentDisplayModel || getDisplayModel();
@@ -1065,89 +1057,183 @@ function getSelectedExportCols() {
     .map((cb) => Number(cb.value));
 }
 
+function exportSeparator() {
+  if (exportPrefs.sep === "auto") return currentLang === "pl" ? ";" : ",";
+  return EXPORT_SEPARATORS[exportPrefs.sep] || ";";
+}
+
+// Cudzysłów, gdy wartość zawiera separator, cudzysłów, nową linię albo spacje na brzegach
+// (Excel inaczej by je zjadł).
+function escapeCsvField(value, sep) {
+  const raw = String(value ?? "");
+  if (raw.includes(sep) || /["\r\n]/.test(raw) || raw !== raw.trim()) {
+    return `"${raw.replace(/"/g, '""')}"`;
+  }
+  return raw;
+}
+
+function exportBaseName(model) {
+  const base = currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : "excel-workbench";
+  const sheet = sheetSelect.value ? sheetSelect.value.replace(/\s+/g, "_") : "arkusz";
+  return `${base}_${sheet}${model.mode === "long" ? "_long" : ""}`;
+}
+
+function deliverExportFile(blob, name) {
+  if (typeof rpDeliverFile === "function") return rpDeliverFile(blob, name);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return Promise.resolve("downloaded");
+}
+
 function runCsvExport(cols) {
   const model = exportModelOrNull();
   if (!model) return;
   const useCols = cols && cols.length ? cols : model.headers.map((_, i) => i);
-  const rows = [
-    useCols.map((ci) => exportColLabel(model.headers[ci], ci)),
-    ...model.rows.map((row) => useCols.map((ci) => getDisplayValue(row, ci))),
+  const sep = exportSeparator();
+  const lines = [
+    useCols.map((ci) => escapeCsvField(exportColLabel(model.headers[ci], ci), sep)).join(sep),
+    ...model.rows.map((row) => useCols.map((ci) => escapeCsvField(getDisplayValue(row, ci), sep)).join(sep)),
   ];
-  const csv = rows.map((row) => row.map(escapeCsv).join(",")).join("\n");
-  const base = currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : "excel-workbench";
-  const sheet = sheetSelect.value ? sheetSelect.value.replace(/\s+/g, "_") : "arkusz";
-  const suffix = model.mode === "long" ? "long" : "wide";
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${base}_${sheet}_${suffix}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  toast(t("csvExported"), "success");
+  // \r\n — Excel na Windows; BOM — Excel rozpoznaje UTF-8 (polskie znaki).
+  const csv = (exportPrefs.bom ? "﻿" : "") + lines.join("\r\n") + "\r\n";
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  deliverExportFile(blob, `${exportBaseName(model)}.csv`).then((how) => {
+    if (how !== "aborted") toast(t("exportCsvDone", { rows: model.rows.length, cols: useCols.length }), "success");
+  });
 }
 
-// Kontener druku jest BEZPOŚREDNIM dzieckiem <body>, żeby @media print mógł ukryć
-// całą resztę przez `body > *:not(#printArea)`.
-function ensurePrintArea() {
-  let area = document.getElementById("printArea");
-  if (!area) {
-    area = document.createElement("div");
-    area.id = "printArea";
-    area.setAttribute("aria-hidden", "true");
-    document.body.appendChild(area);
+const EXPORT_DATE_TEXT_RE = /^\d{1,4}[-./]\d{1,2}[-./]\d{1,4}/;
+
+// Wartość do komórki Excela: liczba zostaje liczbą, data datą (numer seryjny + format),
+// reszta = tekst taki, jak w tabeli. Liczba wyświetlana jako data (np. seryjny z Excela)
+// wraca jako data, nie jako „46023”.
+function exportXlsxCell(row, ci) {
+  const raw = row.values ? row.values[ci] : undefined;
+  const shown = String(getDisplayValue(row, ci) ?? "");
+  const toSerial = (d) => (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds()) - Date.UTC(1899, 11, 30)) / 86400000;
+  if (raw instanceof Date && !Number.isNaN(raw.getTime())) return { t: "n", v: toSerial(raw), z: "yyyy-mm-dd" };
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    if (EXPORT_DATE_TEXT_RE.test(shown.trim())) {
+      const d = parseDateFlexible(raw);
+      if (d instanceof Date) return { t: "n", v: toSerial(d), z: "yyyy-mm-dd" };
+    }
+    return { t: "n", v: raw };
   }
-  return area;
+  if (!shown) return null;
+  return { t: "s", v: shown };
 }
 
-function runPrintExport(cols) {
+async function runXlsxExport(cols) {
   const model = exportModelOrNull();
   if (!model) return;
+  const ok = await ensureXlsxLibs(true).then(() => true, () => false);
+  if (!ok || typeof XLSX === "undefined") {
+    toast(t("exportXlsxFailed"), "error");
+    return;
+  }
   const useCols = cols && cols.length ? cols : model.headers.map((_, i) => i);
-  const area = ensurePrintArea();
-  area.replaceChildren();
+  const ws = {};
+  const widths = useCols.map(() => 8);
+  const put = (r, c, cell) => {
+    if (!cell) return;
+    ws[XLSX.utils.encode_cell({ r, c })] = cell;
+    const len = cell.t === "s" ? String(cell.v).length : (cell.z ? 10 : String(cell.v).length);
+    widths[c] = Math.min(60, Math.max(widths[c], len + 2));
+  };
+  useCols.forEach((ci, c) => put(0, c, { t: "s", v: exportColLabel(model.headers[ci], ci) }));
+  model.rows.forEach((row, r) => useCols.forEach((ci, c) => put(r + 1, c, exportXlsxCell(row, ci))));
+  const range = { s: { r: 0, c: 0 }, e: { r: model.rows.length, c: Math.max(0, useCols.length - 1) } };
+  ws["!ref"] = XLSX.utils.encode_range(range);
+  ws["!autofilter"] = { ref: ws["!ref"] };
+  ws["!cols"] = widths.map((wch) => ({ wch }));
 
-  const title = document.createElement("h1");
-  title.className = "print-title";
-  title.textContent = currentFileName || t("exportReportTitle");
-  const meta = document.createElement("div");
-  meta.className = "print-meta";
-  const locale = (I18N[currentLang] && I18N[currentLang].locale) || "pl-PL";
-  const dateStr = new Date().toLocaleString(locale);
-  const sheetName = sheetSelect.value || "";
-  meta.textContent = `${sheetName ? sheetName + " · " : ""}${dateStr} · ${t("exportRowsMeta", { count: model.rows.length })}`;
+  // Arkusz „Info” — po tygodniu z pliku nie wynika, że to był tylko wycinek.
+  const view = typeof captureViewState === "function" ? captureViewState() : null;
+  const info = XLSX.utils.aoa_to_sheet([
+    [t("exportInfoFile"), currentFileName || ""],
+    [t("exportInfoSheet"), sheetSelect.value || ""],
+    [t("exportInfoScope"), view && typeof describeViewState === "function" ? describeViewState(view) : ""],
+    [t("exportInfoRows"), model.rows.length],
+    [t("exportInfoDate"), new Date().toLocaleString(I18N[currentLang]?.locale || "pl-PL")],
+  ]);
+  info["!cols"] = [{ wch: 18 }, { wch: 70 }];
 
-  const table = document.createElement("table");
-  table.className = "print-table";
-  const thead = document.createElement("thead");
-  const htr = document.createElement("tr");
-  useCols.forEach((ci) => {
-    const th = document.createElement("th");
-    th.textContent = exportColLabel(model.headers[ci], ci);
-    htr.appendChild(th);
+  const wb = XLSX.utils.book_new();
+  const sheetName = String(sheetSelect.value || "Dane").replace(/[[\]:*?/\\]/g, " ").slice(0, 31) || "Dane";
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.utils.book_append_sheet(wb, info, sheetName === "Info" ? "Info (eksport)" : "Info");
+  const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const how = await deliverExportFile(blob, `${exportBaseName(model)}.xlsx`);
+  if (how !== "aborted") toast(t("exportXlsxDone", { rows: model.rows.length, cols: useCols.length }), "success");
+}
+
+function runPdfExport(cols) {
+  if (typeof openReportTable === "function") openReportTable({ cols });
+}
+
+// ── Okno ──
+
+function renderExportScope(model) {
+  const el = document.getElementById("exportScope");
+  if (!el) return;
+  const view = typeof captureViewState === "function" ? captureViewState() : null;
+  const filtering = !!(lastAppliedFilters && lastAppliedFilters.filtering);
+  const loc = I18N[currentLang]?.locale || "pl-PL";
+  const n = (x) => Number(x).toLocaleString(loc);
+  el.textContent = filtering
+    ? t("exportScopeFiltered", { view: view ? describeViewState(view) : "", rows: n(model.rows.length), total: n(baseRows.length) })
+    : t("exportScopeAll", { rows: n(model.rows.length) });
+  el.classList.toggle("is-filtered", filtering);
+}
+
+function syncExportFormatUi() {
+  document.querySelectorAll("#exportFormats [data-format]").forEach((btn) => {
+    btn.setAttribute("aria-checked", btn.dataset.format === exportPrefs.format ? "true" : "false");
+    btn.tabIndex = btn.dataset.format === exportPrefs.format ? 0 : -1;
   });
-  thead.appendChild(htr);
-  table.appendChild(thead);
-  const tbody = document.createElement("tbody");
-  model.rows.forEach((row) => {
-    const tr = document.createElement("tr");
-    useCols.forEach((ci) => {
-      const td = document.createElement("td");
-      td.textContent = String(getDisplayValue(row, ci) ?? "");
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
+  const csvOpts = document.getElementById("exportCsvOptions");
+  if (csvOpts) csvOpts.classList.toggle("hidden", exportPrefs.format !== "csv");
+  const sepEl = document.getElementById("exportCsvSep");
+  if (sepEl) {
+    sepEl.value = exportPrefs.sep;
+    const autoOpt = sepEl.querySelector('option[value="auto"]');
+    if (autoOpt) autoOpt.textContent = t("exportSepAuto", { sep: exportSeparator() === ";" ? ";" : "," });
+  }
+  const bomEl = document.getElementById("exportCsvBom");
+  if (bomEl) bomEl.checked = exportPrefs.bom;
+  const run = document.getElementById("exportRunAction");
+  if (run) run.textContent = t(exportPrefs.format === "csv" ? "exportRunCsv" : exportPrefs.format === "xlsx" ? "exportRunXlsx" : "exportRunPdf");
+}
+
+function updateExportColCount() {
+  const el = document.getElementById("exportColCount");
+  if (!el || !exportColumnListEl) return;
+  const all = exportColumnListEl.querySelectorAll("input[type=checkbox]").length;
+  const on = getSelectedExportCols().length;
+  el.textContent = t("exportColCount", { on, all });
+  el.classList.toggle("is-empty", on === 0);
+  const run = document.getElementById("exportRunAction");
+  if (run) run.disabled = on === 0;
+}
+
+function filterExportColumns() {
+  const q = String(document.getElementById("exportColSearch")?.value || "").trim().toLowerCase();
+  exportColumnListEl.querySelectorAll(".field").forEach((row) => {
+    row.classList.toggle("hidden", !!q && !row.textContent.toLowerCase().includes(q));
   });
-  table.appendChild(tbody);
-  area.append(title, meta, table);
-  window.print();
 }
 
 function openExportModal() {
   const model = exportModelOrNull();
   if (!model || !exportModalEl || !exportColumnListEl) return;
+  exportPrefs = loadExportPrefs();
   exportColumnListEl.replaceChildren();
   model.headers.forEach((h, idx) => {
     const row = document.createElement("div");
@@ -1164,10 +1250,29 @@ function openExportModal() {
     row.appendChild(label);
     exportColumnListEl.appendChild(row);
   });
+  const search = document.getElementById("exportColSearch");
+  if (search) {
+    search.value = "";
+    // Szukajka tylko przy wielu kolumnach — przy kilku zajmowałaby miejsce bez pożytku.
+    search.classList.toggle("hidden", model.headers.length <= 10);
+  }
+  renderExportScope(model);
+  syncExportFormatUi();
+  updateExportColCount();
   ensureKeyboardReachable(exportColumnListEl);
   exportModalEl.classList.remove("hidden");
-  const firstFocusable = getExportModalFocusables()[0];
-  if (firstFocusable) firstFocusable.focus();
+  const current = exportModalEl.querySelector('#exportFormats [aria-checked="true"]');
+  (current || getExportModalFocusables()[0])?.focus();
+}
+
+function runExportAction() {
+  const cols = getSelectedExportCols();
+  if (!cols.length) { toast(t("exportNoColumns"), "warning"); return; }
+  saveExportPrefs(exportPrefs);
+  closeExportModal();
+  if (exportPrefs.format === "xlsx") runXlsxExport(cols);
+  else if (exportPrefs.format === "pdf") runPdfExport(cols);
+  else runCsvExport(cols);
 }
 
 function closeExportModal() {
@@ -1177,7 +1282,8 @@ function closeExportModal() {
 function getExportModalFocusables() {
   const modalContent = exportModalEl.querySelector(".modal-content");
   if (!modalContent) return [];
-  return Array.from(modalContent.querySelectorAll("button, input:not([type=hidden]), [tabindex]:not([tabindex^='-'])"));
+  return Array.from(modalContent.querySelectorAll("button:not([tabindex^='-']):not([disabled]), input:not([type=hidden]), select, [tabindex]:not([tabindex^='-'])"))
+    .filter((el) => !el.closest(".hidden"));
 }
 
 function handleExportModalKeydown(e) {
@@ -1730,7 +1836,8 @@ function closeSaveAsModal(result) {
 function getSaveAsModalFocusables() {
   const modalContent = saveAsModalEl.querySelector(".modal-content");
   if (!modalContent) return [];
-  return Array.from(modalContent.querySelectorAll("button, input:not([type=hidden]), [tabindex]:not([tabindex^='-'])"));
+  return Array.from(modalContent.querySelectorAll("button:not([tabindex^='-']):not([disabled]), input:not([type=hidden]), select, [tabindex]:not([tabindex^='-'])"))
+    .filter((el) => !el.closest(".hidden"));
 }
 
 function handleSaveAsModalKeydown(e) {
@@ -3286,29 +3393,45 @@ columnSearchEl.addEventListener("input", filterColumnList);
 
 exportCsvBtn.addEventListener("click", openExportModal);
 if (exportModalEl) {
-  const exportCsvActionEl = document.getElementById("exportCsvAction");
-  const exportPrintActionEl = document.getElementById("exportPrintAction");
   const exportSelectAllEl = document.getElementById("exportSelectAll");
   const exportClearAllEl = document.getElementById("exportClearAll");
   const closeExportEl = document.getElementById("closeExport");
+  // Przy aktywnej szukajce „zaznacz/wyczyść” działa na WIDOCZNE kolumny.
   const setAllExportCols = (checked) => {
-    exportColumnListEl.querySelectorAll("input[type=checkbox]").forEach((cb) => { cb.checked = checked; });
+    exportColumnListEl.querySelectorAll(".field:not(.hidden) input[type=checkbox]").forEach((cb) => { cb.checked = checked; });
+    updateExportColCount();
   };
   if (exportSelectAllEl) exportSelectAllEl.addEventListener("click", () => setAllExportCols(true));
   if (exportClearAllEl) exportClearAllEl.addEventListener("click", () => setAllExportCols(false));
   if (closeExportEl) closeExportEl.addEventListener("click", closeExportModal);
-  if (exportCsvActionEl) exportCsvActionEl.addEventListener("click", () => {
-    const cols = getSelectedExportCols();
-    if (!cols.length) { toast(t("exportNoColumns"), "warning"); return; }
-    closeExportModal();
-    runCsvExport(cols);
+  document.getElementById("exportCancel")?.addEventListener("click", closeExportModal);
+  document.getElementById("exportRunAction")?.addEventListener("click", runExportAction);
+  exportColumnListEl.addEventListener("change", updateExportColCount);
+  document.getElementById("exportColSearch")?.addEventListener("input", filterExportColumns);
+  const formatsEl = document.getElementById("exportFormats");
+  if (formatsEl) {
+    formatsEl.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-format]");
+      if (!btn || !EXPORT_FORMATS.includes(btn.dataset.format)) return;
+      exportPrefs.format = btn.dataset.format;
+      syncExportFormatUi();
+    });
+    // Strzałki jak w zwykłej grupie radio.
+    formatsEl.addEventListener("keydown", (e) => {
+      if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp"].includes(e.key)) return;
+      e.preventDefault();
+      const i = EXPORT_FORMATS.indexOf(exportPrefs.format);
+      const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : -1;
+      exportPrefs.format = EXPORT_FORMATS[(i + step + EXPORT_FORMATS.length) % EXPORT_FORMATS.length];
+      syncExportFormatUi();
+      formatsEl.querySelector(`[data-format="${exportPrefs.format}"]`)?.focus();
+    });
+  }
+  document.getElementById("exportCsvSep")?.addEventListener("change", (e) => {
+    exportPrefs.sep = e.target.value === "auto" || EXPORT_SEPARATORS[e.target.value] ? e.target.value : "auto";
+    syncExportFormatUi();
   });
-  if (exportPrintActionEl) exportPrintActionEl.addEventListener("click", () => {
-    const cols = getSelectedExportCols();
-    if (!cols.length) { toast(t("exportNoColumns"), "warning"); return; }
-    closeExportModal();
-    runPrintExport(cols);
-  });
+  document.getElementById("exportCsvBom")?.addEventListener("change", (e) => { exportPrefs.bom = !!e.target.checked; });
   exportModalEl.addEventListener("click", (e) => { if (e.target === exportModalEl) closeExportModal(); });
   exportModalEl.addEventListener("keydown", handleExportModalKeydown);
 }

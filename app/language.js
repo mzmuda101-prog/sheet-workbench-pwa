@@ -104,7 +104,35 @@ const I18N = {
     exportColumnFallback: "(kolumna {n})",
     exportReportTitle: "Raport",
     exportRowsMeta: "{count} wierszy",
-    exportModalTitle: "Eksport / Raport",
+    exportModalTitle: "Eksport",
+    exportScopeFiltered: "Eksportujesz bieżący widok: {view} — {rows} z {total} wierszy.",
+    exportScopeAll: "Eksportujesz cały arkusz: {rows} wierszy.",
+    exportFmtCsvName: "CSV",
+    exportFmtCsvDesc: "do Excela i innych programów",
+    exportFmtXlsxName: "Excel (.xlsx)",
+    exportFmtXlsxDesc: "liczby i daty jako liczby, filtr w nagłówku",
+    exportFmtPdfName: "PDF / druk",
+    exportFmtPdfDesc: "podgląd stron, marginesy, pobierz lub drukuj",
+    exportCsvSepLabel: "Separator",
+    exportSepAuto: "Automatyczny ({sep})",
+    exportSepSemicolon: "Średnik ;",
+    exportSepComma: "Przecinek ,",
+    exportSepTab: "Tabulator",
+    exportCsvBomLabel: "Polskie znaki w Excelu (UTF-8 z BOM)",
+    exportColSearch: "Szukaj kolumny…",
+    exportColCount: "Kolumny: {on} z {all}",
+    exportCancel: "Anuluj",
+    exportRunCsv: "Pobierz CSV",
+    exportRunXlsx: "Pobierz Excel",
+    exportRunPdf: "Podgląd wydruku / PDF",
+    exportCsvDone: "Gotowe: CSV — {rows} wierszy, {cols} kolumn",
+    exportXlsxDone: "Gotowe: Excel — {rows} wierszy, {cols} kolumn",
+    exportXlsxFailed: "Nie udało się przygotować pliku Excel (biblioteka się nie wczytała). Spróbuj CSV.",
+    exportInfoFile: "Plik",
+    exportInfoSheet: "Arkusz",
+    exportInfoScope: "Zakres",
+    exportInfoRows: "Wierszy",
+    exportInfoDate: "Wyeksportowano",
     exportModalSub: "Wybierz kolumny do eksportu (bieżący, przefiltrowany widok)",
     exportSelectAll: "Zaznacz wszystko",
     exportClearAll: "Wyczyść",
@@ -256,6 +284,17 @@ const I18N = {
     rpHeading: "Raport",
     rpStyleLabel: "Styl",
     rpMarginLabel: "Marginesy",
+    rpOrientLabel: "Strona",
+    rpLookBtn: "Wygląd",
+    rpOrientPortrait: "Pionowa",
+    rpOrientLandscape: "Pozioma",
+    rpPdfBtn: "Pobierz PDF",
+    rpPdfLoading: "Przygotowuję PDF…",
+    rpPdfProgress: "Tworzę PDF… strona {n} z {all}",
+    rpPdfDone: "Gotowe: {name} ({n} str.)",
+    rpPdfFailed: "Nie udało się utworzyć PDF. Użyj „Drukuj / PDF” → „Zapisz jako PDF”.",
+    rpTableTitleDefault: "Tabela — {name}",
+    rpTableModeCut: "Pokazano {shown} z {all} wierszy — całość daje eksport CSV lub Excel.",
     rpMarginNarrow: "Wąskie",
     rpMarginNormal: "Normalne",
     rpMarginWide: "Szerokie",
@@ -1008,7 +1047,35 @@ const I18N = {
     exportColumnFallback: "(column {n})",
     exportReportTitle: "Report",
     exportRowsMeta: "{count} rows",
-    exportModalTitle: "Export / Report",
+    exportModalTitle: "Export",
+    exportScopeFiltered: "Exporting the current view: {view} — {rows} of {total} rows.",
+    exportScopeAll: "Exporting the whole sheet: {rows} rows.",
+    exportFmtCsvName: "CSV",
+    exportFmtCsvDesc: "for Excel and other apps",
+    exportFmtXlsxName: "Excel (.xlsx)",
+    exportFmtXlsxDesc: "numbers and dates as numbers, filter in header",
+    exportFmtPdfName: "PDF / print",
+    exportFmtPdfDesc: "page preview, margins, download or print",
+    exportCsvSepLabel: "Separator",
+    exportSepAuto: "Automatic ({sep})",
+    exportSepSemicolon: "Semicolon ;",
+    exportSepComma: "Comma ,",
+    exportSepTab: "Tab",
+    exportCsvBomLabel: "Special characters in Excel (UTF-8 with BOM)",
+    exportColSearch: "Search columns…",
+    exportColCount: "Columns: {on} of {all}",
+    exportCancel: "Cancel",
+    exportRunCsv: "Download CSV",
+    exportRunXlsx: "Download Excel",
+    exportRunPdf: "Print preview / PDF",
+    exportCsvDone: "Done: CSV — {rows} rows, {cols} columns",
+    exportXlsxDone: "Done: Excel — {rows} rows, {cols} columns",
+    exportXlsxFailed: "Could not prepare the Excel file (library failed to load). Try CSV.",
+    exportInfoFile: "File",
+    exportInfoSheet: "Sheet",
+    exportInfoScope: "Scope",
+    exportInfoRows: "Rows",
+    exportInfoDate: "Exported",
     exportModalSub: "Choose columns to export (current, filtered view)",
     exportSelectAll: "Select all",
     exportClearAll: "Clear",
@@ -1160,6 +1227,17 @@ const I18N = {
     rpHeading: "Report",
     rpStyleLabel: "Style",
     rpMarginLabel: "Margins",
+    rpOrientLabel: "Page",
+    rpLookBtn: "Look",
+    rpOrientPortrait: "Portrait",
+    rpOrientLandscape: "Landscape",
+    rpPdfBtn: "Download PDF",
+    rpPdfLoading: "Preparing PDF…",
+    rpPdfProgress: "Creating PDF… page {n} of {all}",
+    rpPdfDone: "Done: {name} ({n} pp.)",
+    rpPdfFailed: "Could not create the PDF. Use “Print / PDF” → “Save as PDF”.",
+    rpTableTitleDefault: "Table — {name}",
+    rpTableModeCut: "Showing {shown} of {all} rows — use CSV or Excel export for everything.",
     rpMarginNarrow: "Narrow",
     rpMarginNormal: "Normal",
     rpMarginWide: "Wide",
@@ -2907,11 +2985,20 @@ function applyStaticTranslations() {
   setAttr("#quickSearch", "placeholder", (typeof matchMedia === "function" && matchMedia("(max-width: 768px)").matches) ? copy.quickSearchPlaceholderShort : copy.quickSearchPlaceholder);
   setText("#exportCsvBtn", copy.exportCsv);
   setText("#exportModalTitle", t("exportModalTitle"));
-  setText("#exportModalSub", t("exportModalSub"));
   setText("#exportSelectAll", t("exportSelectAll"));
   setText("#exportClearAll", t("exportClearAll"));
-  setText("#exportCsvAction", t("exportActionCsv"));
-  setText("#exportPrintAction", t("exportActionPrint"));
+  ["Csv", "Xlsx", "Pdf"].forEach((f) => {
+    setText(`#exportFmt${f}Name`, t(`exportFmt${f}Name`));
+    setText(`#exportFmt${f}Desc`, t(`exportFmt${f}Desc`));
+  });
+  setText("#exportCsvSepLabel", t("exportCsvSepLabel"));
+  setText('#exportCsvSep option[value="semicolon"]', t("exportSepSemicolon"));
+  setText('#exportCsvSep option[value="comma"]', t("exportSepComma"));
+  setText('#exportCsvSep option[value="tab"]', t("exportSepTab"));
+  setText("#exportCsvBomLabel", t("exportCsvBomLabel"));
+  setText("#exportCancel", t("exportCancel"));
+  document.getElementById("exportColSearch")?.setAttribute("placeholder", t("exportColSearch"));
+  if (typeof syncExportFormatUi === "function" && typeof exportPrefs !== "undefined") syncExportFormatUi();
   setText("#transcribeBtn", t("trBtn"));
   setText("#reportBtn", t("rpBtn"));
   setText("#rpHeading", t("rpHeading"));
@@ -2923,6 +3010,11 @@ function applyStaticTranslations() {
   document.getElementById("rpPresets")?.setAttribute("aria-label", t("rpPresetsAria"));
   setText("#rpStyleLabel", t("rpStyleLabel"));
   setText("#rpMarginLabel", t("rpMarginLabel"));
+  setText("#rpOrientLabel", t("rpOrientLabel"));
+  setText("#rpLookBtn", t("rpLookBtn"));
+  setText('#rpOrient option[value="portrait"]', t("rpOrientPortrait"));
+  setText('#rpOrient option[value="landscape"]', t("rpOrientLandscape"));
+  setText("#rpPdfBtn", t("rpPdfBtn"));
   setText('#rpMargin option[value="narrow"]', t("rpMarginNarrow"));
   setText('#rpMargin option[value="normal"]', t("rpMarginNormal"));
   setText('#rpMargin option[value="wide"]', t("rpMarginWide"));

@@ -182,6 +182,29 @@ async function run() {
     check(`druk ${preset}/${size}: przekładki podglądu niewidoczne`, spacers.length === 0, spacers);
   }
 
+  // ── Tryb tabeli (Eksport → PDF/druk), strona pozioma ─────────────────────
+  await page.evaluate(() => { window.__report.close(); window.__report.openTable({ cols: [0, 1, 2, 3, 4, 5] }); });
+  await sleep(250);
+  await page.selectOption("#rpOrient", "landscape");
+  await sleep(150);
+  const tm = await page.evaluate(() => ({
+    orient: document.getElementById("rpPage").dataset.orient,
+    width: getComputedStyle(document.getElementById("rpPage")).width,
+    bad: window.__report.marginViolations().length,
+    pages: window.__report.pageCount(),
+  }));
+  check("tabela poziomo: kartka 297 mm, marginesy OK", tm.orient === "landscape" && Math.abs(parseFloat(tm.width) - 1122.5) < 2 && tm.bad === 0, tm);
+  await page.evaluate(() => document.body.classList.add("rp-printing"));
+  await page.emulateMedia({ media: "print" });
+  const tpdf = await page.pdf({ preferCSSPageSize: true });
+  await page.emulateMedia({ media: "screen" });
+  await page.evaluate(() => document.body.classList.remove("rp-printing"));
+  const treal = (tpdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
+  const landscapeMedia = /\/MediaBox\s*\[0 0 84\d\.\d+ 59\d\.\d+\]/.test(tpdf.toString("latin1"));
+  check(`tabela poziomo: strony ${tm.pages} = PDF ${treal}, A4 poziomo`, treal === tm.pages && landscapeMedia, { treal, landscapeMedia });
+  const dl = await page.evaluate(async () => { const r = await window.__report.downloadPdf({ deliver: false }); return r && { pages: r.pages, head: await r.blob.slice(0, 5).text() }; });
+  check("„Pobierz PDF”: tyle stron co podgląd", dl && dl.pages === tm.pages && dl.head === "%PDF-", dl);
+
   check("brak błędów w konsoli", errors.length === 0, errors);
   await browser.close();
   const failed = results.filter((r) => !r.ok);

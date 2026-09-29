@@ -5529,6 +5529,40 @@ html.low-power .loading-overlay.is-file {
 
 /* ── Eksport / Raport ── */
 .export-sub { font-size: 12.5px; opacity: 0.75; margin: 0 0 8px; }
+/* Zakres eksportu — przefiltrowany = bursztyn (jak filtry w apce). */
+.export-scope { font-size: 12.5px; line-height: 1.45; padding: 8px 10px; border-radius: var(--r-md, 10px); background: var(--surface); border: 1px solid var(--border-subtle); margin: 0 0 10px; }
+.export-scope.is-filtered { background: var(--warning-bg); border-color: color-mix(in srgb, var(--warning) 35%, var(--border)); }
+.export-formats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+.export-format {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+  padding: 8px 10px; border-radius: var(--r-md, 10px); border: 1px solid var(--border);
+  background: transparent; color: var(--ink); font: inherit; cursor: pointer; min-width: 0;
+}
+.export-format[aria-checked="true"] { border-color: var(--accent); background: var(--accent-light); box-shadow: inset 0 0 0 1px var(--accent); }
+.export-format-name { font-weight: 700; font-size: 13px; }
+.export-format-desc { font-size: 11.5px; color: var(--muted-strong); line-height: 1.3; }
+.export-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 10px; font-size: 12.5px; }
+.export-options.hidden { display: none; }
+.export-opt { display: inline-flex; align-items: center; gap: 6px; }
+.export-opt select { font: inherit; }
+.export-opt-check input { width: 16px; height: 16px; accent-color: var(--accent); }
+.export-cols-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 6px; }
+.export-cols-count { font-size: 12.5px; font-weight: 600; margin-right: auto; }
+.export-cols-count.is-empty { color: var(--warning); }
+.export-cols-search { flex: 1 1 160px; min-width: 0; font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--ink); }
+.export-cols-search.hidden { display: none; }
+#exportColumnList .field.hidden { display: none; }
+/* Nowe bloki okna mają ten sam odstęp od krawędzi co tytuł i lista (16 px). */
+.export-scope, .export-formats, .export-options, .export-cols-head { margin-left: 16px; margin-right: 16px; }
+.export-scope { margin-top: 10px; }
+/* Nazwy kolumn pełnym kolorem — szare (.field = muted) wyglądały na wyłączone. */
+#exportColumnList .field.checkbox { color: var(--ink); font-size: 13px; }
+/* Telefon: trzy formaty w jednym rzędzie, bez opisów — lista kolumn ma zostać widoczna. */
+@media (max-width: 520px) {
+  .export-formats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .export-format { align-items: center; text-align: center; padding: 9px 6px; }
+  .export-format-desc { display: none; }
+}
 
 /* Druk / PDF — czysty raport tabeli. #printArea jest bezpośrednim dzieckiem <body>,
    więc w druku chowamy całą resztę i pokazujemy tylko jego. */
@@ -7169,6 +7203,18 @@ body.rp-active { overflow: hidden; }
 .rp-fit { font-size: 12px; color: var(--muted-strong); }
 .rp-fit.is-warn { color: var(--warning); }
 .rp-toolbar-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+/* Opcje wyglądu (styl, marginesy, kolor, strona, A) — na telefonie schowane za „Wygląd”,
+   inaczej pasek zajmował 3 rzędy nad kartką. */
+.rp-look { display: contents; }
+.rp-look-btn { display: none; }
+@media (max-width: 640px) {
+  .rp-look-btn { display: inline-flex; }
+  .rp-look { display: none; }
+  .rp-overlay.look-open .rp-look {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    order: 10; flex-basis: 100%; justify-content: flex-end;
+  }
+}
 .rp-field { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted-strong); }
 .rp-field select { font: inherit; color: var(--ink); }
 
@@ -7234,12 +7280,14 @@ body.rp-active { overflow: hidden; }
   --rp-ink: #1b1d1a;
   --rp-muted: #5c625a;
   --rp-line: #d9d6cc;
-  --rp-tint: color-mix(in srgb, var(--rp-accent) 9%, #fff);
+  /* --rp-tint / --rp-accent-soft / --rp-accent-ring wylicza JS (rpRender) jako zwykłe rgb():
+     html2canvas („Pobierz PDF”) nie obsługuje color-mix() i przerywa render. */
+  --rp-tint: #ecf3f0;
   --rp-base: 10.5pt;
   position: absolute;
   top: 0;
   left: 0;
-  width: 210mm;
+  width: var(--rp-pw, 210mm); /* 297 mm w orientacji poziomej */
   min-height: 297mm; /* JS (rpPaginate) ustawia wielokrotność stron A4 */
   box-sizing: border-box;
   /* Góra = margines strony 1 (w druku robi go @page), boki = margines boczny. Z opcji „Marginesy”. */
@@ -7271,8 +7319,8 @@ body.rp-active { overflow: hidden; }
   outline: none;
   border-radius: 4px;
 }
-.rp-title:hover { background: color-mix(in srgb, var(--rp-accent) 6%, transparent); }
-.rp-title:focus { background: color-mix(in srgb, var(--rp-accent) 10%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--rp-accent) 40%, transparent); }
+.rp-title:hover { background: var(--rp-accent-soft, rgba(47, 111, 92, 0.06)); }
+.rp-title:focus { background: var(--rp-accent-soft, rgba(47, 111, 92, 0.1)); box-shadow: 0 0 0 2px var(--rp-accent-ring, rgba(47, 111, 92, 0.4)); }
 .rp-meta { font-size: 0.85em; color: var(--rp-muted); }
 
 .rp-scope {
@@ -7393,6 +7441,7 @@ body.rp-active { overflow: hidden; }
   font-family: var(--font);
 }
 
+.rp-foot.is-dropped { display: none; }
 .rp-foot { padding-top: 3mm; border-top: 1px solid var(--rp-line); font-size: 0.75em; color: var(--rp-muted); }
 
 /* ── Styl: Klasyczny — szeryfowy, linie zamiast wypełnień ── */
@@ -7426,6 +7475,9 @@ body.rp-active { overflow: hidden; }
 @page rpA4-narrow { size: A4; margin: 12.7mm 0; }
 @page rpA4-normal { size: A4; margin: 20mm 0; }
 @page rpA4-wide { size: A4; margin: 25.4mm 0; }
+@page rpA4-narrow-l { size: A4 landscape; margin: 12.7mm 0; }
+@page rpA4-normal-l { size: A4 landscape; margin: 20mm 0; }
+@page rpA4-wide-l { size: A4 landscape; margin: 25.4mm 0; }
 @media print {
   body.rp-printing > *:not(#reportOverlay) { display: none !important; }
   body.rp-printing { overflow: visible !important; background: #fff !important; }
@@ -7443,7 +7495,7 @@ body.rp-active { overflow: hidden; }
     position: static !important;
     transform: none !important;
     box-shadow: none !important;
-    width: 210mm;
+    width: var(--rp-pw, 210mm);
     min-height: 0 !important; /* podgląd ustawia wysokość pełnych stron inline — w druku zbędna (dodałaby pustą stronę) */
     /* góra/dół robi margines strony (powtarza się na każdej), boki — padding kartki */
     padding-top: 0;
@@ -7455,6 +7507,9 @@ body.rp-active { overflow: hidden; }
   body.rp-printing .rp-sheet-band { display: none !important; }
   body.rp-printing .rp-page[data-margin="narrow"] { page: rpA4-narrow; }
   body.rp-printing .rp-page[data-margin="wide"] { page: rpA4-wide; }
+  body.rp-printing .rp-page[data-orient="landscape"] { page: rpA4-normal-l; }
+  body.rp-printing .rp-page[data-orient="landscape"][data-margin="narrow"] { page: rpA4-narrow-l; }
+  body.rp-printing .rp-page[data-orient="landscape"][data-margin="wide"] { page: rpA4-wide-l; }
   body.rp-printing .rp-title:hover,
   body.rp-printing .rp-title:focus { background: none; box-shadow: none; }
 }

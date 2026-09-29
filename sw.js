@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260929-05";
+const CACHE_VERSION = "20260929-06";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -57,6 +57,7 @@ const SHELL_ASSETS = [
 const HEAVY_ASSETS = [
   "./lib/xlsx.full.min.js",
   "./lib/jszip.min.js",
+  "./lib/html2canvas.min.js", // „Pobierz PDF” w raporcie — ma działać offline
   "./assets/media/mateusz-intro.mp4",
 ];
 
@@ -65,7 +66,7 @@ function isStaticAsset(url) {
 }
 
 function isHeavyAsset(url) {
-  return /\/lib\/(?:xlsx\.full\.min|jszip\.min)\.js$/i.test(url.pathname)
+  return /\/lib\/(?:xlsx\.full\.min|jszip\.min|html2canvas\.min)\.js$/i.test(url.pathname)
     || /\/assets\/media\/mateusz-intro\.mp4$/i.test(url.pathname);
 }
 

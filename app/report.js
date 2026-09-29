@@ -55,7 +55,21 @@ const RP_PRESETS = {
   detailed: RP_SECTIONS.map((sec) => sec.id),
 };
 const RP_MAX_BARS = 6;
-const RP_PAGE_MM = { w: 210, h: 297 };
+// A4 w obu orientacjach. Pozioma przydaje się przy szerokich tabelach (tryb „tabela” z Eksportu).
+const RP_ORIENTS = ["portrait", "landscape"];
+const RP_TABLE_MODE_MAX_ROWS = 3000; // wydruk tabeli: więcej = setki stron; pełne dane daje CSV/Excel
+let rpMode = "report";       // "report" | "table" (druk tabeli z okna Eksport)
+let rpTableSpec = null;      // { model, cols } w trybie tabeli
+let rpTableOrient = null;    // orientacja w trybie tabeli (na tę sesję, nie zmienia ustawień raportu)
+let rpPageCount = 1;
+let rpBusy = false;
+function rpOrient() {
+  if (rpMode === "table") return rpTableOrient === "landscape" ? "landscape" : "portrait";
+  return rpPrefs.orient === "landscape" ? "landscape" : "portrait";
+}
+function rpPageMm() {
+  return rpOrient() === "landscape" ? { w: 297, h: 210 } : { w: 210, h: 297 };
+}
 // Bezpieczny margines druku (góra/dół KAŻDEJ strony) = @page rpA4 w app.css. Słabsze drukarki
 // nie drukują 5–6 mm od krawędzi; 15 mm to zapas z nawiązką. Boki = padding kartki (15 mm).
 // Marginesy jak w Wordzie — do wyboru. v = góra/dół KAŻDEJ strony (@page rpA4-*), h = boki
@@ -89,6 +103,8 @@ const rpWrapEl = document.getElementById("rpSheetWrap");
 const rpPageEl = document.getElementById("rpPage");
 const rpStyleEl = document.getElementById("rpStyle");
 const rpMarginEl = document.getElementById("rpMargin");
+const rpOrientEl = document.getElementById("rpOrient");
+const rpPdfBtn = document.getElementById("rpPdfBtn");
 const rpAccentsEl = document.getElementById("rpAccents");
 const rpSizeBtn = document.getElementById("rpSizeBtn");
 const rpPrintBtn = document.getElementById("rpPrintBtn");
@@ -103,7 +119,7 @@ let rpIsOpen = false;
 let rpReturnFocusEl = null;
 let rpData = null;
 let rpTitle = "";
-let rpPrefs = { style: "modern", accent: "green", size: "normal", margin: "normal", preset: "short", sections: RP_PRESETS.short.slice() };
+let rpPrefs = { style: "modern", accent: "green", size: "normal", margin: "normal", orient: "portrait", preset: "short", sections: RP_PRESETS.short.slice() };
 let rpDocTitleBefore = "";
 
 // ── Ustawienia wyglądu ──────────────────────────────────────────────────────
@@ -116,6 +132,7 @@ function rpLoadPrefs() {
       accent: RP_ACCENTS[p.accent] ? p.accent : "green",
       size: RP_SIZES.includes(p.size) ? p.size : "normal",
       margin: RP_MARGINS[p.margin] ? p.margin : "normal",
+      orient: RP_ORIENTS.includes(p.orient) ? p.orient : "portrait",
       preset: RP_PRESETS[p.preset] || p.preset === "custom" ? p.preset : "short",
       sections: Array.isArray(p.sections)
         ? p.sections.filter((id) => RP_SECTIONS.some((sec) => sec.id === id))
@@ -608,9 +625,18 @@ function rpRender() {
   rpPageEl.dataset.style = rpPrefs.style;
   rpPageEl.dataset.size = rpPrefs.size;
   rpPageEl.dataset.margin = RP_MARGINS[rpPrefs.margin] ? rpPrefs.margin : "normal";
+  rpPageEl.dataset.orient = rpOrient();
+  rpPageEl.style.setProperty("--rp-pw", `${rpPageMm().w}mm`);
   rpPageEl.style.setProperty("--rp-mv", `${rpMargin().v}mm`);
   rpPageEl.style.setProperty("--rp-mh", `${rpMargin().h}mm`);
-  rpPageEl.style.setProperty("--rp-accent", RP_ACCENTS[rpPrefs.accent] || RP_ACCENTS.green);
+  const accent = RP_ACCENTS[rpPrefs.accent] || RP_ACCENTS.green;
+  rpPageEl.style.setProperty("--rp-accent", accent);
+  // Odcienie akcentu jako zwykłe rgb (nie color-mix) — patrz komentarz przy --rp-tint w CSS.
+  const [ar, ag, ab] = [1, 3, 5].map((i) => parseInt(accent.slice(i, i + 2), 16));
+  const mixWhite = (c, a) => Math.round(255 + (c - 255) * a);
+  rpPageEl.style.setProperty("--rp-tint", `rgb(${mixWhite(ar, 0.09)}, ${mixWhite(ag, 0.09)}, ${mixWhite(ab, 0.09)})`);
+  rpPageEl.style.setProperty("--rp-accent-soft", `rgba(${ar}, ${ag}, ${ab}, 0.08)`);
+  rpPageEl.style.setProperty("--rp-accent-ring", `rgba(${ar}, ${ag}, ${ab}, 0.4)`);
   rpPageEl.replaceChildren();
 
   // Nagłówek: tytuł edytowalny wprost na kartce (to raport dla siebie — szybciej
@@ -638,7 +664,10 @@ function rpRender() {
   );
 
   const parts = [head, scope];
-  const active = rpActiveSections();
+  if (rpMode === "table") {
+    parts.push(rpBuildTableModeSection());
+  }
+  const active = rpMode === "table" ? [] : rpActiveSections();
   RP_SECTIONS.forEach((sec) => {
     if (!active.includes(sec.id) || !rpSectionAvailable(sec, d)) return;
     const el = RP_BUILDERS[sec.id](d);
@@ -651,8 +680,38 @@ function rpRender() {
   rpPageEl.append(...parts);
   rpFitTables();
   rpSyncControls();
-  rpRenderContentPanel();
+  if (rpMode !== "table") rpRenderContentPanel();
   rpFit();
+}
+
+// ── Tryb „tabela” (druk z okna Eksport) ──
+// Stary „Drukuj / PDF” z Eksportu budował gołą tabelę bez marginesów, bez orientacji i bez
+// informacji o filtrze. Teraz idzie przez ten sam podgląd co raport: te same marginesy,
+// łamanie stron, powtórzony nagłówek, dopasowanie szerokości i pobieranie PDF.
+function rpBuildTableModeSection() {
+  const { model, cols } = rpTableSpec;
+  const sec = rpEl("section", "rp-block rp-data");
+  const rows = model.rows.slice(0, RP_TABLE_MODE_MAX_ROWS);
+  if (model.rows.length > rows.length) {
+    sec.appendChild(rpEl("p", "rp-note", t("rpTableModeCut", { shown: rpNum(rows.length, 0), all: rpNum(model.rows.length, 0) })));
+  }
+  const label = (ci) => (typeof exportColLabel === "function" ? exportColLabel(model.headers[ci], ci) : String(model.headers[ci] ?? ""));
+  sec.appendChild(rpTable(
+    cols.map(label),
+    rows.map((row) => cols.map((ci) => String(getDisplayValue(row, ci) ?? ""))),
+  ));
+  return sec;
+}
+
+function rpCollectScope(model) {
+  const view = typeof captureViewState === "function" ? captureViewState() : null;
+  return {
+    rows: model.rows.length,
+    total: Array.isArray(baseRows) ? baseRows.length : model.rows.length,
+    filtering: !!(typeof lastAppliedFilters !== "undefined" && lastAppliedFilters && lastAppliedFilters.filtering),
+    viewText: view && typeof describeViewState === "function" ? describeViewState(view) : "",
+    at: new Date(),
+  };
 }
 
 // ── Sekcje ──────────────────────────────────────────────────────────────────
@@ -965,7 +1024,7 @@ function rpMmToPx(mm) {
 
 function rpFit() {
   if (!rpIsOpen || !rpPageEl || !rpWrapEl || !rpStageEl) return;
-  const pageW = rpMmToPx(RP_PAGE_MM.w);
+  const pageW = rpMmToPx(rpPageMm().w);
   const avail = Math.max(200, rpStageEl.clientWidth - 24);
   const scale = Math.min(1, avail / pageW);
   rpPageEl.style.transform = scale < 1 ? `scale(${scale})` : "";
@@ -1090,19 +1149,28 @@ function rpSettle(spacer, target, wantTop) {
 function rpPaginate() {
   rpClearSheetGaps();
   const px = rpMmToPx;
-  const P = px(RP_PAGE_MM.h);
+  const P = px(rpPageMm().h);
   const G = px(RP_SHEET_GAP_MM);
   const M = px(rpMargin().v);
   const pageEnd = (k) => k * (P + G) + P - M;      // dół obszaru druku strony k
   const contentTop = (k) => k * (P + G) + M;       // góra obszaru druku strony k
   let k = 0;
   const bands = [];
+  const foot = rpPageEl.querySelector(".rp-foot");
+  if (foot) foot.classList.remove("is-dropped");
   rpPrintUnits().forEach((u) => {
     const top = rpRelTop(u.start);
     const bottom = rpRelTop(u.end) + rpHeight(u.end);
     // Bez tolerancji „na plus”: blok kończący się ułamek piksela za granicą druk przenosi dalej
     // (tak wylądowała sama stopka na nowej stronie, choć podgląd mówił, że się mieści).
     if (bottom <= pageEnd(k) - 0.5) return;
+    // Stopka (jedna linijka „raport policzony na tym urządzeniu”) nie jest warta osobnej
+    // kartki papieru — gdy nie mieści się na ostatniej stronie, po prostu jej nie ma
+    // (także w druku i w PDF: klasa działa wszędzie).
+    if (u.start === foot) {
+      foot.classList.add("is-dropped");
+      return;
+    }
     if (top <= contentTop(k) + 1) {
       // Blok wyższy niż strona, już stoi na górze strony — druk i tak go potnie.
       while (bottom > pageEnd(k) + 0.5) k += 1;
@@ -1156,6 +1224,7 @@ function rpPaginate() {
   // Warstwy dopiero na końcu — absolutne, nie ruszają układu, więc pomiary wyżej są czyste.
   bands.forEach((b) => rpPageEl.appendChild(b));
   const pages = k + 1;
+  rpPageCount = pages;
   rpPageEl.style.minHeight = `${Math.round(pages * (P + G) - G)}px`;
   return pages;
 }
@@ -1165,7 +1234,16 @@ function rpPaginate() {
 function rpSyncControls() {
   if (rpStyleEl) rpStyleEl.value = rpPrefs.style;
   if (rpMarginEl) rpMarginEl.value = rpPrefs.margin;
+  if (rpOrientEl) rpOrientEl.value = rpOrient();
+  // W trybie tabeli nie ma sekcji do wybierania.
+  if (rpContentBtn) rpContentBtn.classList.toggle("hidden", rpMode === "table");
   if (rpContentBtn) rpContentBtn.addEventListener("click", () => rpToggleContentPanel());
+document.getElementById("rpLookBtn")?.addEventListener("click", (e) => {
+  const open = !rpOverlayEl.classList.contains("look-open");
+  rpOverlayEl.classList.toggle("look-open", open);
+  e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
+  rpFit();
+});
 if (rpPresetsEl) {
   rpPresetsEl.addEventListener("click", (e) => {
     const btn = e.target.closest("[data-preset]");
@@ -1209,8 +1287,34 @@ function openReport() {
     return;
   }
   rpLoadPrefs();
+  rpMode = "report";
+  rpTableSpec = null;
   rpData = rpCollectAll();
   rpTitle = rpDefaultTitle();
+  rpShowOverlay();
+}
+
+// Druk / PDF tabeli z okna Eksport: wybrane kolumny, wszystkie wiersze widoku.
+// Szeroka tabela (> 6 kolumn) startuje poziomo — i tak można przełączyć.
+function openReportTable({ cols } = {}) {
+  if (!rpOverlayEl) return;
+  const model = (typeof currentDisplayModel !== "undefined" && currentDisplayModel) || getDisplayModel();
+  if (!model?.headers?.length || !model?.rows?.length) {
+    toast(t("noDataForExport"), "warning");
+    return;
+  }
+  const useCols = Array.isArray(cols) && cols.length ? cols : model.headers.map((_, i) => i);
+  rpLoadPrefs();
+  rpMode = "table";
+  rpTableSpec = { model, cols: useCols };
+  rpTableOrient = useCols.length > 6 ? "landscape" : "portrait";
+  rpData = rpCollectScope(model);
+  const base = currentFileName ? currentFileName.replace(/\.[^.]+$/, "") : t("rpTitleFallback");
+  rpTitle = t("rpTableTitleDefault", { name: base });
+  rpShowOverlay();
+}
+
+function rpShowOverlay() {
   rpReturnFocusEl = document.activeElement;
   rpOverlayEl.classList.remove("hidden");
   document.body.classList.add("rp-active");
@@ -1253,12 +1357,187 @@ function printReport() {
   }
 }
 
+// ── Pobierz PDF (bez okna drukowania) ──────────────────────────────────────
+// „Drukuj / PDF” otwiera systemowe okno druku — na iPadzie to kilka kroków, zanim powstanie
+// plik. Tu dostajesz gotowy plik .pdf do zapisania/wysłania i wydrukowania później.
+// Jak: każda strona z podglądu (który już jest pocięty dokładnie jak wydruk, z marginesami)
+// jest renderowana do obrazu (html2canvas, ładowane dopiero przy pierwszym użyciu), a z obrazów
+// składamy PDF ręcznie — to kilkadziesiąt bajtów struktury, nie potrzeba 400 KB biblioteki.
+// Uczciwie: tekst w takim PDF to obraz (nie da się go zaznaczyć). Do PDF z zaznaczalnym
+// tekstem zostaje „Drukuj / PDF” → „Zapisz jako PDF”.
+const RP_PDF_SCALE = 2;          // ~190 dpi na A4 — ostro na wydruku, rozsądny rozmiar pliku
+const RP_PDF_JPEG_QUALITY = 0.9;
+let rpH2cPromise = null;
+
+function rpEnsureHtml2canvas() {
+  if (typeof window.html2canvas === "function") return Promise.resolve();
+  if (rpH2cPromise) return rpH2cPromise;
+  rpH2cPromise = new Promise((resolve, reject) => {
+    const sc = document.createElement("script");
+    // Bez ?v= — tak samo jak xlsx/jszip: service worker trzyma go w cache „ciężkich” (offline).
+    sc.src = "lib/html2canvas.min.js";
+    sc.async = true;
+    sc.onload = () => resolve();
+    sc.onerror = () => { rpH2cPromise = null; reject(new Error("html2canvas")); };
+    document.head.appendChild(sc);
+  });
+  return rpH2cPromise;
+}
+
+function rpCanvasToJpeg(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error("toBlob")); return; }
+      blob.arrayBuffer().then((buf) => resolve(new Uint8Array(buf)), reject);
+    }, "image/jpeg", RP_PDF_JPEG_QUALITY);
+  });
+}
+
+// Minimalny PDF 1.4: każda strona = jeden obraz JPEG (DCTDecode) na całą stronę.
+function rpBuildPdf(images, wPt, hPt) {
+  const enc = new TextEncoder();
+  const chunks = [];
+  const offsets = [];
+  let len = 0;
+  const push = (data) => {
+    const bytes = typeof data === "string" ? enc.encode(data) : data;
+    chunks.push(bytes);
+    len += bytes.length;
+  };
+  const obj = (n, write) => {
+    offsets[n] = len;
+    push(`${n} 0 obj\n`);
+    write();
+    push("\nendobj\n");
+  };
+  const W = wPt.toFixed(2);
+  const H = hPt.toFixed(2);
+  push("%PDF-1.4\n%âãÏÓ\n");
+  obj(1, () => push("<< /Type /Catalog /Pages 2 0 R >>"));
+  const kids = images.map((_, i) => `${3 + i * 3} 0 R`).join(" ");
+  obj(2, () => push(`<< /Type /Pages /Kids [${kids}] /Count ${images.length} >>`));
+  images.forEach((im, i) => {
+    const pageN = 3 + i * 3;
+    obj(pageN, () => push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /XObject << /Im${i} ${pageN + 2} 0 R >> >> /Contents ${pageN + 1} 0 R >>`));
+    const content = `q ${W} 0 0 ${H} 0 0 cm /Im${i} Do Q`;
+    obj(pageN + 1, () => { push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`); });
+    obj(pageN + 2, () => {
+      push(`<< /Type /XObject /Subtype /Image /Width ${im.w} /Height ${im.h} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.bytes.length} >>\nstream\n`);
+      push(im.bytes);
+      push("\nendstream");
+    });
+  });
+  const size = 3 + images.length * 3;
+  const xref = len;
+  let table = `xref\n0 ${size}\n0000000000 65535 f \n`;
+  for (let n = 1; n < size; n++) table += `${String(offsets[n]).padStart(10, "0")} 00000 n \n`;
+  push(table);
+  push(`trailer\n<< /Size ${size} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
+  return new Blob(chunks, { type: "application/pdf" });
+}
+
+function rpSafeFileName(name, ext) {
+  const base = String(name || "raport").replace(/[\\/:*?"<>|\u0000-\u001f]+/g, "-").replace(/\s+/g, " ").trim().slice(0, 90) || "raport";
+  return `${base}.${ext}`;
+}
+
+// Pobranie pliku. iPad/iPhone jako zainstalowana apka (standalone) często nie obsługuje
+// zwykłego „pobierz” — tam arkusz udostępniania („Zapisz w Plikach”, „Drukuj”, AirDrop).
+async function rpDeliverFile(blob, fileName) {
+  const standaloneIos = window.navigator.standalone === true;
+  if (standaloneIos && typeof File === "function" && navigator.canShare) {
+    const file = new File([blob], fileName, { type: blob.type });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: fileName });
+        return "shared";
+      } catch (e) {
+        if (e && e.name === "AbortError") return "aborted";
+      }
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return "downloaded";
+}
+
+async function rpDownloadPdf({ deliver = true } = {}) {
+  if (!rpIsOpen || rpBusy) return null;
+  rpBusy = true;
+  const buttons = [rpPdfBtn, rpPrintBtn].filter(Boolean);
+  buttons.forEach((b) => { b.disabled = true; });
+  const noteBefore = rpFitNoteEl ? rpFitNoteEl.textContent : "";
+  const transformBefore = rpPageEl.style.transform;
+  try {
+    if (rpFitNoteEl) rpFitNoteEl.textContent = t("rpPdfLoading");
+    await rpEnsureHtml2canvas();
+    const { w, h } = rpPageMm();
+    const px = rpMmToPx;
+    const P = px(h);
+    const G = px(RP_SHEET_GAP_MM);
+    const W = px(w);
+    // Render bez skali podglądu; reszty apki nie klonujemy (szybciej i mniej pamięci na iPadzie),
+    // ale arkusze stylów zostają.
+    rpPageEl.style.transform = "";
+    const keep = (el) => el === rpOverlayEl || rpOverlayEl.contains(el) || el.contains(rpOverlayEl)
+      || /^(HEAD|LINK|STYLE|META|TITLE)$/.test(el.tagName) || !!el.closest?.("head");
+    const images = [];
+    for (let k = 0; k < rpPageCount; k++) {
+      if (rpFitNoteEl) rpFitNoteEl.textContent = t("rpPdfProgress", { n: k + 1, all: rpPageCount });
+      await new Promise((r) => setTimeout(r, 0)); // oddaj wątek — pasek postępu ma się odświeżyć
+      const canvas = await window.html2canvas(rpPageEl, {
+        scale: RP_PDF_SCALE,
+        backgroundColor: "#ffffff",
+        x: 0,
+        y: Math.round(k * (P + G)),
+        width: Math.round(W),
+        height: Math.round(P),
+        logging: false,
+        ignoreElements: (el) => !keep(el) || el.classList?.contains("rp-sheet-band"),
+      });
+      images.push({ bytes: await rpCanvasToJpeg(canvas), w: canvas.width, h: canvas.height });
+      canvas.width = 0; // zwolnij pamięć od razu (iPad)
+      canvas.height = 0;
+    }
+    const mmToPt = (mm) => (mm / 25.4) * 72;
+    const blob = rpBuildPdf(images, mmToPt(w), mmToPt(h));
+    const name = rpSafeFileName(rpTitle || rpDefaultTitle(), "pdf");
+    if (deliver) {
+      const how = await rpDeliverFile(blob, name);
+      if (how !== "aborted") toast(t("rpPdfDone", { n: images.length, name }), "success");
+    }
+    return { blob, name, pages: images.length };
+  } catch (e) {
+    console.warn("PDF", e);
+    toast(t("rpPdfFailed"), "error");
+    return null;
+  } finally {
+    rpPageEl.style.transform = transformBefore;
+    if (rpFitNoteEl) rpFitNoteEl.textContent = noteBefore;
+    buttons.forEach((b) => { b.disabled = false; });
+    rpBusy = false;
+  }
+}
+
 window.addEventListener("afterprint", rpAfterPrint);
 
 if (reportBtn) reportBtn.addEventListener("click", openReport);
 if (rpCloseBtn) rpCloseBtn.addEventListener("click", closeReport);
 if (rpPrintBtn) rpPrintBtn.addEventListener("click", printReport);
 if (rpStyleEl) rpStyleEl.addEventListener("change", () => rpSetPref("style", RP_STYLES.includes(rpStyleEl.value) ? rpStyleEl.value : "modern"));
+if (rpOrientEl) {
+  rpOrientEl.addEventListener("change", () => {
+    const v = RP_ORIENTS.includes(rpOrientEl.value) ? rpOrientEl.value : "portrait";
+    if (rpMode === "table") { rpTableOrient = v; rpRender(); } else rpSetPref("orient", v);
+  });
+}
+if (rpPdfBtn) rpPdfBtn.addEventListener("click", () => rpDownloadPdf());
 if (rpMarginEl) rpMarginEl.addEventListener("change", () => rpSetPref("margin", RP_MARGINS[rpMarginEl.value] ? rpMarginEl.value : "normal"));
 if (rpSizeBtn) rpSizeBtn.addEventListener("click", () => rpSetPref("size", rpPrefs.size === "large" ? "normal" : "large"));
 if (rpAccentsEl) {
@@ -1293,6 +1572,10 @@ window.__report = {
   open: openReport,
   close: closeReport,
   print: printReport,
+  openTable: openReportTable,
+  downloadPdf: (opts) => rpDownloadPdf(opts),
+  mode: () => rpMode,
+  pageCount: () => rpPageCount,
   data: () => rpData,
   findings: () => (rpData ? rpFindings(rpData).map((f) => f.text) : []),
   prefs: () => ({ ...rpPrefs, sections: rpPrefs.sections.slice() }),
@@ -1301,7 +1584,7 @@ window.__report = {
   // Strażnik marginesu: każda jednostka treści leży w całości w obszarze druku swojej strony
   // (≥ margines strony od górnej i dolnej krawędzi kartki). Zwraca listę naruszeń.
   marginViolations: () => {
-    const P = rpMmToPx(RP_PAGE_MM.h);
+    const P = rpMmToPx(rpPageMm().h);
     const G = rpMmToPx(RP_SHEET_GAP_MM);
     const M = rpMmToPx(rpMargin().v);
     return rpPrintUnits().map((u) => {

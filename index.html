@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260929-05" />
+    <link rel="stylesheet" href="styles/app.css?v=20260929-06" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1416,7 +1416,7 @@
     <div class="modal hidden" id="exportModal" role="dialog" aria-modal="true" aria-labelledby="exportModalTitle">
       <div class="modal-content">
         <div class="modal-head">
-          <div class="modal-title" id="exportModalTitle">Eksport / Raport</div>
+          <div class="modal-title" id="exportModalTitle">Eksport</div>
           <button class="modal-close" id="closeExport" type="button" aria-label="Zamknij">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -1424,13 +1424,50 @@
             </svg>
           </button>
         </div>
-        <p class="export-sub" id="exportModalSub">Wybierz kolumny do eksportu (bieżący, przefiltrowany widok)</p>
+        <!-- Co dokładnie wyjdzie z eksportu: bieżący widok (filtr, liczba wierszy). -->
+        <div class="export-scope" id="exportScope" role="status"></div>
+
+        <div class="export-formats" id="exportFormats" role="radiogroup" aria-label="Format">
+          <button type="button" class="export-format" data-format="csv" role="radio" aria-checked="true">
+            <span class="export-format-name" id="exportFmtCsvName">CSV</span>
+            <span class="export-format-desc" id="exportFmtCsvDesc">do Excela i innych programów</span>
+          </button>
+          <button type="button" class="export-format" data-format="xlsx" role="radio" aria-checked="false">
+            <span class="export-format-name" id="exportFmtXlsxName">Excel (.xlsx)</span>
+            <span class="export-format-desc" id="exportFmtXlsxDesc">liczby i daty jako liczby, filtr w nagłówku</span>
+          </button>
+          <button type="button" class="export-format" data-format="pdf" role="radio" aria-checked="false">
+            <span class="export-format-name" id="exportFmtPdfName">PDF / druk</span>
+            <span class="export-format-desc" id="exportFmtPdfDesc">podgląd stron, marginesy, pobierz lub drukuj</span>
+          </button>
+        </div>
+
+        <div class="export-options" id="exportCsvOptions">
+          <label class="export-opt">
+            <span id="exportCsvSepLabel">Separator</span>
+            <select id="exportCsvSep">
+              <option value="auto">Automatyczny</option>
+              <option value="semicolon">Średnik ;</option>
+              <option value="comma">Przecinek ,</option>
+              <option value="tab">Tabulator</option>
+            </select>
+          </label>
+          <label class="export-opt export-opt-check">
+            <input type="checkbox" id="exportCsvBom" checked />
+            <span id="exportCsvBomLabel">Polskie znaki w Excelu (UTF-8 z BOM)</span>
+          </label>
+        </div>
+
+        <div class="export-cols-head">
+          <span class="export-cols-count" id="exportColCount"></span>
+          <input class="export-cols-search hidden" id="exportColSearch" type="search" placeholder="Szukaj kolumny…" autocomplete="off" spellcheck="false" />
+          <button class="btn btn-xs ghost" id="exportSelectAll" type="button">Zaznacz wszystko</button>
+          <button class="btn btn-xs ghost" id="exportClearAll" type="button">Wyczyść</button>
+        </div>
         <div class="modal-list" id="exportColumnList"></div>
         <div class="modal-actions">
-          <button class="btn ghost" id="exportSelectAll" type="button">Zaznacz wszystko</button>
-          <button class="btn ghost" id="exportClearAll" type="button">Wyczyść</button>
-          <button class="btn ghost" id="exportCsvAction" type="button">CSV</button>
-          <button class="btn" id="exportPrintAction" type="button">Drukuj / PDF</button>
+          <button class="btn ghost" id="exportCancel" type="button">Anuluj</button>
+          <button class="btn" id="exportRunAction" type="button">Pobierz CSV</button>
         </div>
       </div>
     </div>
@@ -1665,6 +1702,8 @@
         </div>
         <div class="rp-toolbar-tools">
           <button class="btn btn-sm ghost" id="rpContentBtn" type="button" aria-expanded="false" aria-controls="rpContentPanel">Zawartość: krótki</button>
+          <button class="btn btn-sm ghost rp-look-btn" id="rpLookBtn" type="button" aria-expanded="false" aria-controls="rpLook">Wygląd</button>
+          <div class="rp-look" id="rpLook">
           <label class="rp-field">
             <span id="rpStyleLabel">Styl</span>
             <select id="rpStyle">
@@ -1688,7 +1727,16 @@
             <button type="button" class="rp-swatch" data-accent="orange" style="--sw:#b5602a" aria-label="Pomarańczowy"></button>
             <button type="button" class="rp-swatch" data-accent="graphite" style="--sw:#3d4145" aria-label="Grafitowy"></button>
           </div>
+          <label class="rp-field">
+            <span id="rpOrientLabel">Strona</span>
+            <select id="rpOrient">
+              <option value="portrait">Pionowa</option>
+              <option value="landscape">Pozioma</option>
+            </select>
+          </label>
           <button class="btn btn-sm ghost" id="rpSizeBtn" type="button" aria-pressed="false" aria-label="Większy tekst">A</button>
+          </div>
+          <button class="btn btn-sm ghost" id="rpPdfBtn" type="button" data-hint data-hint-pl="Gotowy plik PDF do zapisania — wydrukujesz go później. Strony dokładnie jak w podglądzie." data-hint-en="A ready PDF file to save — print it later. Pages exactly as in the preview." data-hint-delay="1.1" data-hint-touch="on">Pobierz PDF</button>
           <button class="btn btn-sm" id="rpPrintBtn" type="button">Drukuj / PDF</button>
           <button class="modal-close" id="rpCloseBtn" type="button" aria-label="Zamknij">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1729,32 +1777,32 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260929-05"></script>
-    <script defer src="app/render-budget.js?v=20260929-05"></script>
-    <script defer src="app/language.js?v=20260929-05"></script>
-    <script defer src="app/analysis.js?v=20260929-05"></script>
-    <script defer src="app/smart-filters.js?v=20260929-05"></script>
-    <script defer src="app/workbook.js?v=20260929-05"></script>
-    <script defer src="app/xlsx-patch.js?v=20260929-05"></script>
-    <script defer src="app/table.js?v=20260929-05"></script>
-    <script defer src="app/virt-rows.js?v=20260929-05"></script>
-    <script defer src="app/conditional-formatting.js?v=20260929-05"></script>
-    <script defer src="app/data-validation.js?v=20260929-05"></script>
-    <script defer src="app/derived-columns.js?v=20260929-05"></script>
-    <script defer src="app/formulas.js?v=20260929-05"></script>
-    <script defer src="app/edit-tools.js?v=20260929-05"></script>
-    <script defer src="app/ui-controls.js?v=20260929-05"></script>
-    <script defer src="app/filter-bar.js?v=20260929-05"></script>
-    <script defer src="app/qs-history.js?v=20260929-05"></script>
-    <script defer src="app/undo.js?v=20260929-05"></script>
-    <script defer src="app/transcribe.js?v=20260929-05"></script>
-    <script defer src="app/report.js?v=20260929-05"></script>
-    <script defer src="app/freeze-pane.js?v=20260929-05"></script>
-    <script defer src="app/app-frame.js?v=20260929-05"></script>
+    <script defer src="app/core.js?v=20260929-06"></script>
+    <script defer src="app/render-budget.js?v=20260929-06"></script>
+    <script defer src="app/language.js?v=20260929-06"></script>
+    <script defer src="app/analysis.js?v=20260929-06"></script>
+    <script defer src="app/smart-filters.js?v=20260929-06"></script>
+    <script defer src="app/workbook.js?v=20260929-06"></script>
+    <script defer src="app/xlsx-patch.js?v=20260929-06"></script>
+    <script defer src="app/table.js?v=20260929-06"></script>
+    <script defer src="app/virt-rows.js?v=20260929-06"></script>
+    <script defer src="app/conditional-formatting.js?v=20260929-06"></script>
+    <script defer src="app/data-validation.js?v=20260929-06"></script>
+    <script defer src="app/derived-columns.js?v=20260929-06"></script>
+    <script defer src="app/formulas.js?v=20260929-06"></script>
+    <script defer src="app/edit-tools.js?v=20260929-06"></script>
+    <script defer src="app/ui-controls.js?v=20260929-06"></script>
+    <script defer src="app/filter-bar.js?v=20260929-06"></script>
+    <script defer src="app/qs-history.js?v=20260929-06"></script>
+    <script defer src="app/undo.js?v=20260929-06"></script>
+    <script defer src="app/transcribe.js?v=20260929-06"></script>
+    <script defer src="app/report.js?v=20260929-06"></script>
+    <script defer src="app/freeze-pane.js?v=20260929-06"></script>
+    <script defer src="app/app-frame.js?v=20260929-06"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260929-05"></script>
-    <script defer src="app/bootstrap.js?v=20260929-05"></script>
+    <script defer src="app/debug-loaders.js?v=20260929-06"></script>
+    <script defer src="app/bootstrap.js?v=20260929-06"></script>
   </body>
 </html>
