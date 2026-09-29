@@ -159,22 +159,27 @@ async function run() {
 
   // ── Liczba stron w pasku = liczba stron prawdziwego PDF ─────────────────
   // (symulacja łamania stron musi się zgadzać z tym, co robi przeglądarka przy druku)
-  for (const [preset, size] of [["normal", "normal"], ["detailed", "normal"], ["detailed", "large"]]) {
-    await page.evaluate(([preset, size]) => {
+  for (const [preset, size, margin] of [["normal", "normal", "normal"], ["detailed", "normal", "narrow"], ["detailed", "large", "wide"]]) {
+    await page.evaluate(([preset, size, margin]) => {
       window.__report.close();
-      localStorage.setItem("swb-report-prefs", JSON.stringify({ preset, size }));
+      localStorage.setItem("swb-report-prefs", JSON.stringify({ preset, size, margin }));
       window.__report.open();
-    }, [preset, size]);
+    }, [preset, size, margin]);
     await sleep(250);
     const note = await page.evaluate(() => document.getElementById("rpFitNote").textContent);
+    const bad = await page.evaluate(() => window.__report.marginViolations());
+    check(`margines ${preset}/${size}: nic w pasie 15 mm przy krawędzi`, bad.length === 0, bad.slice(0, 3));
     await page.evaluate(() => document.body.classList.add("rp-printing"));
     await page.emulateMedia({ media: "print" });
+    // przed pdf(): generowanie PDF odpala „afterprint”, a raport wtedy zdejmuje klasę druku
+    const spacers = await page.evaluate(() => Array.from(document.querySelectorAll(".rp-sheet-gap, .rp-gap-row, .rp-head-repeat")).filter((el) => getComputedStyle(el).display !== "none").map((el) => el.className));
     const pdf = await page.pdf({ preferCSSPageSize: true });
     await page.emulateMedia({ media: "screen" });
     await page.evaluate(() => document.body.classList.remove("rp-printing"));
     const real = (pdf.toString("latin1").match(/\/Type\s*\/Page[^s]/g) || []).length;
     const pred = Number((note.match(/(\d+) stron/) || [0, 1])[1]);
     check(`strony ${preset}/${size}: pasek ${pred} = PDF ${real}`, pred === real && real >= 1, { note, real });
+    check(`druk ${preset}/${size}: przekładki podglądu niewidoczne`, spacers.length === 0, spacers);
   }
 
   check("brak błędów w konsoli", errors.length === 0, errors);

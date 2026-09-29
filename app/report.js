@@ -56,9 +56,20 @@ const RP_PRESETS = {
 };
 const RP_MAX_BARS = 6;
 const RP_PAGE_MM = { w: 210, h: 297 };
-const RP_PRINT_MARGIN_MM = 12;  // = @page rpA4 margin (góra/dół) w app.css
-const RP_SCREEN_PAD_MM = 16;    // = padding-top kartki na ekranie
-const RP_PRINT_PAD_TOP_MM = 4;  // = padding-top kartki w druku
+// Bezpieczny margines druku (góra/dół KAŻDEJ strony) = @page rpA4 w app.css. Słabsze drukarki
+// nie drukują 5–6 mm od krawędzi; 15 mm to zapas z nawiązką. Boki = padding kartki (15 mm).
+// Marginesy jak w Wordzie — do wyboru. v = góra/dół KAŻDEJ strony (@page rpA4-*), h = boki
+// (padding kartki). Nawet „wąskie” (12,7 mm, jak w Wordzie) są ponad 2× szersze niż martwa
+// strefa słabszej drukarki (5–6 mm), więc nic nie zostanie ucięte.
+const RP_MARGINS = {
+  narrow: { v: 12.7, h: 12.7 },
+  normal: { v: 20, h: 20 },
+  wide: { v: 25.4, h: 32 },
+};
+function rpMargin() {
+  return RP_MARGINS[rpPrefs.margin] || RP_MARGINS.normal;
+}
+const RP_SHEET_GAP_MM = 8;      // szara przerwa między kartkami w podglądzie
 
 // Podpowiedzi z nazw nagłówków (PL + EN). Tylko podbijają wynik — kolumna i tak musi
 // mieć odpowiednie wartości.
@@ -77,6 +88,7 @@ const rpStageEl = document.getElementById("rpStage");
 const rpWrapEl = document.getElementById("rpSheetWrap");
 const rpPageEl = document.getElementById("rpPage");
 const rpStyleEl = document.getElementById("rpStyle");
+const rpMarginEl = document.getElementById("rpMargin");
 const rpAccentsEl = document.getElementById("rpAccents");
 const rpSizeBtn = document.getElementById("rpSizeBtn");
 const rpPrintBtn = document.getElementById("rpPrintBtn");
@@ -91,7 +103,7 @@ let rpIsOpen = false;
 let rpReturnFocusEl = null;
 let rpData = null;
 let rpTitle = "";
-let rpPrefs = { style: "modern", accent: "green", size: "normal", preset: "short", sections: RP_PRESETS.short.slice() };
+let rpPrefs = { style: "modern", accent: "green", size: "normal", margin: "normal", preset: "short", sections: RP_PRESETS.short.slice() };
 let rpDocTitleBefore = "";
 
 // ── Ustawienia wyglądu ──────────────────────────────────────────────────────
@@ -103,6 +115,7 @@ function rpLoadPrefs() {
       style: RP_STYLES.includes(p.style) ? p.style : "modern",
       accent: RP_ACCENTS[p.accent] ? p.accent : "green",
       size: RP_SIZES.includes(p.size) ? p.size : "normal",
+      margin: RP_MARGINS[p.margin] ? p.margin : "normal",
       preset: RP_PRESETS[p.preset] || p.preset === "custom" ? p.preset : "short",
       sections: Array.isArray(p.sections)
         ? p.sections.filter((id) => RP_SECTIONS.some((sec) => sec.id === id))
@@ -594,6 +607,9 @@ function rpRender() {
   const d = rpData;
   rpPageEl.dataset.style = rpPrefs.style;
   rpPageEl.dataset.size = rpPrefs.size;
+  rpPageEl.dataset.margin = RP_MARGINS[rpPrefs.margin] ? rpPrefs.margin : "normal";
+  rpPageEl.style.setProperty("--rp-mv", `${rpMargin().v}mm`);
+  rpPageEl.style.setProperty("--rp-mh", `${rpMargin().h}mm`);
   rpPageEl.style.setProperty("--rp-accent", RP_ACCENTS[rpPrefs.accent] || RP_ACCENTS.green);
   rpPageEl.replaceChildren();
 
@@ -633,6 +649,7 @@ function rpRender() {
   });
   parts.push(rpEl("footer", "rp-foot", t("rpFooter")));
   rpPageEl.append(...parts);
+  rpFitTables();
   rpSyncControls();
   rpRenderContentPanel();
   rpFit();
@@ -676,7 +693,13 @@ function rpTable(headers, rows, { numCols = [] } = {}) {
   const tbody = rpEl("tbody");
   rows.forEach((cells) => {
     const tr = rpEl("tr");
-    cells.forEach((c, i) => tr.appendChild(rpEl("td", isNum(i) ? "is-num" : "", c)));
+    cells.forEach((c, i) => {
+      // Nierozdzielne: jedno słowo/data/kod albo krótka wartość („Klient 7”, „W toku”).
+      // Dłuższe opisy zawijają się normalnie na spacjach.
+      const txt = String(c).trim();
+      const token = !/\s/.test(txt) || txt.length <= 20;
+      tr.appendChild(rpEl("td", [isNum(i) ? "is-num" : "", token ? "is-token" : ""].filter(Boolean).join(" "), c));
+    });
     tbody.appendChild(tr);
   });
   table.append(thead, tbody);
@@ -741,7 +764,8 @@ const RP_BUILDERS = {
   },
   aggPanel(d) {
     const a = d.aggPanel;
-    const sec = rpSection(t("rpAggPanelTitle"), "rp-aggs");
+    // Jeden wykres = jeden blok, który się nie łamie (inaczej tytuł z opisem zostaje sam na dole strony).
+    const sec = rpSection(t("rpAggPanelTitle"), "rp-agg-panel");
     const how = t("rpAggPanelHow", {
       method: t(`rpAggMethod_${a.method}`),
       measure: a.measureNames.join(", "),
@@ -945,114 +969,202 @@ function rpFit() {
   const avail = Math.max(200, rpStageEl.clientWidth - 24);
   const scale = Math.min(1, avail / pageW);
   rpPageEl.style.transform = scale < 1 ? `scale(${scale})` : "";
+  rpMeasureScale = scale;
+  const pages = rpPaginate();
   const h = rpPageEl.offsetHeight;
   rpWrapEl.style.width = `${Math.round(pageW * scale)}px`;
   rpWrapEl.style.height = `${Math.round(h * scale)}px`;
   if (rpFitNoteEl) {
-    const { pages, breaks } = rpSimulatePages();
     rpFitNoteEl.textContent = pages > 1 ? t("rpFitPages", { n: pages }) : t("rpFitOne");
     rpFitNoteEl.classList.toggle("is-warn", pages > 1);
-    rpDrawPageGuides(breaks);
   }
 }
 
-// ── Symulacja łamania stron ──
-// Proste „wysokość / 273 mm” myliło się, bo bloki z break-inside: avoid (kafelki, wykresy,
-// pojedyncze tabele zestawień) przeglądarka PRZENOSI w całości na następną stronę,
-// zostawiając dziurę. Tu robimy to samo: dzielimy kartkę na jednostki, których druk nie
-// rozetnie, i układamy je na stronach A4 (bez marginesów @page). Wynik: liczba stron
-// i miejsca podziału — przerywane linie w podglądzie stoją tam, gdzie naprawdę wypadnie strona.
+// ── Tabele za szerokie na kartkę → pomniejszenie (jak „dopasuj do strony” w Excelu) ──
+// Słowa łamią się tylko na spacjach. Gdy tabela i tak nie mieści się w szerokości kartki
+// (dużo kolumn + szerokie marginesy + duży tekst), pomniejszamy czcionkę TEJ tabeli krokami
+// po 5% (min. 65%), zamiast łamać słowa w środku („Zakończon-e”). Dopiero gdy nawet to nie
+// pomoże (bardzo długie słowa/adresy), dopuszczamy łamanie w środku słowa (.is-tight).
+const RP_TABLE_MIN_SCALE = 0.65;
 
+function rpFitTables() {
+  rpPageEl.querySelectorAll("table.rp-table").forEach((table) => {
+    const box = table.parentElement;
+    const avail = box.clientWidth;
+    table.classList.remove("is-tight");
+    table.style.fontSize = "";
+    box.querySelectorAll(":scope > .rp-shrunk-note").forEach((n) => n.remove());
+    if (!avail || table.offsetWidth <= avail + 0.5) return;
+    let scale = 1;
+    while (table.offsetWidth > avail + 0.5 && scale > RP_TABLE_MIN_SCALE + 0.001) {
+      scale = Math.max(RP_TABLE_MIN_SCALE, scale - 0.05);
+      table.style.fontSize = `${scale}em`;
+    }
+    if (table.offsetWidth > avail + 0.5) table.classList.add("is-tight");
+    const note = document.createElement("p");
+    note.className = "rp-note rp-shrunk-note";
+    note.textContent = t("rpTableShrunk", { pct: Math.round(scale * 100) });
+    table.after(note);
+  });
+}
+
+// ── Podgląd stronami (= wydruk) ──
+// Drukarka nie drukuje przy samej krawędzi kartki (słabsze nawet 5–6 mm), więc każda
+// strona ma bezpieczny margines (rpMargin().v) u góry i u dołu (@page rpA4-*) oraz
+// 15 mm po bokach (padding kartki). Podgląd pokazuje DOKŁADNIE te strony: łamiemy treść
+// tak, jak zrobi to przeglądarka przy druku, i w miejscach podziału wstawiamy przekładki
+// (tylko na ekranie) — koniec strony z marginesem, szara przerwa między kartkami,
+// margines nowej strony. Dzięki temu widać, że nic nie leży przy krawędzi.
+// Zasady łamania (jak w druku): bloki z break-inside: avoid przechodzą w całości na
+// następną stronę; zestawienia łamią się między tabelami; tabela danych między wierszami,
+// z powtórzonym nagłówkiem. Liczba stron wychodzi przy okazji (test porównuje ją z PDF).
+
+// Pomiary UŁAMKOWE (getBoundingClientRect). offsetTop/offsetHeight zaokrąglają do pełnych
+// pikseli — przy 40 wierszach tabeli na stronę błąd sumował się do ~1 wiersza i podgląd
+// łamał stronę w innym miejscu niż druk. Dzielimy przez skalę podglądu (transform).
+let rpMeasureScale = 1;
 function rpRelTop(el) {
-  let y = 0;
-  let node = el;
-  while (node && node !== rpPageEl) {
-    y += node.offsetTop;
-    node = node.offsetParent;
-  }
-  return y;
+  return (el.getBoundingClientRect().top - rpPageEl.getBoundingClientRect().top) / rpMeasureScale;
+}
+function rpHeight(el) {
+  return el.getBoundingClientRect().height / rpMeasureScale;
 }
 
-// Jednostki w kolejności. Sekcje łamliwe (zestawienia, dane) rozbijamy: tytuł sekcji jedzie
-// razem z pierwszym elementem, tabela danych łamie się między wierszami (z powtórzonym nagłówkiem).
+// Jednostki, których druk nie rozetnie, w kolejności. `start` = od czego zaczyna się nowa
+// strona (tytuł sekcji jedzie razem z pierwszym elementem), `row` = wiersz tabeli danych.
 function rpPrintUnits() {
   const units = [];
-  const push = (startEl, endEl, extra = {}) => {
-    const top = rpRelTop(startEl);
-    units.push({ top, bottom: rpRelTop(endEl) + endEl.offsetHeight, ...extra });
-  };
+  const isGap = (el) => el.classList.contains("rp-sheet-gap") || el.classList.contains("rp-gap-row") || el.classList.contains("rp-head-repeat") || el.classList.contains("rp-sheet-band");
   Array.from(rpPageEl.children).forEach((el) => {
-    if (el.classList.contains("rp-page-break-guide")) return;
-    if (!el.matches(".rp-aggs, .rp-data")) { push(el, el); return; }
+    if (isGap(el)) return;
+    if (!el.matches(".rp-aggs, .rp-data")) { units.push({ start: el, end: el }); return; }
     let lead = null;
     Array.from(el.children).forEach((ch) => {
+      if (isGap(ch)) return;
       if (ch.matches(".rp-h2, .rp-note")) { lead = lead || ch; return; }
-      const table = ch.matches("table") ? ch : null;
-      if (table && el.matches(".rp-data") && table.tBodies[0]) {
-        const head = table.tHead ? table.tHead.offsetHeight : 0;
-        Array.from(table.tBodies[0].rows).forEach((tr, i) => {
-          push(i === 0 ? (lead || table) : tr, tr, { repeatHead: head });
+      if (ch.matches("table") && el.matches(".rp-data") && ch.tBodies[0]) {
+        Array.from(ch.tBodies[0].rows).forEach((tr, i) => {
+          if (isGap(tr)) return;
+          units.push(i === 0 ? { start: lead || ch, end: tr } : { start: tr, end: tr, row: tr, table: ch });
         });
       } else {
-        push(lead || ch, ch);
+        units.push({ start: lead || ch, end: ch });
       }
       lead = null;
     });
+    // Notka PO tabeli (np. „tabela pomniejszona…”) też musi zmieścić się na stronie.
+    if (lead) units.push({ start: lead, end: lead });
   });
   return units;
 }
 
-function rpSimulatePages() {
-  const px = rpMmToPx;
-  const usable = px(RP_PAGE_MM.h - 2 * RP_PRINT_MARGIN_MM);
-  // Współrzędne ekranu → druku: na ekranie kartka ma 16 mm u góry, w druku 4 mm.
-  const toPrint = px(RP_SCREEN_PAD_MM - RP_PRINT_PAD_TOP_MM);
-  const units = rpPrintUnits();
-  let pageStart = 0;
-  let shift = 0;
-  let pages = 1;
-  const breaks = [];
-  units.forEach((u) => {
-    const h = u.bottom - u.top;
-    let top = u.top - toPrint + shift;
-    if (top + h <= pageStart + usable) return;
-    if (h <= usable) {
-      const next = pageStart + usable;
-      if (top > pageStart) {
-        breaks.push({ at: u.top, page: pages + 1 });
-        shift += next - top + (u.repeatHead || 0);
-        pageStart = next;
-        pages += 1;
-      }
-      return;
-    }
-    // Jednostka wyższa niż strona (bardzo długi blok) — i tak zostanie pocięta.
-    while (top + h > pageStart + usable) {
-      pageStart += usable;
-      pages += 1;
-      breaks.push({ at: u.top + (pageStart - top), page: pages });
-    }
-  });
-  return { pages, breaks };
+function rpClearSheetGaps() {
+  rpPageEl.querySelectorAll(".rp-sheet-gap, .rp-gap-row, .rp-head-repeat, .rp-sheet-band").forEach((el) => el.remove());
+  rpPageEl.style.minHeight = "";
 }
 
-// Przerywane linie „strona N” tuż nad elementem, od którego zacznie się nowa strona.
-function rpDrawPageGuides(breaks) {
-  rpPageEl.querySelectorAll(".rp-page-break-guide").forEach((el) => el.remove());
-  breaks.forEach((b) => {
-    const g = document.createElement("div");
-    g.className = "rp-page-break-guide";
-    g.setAttribute("aria-hidden", "true");
-    g.dataset.label = t("rpPageGuide", { n: b.page });
-    g.style.top = `${Math.max(0, Math.round(b.at - rpMmToPx(2)))}px`;
-    rpPageEl.appendChild(g);
+// Szara przerwa między kartkami = osobna warstwa na KARTCE (nie w przekładce): zawsze na
+// całą szerokość, także gdy podział wypada w środku tabeli (komórka tabeli przycinała
+// pasek do szerokości tabeli i dawała mu tło wiersza).
+function rpGapBand(boundary, gapH, nextPage) {
+  const band = document.createElement("div");
+  band.className = "rp-sheet-band";
+  band.setAttribute("aria-hidden", "true");
+  band.style.top = `${boundary}px`;
+  band.style.height = `${gapH}px`;
+  band.dataset.label = t("rpPageGuide", { n: nextPage });
+  return band;
+}
+
+// Ustaw wysokość przekładki tak, żeby `target` zaczynał się DOKŁADNIE na górze obszaru druku.
+// Dwa przebiegi: pierwszy zgrubnie, drugi koryguje ułamki (zaokrąglenia układu, marginesy).
+function rpSettle(spacer, target, wantTop) {
+  let h = 0;
+  spacer.style.height = "0px";
+  for (let pass = 0; pass < 2; pass++) {
+    h = Math.max(0, h + (wantTop - rpRelTop(target)));
+    spacer.style.height = `${h}px`;
+  }
+}
+
+function rpPaginate() {
+  rpClearSheetGaps();
+  const px = rpMmToPx;
+  const P = px(RP_PAGE_MM.h);
+  const G = px(RP_SHEET_GAP_MM);
+  const M = px(rpMargin().v);
+  const pageEnd = (k) => k * (P + G) + P - M;      // dół obszaru druku strony k
+  const contentTop = (k) => k * (P + G) + M;       // góra obszaru druku strony k
+  let k = 0;
+  const bands = [];
+  rpPrintUnits().forEach((u) => {
+    const top = rpRelTop(u.start);
+    const bottom = rpRelTop(u.end) + rpHeight(u.end);
+    // Bez tolerancji „na plus”: blok kończący się ułamek piksela za granicą druk przenosi dalej
+    // (tak wylądowała sama stopka na nowej stronie, choć podgląd mówił, że się mieści).
+    if (bottom <= pageEnd(k) - 0.5) return;
+    if (top <= contentTop(k) + 1) {
+      // Blok wyższy niż strona, już stoi na górze strony — druk i tak go potnie.
+      while (bottom > pageEnd(k) + 0.5) k += 1;
+      return;
+    }
+    k += 1;
+    const boundary = (k - 1) * (P + G) + P;
+    if (u.row) {
+      // Wiersz tabeli: przekładka-wiersz + powtórzony nagłówek (jak thead w druku).
+      const cols = u.row.cells.length || 1;
+      const gapRow = document.createElement("tr");
+      gapRow.className = "rp-gap-row";
+      gapRow.setAttribute("aria-hidden", "true");
+      const td = document.createElement("td");
+      td.colSpan = cols;
+      const filler = document.createElement("div");
+      filler.className = "rp-gap-filler";
+      td.appendChild(filler);
+      gapRow.appendChild(td);
+      u.row.parentNode.insertBefore(gapRow, u.row);
+      let first = u.row;
+      const headRow = u.table.tHead && u.table.tHead.rows[0];
+      if (headRow) {
+        // Kopia nagłówka ze ZWYKŁYCH komórek (td.rp-th): ogólne style apki dla <th> w <tbody>
+        // (numery wierszy głównej tabeli) rozciągały kopię z <th> do ~47 px zamiast 28 px —
+        // i podgląd mieścił na stronie o wiersz mniej niż druk. Wysokość = prawdziwy thead.
+        const clone = document.createElement("tr");
+        clone.className = "rp-head-repeat";
+        clone.setAttribute("aria-hidden", "true");
+        Array.from(headRow.cells).forEach((th) => {
+          const td = document.createElement("td");
+          td.className = `rp-th${th.classList.contains("is-num") ? " is-num" : ""}`;
+          td.textContent = th.textContent;
+          clone.appendChild(td);
+        });
+        clone.style.height = `${rpHeight(u.table.tHead)}px`;
+        u.row.parentNode.insertBefore(clone, u.row);
+        first = clone;
+      }
+      rpSettle(filler, first, contentTop(k));
+      bands.push(rpGapBand(boundary, G, k + 1));
+    } else {
+      const gap = document.createElement("div");
+      gap.className = "rp-sheet-gap";
+      gap.setAttribute("aria-hidden", "true");
+      u.start.parentNode.insertBefore(gap, u.start);
+      rpSettle(gap, u.start, contentTop(k));
+      bands.push(rpGapBand(boundary, G, k + 1));
+    }
   });
+  // Warstwy dopiero na końcu — absolutne, nie ruszają układu, więc pomiary wyżej są czyste.
+  bands.forEach((b) => rpPageEl.appendChild(b));
+  const pages = k + 1;
+  rpPageEl.style.minHeight = `${Math.round(pages * (P + G) - G)}px`;
+  return pages;
 }
 
 // ── Kontrolki wyglądu ───────────────────────────────────────────────────────
 
 function rpSyncControls() {
   if (rpStyleEl) rpStyleEl.value = rpPrefs.style;
+  if (rpMarginEl) rpMarginEl.value = rpPrefs.margin;
   if (rpContentBtn) rpContentBtn.addEventListener("click", () => rpToggleContentPanel());
 if (rpPresetsEl) {
   rpPresetsEl.addEventListener("click", (e) => {
@@ -1147,6 +1259,7 @@ if (reportBtn) reportBtn.addEventListener("click", openReport);
 if (rpCloseBtn) rpCloseBtn.addEventListener("click", closeReport);
 if (rpPrintBtn) rpPrintBtn.addEventListener("click", printReport);
 if (rpStyleEl) rpStyleEl.addEventListener("change", () => rpSetPref("style", RP_STYLES.includes(rpStyleEl.value) ? rpStyleEl.value : "modern"));
+if (rpMarginEl) rpMarginEl.addEventListener("change", () => rpSetPref("margin", RP_MARGINS[rpMarginEl.value] ? rpMarginEl.value : "normal"));
 if (rpSizeBtn) rpSizeBtn.addEventListener("click", () => rpSetPref("size", rpPrefs.size === "large" ? "normal" : "large"));
 if (rpAccentsEl) {
   rpAccentsEl.addEventListener("click", (e) => {
@@ -1185,6 +1298,20 @@ window.__report = {
   prefs: () => ({ ...rpPrefs, sections: rpPrefs.sections.slice() }),
   sections: () => Array.from(document.querySelectorAll("#rpPage [data-section]")).map((el) => el.dataset.section),
   setPreset: rpSetPreset,
+  // Strażnik marginesu: każda jednostka treści leży w całości w obszarze druku swojej strony
+  // (≥ margines strony od górnej i dolnej krawędzi kartki). Zwraca listę naruszeń.
+  marginViolations: () => {
+    const P = rpMmToPx(RP_PAGE_MM.h);
+    const G = rpMmToPx(RP_SHEET_GAP_MM);
+    const M = rpMmToPx(rpMargin().v);
+    return rpPrintUnits().map((u) => {
+      const top = rpRelTop(u.start);
+      const bottom = rpRelTop(u.end) + rpHeight(u.end);
+      const k = Math.floor(top / (P + G));
+      const ok = top >= k * (P + G) + M - 1 && bottom <= k * (P + G) + P - M + 1;
+      return ok ? null : { page: k + 1, top: Math.round(top), bottom: Math.round(bottom), text: u.start.textContent.slice(0, 40) };
+    }).filter(Boolean);
+  },
   aggState: () => (typeof aggregationWorkbenchState !== "undefined" ? JSON.stringify(aggregationWorkbenchState) : ""),
   toggleSection: rpToggleSection,
   isOpen: () => rpIsOpen,

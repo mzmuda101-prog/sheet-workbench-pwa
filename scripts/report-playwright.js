@@ -198,7 +198,14 @@ async function run() {
   await page.selectOption("#rpStyle", "classic");
   await page.click('#rpAccents [data-accent="blue"]');
   await page.click("#rpSizeBtn");
+  await page.selectOption("#rpMargin", "wide");
   await sleep(100);
+  const mg = await page.evaluate(() => {
+    const p = document.getElementById("rpPage");
+    return { attr: p.dataset.margin, side: getComputedStyle(p).paddingLeft, top: getComputedStyle(p).paddingTop };
+  });
+  // 32 mm ≈ 120,9 px, 25,4 mm = 96 px
+  check("marginesy szerokie: boki 32 mm, góra 25,4 mm", mg.attr === "wide" && Math.abs(parseFloat(mg.side) - 120.94) < 1 && Math.abs(parseFloat(mg.top) - 96) < 1, mg);
   const look = await page.evaluate(() => {
     const p = document.getElementById("rpPage");
     return { style: p.dataset.style, size: p.dataset.size, accent: p.style.getPropertyValue("--rp-accent").trim(), font: getComputedStyle(p).fontFamily };
@@ -253,7 +260,7 @@ async function run() {
   await page.evaluate(() => window.__report.open());
   await sleep(200);
   const prefs = await page.evaluate(() => window.__report.prefs());
-  check("po przeładowaniu: ink + blue + large", prefs.style === "ink" && prefs.accent === "blue" && prefs.size === "large", prefs);
+  check("po przeładowaniu: ink + blue + large + szerokie marginesy", prefs.style === "ink" && prefs.accent === "blue" && prefs.size === "large" && prefs.margin === "wide", prefs);
 
   // Wąski ekran: kartka przeskalowana, bez poziomego przewijania strony.
   await page.setViewportSize({ width: 390, height: 760 });

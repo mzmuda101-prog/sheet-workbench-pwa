@@ -228,6 +228,7 @@ const I18N = {
     rpFindAggSpread: "Średnia „{measure}” w „{hi}” ({hiV}) jest {x}× wyższa niż w „{lo}” ({loV}).",
     rpFindAggLongest: "Najdłużej trwa „{group}” ({measure}): średnio {avg}, przy średniej ogółem {all}.",
     rpPageGuide: "strona {n}",
+    rpTableShrunk: "Tabela pomniejszona do {pct}%, żeby zmieściła się na szerokość strony.",
     rpMonthsTitle: "Wiersze w miesiącach · {col}",
     rpMonthsLast: "Ostatnie {n} miesięcy.",
     rpNumbersTitle: "Statystyki kolumn liczbowych",
@@ -254,6 +255,10 @@ const I18N = {
     rpAllDistinct: "każda inna",
     rpHeading: "Raport",
     rpStyleLabel: "Styl",
+    rpMarginLabel: "Marginesy",
+    rpMarginNarrow: "Wąskie",
+    rpMarginNormal: "Normalne",
+    rpMarginWide: "Szerokie",
     rpStyleModern: "Nowoczesny",
     rpStyleClassic: "Klasyczny",
     rpStyleInk: "Oszczędny (cz-b)",
@@ -1127,6 +1132,7 @@ const I18N = {
     rpFindAggSpread: "Average “{measure}” in “{hi}” ({hiV}) is {x}× higher than in “{lo}” ({loV}).",
     rpFindAggLongest: "“{group}” takes the longest ({measure}): {avg} on average vs {all} overall.",
     rpPageGuide: "page {n}",
+    rpTableShrunk: "Table scaled to {pct}% to fit the page width.",
     rpMonthsTitle: "Rows per month · {col}",
     rpMonthsLast: "Last {n} months.",
     rpNumbersTitle: "Numeric column statistics",
@@ -1153,6 +1159,10 @@ const I18N = {
     rpAllDistinct: "all distinct",
     rpHeading: "Report",
     rpStyleLabel: "Style",
+    rpMarginLabel: "Margins",
+    rpMarginNarrow: "Narrow",
+    rpMarginNormal: "Normal",
+    rpMarginWide: "Wide",
     rpStyleModern: "Modern",
     rpStyleClassic: "Classic",
     rpStyleInk: "Ink saver (B&W)",
@@ -2912,6 +2922,10 @@ function applyStaticTranslations() {
   setText("#rpContentHint", t("rpContentHint"));
   document.getElementById("rpPresets")?.setAttribute("aria-label", t("rpPresetsAria"));
   setText("#rpStyleLabel", t("rpStyleLabel"));
+  setText("#rpMarginLabel", t("rpMarginLabel"));
+  setText('#rpMargin option[value="narrow"]', t("rpMarginNarrow"));
+  setText('#rpMargin option[value="normal"]', t("rpMarginNormal"));
+  setText('#rpMargin option[value="wide"]', t("rpMarginWide"));
   setText('#rpStyle option[value="modern"]', t("rpStyleModern"));
   setText('#rpStyle option[value="classic"]', t("rpStyleClassic"));
   setText('#rpStyle option[value="ink"]', t("rpStyleInk"));

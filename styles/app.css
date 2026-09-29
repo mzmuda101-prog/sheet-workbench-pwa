@@ -5554,7 +5554,7 @@ html.low-power .loading-overlay.is-file {
   }
   .print-table th { background: #eee; font-weight: 600; }
   .print-table tr { break-inside: avoid; }
-  @page { margin: 14mm; }
+  @page { margin: 15mm; } /* bezpieczny margines — też dla przeglądarek bez nazwanych stron (raport) */
 }
 
 /* ######################################################################################################################### */
@@ -7240,9 +7240,12 @@ body.rp-active { overflow: hidden; }
   top: 0;
   left: 0;
   width: 210mm;
-  min-height: 297mm;
+  min-height: 297mm; /* JS (rpPaginate) ustawia wielokrotność stron A4 */
   box-sizing: border-box;
-  padding: 16mm 15mm 14mm;
+  /* Góra = margines strony 1 (w druku robi go @page), boki = margines boczny. Z opcji „Marginesy”. */
+  --rp-mv: 20mm;
+  --rp-mh: 20mm;
+  padding: var(--rp-mv) var(--rp-mh) 0;
   background: #fff;
   color: var(--rp-ink);
   font-family: var(--font);
@@ -7250,9 +7253,10 @@ body.rp-active { overflow: hidden; }
   line-height: 1.45;
   transform-origin: top left;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 28px rgba(0, 0, 0, 0.12);
-  display: flex;
-  flex-direction: column;
-  gap: 6mm;
+  /* ZWYKŁY blok z marginesami, nie flex/grid z `gap`: przy łamaniu stron przeglądarka
+     traktuje `gap` niekonsekwentnie (raz zostaje na górze nowej strony, raz znika), a margines
+     tuż za podziałem strony jest zawsze ucinany — tak samo robi podgląd (rpPaginate). */
+  display: block;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -7313,46 +7317,83 @@ body.rp-active { overflow: hidden; }
 .rp-note { margin: 0 0 2mm; font-size: 0.82em; color: var(--rp-muted); }
 .rp-cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(80mm, 1fr)); gap: 4mm 6mm; }
 .rp-cat { break-inside: avoid; }
-.rp-aggs { display: grid; gap: 4mm; }
+.rp-page > * + * { margin-top: 6mm; }
+.rp-page > .rp-sheet-band { margin-top: 0; }
+.rp-aggs > * + * { margin-top: 4mm; }
 .rp-aggs > .rp-h2 { margin-bottom: 0; }
 .rp-agg { break-inside: avoid; }
 .rp-cat .rp-bar-row { grid-template-columns: 26mm 1fr 20mm; }
 
-.rp-table { width: 100%; border-collapse: collapse; font-size: 0.86em; }
+/* table-layout: auto + tło: globalna reguła `table` apki ma fixed (równe kolumny) i tło panelu. */
+.rp-table { width: 100%; border-collapse: collapse; font-size: 0.86em; table-layout: auto; background: none; }
+/* Odcięcie ogólnych stylów tabeli apki (thead th / tbody td: nowrap + ucinanie „…”, stały
+   rozmiar czcionki z --table-zoom). W raporcie nic nie może być ucięte — tekst się zawija —
+   a rozmiar idzie z kartki (opcja A / A+). */
+.rp-table th, .rp-table td {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: inherit;
+  /* Łamanie tylko na spacjach; za szeroką tabelę pomniejsza rpFitTables (report.js).
+     („anywhere” zerował też min. szerokość kolumn → kolumny po równo.) */
+  overflow-wrap: normal;
+}
+/* Komórka bez spacji (słowo, data 2026-09-18, kod) nie łamie się wcale — także na myślniku. */
+.rp-table .is-token { white-space: nowrap; }
+/* Ostateczność, gdy nawet 65% nie wystarcza: łamanie gdziekolwiek. */
+.rp-table.is-tight th, .rp-table.is-tight td { overflow-wrap: anywhere; }
+.rp-table.is-tight .is-token { white-space: normal; }
+.rp-shrunk-note { margin: 1.5mm 0 0; }
+.rp-table th, .rp-table td.rp-th { background: #f4f3ef; }
+.rp-page[data-style="classic"] .rp-table th, .rp-page[data-style="classic"] .rp-table td.rp-th,
+.rp-page[data-style="ink"] .rp-table th, .rp-page[data-style="ink"] .rp-table td.rp-th { background: none; }
 .rp-table thead { display: table-header-group; } /* nagłówek powtarzany na każdej stronie */
 .rp-table th, .rp-table td { padding: 1.2mm 2mm; border-bottom: 0.25mm solid var(--rp-line); text-align: left; vertical-align: top; }
-.rp-table th { font-weight: 700; color: var(--rp-muted); border-bottom: 0.4mm solid var(--rp-accent); }
-.rp-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rp-table th, .rp-table td.rp-th { font-weight: 700; color: var(--rp-muted); border-bottom: 0.4mm solid var(--rp-accent); }
+.rp-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rp-table td.is-num { white-space: nowrap; }
+/* Nagłówki (np. imiona i nazwiska w tabeli krzyżowej) zawijają się zamiast nachodzić na siebie. */
+.rp-table th { hyphens: manual; } /* bez dzielenia wyrazów („(pu-ste)”) — zawijanie tylko na spacjach */
 .rp-table tr { break-inside: avoid; }
 .rp-data .rp-table { font-size: 0.78em; }
-.rp-data .rp-table td { overflow-wrap: anywhere; }
 /* Tylko tabela DANYCH może przechodzić przez strony (bywa długa). Małe tabele (statystyki,
    przegląd kolumn) trzymają się razem z nagłówkiem — inaczej tytuł zostaje sam na dole strony. */
 .rp-block.rp-data, .rp-block.rp-aggs { break-inside: auto; } /* zestawienia łamią się MIĘDZY tabelami (każda .rp-agg w całości) */
-.rp-h2 { break-after: avoid; }
-.rp-page[data-style="classic"] .rp-table th { color: var(--rp-ink); border-bottom-color: var(--rp-ink); }
-.rp-page[data-style="ink"] .rp-table th { border-bottom-color: #000; }
+.rp-h2, .rp-h3, .rp-note { break-after: avoid; }
+.rp-page[data-style="classic"] .rp-table th, .rp-page[data-style="classic"] .rp-table td.rp-th { color: var(--rp-ink); border-bottom-color: var(--rp-ink); }
+.rp-page[data-style="ink"] .rp-table th, .rp-page[data-style="ink"] .rp-table td.rp-th { border-bottom-color: #000; }
 
-/* Podgląd: przerywana linia tam, gdzie wypadnie koniec strony A4 (tylko na ekranie). */
-.rp-page-break-guide {
+/* Podgląd stronami: przekładka w miejscu podziału = dół strony (margines) + szara przerwa
+   między kartkami + margines nowej strony. Tylko na ekranie — w druku znika. */
+/* padding-top: 1px = przekładka nigdy nie jest „pusta”, więc marginesy sąsiadów NIE zlewają się
+   przez nią (przy wysokości 0 zlewały się i pomiar w rpPaginate był przesunięty o 4–6 mm). */
+.rp-sheet-gap { position: relative; padding-top: 1px; }
+/* Przekładki tylko rezerwują miejsce — przezroczyste (żadnego tła wiersza/zebry). */
+.rp-gap-row, .rp-gap-row td { background: transparent !important; }
+.rp-gap-row td { padding: 0 !important; border: 0 !important; }
+.rp-gap-filler { display: block; }
+/* Przerwa między kartkami: warstwa na kartce (kartka = blok odniesienia), od krawędzi do krawędzi. */
+.rp-sheet-band {
   position: absolute;
   left: 0;
   right: 0;
-  height: 0;
-  border-top: 0.4mm dashed #b9b3a3;
+  z-index: 1;
+  background: var(--bg);
+  box-shadow: inset 0 3px 5px -3px rgba(0, 0, 0, 0.18), inset 0 -3px 5px -3px rgba(0, 0, 0, 0.18);
   pointer-events: none;
 }
-.rp-page-break-guide::after {
+.rp-sheet-band::after {
   content: attr(data-label);
   position: absolute;
-  right: 3mm;
-  top: 0.6mm;
+  right: 4mm;
+  top: 50%;
+  transform: translateY(-50%);
   font-size: 7.5pt;
-  color: #9a9486;
+  color: var(--muted);
   font-family: var(--font);
 }
 
-.rp-foot { margin-top: auto; padding-top: 3mm; border-top: 1px solid var(--rp-line); font-size: 0.75em; color: var(--rp-muted); }
+.rp-foot { padding-top: 3mm; border-top: 1px solid var(--rp-line); font-size: 0.75em; color: var(--rp-muted); }
 
 /* ── Styl: Klasyczny — szeryfowy, linie zamiast wypełnień ── */
 .rp-page[data-style="classic"] { font-family: Georgia, "Times New Roman", serif; }
@@ -7380,7 +7421,11 @@ body.rp-active { overflow: hidden; }
 /* ── Druk: tylko kartka, bez skali i cieni. Własna nazwana strona bez marginesów
    (margines to padding kartki), więc wydruk = podgląd. Przeglądarki bez nazwanych
    stron dostaną zwykły margines z @page wyżej — kartka wtedy jest tylko trochę węższa. */
-@page rpA4 { size: A4; margin: 12mm 0; }
+/* Góra/dół KAŻDEJ strony — z dala od martwej strefy drukarki. Trzy nazwane strony = trzy
+   opcje „Marginesy” (wartości = RP_MARGINS w report.js). Boki robi padding kartki. */
+@page rpA4-narrow { size: A4; margin: 12.7mm 0; }
+@page rpA4-normal { size: A4; margin: 20mm 0; }
+@page rpA4-wide { size: A4; margin: 25.4mm 0; }
 @media print {
   body.rp-printing > *:not(#reportOverlay) { display: none !important; }
   body.rp-printing { overflow: visible !important; background: #fff !important; }
@@ -7394,17 +7439,22 @@ body.rp-active { overflow: hidden; }
   body.rp-printing .rp-stage { display: block !important; overflow: visible !important; padding: 0 !important; }
   body.rp-printing .rp-sheet-wrap { width: auto !important; height: auto !important; }
   body.rp-printing .rp-page {
-    page: rpA4;
+    page: rpA4-normal;
     position: static !important;
     transform: none !important;
     box-shadow: none !important;
     width: 210mm;
-    min-height: 0;
+    min-height: 0 !important; /* podgląd ustawia wysokość pełnych stron inline — w druku zbędna (dodałaby pustą stronę) */
     /* góra/dół robi margines strony (powtarza się na każdej), boki — padding kartki */
-    padding-top: 4mm;
+    padding-top: 0;
     padding-bottom: 0;
   }
-  body.rp-printing .rp-page-break-guide { display: none !important; }
+  body.rp-printing .rp-sheet-gap,
+  body.rp-printing .rp-gap-row,
+  body.rp-printing .rp-head-repeat,
+  body.rp-printing .rp-sheet-band { display: none !important; }
+  body.rp-printing .rp-page[data-margin="narrow"] { page: rpA4-narrow; }
+  body.rp-printing .rp-page[data-margin="wide"] { page: rpA4-wide; }
   body.rp-printing .rp-title:hover,
   body.rp-printing .rp-title:focus { background: none; box-shadow: none; }
 }
