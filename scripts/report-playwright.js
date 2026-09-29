@@ -133,7 +133,7 @@ async function run() {
   check("panel zawartości otwarty", await page.evaluate(() => !document.getElementById("rpContentPanel").classList.contains("hidden")));
   await page.click('#rpPresets [data-preset="normal"]');
   await sleep(100);
-  check("normalny: + miesiące i statystyki liczb", (await secs()).join() === "tiles,findings,chart,months,numbers", await secs());
+  check("normalny: + zestawienia, miesiące i statystyki liczb", (await secs()).join() === "tiles,findings,chart,aggAuto,months,numbers", await secs());
   const catRow = await page.evaluate(() => {
     const cb = document.querySelector('#rpSectionList input[value="categories"]');
     return { disabled: cb.disabled, why: cb.closest("label").textContent };
@@ -145,7 +145,7 @@ async function run() {
   check("miesiące po kolei: sty, lut, mar", monthBars.length === 3 && /stycze/.test(monthBars[0]) && /marzec/.test(monthBars[2]), monthBars);
   await page.click('#rpPresets [data-preset="detailed"]');
   await sleep(100);
-  check("szczegółowy: + przegląd kolumn i dane", (await secs()).join() === "tiles,findings,chart,months,numbers,columns,data", await secs());
+  check("szczegółowy: + przegląd kolumn i dane", (await secs()).join() === "tiles,findings,chart,aggAuto,months,numbers,aggPanel,columns,data", await secs());
   const detail = await page.evaluate(() => ({
     dataRows: document.querySelectorAll('#rpPage [data-section="data"] tbody tr').length,
     dataCols: document.querySelectorAll('#rpPage [data-section="data"] thead th').length,

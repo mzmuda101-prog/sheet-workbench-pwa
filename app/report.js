@@ -41,15 +41,17 @@ const RP_SECTIONS = [
   { id: "tiles", label: "rpSecTiles" },
   { id: "findings", label: "rpSecFindings" },
   { id: "chart", label: "rpSecChart", has: (d) => !!d.category },
+  { id: "aggAuto", label: "rpSecAggAuto", has: (d) => !!(d.aggs && d.aggs.length) },
   { id: "months", label: "rpSecMonths", has: (d) => !!(d.date && d.date.months.size >= 2) },
   { id: "numbers", label: "rpSecNumbers", has: (d) => d.numericCols.length > 0 },
   { id: "categories", label: "rpSecCategories", has: (d) => d.otherCategories.length > 0 },
+  { id: "aggPanel", label: "rpSecAggPanel", has: (d) => !!d.aggPanel },
   { id: "columns", label: "rpSecColumns" },
   { id: "data", label: "rpSecData" },
 ];
 const RP_PRESETS = {
   short: ["tiles", "findings", "chart"],
-  normal: ["tiles", "findings", "chart", "months", "numbers", "categories"],
+  normal: ["tiles", "findings", "chart", "aggAuto", "months", "numbers", "categories"],
   detailed: RP_SECTIONS.map((sec) => sec.id),
 };
 const RP_MAX_BARS = 6;
@@ -60,7 +62,10 @@ const RP_PRINT_PAD_TOP_MM = 4;  // = padding-top kartki w druku
 
 // Podpowiedzi z nazw nagłówków (PL + EN). Tylko podbijają wynik — kolumna i tak musi
 // mieć odpowiednie wartości.
-const RP_CAT_RE = /status|stan|etap|faza|typ|rodzaj|kategor|grupa|dział|dzial|priorytet|miasto|region|type|state|stage|category|group|priority|city/i;
+// Dwa poziomy: „stan sprawy” (status, etap) mówi o danych więcej niż „gdzie/jaki” (miasto, typ),
+// więc przy dwóch kandydatach głównym wykresem zostaje status.
+const RP_CAT_STRONG_RE = /status|stan\b|etap|faza|priorytet|state|stage|priority/i;
+const RP_CAT_RE = /typ|rodzaj|kategor|grupa|dział|dzial|miasto|region|oddział|type|category|group|city|branch/i;
 const RP_NUM_RE = /kwot|cen|wart|sum|koszt|brutto|netto|ilo|liczb|godz|czas|dni|waga|wynik|amount|price|value|cost|total|qty|quantity|hours|days|score/i;
 const RP_ID_RE = /^\s*(nr|lp|l\.\s*p|id|numer|no|#)(\b|\.|$)/i;
 const RP_DATE_TEXT_RE = /^\d{1,4}[-./]\d{1,2}[-./]\d{1,4}/;
@@ -215,7 +220,7 @@ function rpCategories(cols, rowCount) {
       && col.unique >= 2 && col.unique <= 12 && col.unique <= col.nonEmpty * 0.6)
     .map((col) => ({
       col,
-      score: (RP_CAT_RE.test(col.name) ? 10 : 0) + col.fill * 3 - col.unique * 0.1,
+      score: (RP_CAT_STRONG_RE.test(col.name) ? 10 : RP_CAT_RE.test(col.name) ? 5 : 0) + col.fill * 3 - col.unique * 0.1,
       entries: Array.from(col.counts.entries()).sort((a, b) => b[1] - a[1]),
       total: col.nonEmpty,
     }))
@@ -320,6 +325,173 @@ function rpCollect() {
   };
 }
 
+// Agregacje dokładamy PO zebraniu podstaw (potrzebują wybranej kategorii i liczby).
+function rpCollectAll() {
+  const d = rpCollect();
+  d.aggs = rpAutoAggregations(d);
+  d.aggPanel = rpPanelAggregation();
+  return d;
+}
+
+// ── Agregacje z silnika apki ────────────────────────────────────────────────
+// Raport nie liczy grup sam — pożycza silnik panelu „Agregacje” (buildAggregationWorkbenchResult).
+// Silnik czyta ustawienia z globalnego aggregationWorkbenchState i po drodze je normalizuje,
+// więc: kopia stanu → nasze ustawienia → wynik → przywrócenie KAŻDEGO pola. Panel użytkownika
+// zostaje dokładnie taki, jaki był (test to pilnuje).
+// Zawsze: bieżący widok (scopeMode "filtered"), wiersz nagłówka = ten z tabeli (bez
+// autodetekcji — inaczej grupy mogłyby wyjść z innych kolumn niż reszta raportu),
+// układ szeroki, bez scalania grup i progów.
+
+const RP_AGG_MAX_GROUPS = 8;
+const RP_AGG_MAX_CROSS_COLS = 5;
+const RP_AGG_PANEL_MAX = 15;
+
+function rpAggAvailable() {
+  return typeof buildAggregationWorkbenchResult === "function" && typeof aggregationWorkbenchState !== "undefined";
+}
+
+function rpWithAggState(override, fn) {
+  if (!rpAggAvailable()) return null;
+  const saved = JSON.parse(JSON.stringify(aggregationWorkbenchState));
+  try {
+    Object.assign(aggregationWorkbenchState, override);
+    return fn();
+  } catch {
+    return null; // raport ma się otworzyć nawet, gdy agregacja na tym arkuszu się wyłoży
+  } finally {
+    Object.keys(aggregationWorkbenchState).forEach((k) => { if (!(k in saved)) delete aggregationWorkbenchState[k]; });
+    Object.assign(aggregationWorkbenchState, saved);
+  }
+}
+
+function rpAggBase() {
+  return {
+    sourceMode: "wide",
+    scopeMode: "filtered",
+    headerRowChoice: "custom",
+    customHeaderRow: currentHeaderRow,
+    groupBy: "",
+    groupBy2: "",
+    groupBy3: "",
+    groupMode: "exact",
+    groupPattern: "=*",
+    havingMode: "all",
+    measureFilterMode: "all",
+    measureFilterValue: "",
+  };
+}
+
+// Uruchom silnik i sprawdź, czy policzył TO, o co prosiliśmy (silnik po cichu podmienia
+// niepasujące ustawienia na domyślne — wtedy wynik byłby o czymś innym niż tytuł sekcji).
+function rpAggRun(override) {
+  return rpWithAggState({ ...rpAggBase(), ...override }, () => {
+    const res = buildAggregationWorkbenchResult();
+    const st = aggregationWorkbenchState;
+    const asked = (k) => override[k] === undefined || JSON.stringify(override[k]) === JSON.stringify(st[k]);
+    if (!res || res.status !== "ok" || !["groupBy", "groupBy2", "measures", "aggregation"].every(asked)) return null;
+    return res;
+  });
+}
+
+function rpAggProbe() {
+  return rpWithAggState({ ...rpAggBase(), measures: ["count_rows"], aggregation: "count" }, () => {
+    const res = buildAggregationWorkbenchResult();
+    return res ? { measures: res.measures || [] } : null;
+  });
+}
+
+function rpFmtKind(value, kind) {
+  if (kind === "duration" && typeof formatDurationDays === "function") return formatDurationDays(value);
+  return rpNum(value);
+}
+
+function rpAutoAggregations(d) {
+  if (!rpAggAvailable() || !d.category || d.rows < 3) return [];
+  const probe = rpAggProbe();
+  if (!probe) return [];
+  const out = [];
+  const catHeader = currentHeaders[d.category.col.c];
+
+  // 1. Główna liczba wg głównej kategorii: suma, średnia, udział.
+  if (d.numeric) {
+    const m = probe.measures.find((x) => x.measureType === "column" && x.colIdx === d.numeric.col.c);
+    const res = m && rpAggRun({ groupBy: catHeader, measures: [m.key], aggregation: "sum" });
+    if (res) {
+      const total = res.entries.reduce((sum, e) => sum + (e.sum || 0), 0);
+      out.push({ type: "byGroup", title: t("rpAggByGroup", { measure: d.numeric.col.name, group: d.category.col.name }), kind: m.kind, entries: res.entries, total, measureName: d.numeric.col.name });
+    }
+  }
+
+  // 2. Czas trwania start → koniec (para kolumn, którą wykrywa silnik) wg kategorii.
+  const dur = probe.measures.find((x) => x.measureType === "date_range") || probe.measures.find((x) => x.kind === "duration" && x.measureType === "column");
+  if (dur) {
+    const res = rpAggRun({ groupBy: catHeader, measures: [dur.key], aggregation: "avg" });
+    if (res && res.entries.some((e) => Number.isFinite(e.average))) {
+      out.push({ type: "duration", title: t("rpAggDuration", { measure: dur.label.replace("->", "→"), group: d.category.col.name }), entries: res.entries.filter((e) => Number.isFinite(e.average)), measureName: dur.label.replace("->", "→") });
+    }
+  }
+
+  // 3. Tabela krzyżowa: główna kategoria × druga kategoria (liczba wierszy).
+  const second = d.otherCategories[0];
+  if (second) {
+    const res = rpAggRun({ groupBy: catHeader, groupBy2: currentHeaders[second.col.c], measures: ["count_rows"], aggregation: "count" });
+    if (res) {
+      out.push({ type: "cross", title: t("rpAggCross", { a: d.category.col.name, b: second.col.name }), entries: res.entries, rowsName: d.category.col.name });
+    }
+  }
+  return out;
+}
+
+const RP_AGG_METHODS = ["count", "sum", "avg", "median", "min", "max", "distinct", "earliest", "latest"];
+
+// Agregacja dokładnie tak, jak ustawiona w panelu — to „skąd ma brać” w rękach użytkownika.
+function rpPanelAggregation() {
+  if (!rpAggAvailable()) return null;
+  return rpWithAggState({}, () => {
+    const res = buildAggregationWorkbenchResult();
+    if (!res || res.status !== "ok") return null;
+    const st = aggregationWorkbenchState;
+    const measures = res.selectedMeasures && res.selectedMeasures.length ? res.selectedMeasures : [res.measure].filter(Boolean);
+    const kind = typeof getPrimaryAggregationValueKind === "function" ? getPrimaryAggregationValueKind(measures, st.aggregation) : "number";
+    return {
+      entries: res.entries,
+      kind,
+      method: RP_AGG_METHODS.includes(st.aggregation) ? st.aggregation : "count",
+      measureNames: measures.map((m) => m.label),
+      groups: [st.groupBy, st.groupBy2, st.groupBy3].filter(Boolean),
+      wholeSheet: st.scopeMode === "all",
+    };
+  });
+}
+
+function rpAggFindings(d) {
+  const out = [];
+  (d.aggs || []).forEach((a) => {
+    if (a.type === "byGroup" && a.entries.length >= 2 && a.total > 0) {
+      const top = a.entries[0];
+      out.push({ text: t("rpFindAggShare", { measure: a.measureName, group: top.label, pct: rpPct(top.sum, a.total), value: rpFmtKind(top.sum, a.kind) }) });
+      const solid = a.entries.filter((e) => e.count >= 3 && Number.isFinite(e.average) && e.average > 0);
+      if (solid.length >= 2) {
+        const hi = solid.reduce((x, y) => (y.average > x.average ? y : x));
+        const lo = solid.reduce((x, y) => (y.average < x.average ? y : x));
+        if (hi !== lo && hi.average >= lo.average * 1.5) {
+          out.push({ text: t("rpFindAggSpread", { measure: a.measureName, hi: hi.label, hiV: rpFmtKind(hi.average, a.kind), x: rpNum(hi.average / lo.average, 1), lo: lo.label, loV: rpFmtKind(lo.average, a.kind) }) });
+        }
+      }
+    }
+    if (a.type === "duration") {
+      const solid = a.entries.filter((e) => e.count >= 3);
+      const n = a.entries.reduce((s2, e) => s2 + e.count, 0);
+      const overall = n ? a.entries.reduce((s2, e) => s2 + e.average * e.count, 0) / n : NaN;
+      if (solid.length >= 2 && Number.isFinite(overall)) {
+        const hi = solid.reduce((x, y) => (y.average > x.average ? y : x));
+        out.push({ text: t("rpFindAggLongest", { group: hi.label, measure: a.measureName, avg: rpFmtKind(hi.average, "duration"), all: rpFmtKind(overall, "duration") }) });
+      }
+    }
+  });
+  return out;
+}
+
 // ── Wnioski zdaniami ────────────────────────────────────────────────────────
 // Kolejność = przydatność. Każda reguła zwraca zdanie albo nic.
 
@@ -336,6 +508,7 @@ function rpFindings(d) {
     const s = d.numeric;
     out.push({ text: t("rpFindSum", { col: s.col.name, sum: rpNum(s.sum), avg: rpNum(s.avg), min: rpNum(s.min), max: rpNum(s.max) }) });
   }
+  out.push(...rpAggFindings(d));
   if (d.date) {
     const dt = d.date;
     let text = t("rpFindDates", { col: dt.col.name, from: rpDate(dt.min), to: rpDate(dt.max) });
@@ -539,6 +712,59 @@ const RP_BUILDERS = {
     rpBars(sec, rpTopWithRest(entries, RP_MAX_BARS), total);
     return sec;
   },
+  aggAuto(d) {
+    const sec = rpSection(t("rpAggTitle"), "rp-aggs");
+    d.aggs.forEach((a) => {
+      const box = rpEl("div", "rp-agg");
+      box.appendChild(rpEl("h3", "rp-h3", a.title));
+      if (a.type === "byGroup") {
+        const shown = a.entries.slice(0, RP_AGG_MAX_GROUPS);
+        box.appendChild(rpTable(
+          [t("rpColGroup"), t("rpColCount"), t("rpColSum"), t("rpColAvg"), t("rpColShare")],
+          shown.map((e) => [e.label, rpNum(e.count, 0), rpFmtKind(e.sum, a.kind), rpFmtKind(e.average, a.kind), `${rpPct(e.sum, a.total)}%`]),
+          { numCols: [1, 2, 3, 4] },
+        ));
+        if (a.entries.length > shown.length) box.appendChild(rpEl("p", "rp-note", t("rpAggMore", { n: a.entries.length - shown.length })));
+      } else if (a.type === "duration") {
+        const shown = a.entries.slice().sort((x, y) => y.average - x.average).slice(0, RP_AGG_MAX_GROUPS);
+        box.appendChild(rpTable(
+          [t("rpColGroup"), t("rpColCount"), t("rpColAvg"), t("rpColMedian"), t("rpColMax")],
+          shown.map((e) => [e.label, rpNum(e.count, 0), rpFmtKind(e.average, "duration"), rpFmtKind(e.median, "duration"), rpFmtKind(e.max, "duration")]),
+          { numCols: [1, 2, 3, 4] },
+        ));
+      } else if (a.type === "cross") {
+        box.appendChild(rpCrossTable(a));
+      }
+      sec.appendChild(box);
+    });
+    return sec;
+  },
+  aggPanel(d) {
+    const a = d.aggPanel;
+    const sec = rpSection(t("rpAggPanelTitle"), "rp-aggs");
+    const how = t("rpAggPanelHow", {
+      method: t(`rpAggMethod_${a.method}`),
+      measure: a.measureNames.join(", "),
+      groups: a.groups.join(" / "),
+    });
+    sec.appendChild(rpEl("p", "rp-note", a.wholeSheet && d.filtering ? `${how} ${t("rpAggPanelWhole")}` : how));
+    const shown = a.entries.slice(0, RP_AGG_PANEL_MAX);
+    const maxV = Math.max(1e-9, ...shown.map((e) => Math.abs(Number(e.primary) || 0)));
+    shown.forEach((e) => {
+      const row = rpEl("div", "rp-bar-row");
+      const bar = rpEl("div", "rp-bar");
+      const fill = rpEl("div", "rp-bar-fill");
+      const v = Number(e.primary) || 0;
+      // Daty (najwcześniej/najpóźniej) nie mają sensownej długości paska.
+      fill.style.width = a.kind === "date" ? "0" : `${Math.max(2, Math.round((Math.abs(v) / maxV) * 100))}%`;
+      bar.appendChild(fill);
+      const value = typeof formatAggregationMetricValue === "function" ? formatAggregationMetricValue(v, a.kind) : rpNum(v);
+      row.append(rpEl("div", "rp-bar-label", e.label), bar, rpEl("div", "rp-bar-value", value));
+      sec.appendChild(row);
+    });
+    if (a.entries.length > shown.length) sec.appendChild(rpEl("p", "rp-note", t("rpAggMore", { n: a.entries.length - shown.length })));
+    return sec;
+  },
   months(d) {
     const dt = d.date;
     const sec = rpSection(t("rpMonthsTitle", { col: dt.col.name }), "rp-chart");
@@ -605,6 +831,32 @@ const RP_BUILDERS = {
     return sec;
   },
 };
+
+// Tabela krzyżowa z wyniku silnika grupującego po dwóch kolumnach („A / B”).
+// Wiersze i kolumny: najliczniejsze, reszta zbiorczo w „inne”.
+function rpCrossTable(a) {
+  const rowsTot = new Map();
+  const colsTot = new Map();
+  const cell = new Map();
+  a.entries.forEach((e) => {
+    const [r, c] = e.groupLabels || [e.label, ""];
+    rowsTot.set(r, (rowsTot.get(r) || 0) + e.count);
+    colsTot.set(c, (colsTot.get(c) || 0) + e.count);
+    cell.set(`${r}\u0000${c}`, e.count);
+  });
+  const top = (m, n) => Array.from(m.entries()).sort((x, y) => y[1] - x[1]).slice(0, n).map(([k]) => k);
+  const rows = top(rowsTot, RP_AGG_MAX_GROUPS);
+  const cols = top(colsTot, RP_AGG_MAX_CROSS_COLS);
+  const colOther = colsTot.size > cols.length;
+  const headers = [a.rowsName, ...cols, ...(colOther ? [t("rpChartOther")] : []), t("rpColTotal")];
+  const body = rows.map((r) => {
+    const vals = cols.map((c) => cell.get(`${r}\u0000${c}`) || 0);
+    const other = rowsTot.get(r) - vals.reduce((x, y) => x + y, 0);
+    return [r, ...vals.map((v) => (v ? rpNum(v, 0) : "·")), ...(colOther ? [other ? rpNum(other, 0) : "·"] : []), rpNum(rowsTot.get(r), 0)];
+  });
+  const numCols = headers.map((_, i) => i).filter((i) => i > 0);
+  return rpTable(headers, body, { numCols });
+}
 
 function afShortSafe(text, max) {
   const str = String(text || "").replace(/\s+/g, " ").trim();
@@ -697,37 +949,104 @@ function rpFit() {
   rpWrapEl.style.width = `${Math.round(pageW * scale)}px`;
   rpWrapEl.style.height = `${Math.round(h * scale)}px`;
   if (rpFitNoteEl) {
-    // Kartka na ekranie ma min. 297 mm (stopka dociśnięta do dołu), więc liczymy
-    // wysokość TREŚCI: dół ostatniej sekcji + stopka. Na wydruku góra/dół każdej strony
-    // to margines @page, a kartka ma tylko RP_PRINT_PAD_TOP_MM u góry.
-    const foot = rpPageEl.querySelector(".rp-foot");
-    const last = foot ? foot.previousElementSibling : null;
-    const px = rpMmToPx;
-    const contentBottom = last && foot
-      ? last.offsetTop + last.offsetHeight + px(6) + foot.offsetHeight
-      : h;
-    const printed = contentBottom - px(RP_SCREEN_PAD_MM) + px(RP_PRINT_PAD_TOP_MM);
-    const usable = px(RP_PAGE_MM.h - 2 * RP_PRINT_MARGIN_MM);
-    const pages = Math.max(1, Math.ceil((printed - 2) / usable));
+    const { pages, breaks } = rpSimulatePages();
     rpFitNoteEl.textContent = pages > 1 ? t("rpFitPages", { n: pages }) : t("rpFitOne");
     rpFitNoteEl.classList.toggle("is-warn", pages > 1);
-    rpDrawPageGuides(pages, usable);
+    rpDrawPageGuides(breaks);
   }
 }
 
-// Przerywane linie „tu kończy się strona N” — przybliżenie (przeglądarka przy druku
-// przenosi całe bloki, więc realny podział bywa odrobinę wyżej).
-function rpDrawPageGuides(pages, usablePx) {
+// ── Symulacja łamania stron ──
+// Proste „wysokość / 273 mm” myliło się, bo bloki z break-inside: avoid (kafelki, wykresy,
+// pojedyncze tabele zestawień) przeglądarka PRZENOSI w całości na następną stronę,
+// zostawiając dziurę. Tu robimy to samo: dzielimy kartkę na jednostki, których druk nie
+// rozetnie, i układamy je na stronach A4 (bez marginesów @page). Wynik: liczba stron
+// i miejsca podziału — przerywane linie w podglądzie stoją tam, gdzie naprawdę wypadnie strona.
+
+function rpRelTop(el) {
+  let y = 0;
+  let node = el;
+  while (node && node !== rpPageEl) {
+    y += node.offsetTop;
+    node = node.offsetParent;
+  }
+  return y;
+}
+
+// Jednostki w kolejności. Sekcje łamliwe (zestawienia, dane) rozbijamy: tytuł sekcji jedzie
+// razem z pierwszym elementem, tabela danych łamie się między wierszami (z powtórzonym nagłówkiem).
+function rpPrintUnits() {
+  const units = [];
+  const push = (startEl, endEl, extra = {}) => {
+    const top = rpRelTop(startEl);
+    units.push({ top, bottom: rpRelTop(endEl) + endEl.offsetHeight, ...extra });
+  };
+  Array.from(rpPageEl.children).forEach((el) => {
+    if (el.classList.contains("rp-page-break-guide")) return;
+    if (!el.matches(".rp-aggs, .rp-data")) { push(el, el); return; }
+    let lead = null;
+    Array.from(el.children).forEach((ch) => {
+      if (ch.matches(".rp-h2, .rp-note")) { lead = lead || ch; return; }
+      const table = ch.matches("table") ? ch : null;
+      if (table && el.matches(".rp-data") && table.tBodies[0]) {
+        const head = table.tHead ? table.tHead.offsetHeight : 0;
+        Array.from(table.tBodies[0].rows).forEach((tr, i) => {
+          push(i === 0 ? (lead || table) : tr, tr, { repeatHead: head });
+        });
+      } else {
+        push(lead || ch, ch);
+      }
+      lead = null;
+    });
+  });
+  return units;
+}
+
+function rpSimulatePages() {
+  const px = rpMmToPx;
+  const usable = px(RP_PAGE_MM.h - 2 * RP_PRINT_MARGIN_MM);
+  // Współrzędne ekranu → druku: na ekranie kartka ma 16 mm u góry, w druku 4 mm.
+  const toPrint = px(RP_SCREEN_PAD_MM - RP_PRINT_PAD_TOP_MM);
+  const units = rpPrintUnits();
+  let pageStart = 0;
+  let shift = 0;
+  let pages = 1;
+  const breaks = [];
+  units.forEach((u) => {
+    const h = u.bottom - u.top;
+    let top = u.top - toPrint + shift;
+    if (top + h <= pageStart + usable) return;
+    if (h <= usable) {
+      const next = pageStart + usable;
+      if (top > pageStart) {
+        breaks.push({ at: u.top, page: pages + 1 });
+        shift += next - top + (u.repeatHead || 0);
+        pageStart = next;
+        pages += 1;
+      }
+      return;
+    }
+    // Jednostka wyższa niż strona (bardzo długi blok) — i tak zostanie pocięta.
+    while (top + h > pageStart + usable) {
+      pageStart += usable;
+      pages += 1;
+      breaks.push({ at: u.top + (pageStart - top), page: pages });
+    }
+  });
+  return { pages, breaks };
+}
+
+// Przerywane linie „strona N” tuż nad elementem, od którego zacznie się nowa strona.
+function rpDrawPageGuides(breaks) {
   rpPageEl.querySelectorAll(".rp-page-break-guide").forEach((el) => el.remove());
-  const firstTop = rpMmToPx(RP_SCREEN_PAD_MM - RP_PRINT_PAD_TOP_MM);
-  for (let i = 1; i < pages; i++) {
+  breaks.forEach((b) => {
     const g = document.createElement("div");
     g.className = "rp-page-break-guide";
     g.setAttribute("aria-hidden", "true");
-    g.dataset.label = t("rpPageGuide", { n: i + 1 });
-    g.style.top = `${Math.round(firstTop + usablePx * i)}px`;
+    g.dataset.label = t("rpPageGuide", { n: b.page });
+    g.style.top = `${Math.max(0, Math.round(b.at - rpMmToPx(2)))}px`;
     rpPageEl.appendChild(g);
-  }
+  });
 }
 
 // ── Kontrolki wyglądu ───────────────────────────────────────────────────────
@@ -778,7 +1097,7 @@ function openReport() {
     return;
   }
   rpLoadPrefs();
-  rpData = rpCollect();
+  rpData = rpCollectAll();
   rpTitle = rpDefaultTitle();
   rpReturnFocusEl = document.activeElement;
   rpOverlayEl.classList.remove("hidden");
@@ -866,6 +1185,7 @@ window.__report = {
   prefs: () => ({ ...rpPrefs, sections: rpPrefs.sections.slice() }),
   sections: () => Array.from(document.querySelectorAll("#rpPage [data-section]")).map((el) => el.dataset.section),
   setPreset: rpSetPreset,
+  aggState: () => (typeof aggregationWorkbenchState !== "undefined" ? JSON.stringify(aggregationWorkbenchState) : ""),
   toggleSection: rpToggleSection,
   isOpen: () => rpIsOpen,
 };

@@ -7313,6 +7313,9 @@ body.rp-active { overflow: hidden; }
 .rp-note { margin: 0 0 2mm; font-size: 0.82em; color: var(--rp-muted); }
 .rp-cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(80mm, 1fr)); gap: 4mm 6mm; }
 .rp-cat { break-inside: avoid; }
+.rp-aggs { display: grid; gap: 4mm; }
+.rp-aggs > .rp-h2 { margin-bottom: 0; }
+.rp-agg { break-inside: avoid; }
 .rp-cat .rp-bar-row { grid-template-columns: 26mm 1fr 20mm; }
 
 .rp-table { width: 100%; border-collapse: collapse; font-size: 0.86em; }
@@ -7325,7 +7328,7 @@ body.rp-active { overflow: hidden; }
 .rp-data .rp-table td { overflow-wrap: anywhere; }
 /* Tylko tabela DANYCH może przechodzić przez strony (bywa długa). Małe tabele (statystyki,
    przegląd kolumn) trzymają się razem z nagłówkiem — inaczej tytuł zostaje sam na dole strony. */
-.rp-block.rp-data { break-inside: auto; }
+.rp-block.rp-data, .rp-block.rp-aggs { break-inside: auto; } /* zestawienia łamią się MIĘDZY tabelami (każda .rp-agg w całości) */
 .rp-h2 { break-after: avoid; }
 .rp-page[data-style="classic"] .rp-table th { color: var(--rp-ink); border-bottom-color: var(--rp-ink); }
 .rp-page[data-style="ink"] .rp-table th { border-bottom-color: #000; }
