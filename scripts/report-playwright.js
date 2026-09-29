@@ -230,7 +230,9 @@ async function run() {
   });
   const printed = await page.evaluate(() => window.__printed);
   check("druk wołany z klasą rp-printing i tytułem raportu", printed && printed.cls && printed.title === "Zlecenia w toku", printed);
-  check("po druku tytuł strony wraca", await page.evaluate(() => document.title === "Sheet Workbench" || !/Zlecenia w toku/.test(document.title)));
+  // Klasa druku i tytuł zostają do „afterprint” (iPad drukuje chwilę po powrocie z print()).
+  await page.evaluate(() => window.dispatchEvent(new Event("afterprint")));
+  check("po druku („afterprint”) tytuł strony wraca", await page.evaluate(() => document.title === "Sheet Workbench" || !/Zlecenia w toku/.test(document.title)));
   await page.evaluate(() => document.body.classList.add("rp-printing"));
   await page.emulateMedia({ media: "print" });
   const printView = await page.evaluate(() => {

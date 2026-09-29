@@ -205,6 +205,42 @@ async function run() {
   const dl = await page.evaluate(async () => { const r = await window.__report.downloadPdf({ deliver: false }); return r && { pages: r.pages, head: await r.blob.slice(0, 5).text() }; });
   check("„Pobierz PDF”: tyle stron co podgląd", dl && dl.pages === tm.pages && dl.head === "%PDF-", dl);
 
+  // ── Dane „z życia”: warianty pisowni, bloki Kw1…Kw3, suma kontrolna, rok ──
+  await page.evaluate(() => {
+    window.__report.close();
+    resetFilterInputs();
+    applyFilters();
+    const ws = {};
+    ["Status", "Rok", "Kw1_Kwota", "Kw2_Kwota", "Kw3_Kwota", "Suma_kontrolna"].forEach((h, i) => { ws[String.fromCharCode(65 + i) + "1"] = { t: "s", v: h }; });
+    const st = ["aktywny", "Aktywny", "AKTYWNY", "Zamknięty", "Zamknięty", "aktywny", "Zamknięty", "Nowy"];
+    for (let i = 0; i < 8; i++) {
+      const r = i + 2;
+      const k = [100 + i, 200, 300];
+      ws["A" + r] = { t: "s", v: st[i] };
+      ws["B" + r] = { t: "n", v: 2022 + (i % 3), w: String(2022 + (i % 3)) };
+      k.forEach((v, j) => { ws[String.fromCharCode(67 + j) + r] = { t: "n", v, w: String(v) }; });
+      ws["F" + r] = { t: "n", v: k[0] + k[1] + k[2] + 0.5, w: String(k[0] + k[1] + k[2] + 0.5) };
+    }
+    ws["!ref"] = "A1:F9";
+    workbook = { SheetNames: ["Z"], Sheets: { Z: ws }, Props: {} };
+    currentFileName = "zycie.xlsx";
+    sheetSelect.replaceChildren();
+    const o = document.createElement("option"); o.value = o.textContent = "Z";
+    sheetSelect.appendChild(o); sheetSelect.value = "Z";
+    document.getElementById("headerRow").value = "1";
+    document.getElementById("autoHeaderRow").checked = false;
+    document.getElementById("loadBtn").click();
+  });
+  await page.waitForFunction(() => currentFileName === "zycie.xlsx" && baseRows.length === 8);
+  await sleep(300);
+  await page.evaluate(() => { localStorage.setItem("swb-report-prefs", JSON.stringify({ preset: "normal" })); window.__report.open(); });
+  await sleep(300);
+  const life = await page.evaluate(() => ({ f: window.__report.findings(), tiles: Array.from(document.querySelectorAll("#rpPage .rp-tile")).map((el) => el.textContent) }));
+  check("warianty pisowni liczone razem: aktywny 50% (4 z 8)", life.f.some((x) => /„Status” najczęściej: aktywny — 50% \(4 z 8\)/.test(x)), life.f);
+  check("wniosek wskazuje warianty i narzędzie", life.f.some((x) => /zapisana różnie: .*„Aktywny”.*Ujednolić warianty/.test(x)), life.f);
+  check("suma z bloków Kw1–Kw3 (4828), nie suma kontrolna ani rok", life.f.some((x) => /Suma „Kwota \(3 kol\.\)”: 4828/.test(x.replace(/\s|\u00a0/g, " ").replace(/(\d) (\d)/g, "$1$2"))), life.f);
+  check("rok i suma kontrolna nie są główną liczbą", !life.f.some((x) => /Suma „(Rok|Suma_kontrolna)”/.test(x)), life.f);
+
   check("brak błędów w konsoli", errors.length === 0, errors);
   await browser.close();
   const failed = results.filter((r) => !r.ok);

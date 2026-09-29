@@ -205,6 +205,7 @@ function rpProfileColumns(rows) {
     nums: [],
     dates: [],
     counts: new Map(),
+    groups: new Map(),
   }));
   rows.forEach((row) => {
     cols.forEach((col) => {
@@ -212,6 +213,14 @@ function rpProfileColumns(rows) {
       if (!shown) return;
       col.nonEmpty += 1;
       col.counts.set(shown, (col.counts.get(shown) || 0) + 1);
+      // Warianty pisowni tej samej wartości („aktywny / Aktywny / AKTYWNY”, podwójna spacja)
+      // liczymy RAZEM — tym samym kluczem co silnik agregacji (normalizeAnalysisKey), inaczej
+      // kafelek mówiłby „aktywny 17%”, a zestawienie obok „AKTYWNY 48%”.
+      const key = rpValueKey(shown);
+      let g = col.groups.get(key);
+      if (!g) { g = { n: 0, spell: new Map() }; col.groups.set(key, g); }
+      g.n += 1;
+      g.spell.set(shown, (g.spell.get(shown) || 0) + 1);
       const value = row.values ? row.values[col.c] : shown;
       const kind = rpClassifyCell(value, shown);
       if (kind === "num") col.nums.push(value);
@@ -223,6 +232,7 @@ function rpProfileColumns(rows) {
   });
   cols.forEach((col) => {
     col.unique = col.counts.size;
+    col.uniqueGroups = col.groups.size;
     col.fill = rows.length ? col.nonEmpty / rows.length : 0;
     col.kind = !col.nonEmpty ? "empty"
       : col.nums.length / col.nonEmpty >= 0.8 ? "num"
@@ -232,9 +242,23 @@ function rpProfileColumns(rows) {
   return cols;
 }
 
+function rpValueKey(shown) {
+  const k = typeof normalizeAnalysisKey === "function" ? normalizeAnalysisKey(shown) : String(shown).toLowerCase().replace(/\s+/g, " ").trim();
+  return k || shown;
+}
+
+// Grupy wariantów kolumny jako [[etykieta, liczba]] — etykieta = najczęstsza pisownia.
+function rpGroupEntries(col) {
+  return Array.from(col.groups.values())
+    .map((g) => [Array.from(g.spell.entries()).sort((a, b) => b[1] - a[1])[0][0], g.n, g.spell.size > 1 ? Array.from(g.spell.keys()) : null])
+    .sort((a, b) => b[1] - a[1]);
+}
+
 // Numer porządkowy (1, 2, 3…) to też liczby, ale ich suma nic nie mówi.
 function rpLooksLikeCounter(col) {
   if (RP_ID_RE.test(col.name)) return true;
+  // „Kwota”, „Ilość”… z wartościami po kolei (100, 101, 102) to nadal kwoty, nie numeracja.
+  if (RP_NUM_RE.test(col.name)) return false;
   if (col.unique !== col.nonEmpty || col.nums.length < 3) return false;
   if (!col.nums.every((n) => Number.isInteger(n))) return false;
   const min = Math.min(...col.nums);
@@ -247,13 +271,17 @@ function rpCategories(cols, rowCount) {
   if (rowCount < 3) return [];
   return cols
     .filter((col) => col.kind === "text" && col.fill >= 0.5
-      && col.unique >= 2 && col.unique <= 12 && col.unique <= col.nonEmpty * 0.6)
-    .map((col) => ({
-      col,
-      score: (RP_CAT_STRONG_RE.test(col.name) ? 10 : RP_CAT_RE.test(col.name) ? 5 : 0) + col.fill * 3 - col.unique * 0.1,
-      entries: Array.from(col.counts.entries()).sort((a, b) => b[1] - a[1]),
-      total: col.nonEmpty,
-    }))
+      && col.uniqueGroups >= 2 && col.uniqueGroups <= 12 && col.uniqueGroups <= col.nonEmpty * 0.6)
+    .map((col) => {
+      const grouped = rpGroupEntries(col);
+      return {
+        col,
+        score: (RP_CAT_STRONG_RE.test(col.name) ? 10 : RP_CAT_RE.test(col.name) ? 5 : 0) + col.fill * 3 - col.uniqueGroups * 0.1,
+        entries: grouped.map(([label, n]) => [label, n]),
+        variants: grouped.filter((g) => g[2]).map(([label, n, spells]) => ({ label, n, spells })),
+        total: col.nonEmpty,
+      };
+    })
     .sort((a, b) => b.score - a.score);
 }
 
@@ -277,11 +305,52 @@ function rpNumStats(col) {
   };
 }
 
-// Kolumny liczbowe warte statystyk (bez numerów porządkowych), najlepsza pierwsza.
+// Liczby, których suma nic nie znaczy: sumy kontrolne / hashe, rok (2022+2023+… = bzdura).
+const RP_NOT_MEASURE_RE = /kontroln|checksum|hash|\bcrc\b|\bpesel\b|\bnip\b|\bregon\b|telefon|\bphone\b|kod poczt|zip/i;
+const RP_YEAR_RE = /^(rok|year|lata)\b/i;
+function rpNotAMeasure(col) {
+  if (RP_NOT_MEASURE_RE.test(col.name) || RP_YEAR_RE.test(col.name)) return true;
+  // Same liczby całkowite z zakresu lat i mało różnych wartości = rok, nie ilość.
+  return col.nums.length >= 3 && col.unique <= 60 && col.nums.every((n) => Number.isInteger(n) && n >= 1900 && n <= 2100);
+}
+
+// Bloki powtarzane (Kw1_Kwota, Kw2_Kwota…; Kwota1, Kwota2…) rozpoznaje parser apki
+// (parseRepeatedHeader). Taka rodzina to JEDNA miara — sumujemy wszystkie bloki, zamiast
+// brać pierwszą z brzegu kolumnę albo „Sumę kontrolną”.
+function rpNumericFamilies(cols) {
+  if (typeof parseRepeatedHeader !== "function") return [];
+  const byBase = new Map();
+  cols.forEach((col) => {
+    const raw = String(currentHeaders[col.c] ?? "");
+    const rh = parseRepeatedHeader(raw);
+    if (!rh || !rh.base || rh.base === raw.trim()) return;
+    const middle = /^[A-Za-zĄąĆćĘęŁłŃńÓóŚśŹźŻż]{1,6}\d+[_\-. ]/.test(raw.trim());
+    const pretty = middle ? (rh.base.split("_").slice(1).join("_") || rh.base) : rh.base;
+    const key = rpValueKey(rh.base);
+    if (!byBase.has(key)) byBase.set(key, { pretty, members: [] });
+    byBase.get(key).members.push(col);
+  });
+  return Array.from(byBase.values())
+    .filter((f) => f.members.length >= 2)
+    .map((f) => ({
+      c: null,
+      isFamily: true,
+      members: f.members,
+      name: t("rpFamilyName", { base: f.pretty, n: f.members.length }),
+      nums: f.members.flatMap((m) => m.nums),
+      fill: f.members.reduce((s2, m) => s2 + m.fill, 0) / f.members.length,
+      unique: Infinity,
+    }));
+}
+
+// Miary liczbowe warte statystyk, najlepsza pierwsza: rodziny bloków + pojedyncze kolumny
+// spoza rodzin. Bez numerów porządkowych, lat i sum kontrolnych.
 function rpNumericCols(cols) {
-  return cols
-    .filter((col) => col.kind === "num" && !rpLooksLikeCounter(col))
-    .map((col) => ({ col, score: (RP_NUM_RE.test(col.name) ? 10 : 0) + col.fill * 3 }))
+  const eligible = cols.filter((col) => col.kind === "num" && !rpLooksLikeCounter(col) && !rpNotAMeasure(col));
+  const families = rpNumericFamilies(eligible);
+  const inFamily = new Set(families.flatMap((f) => f.members));
+  return [...families, ...eligible.filter((col) => !inFamily.has(col))]
+    .map((col) => ({ col, score: (RP_NUM_RE.test(col.name) ? 10 : 0) + (col.isFamily ? 3 : 0) + col.fill * 3 }))
     .sort((a, b) => b.score - a.score)
     .map(({ col }) => rpNumStats(col));
 }
@@ -318,6 +387,8 @@ function rpPickDuplicates(cols) {
     if (col.nonEmpty < 5 || col.unique === col.nonEmpty) continue;
     const idLike = RP_ID_RE.test(col.name) || (col.nonEmpty >= 10 && col.unique / col.nonEmpty >= 0.95);
     if (!idLike) continue;
+    // Kwoty z groszami to nie identyfikatory — dwie równe kwoty to nie duplikat rekordu.
+    if (col.kind === "num" && !RP_ID_RE.test(col.name) && col.nums.some((n) => !Number.isInteger(n))) continue;
     const dups = Array.from(col.counts.entries()).filter(([, n]) => n > 1);
     if (dups.length) return { col, dups };
   }
@@ -443,7 +514,39 @@ function rpAutoAggregations(d) {
   const catHeader = currentHeaders[d.category.col.c];
 
   // 1. Główna liczba wg głównej kategorii: suma, średnia, udział.
-  if (d.numeric) {
+  // Rodzina bloków (Kw1…Kw4_Kwota) to nie jedna kolumna silnika — tu liczymy sami:
+  // suma bloków w wierszu, grupy po tym samym kluczu co reszta raportu.
+  if (d.numeric && d.numeric.col.isFamily) {
+    const fam = d.numeric.col;
+    const catC = d.category.col.c;
+    const groups = new Map();
+    d.rowsList.forEach((row) => {
+      let rowSum = 0;
+      let has = false;
+      fam.members.forEach((m) => {
+        const v = row.values ? row.values[m.c] : undefined;
+        if (typeof v === "number" && Number.isFinite(v)) { rowSum += v; has = true; }
+      });
+      if (!has) return;
+      const shown = String(getDisplayValue(row, catC) ?? "").trim() || t("rpEmptyGroup");
+      const key = rpValueKey(shown);
+      let g = groups.get(key);
+      if (!g) { g = { spell: new Map(), count: 0, sum: 0 }; groups.set(key, g); }
+      g.spell.set(shown, (g.spell.get(shown) || 0) + 1);
+      g.count += 1;
+      g.sum += rowSum;
+    });
+    const entries = Array.from(groups.values()).map((g) => ({
+      label: Array.from(g.spell.entries()).sort((a, b) => b[1] - a[1])[0][0],
+      count: g.count,
+      sum: g.sum,
+      average: g.sum / g.count,
+    })).sort((a, b) => b.sum - a.sum);
+    if (entries.length) {
+      const total = entries.reduce((s2, e) => s2 + e.sum, 0);
+      out.push({ type: "byGroup", title: t("rpAggByGroup", { measure: fam.name, group: d.category.col.name }), kind: "number", entries, total, measureName: fam.name });
+    }
+  } else if (d.numeric) {
     const m = probe.measures.find((x) => x.measureType === "column" && x.colIdx === d.numeric.col.c);
     const res = m && rpAggRun({ groupBy: catHeader, measures: [m.key], aggregation: "sum" });
     if (res) {
@@ -533,6 +636,12 @@ function rpFindings(d) {
     let text = t("rpFindTop", { col: col.name, value: v1, pct: rpPct(n1, total), n: n1, all: total });
     if (entries[1]) text += ` ${t("rpFindNext", { value: entries[1][0], pct: rpPct(entries[1][1], total) })}`;
     out.push({ text });
+    // Ta sama wartość zapisana różnie — policzone razem, ale warto o tym wiedzieć (i poprawić).
+    const v = d.category.variants || [];
+    if (v.length) {
+      const list = v.slice(0, 2).map((g) => g.spells.slice(0, 4).map((x) => `„${x}”`).join(" / ")).join("; ");
+      out.push({ text: t("rpFindVariants", { col: col.name, list, n: v.length }), tone: "warn" });
+    }
   }
   if (d.numeric) {
     const s = d.numeric;
@@ -885,7 +994,7 @@ const RP_BUILDERS = {
     sec.appendChild(rpTable(
       [t("rpColColumn"), t("rpColKind"), t("rpColFill"), t("rpColUnique"), t("rpColTopValue")],
       d.cols.map((col) => {
-        const top = Array.from(col.counts.entries()).sort((a, b) => b[1] - a[1])[0];
+        const top = col.groups.size ? rpGroupEntries(col)[0] : null;
         return [
           col.name,
           t(RP_KIND_LABEL[col.kind]),
@@ -1326,6 +1435,7 @@ function rpShowOverlay() {
 
 function closeReport() {
   if (!rpOverlayEl || !rpIsOpen) return;
+  rpAfterPrint();
   rpToggleContentPanel(false);
   rpIsOpen = false;
   rpOverlayEl.classList.add("hidden");
@@ -1343,17 +1453,35 @@ function rpAfterPrint() {
   rpDocTitleBefore = "";
 }
 
+// iPhone/iPad (iPadOS udaje Maca — stąd maxTouchPoints).
+function rpIsIos() {
+  const ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+let rpPrintStarted = false;
+window.addEventListener("beforeprint", () => { rpPrintStarted = true; });
+
 function printReport() {
   if (!rpIsOpen) return;
   // Tytuł dokumentu = domyślna nazwa pliku PDF w dialogu „Zapisz jako PDF”.
-  rpDocTitleBefore = document.title;
+  if (!rpDocTitleBefore) rpDocTitleBefore = document.title;
   document.title = rpTitle || rpDefaultTitle();
+  // Klasa zostaje aż do „afterprint” albo zamknięcia raportu. NIE zdejmujemy jej zaraz po
+  // print(): na iPadzie print() wraca natychmiast, a stronę do druku bierze CHWILĘ później —
+  // bez klasy szła pusta kartka. Na ekranie ta klasa nic nie zmienia (działa tylko w @media print).
   document.body.classList.add("rp-printing");
-  try {
-    window.print();
-  } finally {
-    // Safari potrafi wrócić z print() zanim dialog się zamknie — sprzątamy też w afterprint.
-    setTimeout(() => { if (!window.matchMedia("print").matches) rpAfterPrint(); }, 0);
+  rpPrintStarted = false;
+  window.print();
+  // W apce dodanej do ekranu początkowego iOS potrafi zignorować print() — okno druku się
+  // nie otwiera i „nic się nie dzieje”. Wtedy robimy PDF i dajemy arkusz „Udostępnij”
+  // (jest w nim „Drukuj”). Tylko na iOS i tylko gdy druk faktycznie nie ruszył.
+  if (rpIsIos()) {
+    setTimeout(() => {
+      if (rpPrintStarted || !rpIsOpen) return;
+      toast(t("rpPrintIosFallback"), "info");
+      rpDownloadPdf({ intent: "print" });
+    }, 1200);
   }
 }
 
@@ -1443,17 +1571,72 @@ function rpSafeFileName(name, ext) {
 
 // Pobranie pliku. iPad/iPhone jako zainstalowana apka (standalone) często nie obsługuje
 // zwykłego „pobierz” — tam arkusz udostępniania („Zapisz w Plikach”, „Drukuj”, AirDrop).
-async function rpDeliverFile(blob, fileName) {
-  const standaloneIos = window.navigator.standalone === true;
-  if (standaloneIos && typeof File === "function" && navigator.canShare) {
+// Na iPhonie/iPadzie arkusz „Udostępnij” (Zachowaj w Plikach, Drukuj, AirDrop) zamiast
+// „pobierz” — w apce z ekranu początkowego zwykłe pobieranie często NIC nie robi.
+// Arkusz wolno otworzyć tylko tuż po dotknięciu. Gdy plik powstawał dłużej (PDF z kilku stron,
+// ładowanie biblioteki Excela), iOS odrzuca share() — wtedy pasek „Plik gotowy” z przyciskiem:
+// świeże dotknięcie = arkusz się otworzy.
+let rpReadyEl = null;
+let rpReadyUrl = "";
+
+function rpHideReady() {
+  if (rpReadyEl) rpReadyEl.classList.add("hidden");
+  if (rpReadyUrl) { URL.revokeObjectURL(rpReadyUrl); rpReadyUrl = ""; }
+}
+
+function rpShowReady(file, label) {
+  if (!rpReadyEl) {
+    rpReadyEl = document.createElement("div");
+    rpReadyEl.className = "file-ready hidden";
+    rpReadyEl.setAttribute("role", "status");
+    const text = document.createElement("span");
+    text.className = "file-ready-text";
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "btn btn-sm file-ready-go";
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "btn btn-sm ghost file-ready-x";
+    x.textContent = "✕";
+    x.setAttribute("aria-label", t("rpReadyClose"));
+    x.addEventListener("click", rpHideReady);
+    rpReadyEl.append(text, go, x);
+    document.body.appendChild(rpReadyEl);
+  }
+  rpReadyEl.querySelector(".file-ready-text").textContent = t("rpReadyText", { name: file.name });
+  const go = rpReadyEl.querySelector(".file-ready-go");
+  go.textContent = label || t("rpReadySave");
+  go.onclick = async () => {
+    try {
+      await navigator.share({ files: [file], title: file.name });
+      rpHideReady();
+    } catch (e) {
+      if (e && e.name === "AbortError") return;
+      // Ostatnia deska: otwórz plik (PDF otworzy się w przeglądarce z własnym „Udostępnij”).
+      if (rpReadyUrl) URL.revokeObjectURL(rpReadyUrl);
+      rpReadyUrl = URL.createObjectURL(file);
+      window.open(rpReadyUrl, "_blank");
+    }
+  };
+  rpReadyEl.classList.remove("hidden");
+  go.focus();
+}
+
+async function rpDeliverFile(blob, fileName, { label } = {}) {
+  if (rpIsIos() && typeof File === "function" && navigator.canShare) {
     const file = new File([blob], fileName, { type: blob.type });
     if (navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({ files: [file], title: fileName });
-        return "shared";
-      } catch (e) {
-        if (e && e.name === "AbortError") return "aborted";
+      const fresh = navigator.userActivation ? navigator.userActivation.isActive : false;
+      if (fresh) {
+        try {
+          await navigator.share({ files: [file], title: fileName });
+          return "shared";
+        } catch (e) {
+          if (e && e.name === "AbortError") return "aborted";
+        }
       }
+      rpShowReady(file, label);
+      return "ready";
     }
   }
   const url = URL.createObjectURL(blob);
@@ -1467,7 +1650,7 @@ async function rpDeliverFile(blob, fileName) {
   return "downloaded";
 }
 
-async function rpDownloadPdf({ deliver = true } = {}) {
+async function rpDownloadPdf({ deliver = true, intent = "save" } = {}) {
   if (!rpIsOpen || rpBusy) return null;
   rpBusy = true;
   const buttons = [rpPdfBtn, rpPrintBtn].filter(Boolean);
@@ -1509,8 +1692,8 @@ async function rpDownloadPdf({ deliver = true } = {}) {
     const blob = rpBuildPdf(images, mmToPt(w), mmToPt(h));
     const name = rpSafeFileName(rpTitle || rpDefaultTitle(), "pdf");
     if (deliver) {
-      const how = await rpDeliverFile(blob, name);
-      if (how !== "aborted") toast(t("rpPdfDone", { n: images.length, name }), "success");
+      const how = await rpDeliverFile(blob, name, { label: intent === "print" ? t("rpReadyPrint") : "" });
+      if (how === "shared" || how === "downloaded") toast(t("rpPdfDone", { n: images.length, name }), "success");
     }
     return { blob, name, pages: images.length };
   } catch (e) {

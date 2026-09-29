@@ -7513,3 +7513,28 @@ body.rp-active { overflow: hidden; }
   body.rp-printing .rp-title:hover,
   body.rp-printing .rp-title:focus { background: none; box-shadow: none; }
 }
+
+/* Pasek „Plik gotowy — Zapisz / udostępnij” (iPhone/iPad): arkusz udostępniania wolno otworzyć
+   tylko tuż po dotknięciu, więc po dłuższym tworzeniu pliku potrzebne jest świeże dotknięcie.
+   Nad nakładkami (raport 200), pod niczym nie ginie. */
+.file-ready {
+  position: fixed;
+  left: 50%;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 10px 12px 10px 16px;
+  border-radius: 14px;
+  background: var(--panel, #fff);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  font-size: 13px;
+}
+.file-ready.hidden { display: none; }
+.file-ready-text { min-width: 0; overflow-wrap: anywhere; }
+.file-ready-go { flex-shrink: 0; }

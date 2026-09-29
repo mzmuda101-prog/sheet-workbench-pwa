@@ -1104,7 +1104,7 @@ function runCsvExport(cols) {
   const csv = (exportPrefs.bom ? "﻿" : "") + lines.join("\r\n") + "\r\n";
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   deliverExportFile(blob, `${exportBaseName(model)}.csv`).then((how) => {
-    if (how !== "aborted") toast(t("exportCsvDone", { rows: model.rows.length, cols: useCols.length }), "success");
+    if (how === "shared" || how === "downloaded") toast(t("exportCsvDone", { rows: model.rows.length, cols: useCols.length }), "success");
   });
 }
 
@@ -1171,7 +1171,7 @@ async function runXlsxExport(cols) {
   const out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
   const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const how = await deliverExportFile(blob, `${exportBaseName(model)}.xlsx`);
-  if (how !== "aborted") toast(t("exportXlsxDone", { rows: model.rows.length, cols: useCols.length }), "success");
+  if (how === "shared" || how === "downloaded") toast(t("exportXlsxDone", { rows: model.rows.length, cols: useCols.length }), "success");
 }
 
 function runPdfExport(cols) {
