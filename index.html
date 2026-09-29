@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20260929-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20260929-02" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -1274,6 +1274,7 @@
                 <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
                 <span class="toolbar-sep" aria-hidden="true"></span>
                 <button class="btn btn-sm ghost" id="transcribeBtn" type="button" data-hint data-hint-pl="Tryb spisywania — jeden wiersz naraz, dużą czcionką, z odhaczaniem. Do przepisywania danych ręcznie na papier." data-hint-en="Transcribe mode — one row at a time, large type, with tick-off. For copying data onto paper by hand." data-hint-delay="1.1" data-hint-touch="on">Spisywanie</button>
+                <button class="btn btn-sm ghost" id="reportBtn" type="button" data-hint data-hint-pl="Raport — jedna kartka A4: najważniejsze liczby, wnioski i wykres z bieżącego widoku. Do druku albo zapisania jako PDF." data-hint-en="Report — one A4 page: key numbers, findings and a chart from the current view. Print it or save as PDF." data-hint-delay="1.1" data-hint-touch="on">Raport</button>
                 <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport…</button>
                 <!-- Ostatnie i przypięte zapytania (z historii szukania) — klik = szukaj ponownie.
                      Jeden rząd; gdy się nie mieszczą, przewija się w bok z miękkim wygaszeniem krawędzi. -->
@@ -1654,6 +1655,59 @@
       <div class="tr-live" id="trLive" role="status" aria-live="polite"></div>
     </div>
 
+    <!-- Raport do druku / PDF (app/report.js). Bezpośrednie dziecko <body> — druk chowa
+         resztę strony przez `body.rp-printing > *:not(#reportOverlay)`. -->
+    <div class="rp-overlay hidden" id="reportOverlay" role="dialog" aria-modal="true" aria-labelledby="rpHeading">
+      <div class="rp-toolbar">
+        <div class="rp-toolbar-main">
+          <div class="rp-heading" id="rpHeading">Raport</div>
+          <div class="rp-fit" id="rpFitNote" role="status"></div>
+        </div>
+        <div class="rp-toolbar-tools">
+          <button class="btn btn-sm ghost" id="rpContentBtn" type="button" aria-expanded="false" aria-controls="rpContentPanel">Zawartość: krótki</button>
+          <label class="rp-field">
+            <span id="rpStyleLabel">Styl</span>
+            <select id="rpStyle">
+              <option value="modern">Nowoczesny</option>
+              <option value="classic">Klasyczny</option>
+              <option value="ink">Oszczędny (cz-b)</option>
+            </select>
+          </label>
+          <div class="rp-accents" id="rpAccents" role="group" aria-label="Kolor">
+            <button type="button" class="rp-swatch" data-accent="green" style="--sw:#2f6f5c" aria-label="Zielony"></button>
+            <button type="button" class="rp-swatch" data-accent="blue" style="--sw:#2b5d9b" aria-label="Niebieski"></button>
+            <button type="button" class="rp-swatch" data-accent="violet" style="--sw:#6a4c93" aria-label="Fioletowy"></button>
+            <button type="button" class="rp-swatch" data-accent="orange" style="--sw:#b5602a" aria-label="Pomarańczowy"></button>
+            <button type="button" class="rp-swatch" data-accent="graphite" style="--sw:#3d4145" aria-label="Grafitowy"></button>
+          </div>
+          <button class="btn btn-sm ghost" id="rpSizeBtn" type="button" aria-pressed="false" aria-label="Większy tekst">A</button>
+          <button class="btn btn-sm" id="rpPrintBtn" type="button">Drukuj / PDF</button>
+          <button class="modal-close" id="rpCloseBtn" type="button" aria-label="Zamknij">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      </div>
+      <!-- Co trafia do raportu: presety + sekcje. „Zakres” jest zawsze (nie ma go na liście). -->
+      <div class="rp-content-panel hidden" id="rpContentPanel">
+        <div class="rp-presets" id="rpPresets" role="group" aria-label="Rodzaj raportu">
+          <button type="button" class="rp-preset" data-preset="short" aria-pressed="false">Krótki</button>
+          <button type="button" class="rp-preset" data-preset="normal" aria-pressed="false">Normalny</button>
+          <button type="button" class="rp-preset" data-preset="detailed" aria-pressed="false">Szczegółowy</button>
+          <span class="rp-preset-custom hidden" id="rpPresetCustom">Własny zestaw</span>
+        </div>
+        <div class="rp-section-list" id="rpSectionList"></div>
+        <p class="rp-content-hint" id="rpContentHint">Zakres danych (filtr, liczba wierszy) jest zawsze na górze kartki.</p>
+      </div>
+      <div class="rp-stage" id="rpStage">
+        <div class="rp-sheet-wrap" id="rpSheetWrap">
+          <article class="rp-page" id="rpPage" data-style="modern" data-size="normal"></article>
+        </div>
+      </div>
+    </div>
+
     <!-- Toasts -->
     <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
     <div class="cell-tooltip hidden" id="cellTooltip" role="status" aria-live="polite"></div>
@@ -1667,31 +1721,32 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20260929-01"></script>
-    <script defer src="app/render-budget.js?v=20260929-01"></script>
-    <script defer src="app/language.js?v=20260929-01"></script>
-    <script defer src="app/analysis.js?v=20260929-01"></script>
-    <script defer src="app/smart-filters.js?v=20260929-01"></script>
-    <script defer src="app/workbook.js?v=20260929-01"></script>
-    <script defer src="app/xlsx-patch.js?v=20260929-01"></script>
-    <script defer src="app/table.js?v=20260929-01"></script>
-    <script defer src="app/virt-rows.js?v=20260929-01"></script>
-    <script defer src="app/conditional-formatting.js?v=20260929-01"></script>
-    <script defer src="app/data-validation.js?v=20260929-01"></script>
-    <script defer src="app/derived-columns.js?v=20260929-01"></script>
-    <script defer src="app/formulas.js?v=20260929-01"></script>
-    <script defer src="app/edit-tools.js?v=20260929-01"></script>
-    <script defer src="app/ui-controls.js?v=20260929-01"></script>
-    <script defer src="app/filter-bar.js?v=20260929-01"></script>
-    <script defer src="app/qs-history.js?v=20260929-01"></script>
-    <script defer src="app/undo.js?v=20260929-01"></script>
-    <script defer src="app/transcribe.js?v=20260929-01"></script>
-    <script defer src="app/freeze-pane.js?v=20260929-01"></script>
-    <script defer src="app/app-frame.js?v=20260929-01"></script>
+    <script defer src="app/core.js?v=20260929-02"></script>
+    <script defer src="app/render-budget.js?v=20260929-02"></script>
+    <script defer src="app/language.js?v=20260929-02"></script>
+    <script defer src="app/analysis.js?v=20260929-02"></script>
+    <script defer src="app/smart-filters.js?v=20260929-02"></script>
+    <script defer src="app/workbook.js?v=20260929-02"></script>
+    <script defer src="app/xlsx-patch.js?v=20260929-02"></script>
+    <script defer src="app/table.js?v=20260929-02"></script>
+    <script defer src="app/virt-rows.js?v=20260929-02"></script>
+    <script defer src="app/conditional-formatting.js?v=20260929-02"></script>
+    <script defer src="app/data-validation.js?v=20260929-02"></script>
+    <script defer src="app/derived-columns.js?v=20260929-02"></script>
+    <script defer src="app/formulas.js?v=20260929-02"></script>
+    <script defer src="app/edit-tools.js?v=20260929-02"></script>
+    <script defer src="app/ui-controls.js?v=20260929-02"></script>
+    <script defer src="app/filter-bar.js?v=20260929-02"></script>
+    <script defer src="app/qs-history.js?v=20260929-02"></script>
+    <script defer src="app/undo.js?v=20260929-02"></script>
+    <script defer src="app/transcribe.js?v=20260929-02"></script>
+    <script defer src="app/report.js?v=20260929-02"></script>
+    <script defer src="app/freeze-pane.js?v=20260929-02"></script>
+    <script defer src="app/app-frame.js?v=20260929-02"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20260929-01"></script>
-    <script defer src="app/bootstrap.js?v=20260929-01"></script>
+    <script defer src="app/debug-loaders.js?v=20260929-02"></script>
+    <script defer src="app/bootstrap.js?v=20260929-02"></script>
   </body>
 </html>

@@ -5534,7 +5534,8 @@ html.low-power .loading-overlay.is-file {
    więc w druku chowamy całą resztę i pokazujemy tylko jego. */
 #printArea { display: none; }
 @media print {
-  body > *:not(#printArea) { display: none !important; }
+  /* Raport (body.rp-printing) ma własne reguły druku — patrz sekcja „Raport do druku”. */
+  body:not(.rp-printing) > *:not(#printArea) { display: none !important; }
   #printArea {
     display: block !important;
     color: #000;
@@ -7129,3 +7130,278 @@ body.tr-active .toast-container {
    Odtworzone w symulatorze iPhone'a 2026-09-28. Na dotyku pasek „Znajdź ustawienie…”
    więc NIE jest przyklejony (przewija się z panelem); na myszy zostaje sticky. */
 /* (pasek już nie jest sticky na żadnym urządzeniu — patrz .sidebar-scroll wyżej) */
+
+
+/* ######################################################################################################################### */
+/* Raport do druku / PDF (app/report.js)                                                                                     */
+/* ######################################################################################################################### */
+/* Kartka jest ZAWSZE papierem: biała, ciemny tekst — także w trybie ciemnym apki.
+   Na ekranie to ta sama kartka 210 mm co na wydruku, tylko przeskalowana (transform),
+   więc podgląd nie kłamie. Pasek narzędzi korzysta z tokenów apki. */
+
+body.rp-active { overflow: hidden; }
+
+.rp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  overscroll-behavior: contain;
+  animation: fadeIn var(--t) ease;
+}
+.rp-overlay.hidden { display: none; }
+
+.rp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: max(10px, env(safe-area-inset-top)) 14px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.rp-toolbar-main { min-width: 0; flex: 1 1 160px; }
+.rp-heading { font-weight: 700; font-size: 15px; }
+.rp-fit { font-size: 12px; color: var(--muted-strong); }
+.rp-fit.is-warn { color: var(--warning); }
+.rp-toolbar-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.rp-field { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted-strong); }
+.rp-field select { font: inherit; color: var(--ink); }
+
+.rp-accents { display: inline-flex; gap: 6px; }
+.rp-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--surface);
+  background: var(--sw);
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+  padding: 0;
+}
+.rp-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--ink); }
+.rp-swatch:disabled { opacity: 0.3; cursor: default; }
+@media (pointer: coarse) { .rp-swatch { width: 30px; height: 30px; } }
+
+.rp-stage {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 12px max(24px, env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  -webkit-overflow-scrolling: touch;
+}
+.rp-sheet-wrap { position: relative; flex-shrink: 0; }
+
+/* Panel „Zawartość” — presety + sekcje. Pod paskiem, nad kartką (nie zasłania podglądu). */
+.rp-content-panel {
+  padding: 10px 14px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+}
+.rp-content-panel.hidden { display: none; }
+.rp-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rp-preset {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.rp-preset[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rp-preset-custom { font-size: 12.5px; color: var(--accent); font-weight: 600; }
+.rp-preset-custom.hidden { display: none; }
+.rp-section-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 14px; }
+.rp-sec { display: flex; align-items: center; gap: 8px; font-size: 13px; min-height: 30px; cursor: pointer; }
+.rp-sec input { width: 17px; height: 17px; accent-color: var(--accent); }
+.rp-sec.is-unavailable { color: var(--muted); cursor: default; }
+.rp-sec-why { font-size: 11.5px; color: var(--muted); }
+.rp-content-hint { margin: 0; font-size: 12px; color: var(--muted-strong); }
+
+/* ── Kartka ── */
+.rp-page {
+  --rp-accent: #2f6f5c;
+  --rp-ink: #1b1d1a;
+  --rp-muted: #5c625a;
+  --rp-line: #d9d6cc;
+  --rp-tint: color-mix(in srgb, var(--rp-accent) 9%, #fff);
+  --rp-base: 10.5pt;
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 210mm;
+  min-height: 297mm;
+  box-sizing: border-box;
+  padding: 16mm 15mm 14mm;
+  background: #fff;
+  color: var(--rp-ink);
+  font-family: var(--font);
+  font-size: var(--rp-base);
+  line-height: 1.45;
+  transform-origin: top left;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 8px 28px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6mm;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.rp-page[data-size="large"] { --rp-base: 12.5pt; }
+
+.rp-head { border-bottom: 2px solid var(--rp-accent); padding-bottom: 3mm; }
+.rp-title {
+  margin: 0 0 1mm;
+  font-size: 1.9em;
+  line-height: 1.15;
+  font-weight: 700;
+  outline: none;
+  border-radius: 4px;
+}
+.rp-title:hover { background: color-mix(in srgb, var(--rp-accent) 6%, transparent); }
+.rp-title:focus { background: color-mix(in srgb, var(--rp-accent) 10%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--rp-accent) 40%, transparent); }
+.rp-meta { font-size: 0.85em; color: var(--rp-muted); }
+
+.rp-scope {
+  display: flex;
+  gap: 3mm;
+  align-items: baseline;
+  padding: 2.5mm 3.5mm;
+  border-radius: 2mm;
+  background: #f4f3ef;
+  font-size: 0.92em;
+}
+/* Przefiltrowany wycinek = bursztyn (jak filtry w apce) — nie da się go przeoczyć na wydruku. */
+.rp-scope.is-filtered { background: #fbf1dc; border-left: 1.2mm solid #c98a1a; }
+.rp-scope-label { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.8em; color: var(--rp-muted); }
+
+.rp-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+.rp-tile {
+  padding: 3mm 3.5mm;
+  border-radius: 2.5mm;
+  background: var(--rp-tint);
+  min-width: 0;
+  break-inside: avoid;
+}
+.rp-tile-label { font-size: 0.78em; color: var(--rp-muted); text-transform: uppercase; letter-spacing: 0.03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-tile-value { font-size: 1.75em; font-weight: 700; line-height: 1.15; color: var(--rp-accent); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rp-tile.is-text .rp-tile-value { font-size: 1.2em; }
+.rp-tile-sub { font-size: 0.82em; color: var(--rp-muted); }
+
+.rp-block { break-inside: avoid; }
+.rp-h2 { margin: 0 0 2mm; font-size: 1.1em; font-weight: 700; color: var(--rp-accent); }
+.rp-list { margin: 0; padding-left: 5mm; display: grid; gap: 1.5mm; }
+.rp-list li::marker { color: var(--rp-accent); }
+.rp-list li.is-warn::marker { content: "! "; color: #b36b00; font-weight: 700; }
+
+.rp-bar-row { display: grid; grid-template-columns: 38mm 1fr 26mm; gap: 3mm; align-items: center; margin-bottom: 1.5mm; font-size: 0.92em; }
+.rp-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-bar { height: 4.2mm; background: #efeee9; border-radius: 1mm; overflow: hidden; }
+.rp-bar-fill { height: 100%; background: var(--rp-accent); border-radius: 1mm; }
+.rp-bar-value { text-align: right; font-variant-numeric: tabular-nums; color: var(--rp-muted); }
+
+.rp-h3 { margin: 0 0 1.5mm; font-size: 0.95em; font-weight: 700; }
+.rp-note { margin: 0 0 2mm; font-size: 0.82em; color: var(--rp-muted); }
+.rp-cat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(80mm, 1fr)); gap: 4mm 6mm; }
+.rp-cat { break-inside: avoid; }
+.rp-cat .rp-bar-row { grid-template-columns: 26mm 1fr 20mm; }
+
+.rp-table { width: 100%; border-collapse: collapse; font-size: 0.86em; }
+.rp-table thead { display: table-header-group; } /* nagłówek powtarzany na każdej stronie */
+.rp-table th, .rp-table td { padding: 1.2mm 2mm; border-bottom: 0.25mm solid var(--rp-line); text-align: left; vertical-align: top; }
+.rp-table th { font-weight: 700; color: var(--rp-muted); border-bottom: 0.4mm solid var(--rp-accent); }
+.rp-table .is-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rp-table tr { break-inside: avoid; }
+.rp-data .rp-table { font-size: 0.78em; }
+.rp-data .rp-table td { overflow-wrap: anywhere; }
+/* Tylko tabela DANYCH może przechodzić przez strony (bywa długa). Małe tabele (statystyki,
+   przegląd kolumn) trzymają się razem z nagłówkiem — inaczej tytuł zostaje sam na dole strony. */
+.rp-block.rp-data { break-inside: auto; }
+.rp-h2 { break-after: avoid; }
+.rp-page[data-style="classic"] .rp-table th { color: var(--rp-ink); border-bottom-color: var(--rp-ink); }
+.rp-page[data-style="ink"] .rp-table th { border-bottom-color: #000; }
+
+/* Podgląd: przerywana linia tam, gdzie wypadnie koniec strony A4 (tylko na ekranie). */
+.rp-page-break-guide {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 0.4mm dashed #b9b3a3;
+  pointer-events: none;
+}
+.rp-page-break-guide::after {
+  content: attr(data-label);
+  position: absolute;
+  right: 3mm;
+  top: 0.6mm;
+  font-size: 7.5pt;
+  color: #9a9486;
+  font-family: var(--font);
+}
+
+.rp-foot { margin-top: auto; padding-top: 3mm; border-top: 1px solid var(--rp-line); font-size: 0.75em; color: var(--rp-muted); }
+
+/* ── Styl: Klasyczny — szeryfowy, linie zamiast wypełnień ── */
+.rp-page[data-style="classic"] { font-family: Georgia, "Times New Roman", serif; }
+.rp-page[data-style="classic"] .rp-head { border-bottom: 0.4mm solid var(--rp-ink); text-align: center; }
+.rp-page[data-style="classic"] .rp-title { font-weight: 400; letter-spacing: 0.01em; }
+.rp-page[data-style="classic"] .rp-tile { background: none; border: 0.3mm solid var(--rp-line); border-radius: 0; }
+.rp-page[data-style="classic"] .rp-tile-label,
+.rp-page[data-style="classic"] .rp-scope-label { font-variant: small-caps; text-transform: none; letter-spacing: 0.05em; font-size: 0.9em; }
+.rp-page[data-style="classic"] .rp-tile-value { color: var(--rp-ink); }
+.rp-page[data-style="classic"] .rp-h2 { color: var(--rp-ink); border-bottom: 0.3mm solid var(--rp-line); padding-bottom: 1mm; }
+.rp-page[data-style="classic"] .rp-scope { background: none; border: 0.3mm solid var(--rp-line); border-radius: 0; }
+.rp-page[data-style="classic"] .rp-scope.is-filtered { border-left: 1.2mm solid var(--rp-accent); }
+.rp-page[data-style="classic"] .rp-bar,
+.rp-page[data-style="classic"] .rp-bar-fill { border-radius: 0; }
+
+/* ── Styl: Oszczędny — czerń i szarość, bez wypełnień tła (mało tonera, czytelne na cz-b) ── */
+.rp-page[data-style="ink"] { --rp-accent: #000; --rp-muted: #444; }
+.rp-page[data-style="ink"] .rp-tile { background: none; border: 0.3mm solid #888; }
+.rp-page[data-style="ink"] .rp-scope { background: none; border: 0.3mm solid #888; }
+.rp-page[data-style="ink"] .rp-scope.is-filtered { border-left: 1.2mm solid #000; }
+.rp-page[data-style="ink"] .rp-bar { background: none; border: 0.25mm solid #888; }
+.rp-page[data-style="ink"] .rp-bar-fill { background: #777; border-radius: 0; }
+.rp-page[data-style="ink"] .rp-list li.is-warn::marker { color: #000; }
+
+/* ── Druk: tylko kartka, bez skali i cieni. Własna nazwana strona bez marginesów
+   (margines to padding kartki), więc wydruk = podgląd. Przeglądarki bez nazwanych
+   stron dostaną zwykły margines z @page wyżej — kartka wtedy jest tylko trochę węższa. */
+@page rpA4 { size: A4; margin: 12mm 0; }
+@media print {
+  body.rp-printing > *:not(#reportOverlay) { display: none !important; }
+  body.rp-printing { overflow: visible !important; background: #fff !important; }
+  body.rp-printing #reportOverlay {
+    position: static !important;
+    display: block !important;
+    background: #fff !important;
+    animation: none !important;
+  }
+  body.rp-printing .rp-toolbar { display: none !important; }
+  body.rp-printing .rp-stage { display: block !important; overflow: visible !important; padding: 0 !important; }
+  body.rp-printing .rp-sheet-wrap { width: auto !important; height: auto !important; }
+  body.rp-printing .rp-page {
+    page: rpA4;
+    position: static !important;
+    transform: none !important;
+    box-shadow: none !important;
+    width: 210mm;
+    min-height: 0;
+    /* góra/dół robi margines strony (powtarza się na każdej), boki — padding kartki */
+    padding-top: 4mm;
+    padding-bottom: 0;
+  }
+  body.rp-printing .rp-page-break-guide { display: none !important; }
+  body.rp-printing .rp-title:hover,
+  body.rp-printing .rp-title:focus { background: none; box-shadow: none; }
+}
