@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20260928-29";
+const CACHE_VERSION = "20260929-01";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -121,8 +121,12 @@ self.addEventListener("activate", (event) => {
     )
   );
   self.clients.claim();
-  // Ciężkie zasoby dogrywamy po chwili, już poza ścieżką krytyczną startu.
-  event.waitUntil(precacheHeavyAssetsLater());
+  // Ciężkie zasoby dogrywamy po chwili, już poza ścieżką krytyczną startu — ale NIE przez
+  // event.waitUntil: dopóki aktywacja trwa, przeglądarka wstrzymuje WSZYSTKIE zapytania
+  // strony (biały ekran po „Aktualizuj” przez 8 s zwłoki + pobieranie; lekcja z Documents
+  // Workbench 2026-09-29). Gdy worker zostanie uśpiony wcześniej — pliki trafią do cache
+  // przy pierwszym użyciu.
+  precacheHeavyAssetsLater();
 });
 
 self.addEventListener("message", (event) => {
