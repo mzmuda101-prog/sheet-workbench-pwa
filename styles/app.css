@@ -7244,6 +7244,82 @@ body.rp-active { overflow: hidden; }
 }
 .rp-sheet-wrap { position: relative; flex-shrink: 0; }
 
+/* Pasek „Zakres” raportu — nad kartką. Chipy w JEDNYM rzędzie z przewijaniem w bok
+   (wygaszenie prawej krawędzi tylko, gdy jest co przewinąć) — jak pasek „Tryby auto”. */
+.rp-scope-bar {
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: grid;
+  gap: 8px;
+}
+.rp-scope-bar.hidden { display: none; }
+.rp-scope-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rp-scope-row.hidden { display: none; }
+.rp-scope-bar-label { font-size: 12px; font-weight: 700; color: var(--muted-strong); text-transform: uppercase; letter-spacing: 0.04em; flex-shrink: 0; }
+.rp-scope-chips {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.rp-scope-chips::-webkit-scrollbar { display: none; }
+.rp-scope-chips.fade-right {
+  mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+}
+.rp-scope-chips.fade-left {
+  mask-image: linear-gradient(to right, transparent 0, #000 18px);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18px);
+}
+.rp-scope-chips.fade-left.fade-right {
+  mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+}
+.rp-scope-chip {
+  font: inherit;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.rp-scope-chip-n { font-size: 11.5px; color: var(--muted-strong); font-variant-numeric: tabular-nums; }
+.rp-scope-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rp-scope-chip[aria-pressed="true"] .rp-scope-chip-n { color: rgba(255, 255, 255, 0.85); }
+@media (pointer: coarse) { .rp-scope-chip { padding: 8px 14px; } }
+.rp-scope-sep { font-size: 11.5px; color: var(--muted-strong); flex-shrink: 0; padding-left: 6px; border-left: 1px solid var(--border-subtle); }
+.rp-scope-row2 { flex-wrap: wrap; }
+.rp-scope-query {
+  font: inherit;
+  font-size: 13px;
+  flex: 1 1 260px;
+  min-width: 0;
+  max-width: 520px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+}
+@media (pointer: coarse) { .rp-scope-query { font-size: 16px; } } /* <16 px = iOS przybliża stronę */
+.rp-scope-query.hidden { display: none; }
+.rp-scope-status { font-size: 12.5px; color: var(--muted-strong); }
+.rp-scope-status.is-warn { color: var(--warning); }
+.rp-scope-apply.hidden { display: none; }
+
 /* Panel „Zawartość” — presety + sekcje. Pod paskiem, nad kartką (nie zasłania podglądu). */
 .rp-content-panel {
   padding: 10px 14px 12px;
@@ -7347,6 +7423,10 @@ body.rp-active { overflow: hidden; }
 .rp-tile-label { font-size: 0.78em; color: var(--rp-muted); text-transform: uppercase; letter-spacing: 0.03em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rp-tile-value { font-size: 1.75em; font-weight: 700; line-height: 1.15; color: var(--rp-accent); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .rp-tile.is-text .rp-tile-value { font-size: 1.2em; }
+/* Liczby w kafelku nigdy nie łamią się w środku (spacje tysięcy to twarde spacje) — długie dostają mniejszą czcionkę. */
+.rp-tile:not(.is-text) .rp-tile-value { white-space: nowrap; overflow-wrap: normal; }
+.rp-tile.is-long .rp-tile-value { font-size: 1.35em; }
+.rp-tile.is-xlong .rp-tile-value { font-size: 1.05em; }
 .rp-tile-sub { font-size: 0.82em; color: var(--rp-muted); }
 
 .rp-block { break-inside: avoid; }
@@ -7487,7 +7567,9 @@ body.rp-active { overflow: hidden; }
     background: #fff !important;
     animation: none !important;
   }
-  body.rp-printing .rp-toolbar { display: none !important; }
+  body.rp-printing .rp-toolbar,
+  body.rp-printing .rp-scope-bar,
+  body.rp-printing .rp-content-panel { display: none !important; }
   body.rp-printing .rp-stage { display: block !important; overflow: visible !important; padding: 0 !important; }
   body.rp-printing .rp-sheet-wrap { width: auto !important; height: auto !important; }
   body.rp-printing .rp-page {

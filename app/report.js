@@ -395,15 +395,332 @@ function rpPickDuplicates(cols) {
   return null;
 }
 
+// ── Zakres raportu ──────────────────────────────────────────────────────────
+// Raport nie musi liczyć tego samego, co widać w tabeli. Zakres to jedno z:
+//  • "view"  — jak w tabeli (domyślnie: filtry, szukanie, tryby auto, sortowanie),
+//  • "all"   — cały arkusz (sortowanie z tabeli zostaje),
+//  • "query" — zapytanie w składni szybkiego szukania z operatorami, np. Status:="W toku".
+// Podpowiedzi to też zwykłe zapytania: po kliknięciu stoją w polu, więc nic nie dzieje się
+// „po cichu”, a przy okazji widać składnię. Tabela zostaje nietknięta, dopóki użytkownik sam
+// nie kliknie „Pokaż w tabeli”. Liczymy tym samym dopasowaniem co filtr tabeli
+// (rowMatchesTextFilter), więc ten sam tekst daje te same wiersze tu i tam.
+
+const RP_SCOPE_MAX_SUGGEST = 5;
+const RP_SCOPE_MIN_ROWS = 3;       // podpowiedź na 1–2 wiersze to nie przegląd, tylko wyszukanie
+const RP_SCOPE_FRESH_DAYS = 45;    // „ostatnie 30 dni” tylko, gdy w danych są świeże daty
+const RP_QUERY_UNSAFE_RE = /&&|\|\||[{}"]/;
+let rpScope = { kind: "view", q: "" };
+const rpScopeBySheet = new Map();  // plik + arkusz → zakres (na tę sesję)
+let rpSuggestCache = null;
+let rpScopeCustomOpen = false;
+let rpScopeMsg = "";
+let rpScopeTimer = 0;
+
+const rpScopeBarEl = document.getElementById("rpScopeBar");
+const rpScopeChipsEl = document.getElementById("rpScopeChips");
+const rpScopeRow2El = document.getElementById("rpScopeRow2");
+const rpScopeQueryEl = document.getElementById("rpScopeQuery");
+const rpScopeStatusEl = document.getElementById("rpScopeStatus");
+const rpScopeApplyEl = document.getElementById("rpScopeApply");
+
+function rpSheetId() {
+  return [currentFileName || "", currentSheetName || "", currentHeaderRow || 0].join("\u001f");
+}
+
+function rpQueryRows(q) {
+  const query = String(q || "").trim();
+  if (!query || !Array.isArray(baseRows)) return [];
+  const criteria = [{
+    query: normalizeTermForMode(query, "contains"),
+    mode: "contains",
+    headers: currentHeaders,
+    indexes: resolveIndexes(currentHeaders, new Set()),
+    emptyMode: "all",
+    negated: false,
+    operatorsEnabled: true,
+  }];
+  try {
+    return baseRows.filter((row) => rowMatchesTextFilter(row, criteria, false));
+  } catch {
+    return [];
+  }
+}
+
+// Kolejność jak w tabeli (tabela danych w raporcie ma wyglądać znajomo).
+function rpSortedLikeTable(rows) {
+  if (typeof sortRowsForHeaders === "function") sortRowsForHeaders(rows, currentHeaders);
+  return rows;
+}
+
+function rpScopeRows(scope = rpScope) {
+  if (scope.kind === "all") return rpSortedLikeTable(baseRows.slice());
+  if (scope.kind === "query") return rpSortedLikeTable(rpQueryRows(scope.q));
+  return Array.isArray(viewRows) ? viewRows : [];
+}
+
+// Zakres jako „stan widoku” (kształt jak captureViewState) — do opisu na kartce, do porównania
+// z tabelą i do „Pokaż w tabeli” (applyViewState).
+function rpScopeViewState(scope = rpScope) {
+  const table = typeof captureViewState === "function" ? captureViewState() : { v: 1, filter: null, sort: [] };
+  if (scope.kind === "view") return table;
+  const filter = scope.kind === "query"
+    ? { f1: { q: scope.q, mode: "contains", neg: false, empty: "all", ops: true, cols: [], qcols: typeof vsQueryColumns === "function" ? vsQueryColumns(scope.q, true) : [] } }
+    : null;
+  return { v: 1, filter, sort: table.sort || [] };
+}
+
+function rpScopeDiffers() {
+  if (rpScope.kind === "view" || typeof viewFilterKey !== "function") return false;
+  return viewFilterKey(rpScopeViewState()) !== viewFilterKey(captureViewState());
+}
+
+// Nagłówek nadaje się do zapytania „Kolumna:…”, gdy jednoznacznie wskazuje JEDNĄ kolumnę
+// i nie ma w nim znaków, które parser czyta jako operatory.
+function rpQueryHeader(c) {
+  const h = String(currentHeaders[c] ?? "").trim();
+  if (!h || RP_QUERY_UNSAFE_RE.test(h) || /^[!@]/.test(h)) return "";
+  const key = normalizeHeaderKey(h);
+  return currentHeaders.filter((x) => normalizeHeaderKey(x) === key).length === 1 ? h : "";
+}
+
+function rpIsoDay(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// Podpowiedzi zakresu — liczone z CAŁEGO arkusza (nie znikają po wybraniu jednej z nich).
+// Każda musi dawać sensowny wycinek: co najmniej kilka wierszy i mniej niż wszystko.
+function rpScopeSuggestions() {
+  const total = Array.isArray(baseRows) ? baseRows.length : 0;
+  const key = [rpSheetId(), typeof sheetDataStamp === "number" ? sheetDataStamp : 0, total, currentLang].join("\u001f");
+  if (rpSuggestCache && rpSuggestCache.key === key) return rpSuggestCache.list;
+  const list = [];
+  const add = (s) => {
+    if (list.length >= RP_SCOPE_MAX_SUGGEST || list.some((x) => x.q === s.q)) return;
+    const n = rpQueryRows(s.q).length;
+    if (n < RP_SCOPE_MIN_ROWS || n >= total) return;
+    list.push({ ...s, n });
+  };
+  if (total >= RP_SCOPE_MIN_ROWS * 2) {
+    const cols = rpProfileColumns(baseRows);
+    // 1) Stan sprawy (Status/Etap…) — a bez takiej kolumny najlepsza kategoria, o ile ma mało grup.
+    const cats = rpCategories(cols, total);
+    const cat = cats.find((c) => RP_CAT_STRONG_RE.test(c.col.name)) || (cats[0] && cats[0].col.uniqueGroups <= 6 ? cats[0] : null);
+    const ch = cat ? rpQueryHeader(cat.col.c) : "";
+    if (ch) {
+      cat.entries.filter(([, n]) => n < total * 0.9).slice(0, 3).forEach(([label, n]) => {
+        const v = String(label).trim();
+        if (!v || RP_QUERY_UNSAFE_RE.test(v)) return;
+        add({ kind: "cat", q: `${ch}:="${v}"`, label: v, why: t("rpScopeWhyCat", { col: ch, value: v, pct: rpPct(n, cat.total) }) });
+      });
+    }
+    // 2) Czas: ostatnie 30 dni (tylko przy świeżych danych) i najnowszy miesiąc w danych.
+    const dp = rpPickDate(cols);
+    const dh = dp ? rpQueryHeader(dp.col.c) : "";
+    if (dh) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const from30 = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 30);
+      const fresh = new Date(today.getFullYear(), today.getMonth(), today.getDate() - RP_SCOPE_FRESH_DAYS);
+      if (dp.max >= fresh && dp.min < from30) {
+        add({ kind: "date", q: `${dh}:>>=${rpIsoDay(from30)} && ${dh}:<<=${rpIsoDay(today)}`, label: t("rpScopeLast30"), why: t("rpScopeWhyLast30", { col: dh }) });
+      }
+      if (dp.months.size >= 2) {
+        const lastKey = Array.from(dp.months.keys()).sort().pop();
+        const [y, m] = lastKey.split("-").map(Number);
+        add({ kind: "date", q: `${dh}:>>=${rpIsoDay(new Date(y, m - 1, 1))} && ${dh}:<<=${rpIsoDay(new Date(y, m, 0))}`, label: rpMonthLabel(lastKey), why: t("rpScopeWhyMonth", { col: dh }) });
+      }
+    }
+  }
+  rpSuggestCache = { key, list };
+  return list;
+}
+
+// Zmiana zakresu. Zapytanie bez wyników NIE zmienia raportu (pusta kartka nic nie mówi) —
+// zostaje poprzedni zakres i komunikat przy polu.
+function rpSetScope(scope) {
+  let next = scope && scope.kind ? { kind: scope.kind, q: String(scope.q || "").trim() } : { kind: "view", q: "" };
+  if (next.kind === "query" && !next.q) next = { kind: "view", q: "" };
+  if (next.kind === "query") {
+    if (/(^|[\s&|{!])@\S/.test(next.q)) {
+      rpScopeMsg = t("rpScopeSmartOnly");
+      rpRenderScopeBar();
+      return false;
+    }
+    if (!rpQueryRows(next.q).length) {
+      rpScopeMsg = t("rpScopeNoRows");
+      rpRenderScopeBar();
+      return false;
+    }
+  }
+  // Zapamiętujemy ZAMIAR („jak w tabeli”), nawet gdy tabela chwilowo jest pusta i liczymy całość.
+  rpScopeBySheet.set(rpSheetId(), next);
+  rpScopeMsg = "";
+  if (next.kind === "view" && !(Array.isArray(viewRows) && viewRows.length)) {
+    next = { kind: "all", q: "" };
+    rpScopeMsg = t("rpScopeViewEmpty");
+  }
+  rpScope = next;
+  rpData = rpCollectAll();
+  rpRender();
+  return true;
+}
+
+function rpApplyScopeToTable() {
+  if (rpScope.kind === "view" || typeof applyViewState !== "function") return;
+  const res = applyViewState(rpScopeViewState());
+  if (!res || !res.ok) {
+    toast((res && res.problems ? res.problems.join(" ") : "") || t("rpScopeNoRows"), "warning");
+    return;
+  }
+  rpScopeCustomOpen = false;
+  rpSetScope({ kind: "view" });
+  toast(t("rpScopeApplied", { rows: rpNum(res.shown, 0) }), "success");
+}
+
+function rpScopeChip({ id, label, n, why, active }) {
+  const btn = rpEl("button", "rp-scope-chip");
+  btn.type = "button";
+  btn.dataset.scope = id;
+  btn.setAttribute("aria-pressed", active ? "true" : "false");
+  btn.append(rpEl("span", "rp-scope-chip-text", label));
+  if (Number.isFinite(n)) btn.append(rpEl("span", "rp-scope-chip-n", rpNum(n, 0)));
+  if (why) btn.setAttribute("data-hint", why);
+  return btn;
+}
+
+function rpRenderScopeBar() {
+  if (!rpScopeBarEl || !rpScopeChipsEl) return;
+  const show = rpMode !== "table";
+  rpScopeBarEl.classList.toggle("hidden", !show);
+  if (!show) return;
+  rpSetText("rpScopeBarLabel", t("rpScopeBarLabel"));
+  const total = Array.isArray(baseRows) ? baseRows.length : 0;
+  const tableFiltering = !!(typeof lastAppliedFilters !== "undefined" && lastAppliedFilters && lastAppliedFilters.filtering);
+  const suggestions = rpScopeSuggestions();
+  const isSuggestion = rpScope.kind === "query" && suggestions.some((s) => s.q === rpScope.q);
+  const chips = [rpScopeChip({ id: "view", label: t("rpScopeView"), n: viewRows.length, why: t("rpScopeHintView"), active: rpScope.kind === "view" })];
+  // Bez filtra w tabeli „cały arkusz” = „jak w tabeli” — drugi chip byłby tym samym.
+  if (tableFiltering || rpScope.kind === "all") {
+    chips.push(rpScopeChip({ id: "all", label: t("rpScopeWhole"), n: total, why: t("rpScopeHintWhole"), active: rpScope.kind === "all" }));
+  }
+  if (suggestions.length) {
+    chips.push(rpEl("span", "rp-scope-sep", t("rpScopeSuggestSep")));
+    suggestions.forEach((s) => chips.push(rpScopeChip({ id: `q:${s.q}`, label: s.label, n: s.n, why: `${s.why} ${t("rpScopeHintQuery", { q: s.q })}`, active: rpScope.kind === "query" && rpScope.q === s.q })));
+  }
+  const customActive = rpScope.kind === "query" && !isSuggestion;
+  chips.push(rpScopeChip({ id: "custom", label: t("rpScopeCustom"), why: t("rpScopeHintCustom"), active: customActive || (rpScopeCustomOpen && rpScope.kind !== "query") }));
+  rpScopeChipsEl.replaceChildren(...chips);
+  // Wybrany chip zawsze w polu widzenia (na telefonie pasek przewija się w bok).
+  const on = rpScopeChipsEl.querySelector('[aria-pressed="true"]');
+  if (on && rpScopeChipsEl.scrollWidth > rpScopeChipsEl.clientWidth + 1) {
+    const box = rpScopeChipsEl.getBoundingClientRect();
+    const r = on.getBoundingClientRect();
+    if (r.left < box.left) rpScopeChipsEl.scrollLeft -= box.left - r.left + 12;
+    else if (r.right > box.right) rpScopeChipsEl.scrollLeft += r.right - box.right + 12;
+  }
+  rpScopeFade();
+
+  const row2 = rpScope.kind === "query" || rpScopeCustomOpen || !!rpScopeMsg || rpScopeDiffers();
+  rpScopeRow2El.classList.toggle("hidden", !row2);
+  if (rpScopeQueryEl) {
+    rpScopeQueryEl.placeholder = t("rpScopeQueryPh");
+    rpScopeQueryEl.setAttribute("aria-label", t("rpScopeQueryAria"));
+    rpScopeQueryEl.classList.toggle("hidden", !(rpScope.kind === "query" || rpScopeCustomOpen));
+    if (document.activeElement !== rpScopeQueryEl) rpScopeQueryEl.value = rpScope.kind === "query" ? rpScope.q : "";
+  }
+  if (rpScopeStatusEl) {
+    rpScopeStatusEl.classList.toggle("is-warn", !!rpScopeMsg);
+    rpScopeStatusEl.textContent = rpScopeMsg
+      || (rpScopeDiffers() ? t("rpScopeDiffers", { rows: rpNum(rpData ? rpData.rows : 0, 0), total: rpNum(total, 0) }) : "");
+  }
+  if (rpScopeApplyEl) {
+    rpScopeApplyEl.textContent = t("rpScopeApply");
+    rpScopeApplyEl.setAttribute("data-hint", t("rpScopeApplyHint"));
+    rpScopeApplyEl.classList.toggle("hidden", !rpScopeDiffers());
+  }
+}
+
+// Wygaszenie krawędzi tylko tam, gdzie jest co przewinąć (lewa / prawa osobno).
+function rpScopeFade() {
+  if (!rpScopeChipsEl) return;
+  const el = rpScopeChipsEl;
+  const over = el.scrollWidth > el.clientWidth + 1;
+  el.classList.toggle("has-overflow", over);
+  el.classList.toggle("fade-left", over && el.scrollLeft > 1);
+  el.classList.toggle("fade-right", over && el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+}
+
+function rpSetText(id, text) {
+  const el = document.getElementById(id);
+  if (el && el.textContent !== text) el.textContent = text;
+}
+
+if (rpScopeChipsEl) {
+  rpScopeChipsEl.addEventListener("scroll", rpScopeFade, { passive: true });
+  window.addEventListener("resize", () => { if (rpIsOpen) rpScopeFade(); });
+  rpScopeChipsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-scope]");
+    if (!btn) return;
+    const id = btn.dataset.scope;
+    if (id === "custom") {
+      rpScopeCustomOpen = true;
+      rpScopeMsg = "";
+      rpRenderScopeBar();
+      rpScopeQueryEl?.focus();
+      return;
+    }
+    rpScopeCustomOpen = false;
+    if (id === "view" || id === "all") rpSetScope({ kind: id });
+    else if (id.startsWith("q:")) rpSetScope({ kind: "query", q: id.slice(2) });
+  });
+}
+if (rpScopeQueryEl) {
+  const commit = () => {
+    clearTimeout(rpScopeTimer);
+    const q = rpScopeQueryEl.value.trim();
+    if (!q) {
+      rpScopeMsg = "";
+      if (rpScope.kind === "query") rpSetScope({ kind: "view" });
+      else rpRenderScopeBar();
+      return;
+    }
+    if (rpScope.kind === "query" && rpScope.q === q && !rpScopeMsg) return;
+    rpSetScope({ kind: "query", q });
+  };
+  rpScopeQueryEl.addEventListener("input", () => {
+    clearTimeout(rpScopeTimer);
+    rpScopeTimer = setTimeout(commit, 400);
+  });
+  rpScopeQueryEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commit(); }
+  });
+}
+rpScopeApplyEl?.addEventListener("click", rpApplyScopeToTable);
+
+// Agregacje (silnik apki) czytają wiersze z globalnego viewRows — na czas liczenia podstawiamy
+// wiersze zakresu raportu i zaraz oddajemy (wszystko synchronicznie, tabela tego nie widzi).
+function rpWithScopeRows(rows, fn) {
+  if (rows === viewRows) return fn();
+  const saved = viewRows;
+  viewRows = rows;
+  try {
+    return fn();
+  } finally {
+    viewRows = saved;
+  }
+}
+
 function rpCollect() {
-  const rows = Array.isArray(viewRows) ? viewRows : [];
+  const rows = rpScopeRows();
   const total = Array.isArray(baseRows) ? baseRows.length : rows.length;
-  const filtering = !!(typeof lastAppliedFilters !== "undefined" && lastAppliedFilters && lastAppliedFilters.filtering);
+  const view = rpScopeViewState();
+  const filtering = rpScope.kind === "view"
+    ? !!(typeof lastAppliedFilters !== "undefined" && lastAppliedFilters && lastAppliedFilters.filtering)
+    : !!(view && view.filter);
   const cols = rpProfileColumns(rows);
   const used = cols.filter((c) => c.nonEmpty > 0);
   const emptyCols = cols.filter((c) => c.nonEmpty === 0);
   const filled = used.reduce((s, c) => s + c.nonEmpty, 0);
-  const view = typeof captureViewState === "function" ? captureViewState() : null;
   const cats = rpCategories(cols, rows.length);
   const numericCols = rpNumericCols(cols);
   return {
@@ -411,6 +728,7 @@ function rpCollect() {
     rows: rows.length,
     total,
     filtering,
+    scopeKind: rpScope.kind,
     viewText: view && typeof describeViewState === "function" ? describeViewState(view) : "",
     cols,
     used,
@@ -429,8 +747,10 @@ function rpCollect() {
 // Agregacje dokładamy PO zebraniu podstaw (potrzebują wybranej kategorii i liczby).
 function rpCollectAll() {
   const d = rpCollect();
-  d.aggs = rpAutoAggregations(d);
-  d.aggPanel = rpPanelAggregation();
+  rpWithScopeRows(d.rowsList, () => {
+    d.aggs = rpAutoAggregations(d);
+    d.aggPanel = rpPanelAggregation();
+  });
   return d;
 }
 
@@ -789,6 +1109,7 @@ function rpRender() {
   rpPageEl.append(...parts);
   rpFitTables();
   rpSyncControls();
+  rpRenderScopeBar();
   if (rpMode !== "table") rpRenderContentPanel();
   rpFit();
 }
@@ -880,7 +1201,10 @@ const RP_BUILDERS = {
   tiles(d) {
     const el = rpEl("section", "rp-tiles");
     rpTiles(d).forEach((tile) => {
-      const box = rpEl("div", `rp-tile${tile.text ? " is-text" : ""}`);
+      // Długa liczba (np. „349 653 101,54”) nie może się łamać w środku — zamiast tego mniejsza czcionka.
+      const len = String(tile.value ?? "").length;
+      const long = tile.text ? "" : len > 15 ? " is-xlong" : len > 11 ? " is-long" : "";
+      const box = rpEl("div", `rp-tile${tile.text ? " is-text" : ""}${long}`);
       box.append(rpEl("div", "rp-tile-label", tile.label), rpEl("div", "rp-tile-value", tile.value));
       if (tile.sub) box.append(rpEl("div", "rp-tile-sub", tile.sub));
       el.appendChild(box);
@@ -1391,13 +1715,23 @@ function rpBackgroundInert(on) {
 
 function openReport() {
   if (!rpOverlayEl) return;
-  if (!Array.isArray(currentHeaders) || !currentHeaders.length || !Array.isArray(viewRows) || !viewRows.length) {
+  if (!Array.isArray(currentHeaders) || !currentHeaders.length || !Array.isArray(baseRows) || !baseRows.length) {
     toast(t("noDataForExport"), "warning");
     return;
   }
   rpLoadPrefs();
   rpMode = "report";
   rpTableSpec = null;
+  // Zakres pamiętany dla tego arkusza (na tę sesję). Zapytanie, które po zmianach w danych nic
+  // nie łapie, i pusta tabela → raport liczy cały arkusz i mówi o tym przy pasku zakresu.
+  rpScopeMsg = "";
+  rpScopeCustomOpen = false;
+  rpScope = rpScopeBySheet.get(rpSheetId()) || { kind: "view", q: "" };
+  if (rpScope.kind === "query" && !rpQueryRows(rpScope.q).length) rpScope = { kind: "view", q: "" };
+  if (rpScope.kind === "view" && !viewRows.length) {
+    rpScope = { kind: "all", q: "" };
+    rpScopeMsg = t("rpScopeViewEmpty");
+  }
   rpData = rpCollectAll();
   rpTitle = rpDefaultTitle();
   rpShowOverlay();
@@ -1781,4 +2115,7 @@ window.__report = {
   aggState: () => (typeof aggregationWorkbenchState !== "undefined" ? JSON.stringify(aggregationWorkbenchState) : ""),
   toggleSection: rpToggleSection,
   isOpen: () => rpIsOpen,
+  scope: () => ({ ...rpScope }),
+  setScope: rpSetScope,
+  suggestions: () => rpScopeSuggestions().map((x) => ({ ...x })),
 };
