@@ -35,8 +35,10 @@
   --ink: #1a1d19;
   --ink-2: #3a3f38;
   --ink-3: #2e7559; /* zielone etykiety (tytuły grup itp.) — ciemniej niż w dark mode, dla kontrastu na jasnym tle */
-  --muted: #7a8075;
-  --muted-strong: #5e6459;
+  /* Drobny szary tekst (etykiety, notki 11–12 px) ma mieć ≥ 4,5:1 także na szkle paneli —
+     dawniej #7a8075 / #5e6459 dawały ~3,4:1. */
+  --muted: #62685d;
+  --muted-strong: #4f5549;
   --placeholder: #b8bdb3;
 
   --table-num: var(--muted-strong); /* numery wierszy i liter kolumn w tabeli */
@@ -49,7 +51,9 @@
 
   --success: #2a7a4e;
   --success-bg: #ebf7f1;
-  --warning: #a06010;
+  --warning: #8a520c;
+  --on-accent: #fff; /* tekst na wypełnionym akcencie (przyciski, wciśnięte chipy) */
+  --on-warning: #fff;
   --warning-bg: #fff8e6;
   --danger: #c0392b;
   --danger-bg: #fef0ee;
@@ -102,6 +106,12 @@
 
 [data-theme="dark"] {
   --bg: #0e1511;
+  /* Akcent w ciemnym motywie jest jasny (#4db88f) — biały tekst na nim miał kontrast 2,4:1. */
+  --on-accent: #0b1611;
+  --warning: #e3a550;
+  --on-warning: #1f1405;
+  --warning-bg: rgba(227, 165, 80, 0.13);
+  --success: #5cc48e;
   --surface: #141a16;
   --panel: rgba(26, 35, 29, 0.75);
   --ink: #e5ece3;
@@ -736,7 +746,7 @@ body.splashing {
   padding-left: 25px;
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow:
     0 6px 16px color-mix(in srgb, var(--accent) 26%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.28);
@@ -2468,7 +2478,7 @@ details.panel[open] > summary {
   padding: 5px 14px;
   border-radius: var(--r-full);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 12px;
   font-weight: 600;
   margin-top: 2px;
@@ -2622,7 +2632,7 @@ details.panel[open] > summary {
   border-radius: var(--r-sm);
   border: 1px solid var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   cursor: pointer;
   font-weight: 600;
   font-size: 13px;
@@ -2703,7 +2713,7 @@ details.panel[open] > summary {
 .dc-msg.ok { color: var(--success, #2e7d32); }
 .dc-msg.bad { color: var(--danger, #c0392b); }
 .dc-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-.dc-empty { font-size: 12px; opacity: .6; padding: 6px 0; }
+.dc-empty { font-size: 12px; color: var(--muted-strong); padding: 6px 0; }
 .dc-item {
   display: flex;
   align-items: flex-start;
@@ -2734,7 +2744,7 @@ details.panel[open] > summary {
 
 .filter-badge {
   background: rgba(255,255,255,.28);
-  color: #fff;
+  color: var(--on-accent);
   padding: 1px 6px;
   border-radius: var(--r-full);
   font-size: 10.5px;
@@ -2872,7 +2882,6 @@ details.panel[open] > summary {
   font-size: 11px;
   line-height: 1.5;
   color: var(--ink-3, var(--ink-2));
-  opacity: .9;
 }
 @media (pointer: coarse) {
   /* Chipy trybów auto to główny sposób obsługi tej funkcji na telefonie —
@@ -4264,7 +4273,7 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
 .qs-scope-toggle[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   box-shadow:
     0 6px 16px color-mix(in srgb, var(--accent) 26%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.28);
@@ -4402,7 +4411,7 @@ tbody.has-cell-range tr.row-focused td.cell-in-range {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  opacity: 0.7;
+  color: var(--muted-strong); /* dawniej opacity .7 → 4,2:1 przy 11 px */
 }
 .cell-stat-value {
   font-weight: 600;
@@ -4800,9 +4809,9 @@ kbd {
 .modal-content {
   width: min(520px, 100%);
   max-height: 82dvh;
-  /* Liquid glass jak .panel — modal stoi na przyciemnionym scrimie, więc lekka
-     przezroczystość + blur dają głębię bez utraty czytelności. */
-  background: var(--glass-sheen), var(--glass-bg);
+  /* Liquid glass jak .panel, ale prawie nieprzezroczysty: na przyciemnionym scrimie tło 46%
+     wychodziło szarobure i drobny tekst (opisy, przyciski-duchy) miał ~1,7–3,8:1. */
+  background: var(--glass-sheen), color-mix(in srgb, var(--surface) 94%, transparent);
   -webkit-backdrop-filter: var(--glass);
   backdrop-filter: var(--glass);
   border-radius: var(--r-lg);
@@ -5453,7 +5462,7 @@ html.low-power .loading-overlay.is-file {
 .monthly-chip.active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-weight: 600;
 }
 
@@ -5544,7 +5553,6 @@ html.low-power .loading-overlay.is-file {
 .export-options { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 0 0 10px; font-size: 12.5px; }
 .export-options.hidden { display: none; }
 .export-opt { display: inline-flex; align-items: center; gap: 6px; }
-.export-opt select { font: inherit; }
 .export-opt-check input { width: 16px; height: 16px; accent-color: var(--accent); }
 .export-cols-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 6px; }
 .export-cols-count { font-size: 12.5px; font-weight: 600; margin-right: auto; }
@@ -6666,8 +6674,8 @@ body.tr-active .toast-container {
 }
 .hero-save[hidden] { display: none; }
 .hero-save:hover { border-color: var(--accent-border); color: var(--accent); }
-.hero-save.is-dirty { background: var(--accent); border-color: var(--accent); color: #fff; }
-.hero-save.is-dirty:hover { background: var(--accent-h); color: #fff; }
+.hero-save.is-dirty { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.hero-save.is-dirty:hover { background: var(--accent-h); color: var(--on-accent); }
 .hero-save-count {
   display: inline-grid;
   place-items: center;
@@ -6811,7 +6819,7 @@ body.tr-active .toast-container {
   padding: 0 5px;
   border-radius: var(--r-full);
   background: var(--warning); /* bursztyn = filtr (paleta apki) */
-  color: #fff;
+  color: var(--on-warning);
   font-size: 10.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -6922,7 +6930,7 @@ body.tr-active .toast-container {
 :root.sidebar-open .sidebar-handle {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   opacity: 1;
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
@@ -6932,7 +6940,7 @@ body.tr-active .toast-container {
 :root.sidebar-open .sidebar-handle::before {
   border-color: rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  color: var(--on-accent);
 }
 :root.sidebar-open .sidebar-handle:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
 
@@ -7216,7 +7224,19 @@ body.rp-active { overflow: hidden; }
   }
 }
 .rp-field { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted-strong); }
-.rp-field select { font: inherit; color: var(--ink); }
+/* Selecty z kolorami motywu — natywny select w ciemnym motywie miał białe tło i jasny tekst. */
+.rp-field select,
+.export-opt select {
+  font: inherit;
+  color: var(--ink);
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  color-scheme: light;
+}
+[data-theme="dark"] .rp-field select,
+[data-theme="dark"] .export-opt select { color-scheme: dark; }
 
 .rp-accents { display: inline-flex; gap: 6px; }
 .rp-swatch {
@@ -7297,8 +7317,8 @@ body.rp-active { overflow: hidden; }
   cursor: pointer;
 }
 .rp-scope-chip-n { font-size: 11.5px; color: var(--muted-strong); font-variant-numeric: tabular-nums; }
-.rp-scope-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.rp-scope-chip[aria-pressed="true"] .rp-scope-chip-n { color: rgba(255, 255, 255, 0.85); }
+.rp-scope-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.rp-scope-chip[aria-pressed="true"] .rp-scope-chip-n { color: var(--on-accent); opacity: 0.85; }
 @media (pointer: coarse) { .rp-scope-chip { padding: 8px 14px; } }
 .rp-scope-sep { font-size: 11.5px; color: var(--muted-strong); flex-shrink: 0; padding-left: 6px; border-left: 1px solid var(--border-subtle); }
 .rp-scope-row2 { flex-wrap: wrap; }
@@ -7329,6 +7349,13 @@ body.rp-active { overflow: hidden; }
   gap: 10px;
 }
 .rp-content-panel.hidden { display: none; }
+/* Kąt raportu (panel „Zawartość”): chipy + opis tego, co wykryto (zgadnięcie widać wprost). */
+.rp-angles { display: grid; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--border-subtle); }
+.rp-angles:empty { display: none; }
+.rp-angle-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.rp-angle-label { font-size: 12px; font-weight: 700; color: var(--muted-strong); text-transform: uppercase; letter-spacing: 0.04em; }
+.rp-angle-info { margin: 0; font-size: 12.5px; color: var(--muted-strong); line-height: 1.45; }
+.rp-preset:disabled { opacity: 0.45; cursor: default; }
 .rp-presets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .rp-preset {
   font: inherit;
@@ -7340,7 +7367,7 @@ body.rp-active { overflow: hidden; }
   color: var(--ink);
   cursor: pointer;
 }
-.rp-preset[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.rp-preset[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .rp-preset-custom { font-size: 12.5px; color: var(--accent); font-weight: 600; }
 .rp-preset-custom.hidden { display: none; }
 .rp-section-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 4px 14px; }
@@ -7360,6 +7387,17 @@ body.rp-active { overflow: hidden; }
      html2canvas („Pobierz PDF”) nie obsługuje color-mix() i przerywa render. */
   --rp-tint: #ecf3f0;
   --rp-base: 10.5pt;
+  /* Kartka jest ZAWSZE jasna (papier). Globalne reguły apki (np. `tbody td`) biorą kolory
+     z motywu — w ciemnym motywie dawały jasny tekst na białej kartce (kontrast 1,2:1).
+     Tokeny apki podmieniamy tu na jasne, więc każda przeciekająca reguła jest czytelna. */
+  color-scheme: light;
+  --ink: var(--rp-ink);
+  --ink-2: var(--rp-ink);
+  --muted: var(--rp-muted);
+  --muted-strong: var(--rp-muted);
+  --border: var(--rp-line);
+  --border-subtle: var(--rp-line);
+  --surface: #fff;
   position: absolute;
   top: 0;
   left: 0;
@@ -7450,6 +7488,17 @@ body.rp-active { overflow: hidden; }
 .rp-aggs > * + * { margin-top: 4mm; }
 .rp-aggs > .rp-h2 { margin-bottom: 0; }
 .rp-agg { break-inside: avoid; }
+/* Stan teraz: jeden pasek składu (otwarte / zamknięte / inne) + legenda z liczbami. */
+.rp-stack { display: flex; height: 4mm; border-radius: 1mm; overflow: hidden; background: #efeee9; }
+.rp-stack-seg { height: 100%; min-width: 0.6mm; }
+.rp-stack-seg.is-open, .rp-stack-key.is-open .rp-stack-dot { background: var(--rp-accent); }
+.rp-stack-seg.is-closed, .rp-stack-key.is-closed .rp-stack-dot { background: #a9ada4; }
+.rp-stack-seg.is-other, .rp-stack-key.is-other .rp-stack-dot { background: #dddad2; }
+.rp-stack-legend { display: flex; flex-wrap: wrap; gap: 1mm 5mm; margin-top: 2mm; font-size: 0.9em; }
+.rp-stack-key { display: inline-flex; align-items: center; gap: 1.5mm; }
+.rp-stack-dot { display: inline-block; width: 2.6mm; height: 2.6mm; border-radius: 0.6mm; }
+.rp-page[data-style="ink"] .rp-stack-seg.is-closed, .rp-page[data-style="ink"] .rp-stack-key.is-closed .rp-stack-dot { background: #8c8c8c; }
+.rp-page[data-style="ink"] .rp-stack-seg.is-other, .rp-page[data-style="ink"] .rp-stack-key.is-other .rp-stack-dot { background: #d0d0d0; }
 .rp-cat .rp-bar-row { grid-template-columns: 26mm 1fr 20mm; }
 
 /* table-layout: auto + tło: globalna reguła `table` apki ma fixed (równe kolumny) i tło panelu. */
@@ -7479,6 +7528,7 @@ body.rp-active { overflow: hidden; }
 .rp-table th, .rp-table td { padding: 1.2mm 2mm; border-bottom: 0.25mm solid var(--rp-line); text-align: left; vertical-align: top; }
 .rp-table th, .rp-table td.rp-th { font-weight: 700; color: var(--rp-muted); border-bottom: 0.4mm solid var(--rp-accent); }
 .rp-table .is-num { text-align: right; font-variant-numeric: tabular-nums; }
+.rp-table td { color: var(--rp-ink); }
 .rp-table td.is-num { white-space: nowrap; }
 /* Nagłówki (np. imiona i nazwiska w tabeli krzyżowej) zawijają się zamiast nachodzić na siebie. */
 .rp-table th { hyphens: manual; } /* bez dzielenia wyrazów („(pu-ste)”) — zawijanie tylko na spacjach */

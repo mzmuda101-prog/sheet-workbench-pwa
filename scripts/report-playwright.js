@@ -216,6 +216,13 @@ async function run() {
   await page.selectOption("#rpStyle", "ink");
   await sleep(50);
   check("styl oszczędny wyłącza wybór koloru", await page.evaluate(() => Array.from(document.querySelectorAll("#rpAccents [data-accent]")).every((b) => b.disabled)));
+  // Kolor akcentu ustawiany inline wygrywał z regułą [data-style="ink"] → cz-b drukowało zielone nagłówki.
+  const inkColors = await page.evaluate(() => {
+    const h2 = document.querySelector("#rpPage .rp-h2");
+    const val = document.querySelector("#rpPage .rp-tile-value");
+    return [h2 && getComputedStyle(h2).color, val && getComputedStyle(val).color];
+  });
+  check("styl oszczędny: nagłówki i liczby czarne (bez koloru akcentu)", inkColors.every((c) => !c || c === "rgb(0, 0, 0)" || c === "rgb(27, 29, 26)"), inkColors);
 
   // ── 5. Druk: tylko kartka ────────────────────────────────────────────────
   await page.evaluate(() => {

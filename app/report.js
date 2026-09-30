@@ -40,6 +40,8 @@ const RP_MAX_MONTHS = 18;
 const RP_SECTIONS = [
   { id: "tiles", label: "rpSecTiles" },
   { id: "findings", label: "rpSecFindings" },
+  { id: "state", label: "rpSecState", has: (d) => !!d.state },
+  { id: "compare", label: "rpSecCompare", has: (d) => !!d.compare },
   { id: "chart", label: "rpSecChart", has: (d) => !!d.category },
   { id: "aggAuto", label: "rpSecAggAuto", has: (d) => !!(d.aggs && d.aggs.length) },
   { id: "months", label: "rpSecMonths", has: (d) => !!(d.date && d.date.months.size >= 2) },
@@ -52,7 +54,8 @@ const RP_SECTIONS = [
 const RP_PRESETS = {
   short: ["tiles", "findings", "chart"],
   normal: ["tiles", "findings", "chart", "aggAuto", "months", "numbers", "categories"],
-  detailed: RP_SECTIONS.map((sec) => sec.id),
+  // Sekcje kątów (Stan teraz / Porównanie) dokłada wybór kąta albo ręczne zaznaczenie — długość raportu ich nie włącza.
+  detailed: RP_SECTIONS.map((sec) => sec.id).filter((id) => id !== "state" && id !== "compare"),
 };
 const RP_MAX_BARS = 6;
 // A4 w obu orientacjach. Pozioma przydaje się przy szerokich tabelach (tryb „tabela” z Eksportu).
@@ -119,7 +122,7 @@ let rpIsOpen = false;
 let rpReturnFocusEl = null;
 let rpData = null;
 let rpTitle = "";
-let rpPrefs = { style: "modern", accent: "green", size: "normal", margin: "normal", orient: "portrait", preset: "short", sections: RP_PRESETS.short.slice() };
+let rpPrefs = { style: "modern", accent: "green", size: "normal", margin: "normal", orient: "portrait", preset: "short", angle: "overview", sections: RP_PRESETS.short.slice() };
 let rpDocTitleBefore = "";
 
 // ── Ustawienia wyglądu ──────────────────────────────────────────────────────
@@ -134,6 +137,7 @@ function rpLoadPrefs() {
       margin: RP_MARGINS[p.margin] ? p.margin : "normal",
       orient: RP_ORIENTS.includes(p.orient) ? p.orient : "portrait",
       preset: RP_PRESETS[p.preset] || p.preset === "custom" ? p.preset : "short",
+      angle: ["overview", "state", "compare"].includes(p.angle) ? p.angle : "overview",
       sections: Array.isArray(p.sections)
         ? p.sections.filter((id) => RP_SECTIONS.some((sec) => sec.id === id))
         : RP_PRESETS.short.slice(),
@@ -154,6 +158,13 @@ function rpLocale() {
 function rpNum(n, digits = 2) {
   if (!Number.isFinite(n)) return "—";
   return n.toLocaleString(rpLocale(), { maximumFractionDigits: digits });
+}
+
+// Odmiana polska: 2–4 strony, 5–21 stron, 22–24 strony… (EN ma tylko jedną formę „many”).
+function rpPluralKey(base, n) {
+  let form = "other";
+  try { form = new Intl.PluralRules(rpLocale()).select(n); } catch { /* stare przeglądarki */ }
+  return form === "few" ? `${base}Few` : base;
 }
 
 function rpPct(part, all) {
@@ -724,6 +735,7 @@ function rpCollect() {
   const cats = rpCategories(cols, rows.length);
   const numericCols = rpNumericCols(cols);
   return {
+    roles: rpDateRoles(cols, rows),
     rowsList: rows,
     rows: rows.length,
     total,
@@ -747,6 +759,8 @@ function rpCollect() {
 // Agregacje dokładamy PO zebraniu podstaw (potrzebują wybranej kategorii i liczby).
 function rpCollectAll() {
   const d = rpCollect();
+  d.state = rpStateModel(d);
+  d.compare = rpCompareModel(d);
   rpWithScopeRows(d.rowsList, () => {
     d.aggs = rpAutoAggregations(d);
     d.aggPanel = rpPanelAggregation();
@@ -949,7 +963,7 @@ function rpAggFindings(d) {
 // Kolejność = przydatność. Każda reguła zwraca zdanie albo nic.
 
 function rpFindings(d) {
-  const out = [];
+  const out = rpAngleFindings(d);
   if (d.category) {
     const { col, entries, total } = d.category;
     const [v1, n1] = entries[0];
@@ -998,6 +1012,452 @@ function rpFindings(d) {
   if (d.emptyCols.length) out.push({ text: t("rpFindEmptyCols", { n: d.emptyCols.length }) });
   if (!out.length) out.push({ text: t("rpFindNone") });
   return out;
+}
+
+// ── Kąty raportu: „Stan teraz” i „Porównanie grup” ─────────────────────────
+// Kąt = pytanie, na które raport ma odpowiedzieć. Preset (krótki/normalny/szczegółowy)
+// mówi „ile”, kąt mówi „o czym”. Kąt dokłada swoją sekcję i swoje wnioski na początek listy.
+// Jak wszędzie w raporcie: zgadujemy z danych, ale każde zgadnięcie jest napisane na kartce
+// („otwarte = W toku, Nowe”), a reguła bez podstaw milczy.
+
+const RP_ANGLES = ["overview", "state", "compare"];
+const RP_ANGLE_SECTION = { state: "state", compare: "compare" };
+const RP_DAY_MS = 86400000;
+const RP_STATE_MAX_ROWS = 5;
+const RP_COMPARE_MAX_GROUPS = 6;
+const RP_COMPARE_MIN_ROWS = 3;     // grupa mniejsza nie wchodzi do wniosków (2 wiersze to nie trend)
+
+// Stan z NAZWY wartości. „niezakończone” to otwarte, choć zawiera „zakończ” — negacja pierwsza.
+const RP_NEG_CLOSED_RE = /\bnie\s*-?\s*(zako|zamk|wykon|zreal|zrob|gotow|rozlicz|zap[łl]ac|odebr|oddan)|\bnot\s+(done|closed|finished|completed|paid)|\bun(paid|resolved|finished)/i;
+const RP_CLOSED_RE = /zako[nń]cz|zamkni|zamkn|gotow|wykonan|zrealizow|zrobion|odebran|rozliczon|zap[łl]acon|oddan|anulow|odrzuc|wycofan|\bdone\b|closed|finished|complete|cancel|reject|resolved|\bpaid\b/i;
+const RP_OPEN_RE = /w toku|otwart|planow|\bnow[eay]\b|oczekuj|wstrzym|realizac|w trakcie|do zrobienia|zaplanow|rozpocz|aktywn|w przygot|w drodze|\bopen\b|progress|pending|\bnew\b|to ?do|planned|active|on hold|waiting|draft/i;
+// Role kolumn z datami — z nazwy; bez podpowiedzi w nazwie decydują dane (patrz rpDateRoles).
+const RP_DUE_RE = /termin|deadline|\bdue\b|do kiedy|planowan|wymagan/i;
+const RP_END_RE = /koniec|zako[nń]cz|zamkn|wykonan|zwrot|oddan|\bdo\b|\bend\b|closed|finish|complet|resolved|\bto\b/i;
+const RP_START_RE = /start|rozpocz|pocz[aą]t|zg[łl]osz|utworz|przyj[eę]|otwar|wp[łl]yn|\bod\b|created|opened|received|begin|\bfrom\b/i;
+const RP_LABEL_RE = /nazw|klient|tytu|temat|teren|obiekt|projekt|osoba|kontrahent|firma|zadanie|sprawa|name|title|client|customer|subject|task|project/i;
+
+let rpCompareBy = "";                    // wybór w panelu (na tę sesję); "" = automatycznie
+const rpCompareBySheet = new Map();
+
+function rpStateKind(label) {
+  const v = String(label || "");
+  if (RP_NEG_CLOSED_RE.test(v)) return "open";
+  if (RP_CLOSED_RE.test(v)) return "closed";
+  if (RP_OPEN_RE.test(v)) return "open";
+  return "other";
+}
+
+function rpDaysLabel(n, digits = 0) {
+  return t(n === 1 ? "rpDay1" : "rpDays", { n: rpNum(n, digits) });
+}
+
+function rpToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function rpDaysBetween(a, b) {
+  return Math.round((b - a) / RP_DAY_MS);
+}
+
+// Data z komórki tylko wtedy, gdy UŻYTKOWNIK widzi datę (liczba 45123 to nie data — patrz rpClassifyCell).
+function rpCellDate(row, c) {
+  if (c == null || c < 0) return null;
+  const shown = String(getDisplayValue(row, c) ?? "").trim();
+  if (!shown) return null;
+  const value = row.values ? row.values[c] : shown;
+  if (rpClassifyCell(value, shown) !== "date") return null;
+  const d = parseDateFlexible(value);
+  return d instanceof Date && !Number.isNaN(d.getTime()) ? new Date(d.getFullYear(), d.getMonth(), d.getDate()) : null;
+}
+
+// Liczba z komórki (albo suma bloków rodziny Kw1…Kw4).
+function rpCellNum(row, col) {
+  const one = (c) => {
+    const v = row.values ? row.values[c] : undefined;
+    return typeof v === "number" && Number.isFinite(v) ? v : null;
+  };
+  if (col.isFamily) {
+    let sum = 0;
+    let has = false;
+    col.members.forEach((m) => { const v = one(m.c); if (v != null) { sum += v; has = true; } });
+    return has ? sum : null;
+  }
+  return one(col.c);
+}
+
+// Role kolumn z datami: start (od kiedy), koniec (kiedy zamknięte), termin (do kiedy ma być).
+// Najpierw nazwy; dwie daty bez podpowiedzi w nazwie → para start→koniec, jeśli w danych
+// druga prawie zawsze jest ≥ pierwszej.
+// Daty „z życia”: mediana roku 1971…dziś+5. Kwoty albo numery wyświetlane jako daty (1900–1926)
+// nie mogą udawać „od kiedy czeka” — wychodziło „czeka 44 296 dni”.
+function rpPlausibleDates(col) {
+  const years = col.dates.map((d) => d.getFullYear()).sort((a, b) => a - b);
+  const mid = years[Math.floor(years.length / 2)];
+  return mid >= 1971 && mid <= new Date().getFullYear() + 5;
+}
+
+function rpDateRoles(cols, rows) {
+  const dates = cols.filter((c) => c.kind === "date" && c.dates.length >= 2 && rpPlausibleDates(c));
+  const due = dates.find((c) => RP_DUE_RE.test(c.name)) || null;
+  const rest = dates.filter((c) => c !== due);
+  let end = rest.find((c) => RP_END_RE.test(c.name) && !RP_START_RE.test(c.name)) || null;
+  let start = rest.find((c) => c !== end && RP_START_RE.test(c.name))
+    || rest.find((c) => c !== end && !RP_END_RE.test(c.name))
+    || null;
+  if (start && !end) {
+    const others = rest.filter((c) => c !== start);
+    if (others.length === 1 && !RP_START_RE.test(others[0].name)) {
+      let both = 0;
+      let ordered = 0;
+      rows.forEach((row) => {
+        const a = rpCellDate(row, start.c);
+        const b = rpCellDate(row, others[0].c);
+        if (a && b) { both += 1; if (b >= a) ordered += 1; }
+      });
+      if (both >= 3 && ordered / both >= 0.9) end = others[0];
+    }
+  }
+  if (start && end && start.c > end.c && !RP_START_RE.test(start.name)) [start, end] = [end, start];
+  return { start, end, due };
+}
+
+// Kolumna, po której człowiek rozpozna wiersz („Klient”, „Nazwa”, „Teren”…).
+function rpLabelCol(cols, exclude = []) {
+  const skip = new Set(exclude.filter(Boolean).map((c) => c.c));
+  const text = cols.filter((c) => c.kind === "text" && c.fill >= 0.6 && !skip.has(c.c));
+  return text.find((c) => RP_LABEL_RE.test(c.name) && c.unique >= c.nonEmpty * 0.3)
+    || text.filter((c) => c.unique >= c.nonEmpty * 0.5).sort((a, b) => b.unique - a.unique)[0]
+    || cols.find((c) => RP_ID_RE.test(c.name))
+    || null;
+}
+
+function rpRowLabel(row, col) {
+  if (!col) return t("rpRowN", { n: (row.rowIndex0 ?? 0) + 1 });
+  return afShortSafe(String(getDisplayValue(row, col.c) ?? "").trim() || "—", 36);
+}
+
+function rpStatusCol(cols, rows) {
+  const cats = rpCategories(cols, rows.length);
+  for (const cat of cats) {
+    const groups = cat.entries.map(([label, n]) => ({ label, n, kind: rpStateKind(label) }));
+    const hasOpen = groups.some((g) => g.kind === "open");
+    const hasClosed = groups.some((g) => g.kind === "closed");
+    if ((hasOpen && hasClosed) || (RP_CAT_STRONG_RE.test(cat.col.name) && (hasOpen || hasClosed))) {
+      return { col: cat.col, groups };
+    }
+  }
+  return null;
+}
+
+function rpStateModel(d) {
+  const rows = d.rowsList;
+  if (rows.length < 3) return null;
+  const roles = d.roles;
+  const status = rpStatusCol(d.cols, rows);
+  // Arkusz z cyklami (Tryby auto): stan wiersza = stan jego cykli (otwarty cykl = zaczęty, nieskończony).
+  const smart = !status && typeof getSmartModel === "function" ? getSmartModel() : null;
+  const records = smart && smart.hasStateColumns && typeof buildSmartRecords === "function" ? smart : null;
+  const mode = status ? "status" : records ? "records" : roles.start && roles.end ? "dates" : roles.start ? "activity" : null;
+  if (!mode) return null;
+  const kindByKey = status ? new Map(status.groups.map((g) => [rpValueKey(g.label), g.kind])) : null;
+  const today = rpToday();
+  const labelCol = rpLabelCol(d.cols, [status && status.col, roles.start, roles.end, roles.due]);
+  const counts = { open: 0, closed: 0, other: 0 };
+  const open = [];
+  const overdue = [];
+  let lastDate = null;
+  let last30 = 0;
+  rows.forEach((row) => {
+    let kind = "other";
+    if (mode === "status") {
+      const shown = String(getDisplayValue(row, status.col.c) ?? "").trim();
+      kind = shown ? kindByKey.get(rpValueKey(shown)) || "other" : "other";
+    } else if (mode === "dates") {
+      const s = rpCellDate(row, roles.start.c);
+      const e = rpCellDate(row, roles.end.c);
+      kind = e ? "closed" : s ? "open" : "other";
+    }
+    let start = roles.start ? rpCellDate(row, roles.start.c) : null;
+    let who = "";
+    const seen = [start, roles.end ? rpCellDate(row, roles.end.c) : null];
+    if (mode === "records") {
+      const recs = buildSmartRecords(row, records).filter((r) => r.filled);
+      const openRec = recs.filter((r) => r.state === "open").pop();
+      kind = openRec ? "open" : recs.some((r) => r.state === "closed") ? "closed" : "other";
+      start = openRec ? rpCellDate(row, openRec.startCol) : null;
+      // „Kto” z otwartego cyklu (kolumna osoby w bloku) — w arkuszu obiegu to najważniejsza informacja.
+      if (openRec && records.entityIdx >= 0) who = String(getDisplayValue(row, openRec.blockStart + records.entityIdx) ?? "").trim();
+      recs.forEach((r) => seen.push(rpCellDate(row, r.startCol), rpCellDate(row, r.endCol)));
+    }
+    counts[kind] += 1;
+    seen.forEach((dt) => {
+      if (dt && dt <= today && (!lastDate || dt > lastDate)) lastDate = dt;
+    });
+    const newest = seen.filter(Boolean).filter((dt) => dt <= today).sort((a, b) => b - a)[0];
+    if (newest && newest <= today && rpDaysBetween(newest, today) <= 30) last30 += 1;
+    if (kind === "open") {
+      open.push({ row, start, who, age: start && start <= today ? rpDaysBetween(start, today) : null });
+      const due = roles.due ? rpCellDate(row, roles.due.c) : null;
+      if (due && due < today) overdue.push({ row, due, late: rpDaysBetween(due, today) });
+    }
+  });
+  const ages = open.map((o) => o.age).filter((a) => a != null).sort((a, b) => a - b);
+  const buckets = ages.length ? [
+    [t("rpAgeB1"), ages.filter((a) => a <= 7).length],
+    [t("rpAgeB2"), ages.filter((a) => a > 7 && a <= 30).length],
+    [t("rpAgeB3"), ages.filter((a) => a > 30 && a <= 90).length],
+    [t("rpAgeB4"), ages.filter((a) => a > 90).length],
+  ] : null;
+  const recStart = records && records.blocks[0] ? records.blocks[0].startIndex + records.startIdx : -1;
+  const recEnd = records && records.blocks[0] && records.endIdx >= 0 ? records.blocks[0].startIndex + records.endIdx : -1;
+  return {
+    mode,
+    status,
+    // W trybie cykli „start” to kolumna startu cyklu (nazwa z pierwszego bloku, do nagłówków na kartce).
+    roles: mode === "records" ? { ...roles, start: recStart >= 0 ? { c: recStart, name: rpColName(recStart) } : roles.start } : roles,
+    recEndName: recEnd >= 0 ? rpColName(recEnd) : "",
+    whoName: records && records.entityIdx >= 0 && records.blocks[0] ? rpColName(records.blocks[0].startIndex + records.entityIdx) : "",
+    labelCol,
+    counts,
+    total: rows.length,
+    openList: open.filter((o) => o.age != null).sort((a, b) => b.age - a.age).slice(0, RP_STATE_MAX_ROWS),
+    openCount: open.length,
+    recent: mode === "activity"
+      ? rows.map((row) => ({ row, date: rpCellDate(row, roles.start.c) })).filter((o) => o.date && o.date <= today).sort((a, b) => b.date - a.date).slice(0, RP_STATE_MAX_ROWS)
+      : [],
+    ages,
+    medianAge: ages.length ? Math.round(rpMedian(ages)) : null,
+    buckets,
+    overdue: overdue.sort((a, b) => b.late - a.late),
+    lastDate,
+    lastAgo: lastDate ? rpDaysBetween(lastDate, today) : null,
+    last30,
+    openLabels: status ? status.groups.filter((g) => g.kind === "open").map((g) => g.label) : [],
+    closedLabels: status ? status.groups.filter((g) => g.kind === "closed").map((g) => g.label) : [],
+  };
+}
+
+// Opis „co uznaliśmy za otwarte” — na kartce i w panelu, żeby zgadnięcie dało się sprawdzić.
+function rpStateRuleText(s) {
+  if (s.mode === "status") {
+    const list = (arr) => arr.slice(0, 4).map((x) => `„${x}”`).join(", ") + (arr.length > 4 ? "…" : "");
+    const parts = [];
+    if (s.openLabels.length) parts.push(t("rpStateRuleOpen", { list: list(s.openLabels) }));
+    if (s.closedLabels.length) parts.push(t("rpStateRuleClosed", { list: list(s.closedLabels) }));
+    return t("rpStateRuleStatus", { col: s.status.col.name, parts: parts.join(" · ") });
+  }
+  if (s.mode === "dates") return t("rpStateRuleDates", { start: s.roles.start.name, end: s.roles.end.name });
+  if (s.mode === "records") return t("rpStateRuleRecords", { start: s.roles.start ? s.roles.start.name : "—", end: s.recEndName || "—" });
+  return t("rpStateRuleActivity", { col: s.roles.start.name });
+}
+
+function rpStateFindings(s) {
+  const out = [];
+  if (s.mode !== "activity") {
+    let text = t("rpFindStateOpen", { n: rpNum(s.openCount, 0), all: rpNum(s.total, 0), pct: rpPct(s.openCount, s.total) });
+    const oldest = s.openList[0];
+    if (oldest) {
+      const who = oldest.who ? ` (${oldest.who})` : "";
+      text += ` ${t("rpFindStateOldest", { days: rpDaysLabel(oldest.age), label: rpRowLabel(oldest.row, s.labelCol), who })}`;
+    }
+    out.push({ text });
+    if (s.ages.length >= 5 && s.medianAge > 0) out.push({ text: t("rpFindStateMedian", { days: rpDaysLabel(s.medianAge) }) });
+  }
+  if (s.overdue.length) {
+    const top = s.overdue[0];
+    out.push({ text: t("rpFindStateOverdue", { n: rpNum(s.overdue.length, 0), col: s.roles.due.name, days: rpDaysLabel(top.late), label: rpRowLabel(top.row, s.labelCol) }), tone: "warn" });
+  }
+  if (s.lastDate) {
+    if (s.lastAgo > 60 && (s.openCount > 0 || s.mode === "activity")) {
+      out.push({ text: t("rpFindStateStale", { date: rpDate(s.lastDate), days: rpDaysLabel(s.lastAgo) }), tone: "warn" });
+    } else if (s.lastAgo <= 60) {
+      out.push({ text: t("rpFindStateFresh", { date: rpDate(s.lastDate), n: rpNum(s.last30, 0) }) });
+    }
+  }
+  return out;
+}
+
+// ── Porównanie grup ──
+
+function rpCompareOptions(d) {
+  const opts = [];
+  // Zakres vs reszta: wystarczy, że po obu stronach coś jest (mały zakres też da się porównać z resztą).
+  if (d.filtering && d.rows > 0 && d.rows < d.total) opts.push({ id: "scope", label: t("rpCompareScopeOpt") });
+  // Grupy w obrębie zakresu: dopiero od kilku wierszy (inaczej każda „grupa” to 1–2 wiersze).
+  if (d.rows < RP_COMPARE_MIN_ROWS * 2) return opts;
+  rpCategories(d.cols, d.rows).forEach((cat) => {
+    const h = String(currentHeaders[cat.col.c] ?? "");
+    if (h) opts.push({ id: `col:${h}`, label: t("rpCompareColOpt", { col: cat.col.name }), col: cat.col });
+  });
+  return opts;
+}
+
+function rpCompareGroupStats(rows, d, ctx) {
+  const n = rows.length;
+  const stat = { n };
+  stat.measures = ctx.measures.map((m) => {
+    const vals = rows.map((row) => rpCellNum(row, m.col)).filter((v) => v != null).sort((a, b) => a - b);
+    return vals.length ? { n: vals.length, avg: vals.reduce((a, b) => a + b, 0) / vals.length, median: rpMedian(vals) } : null;
+  });
+  if (ctx.duration) {
+    const days = [];
+    rows.forEach((row) => {
+      const a = rpCellDate(row, ctx.duration.start.c);
+      const b = rpCellDate(row, ctx.duration.end.c);
+      if (a && b && b >= a) days.push(rpDaysBetween(a, b));
+    });
+    stat.duration = days.length ? { n: days.length, avg: days.reduce((x, y) => x + y, 0) / days.length } : null;
+  }
+  if (ctx.state) {
+    let open = 0;
+    rows.forEach((row) => {
+      const shown = String(getDisplayValue(row, ctx.state.col.c) ?? "").trim();
+      if (shown && ctx.state.kindByKey.get(rpValueKey(shown)) === "open") open += 1;
+    });
+    stat.openPct = n ? rpPct(open, n) : 0;
+  }
+  if (ctx.usedCols.length && n) {
+    let filled = 0;
+    rows.forEach((row) => ctx.usedCols.forEach((c) => { if (String(getDisplayValue(row, c.c) ?? "").trim()) filled += 1; }));
+    stat.complete = rpPct(filled, ctx.usedCols.length * n);
+  }
+  if (ctx.second) {
+    const counts = new Map();
+    let nonEmpty = 0;
+    rows.forEach((row) => {
+      const shown = String(getDisplayValue(row, ctx.second.c) ?? "").trim();
+      if (!shown) return;
+      nonEmpty += 1;
+      const key = rpValueKey(shown);
+      const g = counts.get(key) || { n: 0, label: shown };
+      g.n += 1;
+      counts.set(key, g);
+    });
+    stat.second = { nonEmpty, counts };
+  }
+  return stat;
+}
+
+function rpCompareModel(d) {
+  const opts = rpCompareOptions(d);
+  if (!opts.length) return null;
+  const want = rpCompareBy || rpCompareBySheet.get(rpSheetId()) || "";
+  const opt = opts.find((o) => o.id === want) || opts[0];
+  let groups;
+  let groupCol = null;
+  let skipped = 0;
+  if (opt.id === "scope") {
+    const inScope = new Set(d.rowsList.map((r) => r.rowIndex0));
+    const rest = baseRows.filter((r) => !inScope.has(r.rowIndex0));
+    groups = [{ label: t("rpCompareScope"), rows: d.rowsList }, { label: t("rpCompareRest"), rows: rest }];
+  } else {
+    groupCol = opt.col;
+    const map = new Map();
+    d.rowsList.forEach((row) => {
+      const shown = String(getDisplayValue(row, groupCol.c) ?? "").trim();
+      if (!shown) return;
+      const key = rpValueKey(shown);
+      let g = map.get(key);
+      if (!g) { g = { spell: new Map(), rows: [] }; map.set(key, g); }
+      g.spell.set(shown, (g.spell.get(shown) || 0) + 1);
+      g.rows.push(row);
+    });
+    const all = Array.from(map.values())
+      .map((g) => ({ label: Array.from(g.spell.entries()).sort((a, b) => b[1] - a[1])[0][0], rows: g.rows }))
+      .sort((a, b) => b.rows.length - a.rows.length);
+    groups = all.slice(0, RP_COMPARE_MAX_GROUPS);
+    skipped = all.length - groups.length;
+  }
+  if (groups.length < 2 || groups.filter((g) => g.rows.length).length < 2) return null;
+  // Miary: najwyżej 2 liczby + czas trwania + % otwartych + kompletność + najczęstsza wartość innej kategorii.
+  const measures = d.numericCols.filter((s) => !groupCol || s.col.c !== groupCol.c).slice(0, 2).map((s) => ({ col: s.col, name: s.col.name }));
+  const roles = d.roles;
+  const duration = roles.start && roles.end ? { start: roles.start, end: roles.end, name: `${roles.start.name} → ${roles.end.name}` } : null;
+  const st = d.state && d.state.mode === "status" && (!groupCol || d.state.status.col.c !== groupCol.c)
+    ? { col: d.state.status.col, kindByKey: new Map(d.state.status.groups.map((g) => [rpValueKey(g.label), g.kind])) }
+    : null;
+  const second = rpCategories(d.cols, d.rows).map((c) => c.col).find((c) => (!groupCol || c.c !== groupCol.c) && (!st || c.c !== st.col.c)) || null;
+  const ctx = { measures, duration, state: st, second, usedCols: d.used };
+  const total = groups.reduce((s2, g) => s2 + g.rows.length, 0);
+  const stats = groups.map((g) => ({ label: g.label, ...rpCompareGroupStats(g.rows, d, ctx) }));
+  return { mode: opt.id === "scope" ? "scope" : "column", optId: opt.id, options: opts, groupCol, groups: stats, total, ctx, skipped };
+}
+
+function rpCompareFindings(c) {
+  const out = [];
+  const solid = c.groups.filter((g) => g.n >= RP_COMPARE_MIN_ROWS);
+  if (solid.length < 2) return out;
+  const scope = c.mode === "scope";
+  const ratio = (name, pick, fmt) => {
+    const vals = solid.map((g) => ({ g, v: pick(g) })).filter((x) => Number.isFinite(x.v) && x.v > 0);
+    if (vals.length < 2) return;
+    const hi = vals.reduce((a, b) => (b.v > a.v ? b : a));
+    const lo = vals.reduce((a, b) => (b.v < a.v ? b : a));
+    if (hi === lo || hi.v < lo.v * 1.5) return;
+    const x = rpNum(hi.v / lo.v, 1);
+    if (scope) {
+      const inScope = vals.find((v) => v.g === c.groups[0]);
+      const rest = vals.find((v) => v.g === c.groups[1]);
+      if (!inScope || !rest) return;
+      out.push({ text: t(inScope === hi ? "rpFindCmpScopeMore" : "rpFindCmpScopeLess", { name, v: fmt(inScope.v), x, rest: fmt(rest.v) }) });
+    } else {
+      out.push({ text: t("rpFindCmpSpread", { name, hi: hi.g.label, hiV: fmt(hi.v), lo: lo.g.label, loV: fmt(lo.v), x }) });
+    }
+  };
+  c.ctx.measures.forEach((m, i) => ratio(t("rpCmpAvgOf", { col: m.name }), (g) => g.measures[i] && g.measures[i].avg, (v) => rpNum(v)));
+  if (c.ctx.duration) ratio(t("rpCmpDurationOf", { col: c.ctx.duration.name }), (g) => g.duration && g.duration.avg, (v) => rpDaysLabel(v, 1));
+  if (c.ctx.state) {
+    const hi = solid.reduce((a, b) => (b.openPct > a.openPct ? b : a));
+    const lo = solid.reduce((a, b) => (b.openPct < a.openPct ? b : a));
+    if (hi.openPct - lo.openPct >= 20) out.push({ text: t("rpFindCmpOpen", { hi: hi.label, hiP: hi.openPct, lo: lo.label, loP: lo.openPct }) });
+  }
+  // Skład wg innej kategorii: największa różnica udziału jednej wartości (grupy ≥ 5 wierszy).
+  if (c.ctx.second) {
+    const big = solid.filter((g) => g.second && g.second.nonEmpty >= 5);
+    let best = null;
+    const keys = new Set(big.flatMap((g) => Array.from(g.second.counts.keys())));
+    keys.forEach((k) => {
+      const shares = big.map((g) => ({ g, p: rpPct((g.second.counts.get(k) || { n: 0 }).n, g.second.nonEmpty), label: (g.second.counts.get(k) || {}).label }));
+      if (shares.length < 2) return;
+      const hi = shares.reduce((a, b) => (b.p > a.p ? b : a));
+      const lo = shares.reduce((a, b) => (b.p < a.p ? b : a));
+      if (hi.p - lo.p >= 15 && (!best || hi.p - lo.p > best.diff)) best = { diff: hi.p - lo.p, hi, lo, value: hi.label || shares.find((s) => s.label).label };
+    });
+    if (best) out.push({ text: t("rpFindCmpMix", { col: c.ctx.second.name, value: best.value, hi: best.hi.g.label, hiP: best.hi.p, lo: best.lo.g.label, loP: best.lo.p }) });
+  }
+  const comp = solid.filter((g) => Number.isFinite(g.complete));
+  if (comp.length >= 2) {
+    const hi = comp.reduce((a, b) => (b.complete > a.complete ? b : a));
+    const lo = comp.reduce((a, b) => (b.complete < a.complete ? b : a));
+    if (hi.complete - lo.complete >= 15) out.push({ text: t("rpFindCmpComplete", { lo: lo.label, loP: lo.complete, hi: hi.label, hiP: hi.complete }), tone: "warn" });
+  }
+  if (!out.length) out.push({ text: t("rpFindCmpNone") });
+  return out;
+}
+
+// Wnioski kątów idą NA POCZĄTEK listy — to odpowiedź na pytanie, które zadał użytkownik.
+function rpAngleFindings(d) {
+  const active = rpActiveSections();
+  const out = [];
+  if (active.includes("state") && d.state) out.push(...rpStateFindings(d.state));
+  if (active.includes("compare") && d.compare) out.push(...rpCompareFindings(d.compare));
+  return out;
+}
+
+function rpSetAngle(angle) {
+  if (!RP_ANGLES.includes(angle)) return;
+  rpPrefs.angle = angle;
+  rpSavePrefs();
+  rpRender();
+}
+
+function rpSetCompareBy(id) {
+  rpCompareBy = id || "";
+  rpCompareBySheet.set(rpSheetId(), rpCompareBy);
+  if (rpData) rpData.compare = rpCompareModel(rpData);
+  rpRender();
 }
 
 // ── Kafelki ─────────────────────────────────────────────────────────────────
@@ -1058,7 +1518,9 @@ function rpRender() {
   rpPageEl.style.setProperty("--rp-pw", `${rpPageMm().w}mm`);
   rpPageEl.style.setProperty("--rp-mv", `${rpMargin().v}mm`);
   rpPageEl.style.setProperty("--rp-mh", `${rpMargin().h}mm`);
-  const accent = RP_ACCENTS[rpPrefs.accent] || RP_ACCENTS.green;
+  // Styl „Oszczędny” = czerń. Akcent ustawiany tu inline wygrywał z regułą CSS [data-style="ink"],
+  // więc cz-b drukowało zielone nagłówki — kolor wybieramy więc już tutaj.
+  const accent = rpPrefs.style === "ink" ? "#000000" : (RP_ACCENTS[rpPrefs.accent] || RP_ACCENTS.green);
   rpPageEl.style.setProperty("--rp-accent", accent);
   // Odcienie akcentu jako zwykłe rgb (nie color-mix) — patrz komentarz przy --rp-tint w CSS.
   const [ar, ag, ab] = [1, 3, 5].map((i) => parseInt(accent.slice(i, i + 2), 16));
@@ -1158,7 +1620,8 @@ function rpBars(sec, items, total) {
     const row = rpEl("div", "rp-bar-row");
     const bar = rpEl("div", "rp-bar");
     const fill = rpEl("div", "rp-bar-fill");
-    fill.style.width = `${Math.max(2, Math.round((n / maxN) * 100))}%`;
+    // Zero = pusty pasek (minimalna kreska sugerowałaby, że coś tam jest).
+    fill.style.width = n > 0 ? `${Math.max(2, Math.round((n / maxN) * 100))}%` : "0";
     bar.appendChild(fill);
     row.append(rpEl("div", "rp-bar-label", label), bar, rpEl("div", "rp-bar-value", `${rpNum(n, 0)} · ${rpPct(n, total)}%`));
     sec.appendChild(row);
@@ -1219,6 +1682,107 @@ const RP_BUILDERS = {
     const shown = rpPrefs.preset === "short" ? all.slice(0, RP_MAX_FINDINGS) : all;
     shown.forEach((f) => list.appendChild(rpEl("li", f.tone ? `is-${f.tone}` : "", f.text)));
     sec.appendChild(list);
+    return sec;
+  },
+  state(d) {
+    const s = d.state;
+    // Klasa rp-aggs = łamanie MIĘDZY częściami (każda .rp-agg w całości), jak w zestawieniach.
+    const sec = rpSection(t("rpStateTitle"), "rp-aggs rp-state");
+    sec.appendChild(rpEl("p", "rp-note", rpStateRuleText(s)));
+    if (s.mode !== "activity") {
+      const box = rpEl("div", "rp-agg");
+      const parts = [["open", s.counts.open], ["closed", s.counts.closed], ["other", s.counts.other]].filter(([, n]) => n > 0);
+      const bar = rpEl("div", "rp-stack");
+      bar.setAttribute("aria-hidden", "true");
+      parts.forEach(([k, n]) => {
+        const seg = rpEl("div", `rp-stack-seg is-${k}`);
+        seg.style.width = `${(n / s.total) * 100}%`;
+        bar.appendChild(seg);
+      });
+      const legend = rpEl("div", "rp-stack-legend");
+      parts.forEach(([k, n]) => {
+        const item = rpEl("span", `rp-stack-key is-${k}`);
+        item.append(rpEl("i", "rp-stack-dot"), rpEl("span", "", `${t(`rpState_${k}`)}: ${rpNum(n, 0)} (${rpPct(n, s.total)}%)`));
+        legend.appendChild(item);
+      });
+      box.append(bar, legend);
+      sec.appendChild(box);
+    }
+    if (s.buckets && s.ages.length >= 3) {
+      const box = rpEl("div", "rp-agg");
+      box.appendChild(rpEl("h3", "rp-h3", t("rpStateAges", { col: s.roles.start.name })));
+      rpBars(box, s.buckets, s.ages.length);
+      sec.appendChild(box);
+    }
+    const label = s.labelCol ? s.labelCol.name : t("rpColRow");
+    // Bez pojęcia „otwarte” (sama kolumna daty) pokazujemy przynajmniej najnowsze wpisy.
+    if (s.mode === "activity" && s.recent.length) {
+      const box = rpEl("div", "rp-agg");
+      box.appendChild(rpEl("h3", "rp-h3", t("rpStateRecent", { col: s.roles.start.name })));
+      box.appendChild(rpTable([label, s.roles.start.name], s.recent.map((o) => [rpRowLabel(o.row, s.labelCol), rpDate(o.date)])));
+      sec.appendChild(box);
+    }
+    if (s.openList.length) {
+      const box = rpEl("div", "rp-agg");
+      box.appendChild(rpEl("h3", "rp-h3", t("rpStateOldest")));
+      const withStatus = s.mode === "status";
+      const withWho = !!s.whoName;
+      box.appendChild(rpTable(
+        [label, ...(withStatus ? [s.status.col.name] : []), ...(withWho ? [s.whoName] : []), s.roles.start.name, t("rpColWaiting")],
+        s.openList.map((o) => [
+          rpRowLabel(o.row, s.labelCol),
+          ...(withStatus ? [String(getDisplayValue(o.row, s.status.col.c) ?? "")] : []),
+          ...(withWho ? [afShortSafe(o.who || "—", 30)] : []),
+          rpDate(o.start),
+          rpDaysLabel(o.age, 0),
+        ]),
+        { numCols: [2 + (withStatus ? 1 : 0) + (withWho ? 1 : 0)] },
+      ));
+      sec.appendChild(box);
+    }
+    if (s.overdue.length) {
+      const box = rpEl("div", "rp-agg");
+      box.appendChild(rpEl("h3", "rp-h3", t("rpStateOverdue", { col: s.roles.due.name, n: rpNum(s.overdue.length, 0) })));
+      box.appendChild(rpTable(
+        [label, s.roles.due.name, t("rpColLate")],
+        s.overdue.slice(0, RP_STATE_MAX_ROWS).map((o) => [rpRowLabel(o.row, s.labelCol), rpDate(o.due), rpDaysLabel(o.late, 0)]),
+        { numCols: [2] },
+      ));
+      sec.appendChild(box);
+    }
+    return sec;
+  },
+  compare(d) {
+    const c = d.compare;
+    const sec = rpSection(c.mode === "scope" ? t("rpCompareTitleScope") : t("rpCompareTitleCol", { col: c.groupCol.name }), "rp-aggs rp-compare");
+    const note = c.mode === "scope"
+      ? t("rpCompareNoteScope", { view: d.viewText, rows: rpNum(d.rows, 0), rest: rpNum(c.groups[1].n, 0) })
+      : t("rpCompareNoteCol", { n: c.groups.length }) + (c.skipped ? ` ${t("rpCompareSkipped", { n: c.skipped })}` : "");
+    sec.appendChild(rpEl("p", "rp-note", note));
+    const ctx = c.ctx;
+    const cols = [
+      { h: c.mode === "scope" ? t("rpColGroup") : c.groupCol.name, v: (g) => g.label },
+      { h: t("rpColRows"), v: (g) => rpNum(g.n, 0), num: true },
+      { h: t("rpColShare"), v: (g) => `${rpPct(g.n, c.total)}%`, num: true },
+      ...ctx.measures.map((m, i) => ({ h: t("rpCmpAvgOf", { col: m.name }), v: (g) => (g.measures[i] ? rpNum(g.measures[i].avg) : "—"), num: true })),
+      ...(ctx.duration ? [{ h: t("rpCmpDurationShort"), v: (g) => (g.duration ? rpDaysLabel(g.duration.avg, 1) : "—"), num: true }] : []),
+      ...(ctx.state ? [{ h: t("rpCmpOpenShort"), v: (g) => `${g.openPct}%`, num: true }] : []),
+      { h: t("rpColComplete"), v: (g) => (Number.isFinite(g.complete) ? `${g.complete}%` : "—"), num: true, optional: true },
+      ...(ctx.second ? [{ h: t("rpCmpTopOf", { col: ctx.second.name }), v: (g) => {
+        if (!g.second || !g.second.nonEmpty) return "—";
+        const top = Array.from(g.second.counts.values()).sort((a, b) => b.n - a.n)[0];
+        return `${afShortSafe(top.label, 22)} (${rpPct(top.n, g.second.nonEmpty)}%)`;
+      } }] : []),
+    ];
+    // Za dużo kolumn na pionowym A4 → najpierw wypada „Kompletność”.
+    const shown = cols.length > 8 ? cols.filter((col) => !col.optional) : cols;
+    const box = rpEl("div", "rp-agg");
+    box.appendChild(rpTable(
+      shown.map((col) => col.h),
+      c.groups.map((g) => shown.map((col) => col.v(g))),
+      { numCols: shown.map((col, i) => (col.num ? i : -1)).filter((i) => i >= 0) },
+    ));
+    sec.appendChild(box);
     return sec;
   },
   chart(d) {
@@ -1383,10 +1947,20 @@ function rpSectionAvailable(sec, d) {
   return !sec.has || sec.has(d);
 }
 
-function rpActiveSections() {
+// Sekcje wybrane presetem albo ręcznie (bez dokładki z kąta).
+function rpBaseSections() {
   return rpPrefs.preset !== "custom" && RP_PRESETS[rpPrefs.preset]
     ? RP_PRESETS[rpPrefs.preset]
     : rpPrefs.sections;
+}
+
+// + sekcja kąta (Stan teraz / Porównanie) — zawsze, niezależnie od długości raportu.
+function rpActiveSections() {
+  const base = rpBaseSections();
+  const extra = RP_ANGLE_SECTION[rpPrefs.angle];
+  if (!extra || base.includes(extra)) return base;
+  const set = new Set([...base, extra]);
+  return RP_SECTIONS.map((sec) => sec.id).filter((id) => set.has(id));
 }
 
 // ── Panel „Zawartość”: presety + lista sekcji ───────────────────────────────
@@ -1400,9 +1974,12 @@ function rpRenderContentPanel() {
   if (customEl) customEl.classList.toggle("hidden", rpPrefs.preset !== "custom");
   if (rpContentBtn) {
     const name = rpPrefs.preset === "custom" ? t("rpPresetCustom") : t(`rpPreset_${rpPrefs.preset}`);
-    rpContentBtn.textContent = t("rpContentBtn", { preset: name });
+    const angle = rpPrefs.angle !== "overview" ? `${t(`rpAngle_${rpPrefs.angle}`)} · ` : "";
+    rpContentBtn.textContent = t("rpContentBtn", { preset: `${angle}${name}` });
   }
+  rpRenderAnglePanel();
   const active = rpActiveSections();
+  const forced = RP_ANGLE_SECTION[rpPrefs.angle];
   rpSectionListEl.replaceChildren();
   RP_SECTIONS.forEach((sec) => {
     const available = rpSectionAvailable(sec, rpData);
@@ -1410,15 +1987,66 @@ function rpRenderContentPanel() {
     const cb = rpEl("input");
     cb.type = "checkbox";
     cb.value = sec.id;
-    cb.checked = active.includes(sec.id);
-    cb.disabled = !available;
+    cb.checked = available && active.includes(sec.id); // „brak w tym arkuszu” nie może wyglądać na zaznaczone
+    cb.disabled = !available || sec.id === forced;
     cb.addEventListener("change", () => rpToggleSection(sec.id, cb.checked));
     const text = rpEl("span", "rp-sec-text", t(sec.label));
     label.append(cb, text);
+    if (available && sec.id === forced) label.appendChild(rpEl("span", "rp-sec-why", t("rpSecFromAngle")));
     // Sekcja bez danych zostaje na liście (żeby było wiadomo, że istnieje), ale mówi czemu jej nie ma.
     if (!available) label.appendChild(rpEl("span", "rp-sec-why", t("rpSecUnavailable")));
     rpSectionListEl.appendChild(label);
   });
+}
+
+// Wybór kąta + (dla porównania) „co z czym”. Każdy kąt mówi, co wykrył albo czemu go nie ma.
+function rpRenderAnglePanel() {
+  const box = document.getElementById("rpAngles");
+  if (!box || !rpData) return;
+  const d = rpData;
+  const head = rpEl("div", "rp-angle-row");
+  head.appendChild(rpEl("span", "rp-angle-label", t("rpAngleLabel")));
+  const chips = rpEl("div", "rp-presets");
+  chips.setAttribute("role", "group");
+  chips.setAttribute("aria-label", t("rpAngleLabel"));
+  const avail = { overview: true, state: !!d.state, compare: !!d.compare };
+  ["overview", "state", "compare"].forEach((a) => {
+    const btn = rpEl("button", "rp-preset", t(`rpAngle_${a}`));
+    btn.type = "button";
+    btn.dataset.angle = a;
+    btn.setAttribute("aria-pressed", rpPrefs.angle === a ? "true" : "false");
+    btn.setAttribute("data-hint", t(`rpAngleHint_${a}`));
+    if (!avail[a]) {
+      btn.disabled = true;
+      btn.setAttribute("data-hint", t(`rpAngleNo_${a}`));
+    }
+    btn.addEventListener("click", () => rpSetAngle(a));
+    chips.appendChild(btn);
+  });
+  head.appendChild(chips);
+  const parts = [head];
+  let info = "";
+  if (rpPrefs.angle === "state") info = d.state ? rpStateRuleText(d.state) : t("rpAngleNo_state");
+  if (rpPrefs.angle === "compare") {
+    if (!d.compare) info = t("rpAngleNo_compare");
+    else {
+      const row = rpEl("label", "rp-field rp-compare-pick");
+      row.appendChild(rpEl("span", "", t("rpComparePick")));
+      const sel = rpEl("select");
+      sel.id = "rpCompareBy";
+      d.compare.options.forEach((o) => {
+        const opt = rpEl("option", "", o.label);
+        opt.value = o.id;
+        sel.appendChild(opt);
+      });
+      sel.value = d.compare.optId;
+      sel.addEventListener("change", () => rpSetCompareBy(sel.value));
+      row.appendChild(sel);
+      parts.push(row);
+    }
+  }
+  if (info) parts.push(rpEl("p", "rp-angle-info", info));
+  box.replaceChildren(...parts);
 }
 
 function rpSetPreset(preset) {
@@ -1431,7 +2059,7 @@ function rpSetPreset(preset) {
 
 // Ręczna zmiana = „Własny”. Startujemy od tego, co było widać, więc nic nie przeskakuje.
 function rpToggleSection(id, on) {
-  const next = new Set(rpActiveSections());
+  const next = new Set(rpBaseSections());
   if (on) next.add(id);
   else next.delete(id);
   rpPrefs.sections = RP_SECTIONS.map((sec) => sec.id).filter((x) => next.has(x));
@@ -1467,7 +2095,7 @@ function rpFit() {
   rpWrapEl.style.width = `${Math.round(pageW * scale)}px`;
   rpWrapEl.style.height = `${Math.round(h * scale)}px`;
   if (rpFitNoteEl) {
-    rpFitNoteEl.textContent = pages > 1 ? t("rpFitPages", { n: pages }) : t("rpFitOne");
+    rpFitNoteEl.textContent = pages > 1 ? t(rpPluralKey("rpFitPages", pages), { n: pages }) : t("rpFitOne");
     rpFitNoteEl.classList.toggle("is-warn", pages > 1);
   }
 }
@@ -1670,20 +2298,7 @@ function rpSyncControls() {
   if (rpOrientEl) rpOrientEl.value = rpOrient();
   // W trybie tabeli nie ma sekcji do wybierania.
   if (rpContentBtn) rpContentBtn.classList.toggle("hidden", rpMode === "table");
-  if (rpContentBtn) rpContentBtn.addEventListener("click", () => rpToggleContentPanel());
-document.getElementById("rpLookBtn")?.addEventListener("click", (e) => {
-  const open = !rpOverlayEl.classList.contains("look-open");
-  rpOverlayEl.classList.toggle("look-open", open);
-  e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
-  rpFit();
-});
-if (rpPresetsEl) {
-  rpPresetsEl.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-preset]");
-    if (btn) rpSetPreset(btn.dataset.preset);
-  });
-}
-if (rpAccentsEl) {
+  if (rpAccentsEl) {
     rpAccentsEl.querySelectorAll("[data-accent]").forEach((btn) => {
       const on = btn.dataset.accent === rpPrefs.accent;
       btn.setAttribute("aria-pressed", on ? "true" : "false");
@@ -1696,6 +2311,23 @@ if (rpAccentsEl) {
     rpSizeBtn.textContent = rpPrefs.size === "large" ? "A+" : "A";
     rpSizeBtn.setAttribute("aria-pressed", rpPrefs.size === "large" ? "true" : "false");
   }
+}
+
+// Nasłuchy przycisków paska — rejestrowane RAZ. Dawniej stały w środku rpSyncControls
+// (wołanego przy każdym renderze), więc po N odświeżeniach klik przełączał panel N razy:
+// „Zawartość” / „Wygląd” czasem nic nie robiły, a preset przeliczał raport N razy.
+if (rpContentBtn) rpContentBtn.addEventListener("click", () => rpToggleContentPanel());
+document.getElementById("rpLookBtn")?.addEventListener("click", (e) => {
+  const open = !rpOverlayEl.classList.contains("look-open");
+  rpOverlayEl.classList.toggle("look-open", open);
+  e.currentTarget.setAttribute("aria-expanded", open ? "true" : "false");
+  rpFit();
+});
+if (rpPresetsEl) {
+  rpPresetsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-preset]");
+    if (btn) rpSetPreset(btn.dataset.preset);
+  });
 }
 
 function rpSetPref(key, value) {
@@ -2094,6 +2726,8 @@ window.__report = {
   mode: () => rpMode,
   pageCount: () => rpPageCount,
   data: () => rpData,
+  setAngle: rpSetAngle,
+  setCompareBy: rpSetCompareBy,
   findings: () => (rpData ? rpFindings(rpData).map((f) => f.text) : []),
   prefs: () => ({ ...rpPrefs, sections: rpPrefs.sections.slice() }),
   sections: () => Array.from(document.querySelectorAll("#rpPage [data-section]")).map((el) => el.dataset.section),
