@@ -154,6 +154,9 @@ async function run() {
     await page.evaluate(() => window.__report.setAngle("compare"));
     await sleep(150);
     check(`${label}: raport — porównanie grup`, await page.evaluate(AUDIT, "#reportOverlay"));
+    await page.evaluate(() => { window.__report.setScope({ kind: "view" }); window.__report.setAngle("periods"); });
+    await sleep(150);
+    check(`${label}: raport — porównanie okresów`, await page.evaluate(AUDIT, "#reportOverlay"));
     await page.evaluate(() => { window.__report.setAngle("overview"); window.__report.setScope({ kind: "view" }); window.__report.close(); });
     await context.close();
   }

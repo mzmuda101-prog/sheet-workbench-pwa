@@ -7488,6 +7488,14 @@ body.rp-active { overflow: hidden; }
 .rp-aggs > * + * { margin-top: 4mm; }
 .rp-aggs > .rp-h2 { margin-bottom: 0; }
 .rp-agg { break-inside: avoid; }
+/* Porównanie okresów: trend — bieżący okres w kolorze akcentu, poprzednie szare. */
+.rp-trend .rp-bar-fill { background: #b3b7ad; }
+.rp-trend .rp-bar-row.is-hl .rp-bar-fill { background: var(--rp-accent); }
+.rp-trend .rp-bar-row.is-hl .rp-bar-label, .rp-trend .rp-bar-row.is-hl .rp-bar-value { font-weight: 700; color: var(--rp-ink); }
+.rp-page[data-style="ink"] .rp-trend .rp-bar-fill { background: #9a9a9a; }
+.rp-page[data-style="ink"] .rp-trend .rp-bar-row.is-hl .rp-bar-fill { background: #000; }
+.rp-period-picks { gap: 8px 14px; }
+.rp-angle-info.is-warn { color: var(--warning); }
 /* Stan teraz: jeden pasek składu (otwarte / zamknięte / inne) + legenda z liczbami. */
 .rp-stack { display: flex; height: 4mm; border-radius: 1mm; overflow: hidden; background: #efeee9; }
 .rp-stack-seg { height: 100%; min-width: 0.6mm; }

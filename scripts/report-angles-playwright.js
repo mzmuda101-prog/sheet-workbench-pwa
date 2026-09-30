@@ -98,7 +98,7 @@ async function run() {
   await page.click("#rpContentBtn");
   await sleep(150);
   const chips = await page.evaluate(() => Array.from(document.querySelectorAll("#rpAngles [data-angle]")).map((b) => ({ a: b.dataset.angle, on: b.getAttribute("aria-pressed") === "true", dis: b.disabled })));
-  check("chipy kątów: Przegląd (wciśnięty), Stan teraz, Porównanie — dostępne", chips.length === 3 && chips[0].on && chips.every((c) => !c.dis), chips);
+  check("chipy kątów: Przegląd (wciśnięty), Stan teraz, Porównanie grup, Porównanie okresów — dostępne", chips.length === 4 && chips[0].on && chips.every((c) => !c.dis), chips);
   await page.click('#rpAngles [data-angle="state"]');
   await sleep(200);
   const ui = await page.evaluate(() => ({

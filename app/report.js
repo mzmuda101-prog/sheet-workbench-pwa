@@ -42,6 +42,7 @@ const RP_SECTIONS = [
   { id: "findings", label: "rpSecFindings" },
   { id: "state", label: "rpSecState", has: (d) => !!d.state },
   { id: "compare", label: "rpSecCompare", has: (d) => !!d.compare },
+  { id: "periods", label: "rpSecPeriods", has: (d) => !!d.periods },
   { id: "chart", label: "rpSecChart", has: (d) => !!d.category },
   { id: "aggAuto", label: "rpSecAggAuto", has: (d) => !!(d.aggs && d.aggs.length) },
   { id: "months", label: "rpSecMonths", has: (d) => !!(d.date && d.date.months.size >= 2) },
@@ -55,7 +56,7 @@ const RP_PRESETS = {
   short: ["tiles", "findings", "chart"],
   normal: ["tiles", "findings", "chart", "aggAuto", "months", "numbers", "categories"],
   // Sekcje kątów (Stan teraz / Porównanie) dokłada wybór kąta albo ręczne zaznaczenie — długość raportu ich nie włącza.
-  detailed: RP_SECTIONS.map((sec) => sec.id).filter((id) => id !== "state" && id !== "compare"),
+  detailed: RP_SECTIONS.map((sec) => sec.id).filter((id) => id !== "state" && id !== "compare" && id !== "periods"),
 };
 const RP_MAX_BARS = 6;
 // A4 w obu orientacjach. Pozioma przydaje się przy szerokich tabelach (tryb „tabela” z Eksportu).
@@ -137,7 +138,7 @@ function rpLoadPrefs() {
       margin: RP_MARGINS[p.margin] ? p.margin : "normal",
       orient: RP_ORIENTS.includes(p.orient) ? p.orient : "portrait",
       preset: RP_PRESETS[p.preset] || p.preset === "custom" ? p.preset : "short",
-      angle: ["overview", "state", "compare"].includes(p.angle) ? p.angle : "overview",
+      angle: ["overview", "state", "compare", "periods"].includes(p.angle) ? p.angle : "overview",
       sections: Array.isArray(p.sections)
         ? p.sections.filter((id) => RP_SECTIONS.some((sec) => sec.id === id))
         : RP_PRESETS.short.slice(),
@@ -761,6 +762,7 @@ function rpCollectAll() {
   const d = rpCollect();
   d.state = rpStateModel(d);
   d.compare = rpCompareModel(d);
+  d.periods = rpPeriodModel(d);
   rpWithScopeRows(d.rowsList, () => {
     d.aggs = rpAutoAggregations(d);
     d.aggPanel = rpPanelAggregation();
@@ -1020,8 +1022,8 @@ function rpFindings(d) {
 // Jak wszędzie w raporcie: zgadujemy z danych, ale każde zgadnięcie jest napisane na kartce
 // („otwarte = W toku, Nowe”), a reguła bez podstaw milczy.
 
-const RP_ANGLES = ["overview", "state", "compare"];
-const RP_ANGLE_SECTION = { state: "state", compare: "compare" };
+const RP_ANGLES = ["overview", "state", "compare", "periods"];
+const RP_ANGLE_SECTION = { state: "state", compare: "compare", periods: "periods" };
 const RP_DAY_MS = 86400000;
 const RP_STATE_MAX_ROWS = 5;
 const RP_COMPARE_MAX_GROUPS = 6;
@@ -1443,6 +1445,7 @@ function rpAngleFindings(d) {
   const out = [];
   if (active.includes("state") && d.state) out.push(...rpStateFindings(d.state));
   if (active.includes("compare") && d.compare) out.push(...rpCompareFindings(d.compare));
+  if (active.includes("periods") && d.periods) out.push(...rpPeriodFindings(d.periods));
   return out;
 }
 
@@ -1457,6 +1460,435 @@ function rpSetCompareBy(id) {
   rpCompareBy = id || "";
   rpCompareBySheet.set(rpSheetId(), rpCompareBy);
   if (rpData) rpData.compare = rpCompareModel(rpData);
+  rpRender();
+}
+
+// ── Kąt „Porównanie okresów” ────────────────────────────────────────────────
+// „Jak ten okres wypada wobec poprzednich?” Czas bywa zapisany na wiele sposobów, więc
+// najpierw szukamy ŹRÓDŁA czasu (każde ma funkcję: wiersz → lista dat):
+//  • kolumna z datą (także tekst „01 sty 26”),
+//  • cykle z Trybów auto — daty startu ze WSZYSTKICH bloków (od, od2, od3…),
+//  • para kolumn Rok + Miesiąc (liczba albo nazwa miesiąca),
+//  • liczby Excela (45872) — TYLKO w kolumnie o nazwie „Data/Start/Koniec…” i gdy prawie
+//    wszystkie wartości to całe liczby z zakresu 1970–2100 (inaczej kwota stałaby się datą),
+//  • sam Rok (wtedy tylko porównanie lat).
+// Potem okres (tydzień/miesiąc/kwartał/rok) dobrany do rozpiętości danych, okres do porównania
+// (najnowszy z danymi, nie z przyszłości) i uczciwe porównanie: trwający okres porównujemy
+// „do tego samego dnia”, a świeżo zaczęty (<25%) domyślnie zastępujemy ostatnim pełnym.
+// Wszystko to można zmienić ręcznie w panelu (Data / Okres / Porównaj).
+
+const RP_GRANS = ["week", "month", "quarter", "year"];
+const RP_PERIOD_MIN_EVENTS = 6;       // mniej wpisów łącznie = nie ma czego porównywać
+const RP_PERIOD_TREND = 12;           // ile okresów na wykresie
+const RP_SERIAL_MIN = 25569;          // 1970-01-01 jako liczba Excela
+const RP_SERIAL_MAX = 73051;          // 2100-01-01
+const RP_DATEISH_RE = /data|date|dzie[nń]|start|koniec|pocz|zako|termin|\bod\b|\bdo\b|\bend\b|deadline|created|updated/i;
+const RP_MONTH_COL_RE = /miesi|month|\bmies\b/i;
+const RP_YEAR_COL_RE = /^(rok|year|lata)\b|\brok\b/i;
+const RP_MONTH_NAMES = [
+  ["sty", "jan"], ["lut", "feb"], ["mar"], ["kwi", "apr"], ["maj", "may"], ["cze", "jun"],
+  ["lip", "jul"], ["sie", "aug"], ["wrz", "sep"], ["pa[zź]", "oct"], ["lis", "nov"], ["gru", "dec"],
+];
+// Ręczny wybór (Czas wg / Okres / Porównaj) — TYLKO dla danego arkusza, na tę sesję.
+// Wspólny „ostatni wybór” przenosił okres z innego pliku (RODO dostawało czerwiec 2025).
+const rpPeriodPickBySheet = new Map();
+
+function rpMonthFromText(v) {
+  if (typeof v === "number") return Number.isInteger(v) && v >= 1 && v <= 12 ? v : null;
+  const s = String(v ?? "").trim().toLowerCase();
+  if (!s) return null;
+  if (/^\d{1,2}$/.test(s)) { const n = Number(s); return n >= 1 && n <= 12 ? n : null; }
+  const i = RP_MONTH_NAMES.findIndex((alts) => alts.some((a) => new RegExp(`^${a}`).test(s)));
+  return i >= 0 ? i + 1 : null;
+}
+
+function rpYearFromValue(v) {
+  const n = typeof v === "number" ? v : Number(String(v ?? "").trim());
+  return Number.isInteger(n) && n >= 1971 && n <= 2100 ? n : null;
+}
+
+function rpSerialToDate(v) {
+  return typeof v === "number" && Number.isInteger(v) && v >= RP_SERIAL_MIN && v <= RP_SERIAL_MAX ? new Date(1899, 11, 30 + v) : null;
+}
+
+// Wszystkie źródła czasu w arkuszu, najlepsze pierwsze.
+function rpPeriodSources(d) {
+  const rows = d.rowsList;
+  const out = [];
+  const share = (col, fn) => {
+    let ok = 0;
+    let n = 0;
+    rows.forEach((row) => {
+      const v = row.values ? row.values[col.c] : undefined;
+      if (v === undefined || v === null || String(v).trim() === "") return;
+      n += 1;
+      if (fn(v)) ok += 1;
+    });
+    return n ? { ok, n, r: ok / n } : { ok: 0, n: 0, r: 0 };
+  };
+  // Cykle (Tryby auto): starty z każdego bloku.
+  const smart = typeof getSmartModel === "function" ? getSmartModel() : null;
+  if (smart && smart.startIdx >= 0 && typeof buildSmartRecords === "function") {
+    const startName = rpColName(smart.blocks[0].startIndex + smart.startIdx);
+    // Liczba Excela jako data TYLKO w kolumnie o „datowej” nazwie (OkrA_Start tak, Kw1_Kwota nie).
+    const serialOk = RP_DATEISH_RE.test(String(currentHeaders[smart.blocks[0].startIndex + smart.startIdx] ?? ""));
+    const asDate = (row, c) => rpCellDate(row, c) || (serialOk ? rpSerialToDate(row.values ? row.values[c] : null) : null);
+    out.push({
+      id: "records",
+      label: t("rpPerSrcRecords", { col: startName }),
+      what: "cycles",
+      // Kolumna startu cyklu to data z definicji modelu — przyjmujemy też liczby Excela (45412).
+      datesOf: (row) => buildSmartRecords(row, smart).filter((r) => r.filled && r.startCol >= 0).map((r) => asDate(row, r.startCol)).filter(Boolean),
+      endsOf: smart.endIdx >= 0 ? (row) => buildSmartRecords(row, smart).filter((r) => r.filled && r.endCol >= 0).map((r) => asDate(row, r.endCol)).filter(Boolean) : null,
+    });
+  }
+  // Kolumny z datą (sensowne lata). Termin na końcu — bywa w przyszłości.
+  const dateCols = d.cols.filter((c) => c.kind === "date" && c.dates.length >= 3 && rpPlausibleDates(c))
+    .sort((a, b) => (RP_DUE_RE.test(a.name) - RP_DUE_RE.test(b.name)) || ((d.roles.start === b) - (d.roles.start === a)) || (b.dates.length - a.dates.length));
+  dateCols.forEach((col) => {
+    const endCol = d.roles.start === col && d.roles.end ? d.roles.end : null;
+    out.push({
+      id: `date:${col.c}`,
+      label: t("rpPerSrcCol", { col: col.name }),
+      what: "rows",
+      col,
+      datesOf: (row) => { const x = rpCellDate(row, col.c); return x ? [x] : []; },
+      endsOf: endCol ? (row) => { const x = rpCellDate(row, endCol.c); return x ? [x] : []; } : null,
+      endName: endCol ? endCol.name : "",
+    });
+  });
+  // Rok + Miesiąc w osobnych kolumnach.
+  const yearCol = d.cols.find((c) => RP_YEAR_COL_RE.test(c.name) && share(c, (v) => rpYearFromValue(v) != null).r >= 0.8);
+  const monthCol = d.cols.find((c) => c !== yearCol && RP_MONTH_COL_RE.test(c.name) && share(c, (v) => rpMonthFromText(v) != null).r >= 0.8);
+  if (yearCol && monthCol) {
+    out.push({
+      id: "ym",
+      label: t("rpPerSrcYm", { y: yearCol.name, m: monthCol.name }),
+      what: "rows",
+      coarse: "month",
+      cols: [yearCol, monthCol],
+      datesOf: (row) => {
+        const y = rpYearFromValue(row.values ? row.values[yearCol.c] : null);
+        const m = rpMonthFromText(row.values ? row.values[monthCol.c] : null) || rpMonthFromText(getDisplayValue(row, monthCol.c));
+        return y && m ? [new Date(y, m - 1, 1)] : [];
+      },
+    });
+  }
+  // Liczby Excela w kolumnie „Data/Start…”.
+  d.cols.filter((c) => c.kind !== "date" && RP_DATEISH_RE.test(c.name)).forEach((col) => {
+    const sh = share(col, (v) => rpSerialToDate(v) != null);
+    if (sh.ok < 3 || sh.r < 0.8) return;
+    out.push({
+      id: `serial:${col.c}`,
+      label: t("rpPerSrcSerial", { col: col.name }),
+      what: "rows",
+      col,
+      datesOf: (row) => { const x = rpSerialToDate(row.values ? row.values[col.c] : null); return x ? [x] : []; },
+    });
+  });
+  if (yearCol && !monthCol) {
+    out.push({
+      id: "year",
+      label: t("rpPerSrcYear", { col: yearCol.name }),
+      what: "rows",
+      coarse: "year",
+      cols: [yearCol],
+      datesOf: (row) => { const y = rpYearFromValue(row.values ? row.values[yearCol.c] : null); return y ? [new Date(y, 0, 1)] : []; },
+    });
+  }
+  return out;
+}
+
+function rpPeriodStart(dt, gran) {
+  const y = dt.getFullYear();
+  const m = dt.getMonth();
+  if (gran === "year") return new Date(y, 0, 1);
+  if (gran === "quarter") return new Date(y, m - (m % 3), 1);
+  if (gran === "month") return new Date(y, m, 1);
+  return new Date(y, m, dt.getDate() - ((dt.getDay() + 6) % 7)); // tydzień od poniedziałku
+}
+
+function rpPeriodShift(start, gran, k) {
+  const y = start.getFullYear();
+  const m = start.getMonth();
+  if (gran === "year") return new Date(y + k, 0, 1);
+  if (gran === "quarter") return new Date(y, m + 3 * k, 1);
+  if (gran === "month") return new Date(y, m + k, 1);
+  return new Date(y, m, start.getDate() + 7 * k);
+}
+
+function rpPeriodLabel(start, gran) {
+  if (gran === "year") return String(start.getFullYear());
+  if (gran === "quarter") return t("rpPerQuarter", { q: Math.floor(start.getMonth() / 3) + 1, y: start.getFullYear() });
+  if (gran === "month") return start.toLocaleDateString(rpLocale(), { month: "long", year: "numeric" });
+  const end = rpPeriodShift(start, "week", 1);
+  end.setDate(end.getDate() - 1);
+  return t("rpPerWeek", { from: rpDate(start, false), to: rpDate(end, start.getFullYear() !== new Date().getFullYear()) });
+}
+
+// Okres dobrany do danych: krótkie dane → tygodnie; długie i rzadkie → kwartały / lata.
+function rpAutoGran(dates, src) {
+  if (src.coarse === "year") return "year";
+  const sorted = dates.map((x) => x.getTime()).sort((a, b) => a - b);
+  const span = (sorted[sorted.length - 1] - sorted[0]) / RP_DAY_MS;
+  let gran = src.coarse === "month" || span > 70 ? "month" : "week";
+  const perPeriod = (g) => {
+    const counts = new Map();
+    dates.forEach((x) => { const k = rpPeriodStart(x, g).getTime(); counts.set(k, (counts.get(k) || 0) + 1); });
+    const vals = Array.from(counts.values()).sort((a, b) => a - b);
+    return vals[Math.floor(vals.length / 2)];
+  };
+  if (gran === "month" && span > 730 && perPeriod("month") < 2) gran = "quarter";
+  if (gran === "quarter" && span > 2190 && perPeriod("quarter") < 2) gran = "year";
+  return gran;
+}
+
+function rpPeriodModel(d) {
+  if (d.rows < 3) return null;
+  const sources = rpPeriodSources(d);
+  if (!sources.length) return null;
+  const pick = rpPeriodPickBySheet.get(rpSheetId()) || {};
+  const today = rpToday();
+  // Zdarzenia dla źródła: [{ date, row }] + zamknięcia (przepływ).
+  const eventsFor = (src) => {
+    const ev = [];
+    const ends = [];
+    d.rowsList.forEach((row) => {
+      src.datesOf(row).forEach((date) => { if (date <= today) ev.push({ date, row }); });
+      if (src.endsOf) src.endsOf(row).forEach((date) => { if (date <= today) ends.push(date); });
+    });
+    return { ev, ends };
+  };
+  // Na liście zostają tylko źródła, które dają dość dat (np. „cykle” z bloków kwot — nie).
+  const usable = sources.map((s) => ({ s, x: eventsFor(s) })).filter((u) => u.x.ev.length >= RP_PERIOD_MIN_EVENTS);
+  if (!usable.length) return null;
+  const chosen = usable.find((u) => u.s.id === pick.src) || usable[0];
+  const src = chosen.s;
+  const { ev, ends } = chosen.x;
+  const autoGran = rpAutoGran(ev.map((e) => e.date), src);
+  const allowed = RP_GRANS.filter((g) => (src.coarse === "year" ? g === "year" : src.coarse === "month" ? g !== "week" : true))
+    .filter((g) => new Set(ev.map((e) => rpPeriodStart(e.date, g).getTime())).size >= 2);
+  if (!allowed.length) return null;
+  const gran = allowed.includes(pick.gran) ? pick.gran : allowed.includes(autoGran) ? autoGran : allowed[0];
+
+  // Okresy od pierwszego do najnowszego z danymi; puste okresy w środku liczą się jako 0.
+  const byKey = new Map();
+  ev.forEach((e) => {
+    const k = rpPeriodStart(e.date, gran).getTime();
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(e);
+  });
+  const keys = Array.from(byKey.keys()).sort((a, b) => a - b);
+  const first = new Date(keys[0]);
+  const last = new Date(keys[keys.length - 1]);
+  const periods = [];
+  for (let p = first; p <= last; p = rpPeriodShift(p, gran, 1)) periods.push(p);
+  if (periods.length < 2) return null;
+
+  // Okres do porównania: wybrany ręcznie albo najnowszy; świeżo zaczęty (<25% okresu)
+  // zastępujemy ostatnim pełnym — 2 dni października vs cały wrzesień to nie porównanie.
+  const periodLen = (p) => (rpPeriodShift(p, gran, 1) - p) / RP_DAY_MS;
+  // Dzień odniesienia = dziś albo ostatni wpis, jeśli dane kończą się wcześniej (RODO: 3 maja).
+  // Okres, w którym dane się urywają, jest NIEPEŁNY tak samo jak trwający — 3 dni maja vs cały
+  // kwiecień dawały „−90%”. Liczymy więc „do tego samego dnia” w każdym okresie.
+  const dataEnd = new Date(Math.max(...ev.map((e) => e.date.getTime())));
+  const refDay = dataEnd < today ? dataEnd : today;
+  const lastDay = (p) => { const x = rpPeriodShift(p, gran, 1); x.setDate(x.getDate() - 1); return x; };
+  const isRunning = (p) => p <= refDay && refDay < lastDay(p);
+  let anchorIdx = periods.findIndex((p) => String(p.getTime()) === String(pick.anchor));
+  let autoNote = "";
+  if (anchorIdx < 0) {
+    anchorIdx = periods.length - 1;
+    const p = periods[anchorIdx];
+    // Okres z niecałą ćwiercią dni (dopiero zaczęty ALBO dane się w nim urywają) → domyślnie
+    // ostatni pełny. RODO: 3 dni maja vs 3 dni kwietnia = „9 wobec 0”, nic z tego nie wynika.
+    if (!src.coarse && isRunning(p) && rpDaysBetween(p, refDay) + 1 < periodLen(p) * 0.25 && anchorIdx > 0) {
+      autoNote = t(refDay === today ? "rpPerJustStarted" : "rpPerDataStops", { period: rpPeriodLabel(p, gran), prev: rpPeriodLabel(periods[anchorIdx - 1], gran), day: rpDate(refDay) });
+      anchorIdx -= 1;
+    }
+  }
+  if (anchorIdx < 1) anchorIdx = Math.max(1, anchorIdx);
+  const anchor = periods[anchorIdx];
+  // Trwający okres: porównujemy „do tego samego dnia” (dzień N okresu vs dzień N poprzednich).
+  const partial = !src.coarse && isRunning(anchor);
+  const cutoffDays = partial ? rpDaysBetween(anchor, refDay) : Infinity;
+  const inPeriod = (p) => (byKey.get(p.getTime()) || []).filter((e) => rpDaysBetween(p, e.date) <= cutoffDays);
+  const endsIn = (p) => {
+    const next = rpPeriodShift(p, gran, 1);
+    return ends.filter((x) => x >= p && x < next && rpDaysBetween(p, x) <= cutoffDays).length;
+  };
+  const measures = src.what === "rows"
+    ? d.numericCols.filter((s) => !(src.cols || []).includes(s.col) && s.col !== src.col).slice(0, 2).map((s) => s.col)
+    : [];
+  const statOf = (p) => {
+    const evs = inPeriod(p);
+    const rowsSet = Array.from(new Set(evs.map((e) => e.row)));
+    return {
+      p,
+      label: rpPeriodLabel(p, gran),
+      n: evs.length,
+      rows: rowsSet,
+      ends: src.endsOf ? endsIn(p) : null,
+      sums: measures.map((col) => rowsSet.reduce((s2, row) => { const v = rpCellNum(row, col); return v == null ? s2 : s2 + v; }, 0)),
+    };
+  };
+  const cur = statOf(anchor);
+  const prev = statOf(periods[anchorIdx - 1]);
+  const prevN = periods.slice(Math.max(0, anchorIdx - 3), anchorIdx).map(statOf);
+  const avg = prevN.length >= 3 ? {
+    label: t("rpPerAvgLabel", { n: prevN.length }),
+    n: prevN.reduce((s2, x) => s2 + x.n, 0) / prevN.length,
+    ends: src.endsOf ? prevN.reduce((s2, x) => s2 + x.ends, 0) / prevN.length : null,
+    sums: measures.map((_, i) => prevN.reduce((s2, x) => s2 + x.sums[i], 0) / prevN.length),
+  } : null;
+  // Rok wcześniej — tylko gdy dane go obejmują (inaczej „0” byłoby zmyślone).
+  const yearsBack = { week: 52, month: 12, quarter: 4, year: 1 }[gran];
+  const yoyP = rpPeriodShift(anchor, gran, -yearsBack);
+  const yoy = gran !== "year" && yoyP >= first ? statOf(gran === "week" ? rpPeriodStart(new Date(anchor.getFullYear() - 1, anchor.getMonth(), anchor.getDate()), "week") : yoyP) : null;
+  const trend = periods.slice(Math.max(0, anchorIdx - RP_PERIOD_TREND + 1), anchorIdx + 1)
+    .map((p) => ({ label: rpPeriodLabel(p, gran), n: (byKey.get(p.getTime()) || []).length, hl: p === anchor }));
+
+  // Zakres raportu mógł obciąć przeszłość (np. zakres „maj 2026”) — wtedy mówimy o tym wprost.
+  // Mówimy o tym zawsze, gdy arkusz ma dane SPRZED początku zakresu (nie tylko gdy poprzedni okres wyszedł pusty).
+  let scopeCut = "";
+  if (d.filtering && src.what === "rows") {
+    const firstInScope = Math.min(...ev.map((e) => e.date.getTime()));
+    const earlier = baseRows.some((row) => src.datesOf(row).some((x) => x.getTime() < firstInScope));
+    if (earlier) scopeCut = rpDate(new Date(firstInScope));
+  }
+  return {
+    sources: usable.map((u) => ({ id: u.s.id, label: u.s.label })),
+    src: { id: src.id, label: src.label, what: src.what, endName: src.endName || "" },
+    gran,
+    autoGran,
+    allowed,
+    periods: periods.map((p) => ({ key: String(p.getTime()), label: rpPeriodLabel(p, gran) })).slice(-24).reverse(),
+    anchorKey: String(anchor.getTime()),
+    partial,
+    partialDay: partial ? rpDate(refDay, refDay.getFullYear() !== today.getFullYear()) : "",
+    partialByData: partial && refDay !== today,
+    autoNote,
+    cur,
+    prev,
+    avg,
+    yoy,
+    trend,
+    measures: measures.map((col) => col.name),
+    mix: src.what === "rows" ? rpPeriodMix(d, cur.rows, prev.rows) : null,
+    fresh: src.what === "rows" ? rpPeriodNewValues(d, cur.rows, periods.slice(0, anchorIdx).flatMap((p) => inPeriodAll(byKey, p))) : null,
+    scopeCut,
+  };
+}
+
+function inPeriodAll(byKey, p) {
+  return (byKey.get(p.getTime()) || []).map((e) => e.row);
+}
+
+// Skład wg głównej kategorii: która wartość najbardziej zmieniła udział (grupy ≥ 5 wierszy).
+function rpPeriodMix(d, curRows, prevRows) {
+  if (!d.category || curRows.length < 5 || prevRows.length < 5) return null;
+  const c = d.category.col.c;
+  const shares = (rows) => {
+    const m = new Map();
+    let n = 0;
+    rows.forEach((row) => {
+      const shown = String(getDisplayValue(row, c) ?? "").trim();
+      if (!shown) return;
+      n += 1;
+      const k = rpValueKey(shown);
+      const g = m.get(k) || { n: 0, label: shown };
+      g.n += 1;
+      m.set(k, g);
+    });
+    return { m, n };
+  };
+  const a = shares(curRows);
+  const b = shares(prevRows);
+  if (a.n < 5 || b.n < 5) return null;
+  let best = null;
+  new Set([...a.m.keys(), ...b.m.keys()]).forEach((k) => {
+    const pa = rpPct((a.m.get(k) || { n: 0 }).n, a.n);
+    const pb = rpPct((b.m.get(k) || { n: 0 }).n, b.n);
+    if (Math.abs(pa - pb) >= 10 && (!best || Math.abs(pa - pb) > Math.abs(best.pa - best.pb))) {
+      best = { label: (a.m.get(k) || b.m.get(k)).label, pa, pb };
+    }
+  });
+  return best ? { col: d.category.col.name, ...best } : null;
+}
+
+// Nowe wartości (np. nowi klienci): w tym okresie, a nigdy wcześniej. Tylko dla kolumn,
+// w których wartości się POWTARZAJĄ (numer/ID jest nowy zawsze — to nic nie mówi).
+function rpPeriodNewValues(d, curRows, earlierRows) {
+  if (curRows.length < 3 || earlierRows.length < 10) return null;
+  const col = d.cols.find((c) => c.kind === "text" && c.fill >= 0.6 && c.unique <= c.nonEmpty * 0.7 && c.unique >= 5 && RP_LABEL_RE.test(c.name));
+  if (!col) return null;
+  const seen = new Set(earlierRows.map((row) => rpValueKey(String(getDisplayValue(row, col.c) ?? "").trim())).filter(Boolean));
+  const fresh = new Map();
+  curRows.forEach((row) => {
+    const shown = String(getDisplayValue(row, col.c) ?? "").trim();
+    const k = rpValueKey(shown);
+    if (shown && !seen.has(k) && !fresh.has(k)) fresh.set(k, shown);
+  });
+  return fresh.size ? { col: col.name, n: fresh.size, ex: Array.from(fresh.values()).slice(0, 4) } : null;
+}
+
+function rpChangeText(a, b, digits = 0) {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return "—";
+  if (b === 0) return a === 0 ? "0" : t("rpPerNew");
+  const diff = a - b;
+  const pct = Math.round((diff / Math.abs(b)) * 100);
+  const sign = (x) => (x > 0 ? "+" : x < 0 ? "−" : "");
+  return `${sign(diff)}${rpNum(Math.abs(diff), digits)} (${sign(pct)}${Math.abs(pct)}%)`;
+}
+
+function rpPeriodFindings(m) {
+  const out = [];
+  const what = t(m.src.what === "cycles" ? "rpPerWhatCycles" : "rpPerWhatRows");
+  if (m.partial) out.push({ text: t(m.partialByData ? "rpPerPartialData" : "rpPerPartial", { period: m.cur.label, day: m.partialDay }) });
+  if (m.cur.n < 3 && m.prev.n < 3) {
+    out.push({ text: t("rpPerTooFew", { a: m.cur.n, b: m.prev.n }) });
+    return out;
+  }
+  // Kilka wpisów to za mało na procenty („2 wobec 7 = −71%” brzmi groźnie, a nic nie znaczy).
+  if (Math.min(m.cur.n, m.prev.n) < 5) {
+    out.push({ text: t("rpPerMainSmall", { period: m.cur.label, n: rpNum(m.cur.n, 0), what, prev: m.prev.label, b: rpNum(m.prev.n, 0) }) });
+    return out;
+  }
+  const pct = m.prev.n ? Math.round(((m.cur.n - m.prev.n) / m.prev.n) * 100) : null;
+  let text = pct == null
+    ? t("rpPerMainNew", { period: m.cur.label, n: rpNum(m.cur.n, 0), what, prev: m.prev.label })
+    : Math.abs(pct) < 10
+      ? t("rpPerMainSame", { period: m.cur.label, n: rpNum(m.cur.n, 0), what, prev: m.prev.label, b: rpNum(m.prev.n, 0) })
+      : t(pct > 0 ? "rpPerMainUp" : "rpPerMainDown", { period: m.cur.label, n: rpNum(m.cur.n, 0), what, prev: m.prev.label, b: rpNum(m.prev.n, 0), pct: Math.abs(pct) });
+  if (m.avg && m.avg.n > 0) {
+    const x = m.cur.n / m.avg.n;
+    if (x >= 1.3 || x <= 0.77) text += ` ${t("rpPerVsAvg", { x: rpNum(x, 1), avg: rpNum(m.avg.n, 1), n: m.avg.label })}`;
+  }
+  out.push({ text });
+  if (m.yoy && m.yoy.n >= 3) out.push({ text: t("rpPerYoy", { period: m.yoy.label, b: rpNum(m.yoy.n, 0), change: rpChangeText(m.cur.n, m.yoy.n) }) });
+  m.measures.forEach((name, i) => {
+    const a = m.cur.sums[i];
+    const b = m.prev.sums[i];
+    if (b && Math.abs((a - b) / b) >= 0.15) out.push({ text: t("rpPerSum", { col: name, a: rpNum(a), b: rpNum(b), prev: m.prev.label, change: rpChangeText(a, b) }) });
+  });
+  if (m.cur.ends != null && (m.cur.n || m.cur.ends)) {
+    const net = m.cur.n - m.cur.ends;
+    out.push({
+      text: t(net > 0 ? "rpPerFlowUp" : net < 0 ? "rpPerFlowDown" : "rpPerFlowEven", { a: rpNum(m.cur.n, 0), b: rpNum(m.cur.ends, 0), net: rpNum(Math.abs(net), 0) }),
+      tone: net > 0 && m.cur.ends < m.cur.n * 0.5 ? "warn" : undefined,
+    });
+  }
+  if (m.mix) out.push({ text: t("rpPerMix", { col: m.mix.col, value: m.mix.label, a: m.mix.pa, b: m.mix.pb, prev: m.prev.label }) });
+  if (m.fresh) out.push({ text: t("rpPerFresh", { col: m.fresh.col, n: rpNum(m.fresh.n, 0), ex: m.fresh.ex.map((x) => `„${x}”`).join(", ") }) });
+  return out;
+}
+
+function rpSetPeriodPick(patch) {
+  const next = { ...(rpPeriodPickBySheet.get(rpSheetId()) || {}), ...patch };
+  if (patch.src !== undefined || patch.gran !== undefined) next.anchor = patch.anchor || "";
+  if (patch.src !== undefined) next.gran = patch.gran || "";
+  rpPeriodPickBySheet.set(rpSheetId(), next);
+  if (rpData) rpData.periods = rpPeriodModel(rpData);
   rpRender();
 }
 
@@ -1614,16 +2046,16 @@ function rpSection(titleText, cls = "") {
   return sec;
 }
 
-function rpBars(sec, items, total) {
+function rpBars(sec, items, total, { highlight = -1, plain = false } = {}) {
   const maxN = Math.max(1, ...items.map(([, n]) => n));
-  items.forEach(([label, n]) => {
-    const row = rpEl("div", "rp-bar-row");
+  items.forEach(([label, n], i) => {
+    const row = rpEl("div", `rp-bar-row${i === highlight ? " is-hl" : ""}`);
     const bar = rpEl("div", "rp-bar");
     const fill = rpEl("div", "rp-bar-fill");
     // Zero = pusty pasek (minimalna kreska sugerowałaby, że coś tam jest).
     fill.style.width = n > 0 ? `${Math.max(2, Math.round((n / maxN) * 100))}%` : "0";
     bar.appendChild(fill);
-    row.append(rpEl("div", "rp-bar-label", label), bar, rpEl("div", "rp-bar-value", `${rpNum(n, 0)} · ${rpPct(n, total)}%`));
+    row.append(rpEl("div", "rp-bar-label", label), bar, rpEl("div", "rp-bar-value", plain ? rpNum(n, 0) : `${rpNum(n, 0)} · ${rpPct(n, total)}%`));
     sec.appendChild(row);
   });
 }
@@ -1783,6 +2215,39 @@ const RP_BUILDERS = {
       { numCols: shown.map((col, i) => (col.num ? i : -1)).filter((i) => i >= 0) },
     ));
     sec.appendChild(box);
+    return sec;
+  },
+  periods(d) {
+    const m = d.periods;
+    const sec = rpSection(t("rpPerTitle", { period: m.cur.label }), "rp-aggs rp-periods");
+    const notes = [t("rpPerNote", { src: m.src.label, gran: t(`rpGran_${m.gran}`).toLowerCase() })];
+    if (m.partial) notes.push(t(m.partialByData ? "rpPerPartialDataNote" : "rpPerPartialNote", { day: m.partialDay }));
+    if (m.autoNote) notes.push(m.autoNote);
+    sec.appendChild(rpEl("p", "rp-note", notes.join(" ")));
+    // Tabela: miary × (ten okres, poprzedni, zmiana, średnia z 3, zmiana, rok wcześniej).
+    const headers = [t("rpPerColMeasure"), m.cur.label, m.prev.label, t("rpPerColChange")];
+    if (m.avg) headers.push(m.avg.label, t("rpPerColChange"));
+    if (m.yoy) headers.push(m.yoy.label);
+    const rowOf = (name, get, digits = 0) => {
+      const r = [name, rpNum(get(m.cur), digits), rpNum(get(m.prev), digits), rpChangeText(get(m.cur), get(m.prev), digits)];
+      if (m.avg) r.push(rpNum(get(m.avg), 1), rpChangeText(get(m.cur), get(m.avg), 1));
+      if (m.yoy) r.push(rpNum(get(m.yoy), digits));
+      return r;
+    };
+    const body = [rowOf(t(m.src.what === "cycles" ? "rpPerRowCycles" : "rpPerRowRows"), (x) => x.n)];
+    if (m.cur.ends != null) body.push(rowOf(t("rpPerRowEnded", { col: m.src.endName || t("rpPerEndCycles") }), (x) => x.ends));
+    m.measures.forEach((name, i) => body.push(rowOf(t("rpPerRowSum", { col: name }), (x) => x.sums[i], 2)));
+    const box = rpEl("div", "rp-agg");
+    box.appendChild(rpTable(headers, body, { numCols: headers.map((_, i) => i).filter((i) => i > 0) }));
+    sec.appendChild(box);
+    // Trend: ostatnie okresy, bieżący wyróżniony.
+    if (m.trend.length >= 3) {
+      const tb = rpEl("div", "rp-agg rp-trend");
+      tb.appendChild(rpEl("h3", "rp-h3", t("rpPerTrend", { n: m.trend.length, gran: t(`rpGranPl_${m.gran}`) })));
+      const total = m.trend.reduce((s2, x) => s2 + x.n, 0) || 1;
+      rpBars(tb, m.trend.map((x) => [x.label, x.n]), total, { highlight: m.trend.findIndex((x) => x.hl), plain: true });
+      sec.appendChild(tb);
+    }
     return sec;
   },
   chart(d) {
@@ -2009,8 +2474,8 @@ function rpRenderAnglePanel() {
   const chips = rpEl("div", "rp-presets");
   chips.setAttribute("role", "group");
   chips.setAttribute("aria-label", t("rpAngleLabel"));
-  const avail = { overview: true, state: !!d.state, compare: !!d.compare };
-  ["overview", "state", "compare"].forEach((a) => {
+  const avail = { overview: true, state: !!d.state, compare: !!d.compare, periods: !!d.periods };
+  RP_ANGLES.forEach((a) => {
     const btn = rpEl("button", "rp-preset", t(`rpAngle_${a}`));
     btn.type = "button";
     btn.dataset.angle = a;
@@ -2045,7 +2510,34 @@ function rpRenderAnglePanel() {
       parts.push(row);
     }
   }
-  if (info) parts.push(rpEl("p", "rp-angle-info", info));
+  if (rpPrefs.angle === "periods") {
+    const m = d.periods;
+    if (!m) info = t("rpAngleNo_periods");
+    else {
+      // Trzy ręczne poprawki zgadnięcia: skąd czas, jaki okres, który okres porównać.
+      const pickRow = rpEl("div", "rp-angle-row rp-period-picks");
+      const addSelect = (labelKey, id, options, value, onChange) => {
+        const lab = rpEl("label", "rp-field");
+        lab.appendChild(rpEl("span", "", t(labelKey)));
+        const sel = rpEl("select");
+        sel.id = id;
+        options.forEach(([v, text]) => { const o = rpEl("option", "", text); o.value = v; sel.appendChild(o); });
+        sel.value = value;
+        sel.addEventListener("change", () => onChange(sel.value));
+        lab.appendChild(sel);
+        pickRow.appendChild(lab);
+      };
+      addSelect("rpPerPickSrc", "rpPeriodSrc", m.sources.map((x) => [x.id, x.label]), m.src.id, (v) => rpSetPeriodPick({ src: v }));
+      addSelect("rpPerPickGran", "rpPeriodGran", m.allowed.map((g) => [g, t(`rpGran_${g}`) + (g === m.autoGran ? ` ${t("rpPerAuto")}` : "")]), m.gran, (v) => rpSetPeriodPick({ gran: v }));
+      addSelect("rpPerPickAnchor", "rpPeriodAnchor", m.periods.map((x) => [x.key, x.label]), m.anchorKey, (v) => rpSetPeriodPick({ anchor: v }));
+      parts.push(pickRow);
+      const notes = [];
+      if (m.autoNote) notes.push(`${m.autoNote} ${t("rpPerPickAnother")}`);
+      if (m.scopeCut) notes.push(t("rpPerScopeCut", { day: m.scopeCut }));
+      info = notes.join(" ");
+    }
+  }
+  if (info) parts.push(rpEl("p", `rp-angle-info${d.periods && d.periods.scopeCut && rpPrefs.angle === "periods" ? " is-warn" : ""}`, info));
   box.replaceChildren(...parts);
 }
 
@@ -2728,6 +3220,7 @@ window.__report = {
   data: () => rpData,
   setAngle: rpSetAngle,
   setCompareBy: rpSetCompareBy,
+  setPeriodPick: rpSetPeriodPick,
   findings: () => (rpData ? rpFindings(rpData).map((f) => f.text) : []),
   prefs: () => ({ ...rpPrefs, sections: rpPrefs.sections.slice() }),
   sections: () => Array.from(document.querySelectorAll("#rpPage [data-section]")).map((el) => el.dataset.section),
