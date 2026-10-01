@@ -694,7 +694,20 @@ function updateNetworkBadge() {
   );
 }
 
+// Przeładowanie (Aktualizuj / Odśwież aplikację) przy niezapisanych zmianach: najpierw pytamy.
+// Na iPhonie/iPadzie Safari NIE pokazuje „Opuścić stronę?” — praca przepadała bez słowa
+// (to samo znalezione i naprawione w Documents Workbench 2026-10-01). Po „OK” przeglądarka
+// nie pyta drugi raz (beforeunload w bootstrap.js patrzy na tę flagę).
+let reloadConfirmed = false;
+function confirmReloadWithUnsaved() {
+  if (!hasUnsavedChanges || reloadConfirmed) return true;
+  if (!window.confirm(t("reloadUnsavedWarn"))) return false;
+  reloadConfirmed = true;
+  return true;
+}
+
 async function hardRefreshApp() {
+  if (!confirmReloadWithUnsaved()) return;
   // Sygnał NATYCHMIAST po kliknięciu. Wcześniej toast leciał dopiero PO czyszczeniu
   // cache i registration.update() — a to na telefonie potrafi trwać sekundę i dłużej,
   // więc klik wyglądał, jakby przycisk go nie złapał.
@@ -4089,7 +4102,20 @@ function shakeCellEditor(input) {
   input.addEventListener("animationend", () => input.classList.remove("input-shake"), { once: true });
 }
 
+// Tabela zaraz przebuduje wiersze — edytor (pole w komórce) zniknąłby BEZ zatwierdzenia.
+// Chrome przy usunięciu aktywnego pola wysyła blur (zatwierdza), ale WebKit (Safari, iPad,
+// iPhone) nie: wpis przepadał, a activeCellEditor wskazywał na odłączoną komórkę → żadnej
+// komórki nie dało się już edytować aż do przeładowania (znalezione 2026-10-01).
+function flushCellEditor() {
+  const ed = activeCellEditor;
+  if (!ed) return;
+  if (ed.input.isConnected) ed.commit();
+  if (activeCellEditor === ed) ed.close(); // zatwierdzenie odrzucone (np. walidacja) — bez martwego stanu
+}
+
 function openCellEditor(td, options = {}) {
+  // edytor odłączony od strony (przebudowa bez zatwierdzenia) = martwy stan — sprzątnij
+  if (activeCellEditor && !activeCellEditor.input.isConnected) activeCellEditor.close();
   if (activeCellEditor || !td || td.classList.contains("row-head")) return;
   if (!workbook || !currentDisplayModel) return;
   if (currentDisplayModel.mode !== "wide") {
@@ -4146,7 +4172,8 @@ function openCellEditor(td, options = {}) {
 
   td.classList.add("cell-editing");
   td.appendChild(input);
-  activeCellEditor = { td, input };
+  // commit/close uzupełniane niżej (flushCellEditor potrzebuje ich przy przebudowie tabeli)
+  activeCellEditor = { td, input, commit: () => {}, close: () => {} };
   // Pasek działań chowa się na czas edycji — i nic go nie zastępuje. W OTWARTYM POLU
   // TEKSTOWYM działa systemowe menu (iOS: tap w zaznaczony tekst → „Wytnij | Kopiuj |
   // Wklej"; Android tak samo), więc własne przyciski byłyby dokładnie tym samym, tylko
@@ -4238,6 +4265,10 @@ function openCellEditor(td, options = {}) {
     updateCellStats();
   };
 
+  if (activeCellEditor && activeCellEditor.input === input) {
+    activeCellEditor.commit = () => commit(null);
+    activeCellEditor.close = close;
+  }
   input.addEventListener("keydown", (e) => {
     e.stopPropagation();
     if (e.key === "Enter") {

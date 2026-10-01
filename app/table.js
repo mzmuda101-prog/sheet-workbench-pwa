@@ -2173,6 +2173,9 @@ function renderTable(modelOrHeaders, maybeRows) {
   // komórkę → activeElement leci na <body>, więc po renderze nie dałoby się już tego
   // odczytać. Zapamiętujemy, żeby po sortowaniu/filtrze oddać fokus tam, gdzie był.
   const hadGridFocus = gridHasDomFocus();
+  // Otwarta edycja komórki: zatwierdź PRZED przebudową (Safari/iPad nie wysyła blur przy
+  // usunięciu pola — wpis przepadał, a edycja zostawała zablokowana). ui-controls.js.
+  if (typeof flushCellEditor === "function") flushCellEditor();
   theadEl.replaceChildren();
   tbodyEl.replaceChildren();
 

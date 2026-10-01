@@ -907,7 +907,7 @@ function prewarmSidebar() {
   : (fn) => window.setTimeout(fn, 200))(prewarmSidebar);
 
 window.addEventListener("beforeunload", (e) => {
-  if (!hasUnsavedChanges) return;
+  if (!hasUnsavedChanges || reloadConfirmed) return; // przy „Aktualizuj” już zapytaliśmy
   e.preventDefault();
   e.returnValue = "";
 });
@@ -928,6 +928,7 @@ if ("serviceWorker" in navigator) {
   if (appUpdateBtn) {
     appUpdateBtn.addEventListener("click", () => {
       if (appUpdateBtn.classList.contains("is-busy")) return; // drugi klik w trakcie = nic
+      if (!confirmReloadWithUnsaved()) return;
       // Najpierw WIDOCZNA zmiana stanu (spinner + tekst + blokada), dopiero potem
       // robota. Aktywacja nowego workera i przeładowanie trwają kilkaset ms do paru
       // sekund — bez tego klik wyglądał, jakby przycisk go nie zarejestrował.
@@ -958,6 +959,19 @@ if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("controllerchange", () => {
     if (refreshingForUpdate) return;
     if (!hadControllerAtStart) return; // pierwsze przejęcie (claim), nie aktualizacja
+    // Aktualizację kliknięto w INNEJ karcie/oknie aplikacji, a tu są niezapisane zmiany —
+    // nie przeładowuj sam; „Aktualizuj” zostaje na później (nowa wersja już działa).
+    if (hasUnsavedChanges && !reloadConfirmed) {
+      waitingServiceWorker = null;
+      if (appUpdateBtn) {
+        appUpdateBtn.classList.remove("hidden", "is-busy");
+        appUpdateBtn.disabled = false;
+        appUpdateBtn.removeAttribute("aria-busy");
+        appUpdateBtn.textContent = t("updateNow");
+      }
+      toast(t("updateWaitsForSave"), "info");
+      return;
+    }
     refreshingForUpdate = true;
     window.location.reload();
   });
