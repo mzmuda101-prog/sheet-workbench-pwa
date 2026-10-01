@@ -1777,7 +1777,9 @@ async function downloadWorkbook(name, ext, opts = {}) {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  // Nie od razu: Safari (iPhone/iPad — zapis bez File System Access) potrafi przerwać
+  // pobieranie, gdy adres zniknie w tym samym zadaniu co kliknięcie (jak w Documents Workbench).
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
   setDirtyState(false);
   toast(t(opts.toastKey || "fileSaved"), opts.toastType || "success");
   log(`Zapisano plik: ${name}`, "success");
@@ -2142,7 +2144,10 @@ loadBtn.addEventListener("click", () => {
         if (panelFileSheet) panelFileSheet.removeAttribute("open");
         scheduleViewRefresh({ table: true, analyses: true, formula: true, sync: true });
       });
-      setDirtyState(false);
+      // Inny arkusz TEGO SAMEGO pliku: zmiany z poprzedniego arkusza dalej czekają na zapis
+      // (pendingEdits). Dawniej setDirtyState(false) gasiło „Zapisz” — brak ostrzeżenia przy
+      // zamykaniu, a zmiany przepadały (znalezione 2026-10-01 przy szkicach).
+      setDirtyState(Object.values(pendingEdits || {}).some((cells) => cells && Object.keys(cells).length > 0));
       if ((currentSheetStats?.trimmedColumns || 0) > 0) {
         log(`Przycięto puste kolumny poza realnym zakresem danych: ${currentSheetStats.trimmedColumns}`, "info");
       }

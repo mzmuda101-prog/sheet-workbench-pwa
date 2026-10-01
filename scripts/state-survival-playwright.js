@@ -145,6 +145,21 @@ async function run() {
     await page.evaluate(() => { const vp = document.querySelector(".table-wrap, #tableViewport, .table-viewport") || document.scrollingElement; vp.scrollTop = 0; });
   });
 
+  await step("przejście na inny arkusz i z powrotem (Zapisz nie może zgasnąć)", async () => {
+    const back = await page.evaluate(() => currentSheetName);
+    const other = await page.evaluate((b) => [...sheetSelect.options].map((o) => o.value).find((v) => v !== b), back);
+    if (!other) return;
+    const load = async (name) => {
+      await page.evaluate((n) => { sheetSelect.value = n; loadBtn.click(); }, name);
+      await page.waitForFunction((n) => currentSheetName === n && !!currentDisplayModel, name, { timeout: 15000 });
+      await sleep(600);
+    };
+    await load(other);
+    const dirtyOnOther = await page.evaluate(() => hasUnsavedChanges);
+    check("na innym arkuszu „Zapisz” dalej świeci (zmiany z poprzedniego czekają)", dirtyOnOther);
+    await load(back);
+  });
+
   // B) edycja w toku
   await verifyOpenEdit("zmiana szerokości okna (inny monitor)", resizeAround);
   await verifyOpenEdit("przerysowanie tabeli", rerender);
