@@ -144,3 +144,20 @@ console.log("✅ xlsx-patch-unit OK (double save, emoji, emoji w edytowanej kom�
   }
   console.log("✅ xlsx-patch-unit OK (zipWriteUtf8Xml TextEncoder, no CESU-8)");
 }
+// Wyczyszczenie komórki (payload null) = „Wyczyść zawartość” w Excelu: wartość znika,
+// styl s= zostaje (dawniej znikało całe <c> razem z ramką/tłem/formatem).
+{
+  const xml = '<?xml version="1.0"?><worksheet><sheetData><row r="1">' +
+    '<c r="A1" s="5" t="s"><v>0</v></c><c r="B1"><v>2</v></c><c r="C1" s="3"><f>A1+1</f><v>1</v></c></row></sheetData></worksheet>';
+  const out = patchSheetXml(xml, { A1: null, B1: null, C1: null });
+  const fails4 = [];
+  if (!out.includes('<c r="A1" s="5"/>')) fails4.push("A1 lost style on clear");
+  if (!out.includes('<c r="C1" s="3"/>')) fails4.push("C1 (formula) lost style on clear");
+  if (out.includes('r="B1"')) fails4.push("B1 without style should be removed");
+  if (/<v>|<f>/.test(out)) fails4.push("value/formula left after clear");
+  if (fails4.length) {
+    console.error("❌ xlsx-patch-unit FAIL (clear keeps style):", fails4.join("; "));
+    process.exit(1);
+  }
+  console.log("✅ xlsx-patch-unit OK (clear keeps style)");
+}

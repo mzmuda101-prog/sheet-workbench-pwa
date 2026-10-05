@@ -34,3 +34,7 @@ output
 
 # czasy kroków testów (runner równoległy układa kolejność)
 .test-timings.json
+
+# Python do narzędzi testowych (openpyxl) — npm run py:setup
+.venv
+__pycache__

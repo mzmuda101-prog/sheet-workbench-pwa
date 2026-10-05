@@ -252,7 +252,12 @@ function patchSheetDataInner(inner, cells, formulaMap, dateStyler) {
 
     const existing = cellMap.get(ref);
     if (payload === null) {
-      if (existing) replacements.push({ start: existing.start, len: existing.full.length, text: "" });
+      // Jak „Wyczyść zawartość” w Excelu: znika wartość/formuła, styl (s=) zostaje —
+      // inaczej czyszczenie komórki w obramowanej tabeli zjadało ramkę, tło i format.
+      if (existing) {
+        const s = (existing.attrs.match(/\bs="\d+"/) || [])[0];
+        replacements.push({ start: existing.start, len: existing.full.length, text: s ? `<c r="${ref}" ${s}/>` : "" });
+      }
       return;
     }
 
