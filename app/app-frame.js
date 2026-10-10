@@ -27,7 +27,9 @@ function attachOverflowFade(el) {
   const sync = () => {
     const max = el.scrollWidth - el.clientWidth;
     el.classList.toggle("more-l", max > 1 && el.scrollLeft > 2);
-    el.classList.toggle("more-r", max > 1 && el.scrollLeft < max - 2);
+    const moreR = max > 1 && el.scrollLeft < max - 2;
+    if (moreR && !el.classList.contains("more-r") && el._swbNudgeRetry) el._swbNudgeRetry();
+    el.classList.toggle("more-r", moreR);
   };
   // Pionowe kółko myszy przewija rząd w bok (Shift+kółko działa natywnie).
   el.addEventListener("wheel", (e) => {
@@ -37,10 +39,62 @@ function attachOverflowFade(el) {
     e.preventDefault();
   }, { passive: false });
   el.addEventListener("scroll", sync, { passive: true });
+  scheduleOverflowNudge(el);
   if (typeof ResizeObserver === "function") new ResizeObserver(sync).observe(el);
   if (typeof MutationObserver === "function") new MutationObserver(sync).observe(el, { childList: true, subtree: true, characterData: true });
   el._swbFadeSync = sync;
   sync();
+}
+
+// Jednorazowe „drgnięcie” rzędu (Mateusz 2026-10-11): samo wygaszenie krawędzi bywało
+// niezauważone. Gdy rząd pierwszy raz jest widoczny i ma coś schowane po prawej, przewija
+// się płynnie o ~40 px i wraca. Maks. 3 razy na rząd (licznik w localStorage), nigdy po
+// dotknięciu/kółku na rzędzie, nigdy przy prefers-reduced-motion. Testy automatyczne
+// (navigator.webdriver) go nie dostają, chyba że włączą window.__swbNudgeTest.
+const OVERFLOW_NUDGE_KEY = "swb-scroll-nudge-v1";
+const OVERFLOW_NUDGE_MAX = 3;
+let overflowNudgeNextAt = 0; // kilka rzędów naraz → drgają po kolei, nie jednocześnie
+function overflowNudgeCounts() {
+  try { return JSON.parse(localStorage.getItem(OVERFLOW_NUDGE_KEY) || "{}") || {}; } catch (_) { return {}; }
+}
+function scheduleOverflowNudge(el) {
+  const key = el.id || String(el.className || "").split(/\s+/)[0];
+  if (!key || typeof IntersectionObserver !== "function") return;
+  if (navigator.webdriver && !window.__swbNudgeTest) return;
+  if (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  if ((overflowNudgeCounts()[key] || 0) >= OVERFLOW_NUDGE_MAX) return;
+  let done = false;
+  let visible = false;
+  let timer = 0;
+  const stop = () => { done = true; clearTimeout(timer); io.disconnect(); };
+  el.addEventListener("pointerdown", stop, { once: true, passive: true });
+  el.addEventListener("wheel", stop, { once: true, passive: true });
+  const attempt = () => {
+    clearTimeout(timer);
+    if (done || !visible) return;
+    const now = Date.now();
+    const at = Math.max(now + 700, overflowNudgeNextAt);
+    timer = setTimeout(() => {
+      const room = el.scrollWidth - el.clientWidth;
+      if (done || !visible || room < 24 || el.scrollLeft > 2) return; // nic schowanego — czekamy
+      if (Date.now() < overflowNudgeNextAt - 50) { attempt(); return; } // inny rząd właśnie drga
+      overflowNudgeNextAt = Date.now() + 1100;
+      stop();
+      const counts = overflowNudgeCounts();
+      counts[key] = (counts[key] || 0) + 1;
+      try { localStorage.setItem(OVERFLOW_NUDGE_KEY, JSON.stringify(counts)); } catch (_) { /* tryb prywatny */ }
+      const dist = Math.min(40, room);
+      el.scrollTo({ left: dist, behavior: "smooth" });
+      setTimeout(() => { if (el.scrollLeft <= dist + 2) el.scrollTo({ left: 0, behavior: "smooth" }); }, 520);
+    }, at - now);
+  };
+  const io = new IntersectionObserver((entries) => {
+    visible = entries[entries.length - 1].isIntersecting;
+    attempt();
+  }, { threshold: 0.9 });
+  io.observe(el);
+  // rząd stał się przepełniony później (zmiana szerokości, nowe przyciski) — spróbuj znowu
+  el._swbNudgeRetry = attempt;
 }
 
 const appFrame = (() => {
@@ -539,6 +593,8 @@ const appFrame = (() => {
   placeStatus();
   syncDock();
   attachOverflowFade(tableActions);
+  // telefon: Edycja/Podgląd · zoom · Widok · Więcej w jednym przewijanym rzędzie
+  attachOverflowFade(document.getElementById("toolbarMain"));
   syncFile();
   renderRecent();
 

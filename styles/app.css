@@ -6920,10 +6920,14 @@ body.tr-active .toast-container {
 .recent-chip:focus-visible { border-color: var(--accent-border); color: var(--accent); background: var(--accent-light); outline: none; }
 
 /* Bezpiecznik przepełnienia (attachOverflowFade w app-frame.js): krawędź wygasa tylko
-   wtedy, gdy w tę stronę jest jeszcze co przewinąć. */
-.overflow-fade.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
-.overflow-fade.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
-.overflow-fade.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+   wtedy, gdy w tę stronę jest jeszcze co przewinąć. 2026-10-11: szersze i wyraźniejsze
+   (Mateusz nie widział, że rząd da się przesunąć) — urwany przycisk znika stopniowo,
+   a przy pierwszym pokazaniu rząd raz „drga” w bok (scheduleOverflowNudge). */
+.overflow-fade { --fade-w: 44px; }
+@media (pointer: coarse) { .overflow-fade { --fade-w: 56px; } }
+.overflow-fade.more-r { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - var(--fade-w)), rgba(0, 0, 0, 0.35) calc(100% - 14px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - var(--fade-w)), rgba(0, 0, 0, 0.35) calc(100% - 14px), transparent); }
+.overflow-fade.more-l { -webkit-mask-image: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.35) 14px, #000 var(--fade-w)); mask-image: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.35) 14px, #000 var(--fade-w)); }
+.overflow-fade.more-l.more-r { -webkit-mask-image: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.35) 14px, #000 var(--fade-w), #000 calc(100% - var(--fade-w)), rgba(0, 0, 0, 0.35) calc(100% - 14px), transparent); mask-image: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.35) 14px, #000 var(--fade-w), #000 calc(100% - var(--fade-w)), rgba(0, 0, 0, 0.35) calc(100% - 14px), transparent); }
 
 @media (max-width: 768px) {
   /* telefon: [szukaj — cała szerokość] / [status …… Narzędzia ▾] / (zwijany) przyciski.

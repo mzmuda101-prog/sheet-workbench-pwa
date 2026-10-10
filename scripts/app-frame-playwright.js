@@ -489,6 +489,39 @@ async function run() {
   check("9. telefon: rząd przycisków wygasa tylko tam, gdzie jest co przewinąć", phone.overflowing ? (phone.fadeR && !phone.fadeL) : (!phone.fadeR && !phone.fadeL), JSON.stringify(phone));
   check("brak błędów strony (telefon)", errors.length === 0, errors.join(" | "));
   await context.close();
+
+  // 10. zachęta do przewijania w bok (2026-10-11): rząd Edycja/Podgląd/zoom/Widok na telefonie
+  // wygasa po prawej i przy pierwszym pokazaniu raz „drga” (przewija ~40 px i wraca);
+  // licznik w localStorage — po 3 razach już nie drga.
+  {
+    const nctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 360, height: 780 }, hasTouch: true, isMobile: ENGINE === "chromium" });
+    await nctx.addInitScript(() => {
+      window.__swbNudgeTest = true;
+      localStorage.setItem("introPlayed", "true");
+      localStorage.setItem("excel-workbench-toolbar-collapsed-v2", "0");
+    });
+    const np = await nctx.newPage();
+    const nerr = [];
+    np.on("pageerror", (e) => nerr.push(e.message));
+    const watch = async () => {
+      await np.evaluate(() => { document.getElementById("heroSplash")?.remove(); return loadSampleFile(); });
+      await np.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
+      const seen = [];
+      for (let i = 0; i < 40; i++) { seen.push(await np.evaluate(() => Math.round(document.getElementById("toolbarMain").scrollLeft))); await sleep(60); }
+      return seen;
+    };
+    await np.goto(APP_URL, { waitUntil: "load" });
+    const first = await watch();
+    const st = await np.evaluate(() => ({ cls: document.getElementById("toolbarMain").className, count: JSON.parse(localStorage.getItem("swb-scroll-nudge-v1") || "{}").toolbarMain }));
+    check("10. telefon: rząd Edycja/Podgląd/Widok wygasa po prawej", /overflow-fade/.test(st.cls) && /more-r/.test(st.cls), st.cls);
+    check("10. telefon: rząd raz drga w bok i wraca na 0, licznik +1", Math.max(...first) >= 20 && first[first.length - 1] === 0 && st.count === 1, JSON.stringify({ first: first.join(","), count: st.count }));
+    await np.evaluate(() => localStorage.setItem("swb-scroll-nudge-v1", JSON.stringify({ toolbarMain: 3, cellStatsBar: 3 })));
+    await np.reload({ waitUntil: "load" });
+    const again = await watch();
+    check("10. telefon: po 3 razach rząd już nie drga", Math.max(...again) === 0, again.join(","));
+    check("brak błędów strony (zachęta do przewijania)", nerr.length === 0, nerr.join(" | "));
+    await nctx.close();
+  }
   await browser.close();
 
   const failed = results.filter((r) => !r.ok);
