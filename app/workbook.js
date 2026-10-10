@@ -458,7 +458,7 @@ const DATE_MONTH_MAP = {
   // EN
   "jan": 1, "january": 1,
   "feb": 2, "february": 2,
-  "mar": 3, "march": 3,
+  "march": 3,
   "apr": 4, "april": 4,
   "may": 5,
   "jun": 6, "june": 6,
@@ -1488,12 +1488,11 @@ function sortRows() {
   normalizeSortState();
   if (!multiSortState.length) return;
   flipNextRender = true; // następny render tabeli animuje przestawienie wierszy (FLIP)
+  const rules = resolveSortRules(currentHeaders);
   viewRows.sort((a, b) => {
-    for (const rule of multiSortState) {
-      const idx = currentHeaders.indexOf(rule.col);
-      if (idx < 0) continue;
-      const av = a.rawValues ? a.rawValues[idx] : a.values[idx];
-      const bv = b.rawValues ? b.rawValues[idx] : b.values[idx];
+    for (const rule of rules) {
+      const av = a.rawValues ? a.rawValues[rule.idx] : a.values[rule.idx];
+      const bv = b.rawValues ? b.rawValues[rule.idx] : b.values[rule.idx];
       const cmp = compareSortValues(av, bv);
       if (cmp !== 0) return rule.dir === "desc" ? -cmp : cmp;
     }
@@ -1504,17 +1503,26 @@ function sortRows() {
 function sortRowsForHeaders(rows, headers) {
   normalizeSortState();
   if (!multiSortState.length || !Array.isArray(rows) || !Array.isArray(headers)) return;
+  const rules = resolveSortRules(headers);
   rows.sort((a, b) => {
-    for (const rule of multiSortState) {
-      const idx = headers.indexOf(rule.col);
-      if (idx < 0) continue;
-      const av = a.rawValues ? a.rawValues[idx] : a.values[idx];
-      const bv = b.rawValues ? b.rawValues[idx] : b.values[idx];
+    for (const rule of rules) {
+      const av = a.rawValues ? a.rawValues[rule.idx] : a.values[rule.idx];
+      const bv = b.rawValues ? b.rawValues[rule.idx] : b.values[rule.idx];
       const cmp = compareSortValues(av, bv);
       if (cmp !== 0) return rule.dir === "desc" ? -cmp : cmp;
     }
     return 0;
   });
+}
+
+// `Array#sort` wywołuje komparator wielokrotnie, więc wyszukiwanie nazwy kolumny
+// w nagłówkach w jego środku robiło tę samą pracę O(porównań × kolumn). Reguły są
+// niezmienne przez jedno synchroniczne sortowanie — indeksy można bezpiecznie
+// wyliczyć tylko raz, zachowując identyczny porządek i obsługę nieistniejących kolumn.
+function resolveSortRules(headers) {
+  return multiSortState
+    .map((rule) => ({ idx: headers.indexOf(rule.col), dir: rule.dir }))
+    .filter((rule) => rule.idx >= 0);
 }
 
 function getActiveRepeatingGroup() {
