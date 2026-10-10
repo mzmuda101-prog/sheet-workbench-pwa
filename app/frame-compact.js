@@ -214,14 +214,25 @@ var frameCompact = (() => {
     }
     syncRailClasses();
   }
+  // Zawężenie do grupy zdejmujemy dopiero PO zjechaniu panelu — inaczej otwarta „szeroka”
+  // sekcja w innej grupie (np. Agregacje) poszerzała panel w trakcie chowania (Mateusz 2026-10-11).
+  let releaseTimer = 0;
+  function releaseFocusLater() {
+    clearTimeout(releaseTimer);
+    releaseTimer = setTimeout(() => {
+      if (typeof isSidebarOpen === "function" && isSidebarOpen()) return;
+      focusGroup("");
+      syncRailClasses();
+    }, 320);
+  }
   function closeFlyout({ returnFocus = false } = {}) {
     if (typeof setSidebarOpen === "function") setSidebarOpen(false);
-    focusGroup("");
     syncRailClasses();
     if (returnFocus) {
       const b = railBtns.find((x) => x.dataset.group === currentGroup) || railBtns[0];
       if (b) b.focus();
     }
+    releaseFocusLater();
   }
   railBtns.forEach((b) => b.addEventListener("click", () => {
     const id = b.dataset.group;
@@ -251,10 +262,32 @@ var frameCompact = (() => {
   // ‹ w panelu: przy pasku ikon = schowaj (i odepnij — przypięty panel bez ‹ nie dałby się zwinąć)
   if (closeBtn) closeBtn.addEventListener("click", () => {
     if (!railMode()) return;
-    if (pinned) { pinned = false; writeLS(SWB_PIN_KEY, "0"); }
-    focusGroup("");
+    if (pinned) { pinned = false; writeLS(SWB_PIN_KEY, "0"); focusGroup(""); } else releaseFocusLater();
     syncRailClasses();
   }, true);
+
+  // Poszerzenie panelu (gęsta sekcja analiz) — tania animacja: szerokość zmienia się jednym
+  // skokiem (bez przeliczania układu w każdej klatce), a nowy pas odsłania clip-path.
+  // Zwężanie bez animacji. Tylko otwarty panel z paska ikon i bez prefers-reduced-motion.
+  if (sidebar && typeof ResizeObserver === "function" && typeof sidebar.animate === "function") {
+    const calm = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+    let lastW = 0;
+    new ResizeObserver((entries) => {
+      const w = Math.round(entries[entries.length - 1].borderBoxSize?.[0]?.inlineSize ?? sidebar.offsetWidth);
+      const open = railMode() && typeof isSidebarOpen === "function" && isSidebarOpen();
+      const grow = w - lastW;
+      // w trakcie wjazdu/zjazdu panelu (transform) nie odsłaniamy — to już jest ruch
+      const sliding = sidebar.getAnimations().some((a) => a.transitionProperty === "transform" && a.playState === "running");
+      if (open && !sliding && grow > 24 && !(calm && calm.matches)) {
+        const r = parseFloat(getComputedStyle(sidebar).borderTopRightRadius) || 0;
+        sidebar.animate(
+          [{ clipPath: `inset(0 ${grow}px 0 -60px round 0 ${r}px ${r}px 0)` }, { clipPath: `inset(0 0 0 -60px round 0 ${r}px ${r}px 0)` }],
+          { duration: 240, easing: "cubic-bezier(.22,1,.36,1)" }
+        );
+      }
+      lastW = w;
+    }).observe(sidebar);
+  }
   // Szukanie ustawienia przeszukuje WSZYSTKIE grupy — zdejmij zawężenie do jednej.
   if (finder) finder.addEventListener("input", () => { if (finder.value) { root.classList.remove("rail-focus"); } else if (currentGroup && !pinned) focusGroup(currentGroup); });
 

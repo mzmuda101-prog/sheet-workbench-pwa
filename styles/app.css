@@ -1139,7 +1139,10 @@ body.splashing {
   transform: translateX(calc(-100% - clamp(16px, 2.4vw, 28px)));
   opacity: 0;
   pointer-events: none;
-  transition: transform var(--t-slow), opacity var(--t), width var(--t-slow);
+  /* BEZ animacji szerokości (2026-10-11): przy wczytanym arkuszu każda klatka przeliczała
+     i malowała cały panel (~3,5 tys. elementów, ~260 ms rastra) — poszerzanie lagowało.
+     Szerokość zmienia się jednym skokiem; wjazd/zjazd panelu dalej idzie transformem. */
+  transition: transform var(--t-slow), opacity var(--t);
 }
 
 /* BEZ content-visibility na sekcjach panelu (usunięte 2026-09-24): na iOS sekcje
@@ -3192,6 +3195,9 @@ details.panel[open] > summary {
   height: 12px;
   flex-shrink: 0;
   margin: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
 }
 .qs-operators-toggle-text em {
   font-style: normal;
@@ -5291,11 +5297,12 @@ html.low-power .loading-overlay.is-file {
   background:
     linear-gradient(135deg, color-mix(in srgb, var(--panel) 84%, white) 0%, color-mix(in srgb, var(--accent-light) 84%, white) 100%);
   color: var(--accent);
+  /* BEZ backdrop-filter i z mniejszym rozmyciem cienia (2026-10-11): dymek jedzie za
+     kursorem, a rozmycie tła pod nim liczyło się w każdej klatce nad tabelą → lag.
+     Tło i tak jest prawie nieprzezroczyste, więc wygląd się nie zmienia. */
   box-shadow:
-    0 16px 34px color-mix(in srgb, var(--accent) 18%, transparent),
+    0 8px 18px color-mix(in srgb, var(--accent) 16%, transparent),
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
   font-size: 0.72rem;
   font-weight: 850;
   letter-spacing: 0;
@@ -5326,7 +5333,7 @@ html.low-power .loading-overlay.is-file {
     linear-gradient(135deg, rgba(18, 31, 25, 0.92) 0%, rgba(28, 58, 44, 0.9) 100%);
   color: #effff7;
   box-shadow:
-    0 18px 40px rgba(5, 18, 12, 0.34),
+    0 8px 20px rgba(5, 18, 12, 0.34),
     0 0 0 1px rgba(255, 255, 255, 0.06) inset;
 }
 
@@ -7162,10 +7169,13 @@ body.tr-active .toast-container {
 :root.sidebar-docked .sidebar-scrim { display: none; }
 /* otwarty panel zamyka się ‹ w panelu albo 🔧 — wystający uchwyt leżałby na tabeli */
 :root.sidebar-docked.sidebar-open .sidebar-handle { display: none; }
-:root.sidebar-docked .main { transition: margin-left var(--t-slow); }
+/* Margines/limit tabeli animujemy TYLKO przy przypinaniu/otwieraniu panelu (klasa dock-anim
+   na chwilę, frame-compact.js/app-frame.js) — animacja układu całej tabeli przy każdej
+   zmianie szerokości panelu (szersze sekcje analiz) dawała lag. */
+:root.sidebar-docked.dock-anim .main { transition: margin-left var(--t-slow); }
 /* margines tabeli przy panelu: blok „PASEK IKON PANELU” (frame-compact.js) */
 /* limit szerokości rośnie o panel — tabela nie traci miejsca na dużych ekranach */
-:root.sidebar-docked .app { transition: max-width var(--t-slow); }
+:root.sidebar-docked.dock-anim .app { transition: max-width var(--t-slow); }
 
 @media (prefers-reduced-motion: reduce) {
   :root.sidebar-docked .main,
@@ -8254,3 +8264,13 @@ button.fx-label:hover, button.fx-label:focus-visible { background: var(--accent-
 }
 /* „Auto wykryj” obok pola wiersza nagłówka (na dole rzędu, równo z polem) */
 .row > .header-auto-field { align-self: end; min-height: 40px; align-items: center; }
+
+/* Telefon: węższe ramki wokół tabeli (Mateusz 2026-10-11) — z ~26 px do ~15 px z każdej
+   strony; więcej kolumn mieści się na ekranie. Notch w poziomie dalej respektowany. */
+@media (max-width: 600px) {
+  .app {
+    padding-left: max(6px, env(safe-area-inset-left));
+    padding-right: max(6px, env(safe-area-inset-right));
+  }
+  .table-panel { padding: 8px 7px 0; border-radius: 14px; }
+}

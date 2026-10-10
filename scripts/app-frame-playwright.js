@@ -246,6 +246,33 @@ async function run() {
   await page.evaluate(() => { document.getElementById("panel-aggregation-workbench").open = false; });
   await page.keyboard.press("Escape");
   await sleep(300);
+  // R3c. strażnik lagu (2026-10-11): szerokość panelu NIE animowana (każda klatka przeliczała
+  // i malowała cały panel), tabela bez animacji marginesu poza przypinaniem, dymek bez
+  // rozmycia tła, a --sidebar-w nie jest przepisywane tą samą wartością.
+  await sleep(400); // po Esc: koniec chwilowego dock-anim
+  await page.evaluate(() => window.dispatchEvent(new Event("resize"))); // ustal bieżącą szerokość
+  const lagGuard = await page.evaluate(() => {
+    // właściwość „animowana” = na liście transition-property i z niezerowym czasem
+    // (domyślne „all” ma czas 0 — to nie animacja)
+    const animated = (el, re) => {
+      const cs = getComputedStyle(el);
+      const props = cs.transitionProperty.split(",").map((x) => x.trim());
+      const durs = cs.transitionDuration.split(",").map((x) => parseFloat(x) || 0);
+      return props.some((p, i) => re.test(p) && durs[i % durs.length] > 0);
+    };
+    const scaler = document.querySelector(".cursor-hint-scaler");
+    const bf = scaler ? getComputedStyle(scaler).backdropFilter || getComputedStyle(scaler).webkitBackdropFilter || "none" : "none";
+    let writes = 0;
+    const st = document.documentElement.style;
+    const orig = st.setProperty;
+    st.setProperty = function (n, ...a) { if (n === "--sidebar-w") writes += 1; return orig.call(this, n, ...a); };
+    window.dispatchEvent(new Event("resize"));
+    window.dispatchEvent(new Event("resize"));
+    st.setProperty = orig;
+    return { sbWidth: animated(document.querySelector(".sidebar"), /^(width|all)$/), mainMargin: animated(document.querySelector(".main"), /^(margin-left|margin|all)$/), bf, writes };
+  });
+  check("R3c. bez animacji szerokości panelu / marginesu tabeli, dymek bez backdrop-filter, --sidebar-w tylko przy zmianie",
+    !lagGuard.sbWidth && !lagGuard.mainMargin && (lagGuard.bf === "none" || lagGuard.bf === "") && lagGuard.writes === 0, JSON.stringify(lagGuard));
   // R4. 📌 przypina: wszystkie grupy, panel OBOK tabeli, pamiętane po przeładowaniu
   await page.click('.rail-btn[data-group="group-data"]');
   await sleep(300);

@@ -386,6 +386,7 @@ const appFrame = (() => {
   const dockMq = typeof matchMedia === "function" ? matchMedia("(min-width: 1024px)") : null;
   const sidebarNode = document.querySelector(".sidebar");
   const tablePanelNode = document.querySelector(".table-panel");
+  let dockAnimTimer = 0;
   function isDocked() { return !!(dockMq && dockMq.matches); }
   function syncDock() {
     const docked = isDocked();
@@ -395,11 +396,16 @@ const appFrame = (() => {
       rootEl.style.removeProperty("--dock-top");
       return;
     }
-    rootEl.style.setProperty("--sidebar-w", `${Math.round(sidebarNode.getBoundingClientRect().width) || 320}px`);
+    // Zmienne na :root dziedziczy cały dokument — zapis tej samej wartości i tak unieważnia
+    // style tysięcy elementów, więc piszemy tylko przy realnej zmianie.
+    setRootVar("--sidebar-w", `${Math.round(sidebarNode.getBoundingClientRect().width) || 320}px`);
     if (tablePanelNode) {
       const top = Math.round(tablePanelNode.getBoundingClientRect().top + (window.scrollY || 0));
-      rootEl.style.setProperty("--dock-top", `${top}px`);
+      setRootVar("--dock-top", `${top}px`);
     }
+  }
+  function setRootVar(name, value) {
+    if (rootEl.style.getPropertyValue(name) !== value) rootEl.style.setProperty(name, value);
   }
   function dockedInitialOpen() {
     if (!isDocked()) return typeof matchMedia === "function" && matchMedia("(min-width: 769px)").matches;
@@ -420,6 +426,12 @@ const appFrame = (() => {
     const origSet = window.setSidebarOpen;
     window.setSidebarOpen = function setSidebarOpenDocked(open, ...rest) {
       syncDock();
+      // płynny margines tabeli tylko przy otwarciu/zamknięciu/przypięciu (zob. .dock-anim w app.css)
+      if (isDocked()) {
+        rootEl.classList.add("dock-anim");
+        clearTimeout(dockAnimTimer);
+        dockAnimTimer = setTimeout(() => rootEl.classList.remove("dock-anim"), 340);
+      }
       const r = origSet.call(this, open, ...rest);
       // Szerokość tabeli zmienia się bez zmiany okna — przelicz pasek przewijania w bok
       // i metryki nagłówków po przejściu (transition marginesu ~300 ms).
@@ -446,9 +458,11 @@ const appFrame = (() => {
   }
   window.addEventListener("resize", () => syncDock(), { passive: true });
   if (typeof ResizeObserver === "function" && heroEl) new ResizeObserver(() => syncDock()).observe(heroEl);
-  // Panel zmienia szerokość sam (szersze sekcje analiz, z animacją) — margines tabeli
+  // Panel zmienia szerokość sam (szersze sekcje analiz, jednym skokiem) — margines tabeli
   // przy przypiętym panelu musi nadążać, inaczej panel nachodził na tabelę.
-  if (typeof ResizeObserver === "function" && sidebarNode) new ResizeObserver(() => { if (isDocked()) syncDock(); }).observe(sidebarNode);
+  if (typeof ResizeObserver === "function" && sidebarNode) new ResizeObserver(() => {
+    if (isDocked() && rootEl.classList.contains("sidebar-open")) syncDock();
+  }).observe(sidebarNode);
 
   // ── „Znajdź ustawienie…” ───────────────────────────────────────────────────
   // Filtruje sekcje panelu po tekście (tytuł sekcji, etykiety pól, przyciski, opisy).
