@@ -2430,8 +2430,13 @@ function closeTranscribe() {
   trReleaseWakeLock();
   const back = trReturnFocusEl;
   trReturnFocusEl = null;
-  if (back && document.contains(back) && !back.closest("[inert]")) back.focus();
-  else if (trBtn) trBtn.focus();
+  // Fokus wraca tam, skąd przyszedł — o ile to widać. „Spisywanie” mieszka w menu
+  // „Więcej ▾” (schowanym po zamknięciu), więc wtedy fokus wraca na „Więcej”.
+  const visible = (el) => !!(el && document.contains(el) && !el.closest("[inert]") && el.getClientRects().length);
+  const moreBtn = document.getElementById("moreMenuBtn");
+  if (visible(back) && back !== document.body) back.focus();
+  else if (visible(trBtn)) trBtn.focus();
+  else if (visible(moreBtn)) moreBtn.focus();
 }
 
 // ── Klawiatura ──────────────────────────────────────────────────────────────

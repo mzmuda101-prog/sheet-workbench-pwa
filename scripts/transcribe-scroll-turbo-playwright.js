@@ -31,7 +31,7 @@ async function loadSheet(page) {
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 15000 });
   await sleep(300);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await sleep(1000);
   await page.evaluate(() => { try { setSidebarOpen && setSidebarOpen(false); } catch {} document.documentElement.classList.remove("sidebar-open"); });
   await sleep(150);
@@ -55,7 +55,7 @@ async function run() {
   const ok = (name, cond, got) => { if (!cond) failures.push(`${name} — dostałem: ${JSON.stringify(got)}`); };
 
   await loadSheet(page);
-  await page.click("#transcribeBtn");
+  await page.evaluate(() => document.getElementById("transcribeBtn").click());
   await sleep(300);
 
   // Wszystkie kolumny na kartę → gwarantowane przepełnienie ekranu.

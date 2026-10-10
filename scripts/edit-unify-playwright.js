@@ -56,7 +56,7 @@ async function run() {
   const FILE = buildFixture();
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
-  await context.addInitScript(() => localStorage.setItem("introPlayed", "true"));
+  await context.addInitScript(() => { localStorage.setItem("introPlayed", "true"); localStorage.setItem("swb-panel-pinned-v1", "1"); });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
@@ -68,7 +68,7 @@ async function run() {
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 15000 });
   await sleep(300);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await page.waitForFunction(() => Array.isArray(baseRows) && baseRows.length === 10, null, { timeout: 15000 });
   await page.evaluate(() => { document.getElementById("panel-edit-tools").open = true; });
   await sleep(200);

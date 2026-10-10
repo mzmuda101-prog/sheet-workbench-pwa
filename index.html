@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20260429-01" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20261010-03" />
+    <link rel="stylesheet" href="styles/app.css?v=20261011-02" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -120,6 +120,17 @@
       <!-- ============ WORKSPACE ============ -->
       <div class="workspace">
         <!-- ====== SIDEBAR ====== -->
+        <!-- Pasek ikon panelu (≥1024 px, frame-compact.js): klik = grupa panelu wysuwa się nad tabelą;
+             📌 w panelu przypina go na stałe obok tabeli (jak dawniej). -->
+        <nav class="sidebar-rail" id="sidebarRail" aria-label="Panel narzędzi">
+          <button class="rail-btn" type="button" data-group="group-data" aria-pressed="false" data-hint data-hint-pl="Plik i arkusz" data-hint-en="File and sheet" data-hint-delay="0.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg><span class="visually-hidden">Plik</span></button>
+          <button class="rail-btn" type="button" data-group="group-filters" aria-pressed="false" data-hint data-hint-pl="Filtry" data-hint-en="Filters" data-hint-delay="0.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 3H2l8 9.5V19l4 2v-8.5z"/></svg><span class="visually-hidden">Filtry</span><span class="rail-count" id="railFilterCount" hidden></span></button>
+          <button class="rail-btn" type="button" data-group="group-view" aria-pressed="false" data-hint data-hint-pl="Widok" data-hint-en="View" data-hint-delay="0.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span class="visually-hidden">Widok</span></button>
+          <button class="rail-btn" type="button" data-group="group-edit" aria-pressed="false" data-hint data-hint-pl="Edycja: narzędzia, kolumny wyliczane, walidacja" data-hint-en="Edit: tools, calculated columns, validation" data-hint-delay="0.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg><span class="visually-hidden">Edycja</span></button>
+          <button class="rail-btn" type="button" data-group="group-analyze" aria-pressed="false" data-hint data-hint-pl="Analizy" data-hint-en="Analyses" data-hint-delay="0.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/></svg><span class="visually-hidden">Analizy</span></button>
+          <span class="rail-gap" aria-hidden="true"></span>
+          <button class="rail-btn" type="button" data-group="group-help" aria-pressed="false" data-hint data-hint-pl="Pomoc: skróty, dziennik" data-hint-en="Help: shortcuts, log" data-hint-delay="0.5"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg><span class="visually-hidden">Pomoc</span></button>
+        </nav>
         <aside class="sidebar">
           <!-- Górny pasek panelu (stały, poza przewijaną częścią): „Znajdź ustawienie…” + schowaj panel. -->
           <div class="sidebar-top">
@@ -131,6 +142,7 @@
             </div>
             <!-- Panel obok tabeli (≥1024 px): zamykanie z samego panelu. Wystający uchwyt
                  „Schowaj” leżałby na krawędzi tabeli i zasłaniał numery wierszy. -->
+            <button class="sidebar-close sidebar-pin" id="sidebarPinBtn" type="button" aria-pressed="false" aria-label="Przypnij panel obok tabeli" data-hint data-hint-pl="Przypnij panel na stałe obok tabeli (wszystkie grupy)" data-hint-en="Pin the panel next to the table (all groups)" data-hint-delay="0.8"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5"/><path d="M9 10.8V4h6v6.8l3 3.2H6z"/></svg></button>
             <button class="sidebar-close" id="sidebarCloseBtn" type="button" data-hint data-hint-pl="Schowaj panel narzędzi" data-hint-en="Hide the tools panel" data-hint-delay="0.8" aria-label="Schowaj panel narzędzi">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
@@ -517,6 +529,14 @@
                     <option value="1.6">160%</option>
                     <option value="1.75">175%</option>
                     <option value="2">200%</option>
+                  </select>
+                </label>
+                <label class="field" data-hint data-hint-pl="Wysokość wierszy tabeli: Wygodna jak dotąd, Kompaktowa mieści najwięcej wierszy na ekranie" data-hint-en="Table row height: Comfortable as before, Compact fits the most rows on screen" data-hint-delay="1.1">
+                  <span id="rowDensityLabel">Gęstość wierszy</span>
+                  <select id="rowDensity">
+                    <option value="">Wygodna</option>
+                    <option value="standard">Standardowa</option>
+                    <option value="compact">Kompaktowa</option>
                   </select>
                 </label>
                 <label class="field" data-hint data-hint-pl="Jednolita wysokość wszystkich wierszy w px. Puste = automatyczna. Pojedynczy wiersz możesz też zmienić przeciągając jego dolną krawędź." data-hint-en="Uniform row height in px. Empty = automatic. You can also drag a single row's bottom edge." data-hint-delay="1.1">
@@ -1247,6 +1267,32 @@
                 </button>
                 <div class="qs-live hidden" id="qsLiveResults" role="listbox" aria-label="Podgląd wyników szukania"></div>
               </div>
+              <!-- Rząd 1 (po prawej od szukania): tryb, cofanie, powiększenie/gęstość, menu Widok i Więcej.
+                   Przyciski w menu to te same elementy co dawniej w rzędzie przycisków (id bez zmian). -->
+              <div class="toolbar-main" id="toolbarMain">
+                  <!-- Edycja (domyślnie) / Podgląd: tylko oglądanie — blokuje przypadkowe zmiany
+                       komórek i chowa paski edycji. Wybór pamiętany na urządzeniu (sheet-edit-ui.js). -->
+                  <div class="mode-switch" id="sheetModeSwitch" role="group" aria-label="Tryb pracy">
+                    <button class="mode-btn is-active" type="button" data-mode="edit" aria-pressed="true" data-hint data-hint-pl="Edycja: zmieniaj komórki, formatuj, wklejaj (pasek formatu i formuły nad tabelą)" data-hint-en="Edit: change cells, format, paste (format and formula bars above the table)" data-hint-delay="1.1">Edycja</button>
+                    <button class="mode-btn" type="button" data-mode="view" aria-pressed="false" data-hint data-hint-pl="Podgląd: tylko oglądanie — nic przypadkiem się nie zmieni" data-hint-en="View: look only — nothing changes by accident" data-hint-delay="1.1">Podgląd</button>
+                  </div>
+                  <button class="btn btn-sm ghost icon-only undo-btn hidden" id="undoBtn" type="button" aria-label="Cofnij" data-hint data-hint-pl="Cofnij ostatnią zmianę w arkuszu (Ctrl/⌘+Z)" data-hint-en="Undo the last change in the sheet (Ctrl/⌘+Z)" data-hint-delay="0.8" data-hint-touch="on">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+                  </button>
+                  <button class="btn btn-sm ghost icon-only undo-btn hidden" id="redoBtn" type="button" aria-label="Ponów" data-hint data-hint-pl="Ponów cofniętą zmianę (Ctrl/⌘+Shift+Z)" data-hint-en="Redo the undone change (Ctrl/⌘+Shift+Z)" data-hint-delay="0.8" data-hint-touch="on">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
+                  </button>
+                <span class="toolbar-sep" aria-hidden="true"></span>
+                <div class="zoom-group" id="zoomGroup" role="group" aria-label="Powiększenie tabeli">
+                  <button class="tb-btn" id="zoomOutBtn" type="button" aria-label="Pomniejsz tabelę" data-hint data-hint-pl="Pomniejsz tabelę" data-hint-en="Zoom out the table" data-hint-delay="0.8">−</button>
+                  <button class="zoom-now" id="zoomNowBtn" type="button" aria-haspopup="true" aria-expanded="false" data-hint data-hint-pl="Powiększenie i gęstość wierszy" data-hint-en="Zoom and row density" data-hint-delay="0.8"><span id="zoomNowText">100%</span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+                  <button class="tb-btn" id="zoomInBtn" type="button" aria-label="Powiększ tabelę" data-hint data-hint-pl="Powiększ tabelę" data-hint-en="Zoom in the table" data-hint-delay="0.8">+</button>
+                </div>
+                <button class="btn btn-sm ghost tb-menu-btn" id="viewMenuBtn" type="button" aria-haspopup="true" aria-expanded="false">Widok <span aria-hidden="true">▾</span></button>
+                <button class="btn btn-sm ghost tb-menu-btn" id="moreMenuBtn" type="button" aria-haspopup="true" aria-expanded="false">Więcej <span aria-hidden="true">▾</span></button>
+              </div>
+              <!-- Telefon: „Aa” = formatowanie wysuwane od dołu (tryb Edycja). -->
+              <button class="btn btn-sm ghost fmt-sheet-btn" id="fmtSheetBtn" type="button" aria-expanded="false" aria-controls="formatRibbon" aria-label="Formatowanie komórek" hidden>Aa</button>
               <!-- „Narzędzia” = cały panel boczny (filtry, widok, edycja, analizy). Kropka z liczbą
                    = ile filtrów działa teraz (te same, co pigułki w pasku aktywnych filtrów). -->
               <button class="panel-toggle" id="panelToggle" type="button" data-hint data-hint-pl="Narzędzia: filtry, widok, edycja, analizy" data-hint-en="Tools: filters, view, editing, analyses" data-hint-delay="1.1">
@@ -1259,23 +1305,41 @@
                 </svg>
               </button>
               <div class="table-actions" id="tableActions">
-                <button class="btn btn-sm ghost icon-only undo-btn hidden" id="undoBtn" type="button" aria-label="Cofnij" data-hint data-hint-pl="Cofnij ostatnią zmianę w arkuszu (Ctrl/⌘+Z)" data-hint-en="Undo the last change in the sheet (Ctrl/⌘+Z)" data-hint-delay="0.8" data-hint-touch="on">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
-                </button>
-                <button class="btn btn-sm ghost icon-only undo-btn hidden" id="redoBtn" type="button" aria-label="Ponów" data-hint data-hint-pl="Ponów cofniętą zmianę (Ctrl/⌘+Shift+Z)" data-hint-en="Redo the undone change (Ctrl/⌘+Shift+Z)" data-hint-delay="0.8" data-hint-touch="on">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg>
-                </button>
-                <button class="btn btn-sm ghost toggle-pill hidden" id="wideLongToggle" type="button" aria-pressed="false" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
-                  Wide-to-Long
-                </button>
-                <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Użyj szerokości kolumn i wysokości wierszy zapisanych w pliku Excel (zamiast auto-dopasowania)" data-hint-en="Use column widths and row heights saved in the Excel file (instead of auto-fit)" data-hint-delay="1.1">
-                  Wymiary z Excela
-                </button>
-                <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
-                <span class="toolbar-sep" aria-hidden="true"></span>
-                <button class="btn btn-sm ghost" id="transcribeBtn" type="button" data-hint data-hint-pl="Tryb spisywania — jeden wiersz naraz, dużą czcionką, z odhaczaniem. Do przepisywania danych ręcznie na papier." data-hint-en="Transcribe mode — one row at a time, large type, with tick-off. For copying data onto paper by hand." data-hint-delay="1.1" data-hint-touch="on">Spisywanie</button>
-                <button class="btn btn-sm ghost" id="reportBtn" type="button" data-hint data-hint-pl="Raport — jedna kartka A4: najważniejsze liczby, wnioski i wykres z bieżącego widoku. Do druku albo zapisania jako PDF." data-hint-en="Report — one A4 page: key numbers, findings and a chart from the current view. Print it or save as PDF." data-hint-delay="1.1" data-hint-touch="on">Raport</button>
-                <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport…</button>
+                <!-- Rząd 2: „Narzędzia główne” (tryb Edycja) + „Ostatnie” zapytania w wolnym miejscu. -->
+                <div class="format-ribbon" id="formatRibbon" role="toolbar" aria-label="Formatowanie komórek">
+                  <button class="fmt-btn" type="button" data-fmt="b" aria-pressed="false" aria-label="Pogrubienie" data-hint data-hint-pl="Pogrubienie (Ctrl/⌘+B)" data-hint-en="Bold (Ctrl/⌘+B)" data-hint-delay="0.8"><span class="fmt-glyph fmt-b">B</span></button>
+                  <button class="fmt-btn" type="button" data-fmt="i" aria-pressed="false" aria-label="Kursywa" data-hint data-hint-pl="Kursywa (Ctrl/⌘+I)" data-hint-en="Italic (Ctrl/⌘+I)" data-hint-delay="0.8"><span class="fmt-glyph fmt-i">I</span></button>
+                  <button class="fmt-btn" type="button" data-fmt="u" aria-pressed="false" aria-label="Podkreślenie" data-hint data-hint-pl="Podkreślenie (Ctrl/⌘+U)" data-hint-en="Underline (Ctrl/⌘+U)" data-hint-delay="0.8"><span class="fmt-glyph fmt-u">U</span></button>
+                  <button class="fmt-btn" type="button" data-fmt="strike" aria-pressed="false" aria-label="Przekreślenie" data-hint data-hint-pl="Przekreślenie (Ctrl+5)" data-hint-en="Strikethrough (Ctrl+5)" data-hint-delay="0.8"><span class="fmt-glyph fmt-s">S</span></button>
+                  <select class="fmt-select fmt-size" id="fmtSize" aria-label="Rozmiar czcionki" data-hint data-hint-pl="Rozmiar czcionki" data-hint-en="Font size" data-hint-delay="0.8"></select>
+                  <span class="fmt-sep" aria-hidden="true"></span>
+                  <div class="fmt-split" id="fmtColorSplit">
+                    <button class="fmt-btn fmt-split-main" type="button" id="fmtColorBtn" aria-label="Kolor czcionki" data-hint data-hint-pl="Kolor czcionki (ostatnio użyty)" data-hint-en="Font color (last used)" data-hint-delay="0.8"><span class="fmt-glyph">A</span><span class="fmt-swatch" id="fmtColorSwatch"></span></button>
+                    <button class="fmt-btn fmt-split-caret" type="button" id="fmtColorMore" aria-haspopup="true" aria-expanded="false" aria-label="Wybierz kolor czcionki">▾</button>
+                  </div>
+                  <div class="fmt-split" id="fmtFillSplit">
+                    <button class="fmt-btn fmt-split-main" type="button" id="fmtFillBtn" aria-label="Kolor wypełnienia" data-hint data-hint-pl="Kolor wypełnienia (ostatnio użyty)" data-hint-en="Fill color (last used)" data-hint-delay="0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z"/><path d="m5 2 5 5"/><path d="M2 13h15"/><path d="M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z"/></svg><span class="fmt-swatch" id="fmtFillSwatch"></span></button>
+                    <button class="fmt-btn fmt-split-caret" type="button" id="fmtFillMore" aria-haspopup="true" aria-expanded="false" aria-label="Wybierz kolor wypełnienia">▾</button>
+                  </div>
+                  <button class="fmt-btn" type="button" id="fmtBorderBtn" aria-haspopup="true" aria-expanded="false" aria-label="Obramowanie" data-hint data-hint-pl="Obramowanie" data-hint-en="Borders" data-hint-delay="0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 12h18M12 3v18" stroke-dasharray="2 2"/></svg><span class="fmt-caret-mini" aria-hidden="true">▾</span></button>
+                  <span class="fmt-sep" aria-hidden="true"></span>
+                  <button class="fmt-btn" type="button" data-align="left" aria-pressed="false" aria-label="Wyrównaj do lewej" data-hint data-hint-pl="Wyrównaj do lewej" data-hint-en="Align left" data-hint-delay="0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h12M3 18h16"/></svg></button>
+                  <button class="fmt-btn" type="button" data-align="center" aria-pressed="false" aria-label="Wyśrodkuj" data-hint data-hint-pl="Wyśrodkuj" data-hint-en="Center" data-hint-delay="0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M6 12h12M4 18h16"/></svg></button>
+                  <button class="fmt-btn" type="button" data-align="right" aria-pressed="false" aria-label="Wyrównaj do prawej" data-hint data-hint-pl="Wyrównaj do prawej" data-hint-en="Align right" data-hint-delay="0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M9 12h12M5 18h16"/></svg></button>
+                  <button class="fmt-btn" type="button" data-fmt="wrap" aria-pressed="false" aria-label="Zawijaj tekst" data-hint data-hint-pl="Zawijaj tekst w komórce" data-hint-en="Wrap text in the cell" data-hint-delay="0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M3 12h15a3 3 0 1 1 0 6h-4"/><path d="m16 16-2 2 2 2"/><path d="M3 18h7"/></svg></button>
+                  <span class="fmt-sep" aria-hidden="true"></span>
+                  <select class="fmt-select fmt-numfmt" id="fmtNumFormat" aria-label="Format liczb" data-hint data-hint-pl="Format liczb: jak wartość wygląda w Excelu (sama wartość się nie zmienia)" data-hint-en="Number format: how the value looks in Excel (the value itself does not change)" data-hint-delay="0.8"></select>
+                  <button class="fmt-btn fmt-text-btn" type="button" id="fmtDecLess" aria-label="Zmniejsz liczbę miejsc po przecinku" data-hint data-hint-pl="Mniej miejsc po przecinku" data-hint-en="Fewer decimal places" data-hint-delay="0.8">,0←</button>
+                  <button class="fmt-btn fmt-text-btn" type="button" id="fmtDecMore" aria-label="Zwiększ liczbę miejsc po przecinku" data-hint data-hint-pl="Więcej miejsc po przecinku" data-hint-en="More decimal places" data-hint-delay="0.8">→,00</button>
+                  <span class="fmt-sep" aria-hidden="true"></span>
+                  <button class="fmt-btn" type="button" id="fmtPainterBtn" aria-pressed="false" aria-label="Malarz formatów" data-hint data-hint-pl="Malarz formatów: skopiuj format tej komórki, potem kliknij komórkę lub zaznacz zakres" data-hint-en="Format painter: copy this cell's format, then click a cell or select a range" data-hint-delay="0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="15" height="7" rx="1.5"/><path d="M18 6.5h2.5V13H11v3"/><rect x="9" y="16" width="4" height="6" rx="1"/></svg></button>
+                  <button class="fmt-btn" type="button" id="fmtClearBtn" aria-label="Wyczyść formatowanie" data-hint data-hint-pl="Wyczyść formatowanie (zostaje sama wartość)" data-hint-en="Clear formatting (only the value stays)" data-hint-delay="0.8"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m7 21-4.3-4.3a1 1 0 0 1 0-1.4l9.6-9.6a1 1 0 0 1 1.4 0l5.6 5.6a1 1 0 0 1 0 1.4L13 19"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg></button>
+                  <span class="fmt-sep" aria-hidden="true"></span>
+                  <div class="fmt-split" id="fmtSumSplit">
+                    <button class="fmt-btn fmt-split-main fmt-sum" type="button" id="fmtSumBtn" aria-label="Autosumowanie" data-hint data-hint-pl="Autosumowanie: suma liczb nad komórką (Alt+=)" data-hint-en="AutoSum: sum of the numbers above the cell (Alt+=)" data-hint-delay="0.8"><span class="fmt-glyph">Σ</span></button>
+                    <button class="fmt-btn fmt-split-caret" type="button" id="fmtSumMore" aria-haspopup="true" aria-expanded="false" aria-label="Wybierz funkcję autosumowania">▾</button>
+                  </div>
+                </div>
                 <!-- Ostatnie i przypięte zapytania (z historii szukania) — klik = szukaj ponownie.
                      Jeden rząd; gdy się nie mieszczą, przewija się w bok z miękkim wygaszeniem krawędzi. -->
                 <span class="toolbar-sep recent-sep" aria-hidden="true" hidden></span>
@@ -1285,6 +1349,18 @@
 
             <!-- Co teraz filtruje: jedna linia pigułek z × — widać, DLACZEGO wierszy jest mało,
                  i każdy filtr zdejmuje się jednym tapnięciem. Ukryta, gdy nic nie filtruje. -->
+            <!-- ============ PASKI EDYCJI (tryb Edycja, sheet-edit-ui.js) ============
+                 Rząd 1 = „Narzędzia główne” jak w Excelu (format zapisuje się do pliku przy
+                 „Zapisz”), rząd 2 = pasek formuły: adres komórki + pełna zawartość. -->
+            <div class="edit-bars" id="editBars" hidden>
+              <div class="formula-bar" id="formulaBar">
+                <input class="name-box" id="nameBox" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go" aria-label="Adres komórki — wpisz np. B12 i Enter, aby przejść" data-hint data-hint-pl="Adres komórki — wpisz np. B12 i Enter, aby przejść" data-hint-en="Cell address — type e.g. B12 and Enter to go there" data-hint-delay="0.8" />
+                <button class="fx-label" id="fxInsertBtn" type="button" aria-label="Wstaw funkcję" data-hint data-hint-pl="Wstaw funkcję (SUMA, JEŻELI, WYSZUKAJ.PIONOWO…)" data-hint-en="Insert function (SUM, IF, VLOOKUP…)" data-hint-delay="0.8">fx</button>
+                <input class="formula-input" id="formulaInput" type="text" autocomplete="off" spellcheck="false" enterkeyhint="done" aria-label="Zawartość komórki" />
+                <button class="fx-act fx-cancel" id="formulaCancel" type="button" aria-label="Anuluj" hidden>✕</button>
+                <button class="fx-act fx-ok" id="formulaOk" type="button" aria-label="Zatwierdź" hidden>✓</button>
+              </div>
+            </div>
             <div class="active-filters hidden" id="activeFilters" role="group" aria-label="Aktywne filtry"></div>
 
             <div class="empty-state" id="emptyState">
@@ -1353,7 +1429,7 @@
                 <span class="ca-toggle-label">Akcje</span><span class="ca-chevron" aria-hidden="true">⌄</span>
               </button>
             </div>
-            <div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div>
+            <div class="table-foot" id="tableFoot"><div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div></div>
             <button class="sheet-picker-fab hidden" id="sheetPickerFab" type="button" aria-label="Przełącz arkusz" aria-haspopup="dialog">
               <svg class="spf-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
@@ -1498,6 +1574,23 @@
       </div>
     </div>
 
+    <!-- Menu „Widok ▾” i „Więcej ▾” z paska nad tabelą (frame-compact.js) — przyciski z dawnego rzędu. -->
+    <div class="app-menu tb-menu" id="viewMenu" role="menu" aria-label="Widok" hidden>
+                  <button class="btn btn-sm ghost toggle-pill hidden" id="wideLongToggle" type="button" aria-pressed="false" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
+                    Wide-to-Long
+                  </button>
+                  <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Użyj szerokości kolumn i wysokości wierszy zapisanych w pliku Excel (zamiast auto-dopasowania)" data-hint-en="Use column widths and row heights saved in the Excel file (instead of auto-fit)" data-hint-delay="1.1">
+                    Wymiary z Excela
+                  </button>
+                  <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
+    </div>
+    <div class="app-menu tb-menu" id="moreMenu" role="menu" aria-label="Więcej" hidden>
+                  <button class="btn btn-sm ghost" id="transcribeBtn" type="button" data-hint data-hint-pl="Tryb spisywania — jeden wiersz naraz, dużą czcionką, z odhaczaniem. Do przepisywania danych ręcznie na papier." data-hint-en="Transcribe mode — one row at a time, large type, with tick-off. For copying data onto paper by hand." data-hint-delay="1.1" data-hint-touch="on">Spisywanie</button>
+                  <button class="btn btn-sm ghost" id="reportBtn" type="button" data-hint data-hint-pl="Raport — jedna kartka A4: najważniejsze liczby, wnioski i wykres z bieżącego widoku. Do druku albo zapisania jako PDF." data-hint-en="Report — one A4 page: key numbers, findings and a chart from the current view. Print it or save as PDF." data-hint-delay="1.1" data-hint-touch="on">Raport</button>
+                  <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport…</button>
+    </div>
+    <!-- Powiększenie i gęstość wierszy (dymek pod procentem) -->
+    <div class="app-menu tb-menu zoom-menu" id="zoomMenu" role="dialog" aria-label="Powiększenie i gęstość" hidden></div>
     <!-- Menu komórki: prawy klik / przytrzymanie palcem / klawisz menu (Shift+F10) -->
     <div class="cell-menu hidden" id="cellMenu" role="menu" aria-label="Działania na komórce"></div>
 
@@ -1793,33 +1886,39 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20261010-03"></script>
-    <script defer src="app/render-budget.js?v=20261010-03"></script>
-    <script defer src="app/language.js?v=20261010-03"></script>
-    <script defer src="app/analysis.js?v=20261010-03"></script>
-    <script defer src="app/smart-filters.js?v=20261010-03"></script>
-    <script defer src="app/workbook.js?v=20261010-03"></script>
-    <script defer src="app/xlsx-patch.js?v=20261010-03"></script>
-    <script defer src="app/table.js?v=20261010-03"></script>
-    <script defer src="app/virt-rows.js?v=20261010-03"></script>
-    <script defer src="app/conditional-formatting.js?v=20261010-03"></script>
-    <script defer src="app/data-validation.js?v=20261010-03"></script>
-    <script defer src="app/derived-columns.js?v=20261010-03"></script>
-    <script defer src="app/formulas.js?v=20261010-03"></script>
-    <script defer src="app/edit-tools.js?v=20261010-03"></script>
-    <script defer src="app/ui-controls.js?v=20261010-03"></script>
-    <script defer src="app/filter-bar.js?v=20261010-03"></script>
-    <script defer src="app/qs-history.js?v=20261010-03"></script>
-    <script defer src="app/undo.js?v=20261010-03"></script>
-    <script defer src="app/drafts.js?v=20261010-03"></script>
-    <script defer src="app/transcribe.js?v=20261010-03"></script>
-    <script defer src="app/report.js?v=20261010-03"></script>
-    <script defer src="app/freeze-pane.js?v=20261010-03"></script>
-    <script defer src="app/app-frame.js?v=20261010-03"></script>
+    <script defer src="app/core.js?v=20261011-02"></script>
+    <script defer src="app/render-budget.js?v=20261011-02"></script>
+    <script defer src="app/language.js?v=20261011-02"></script>
+    <script defer src="app/analysis.js?v=20261011-02"></script>
+    <script defer src="app/smart-filters.js?v=20261011-02"></script>
+    <script defer src="app/workbook.js?v=20261011-02"></script>
+    <script defer src="app/xlsx-patch.js?v=20261011-02"></script>
+    <script defer src="app/table.js?v=20261011-02"></script>
+    <script defer src="app/virt-rows.js?v=20261011-02"></script>
+    <script defer src="app/conditional-formatting.js?v=20261011-02"></script>
+    <script defer src="app/formula-engine.js?v=20261011-02"></script>
+    <script defer src="app/formula-calc.js?v=20261011-02"></script>
+    <script defer src="app/data-validation.js?v=20261011-02"></script>
+    <script defer src="app/derived-columns.js?v=20261011-02"></script>
+    <script defer src="app/formulas.js?v=20261011-02"></script>
+    <script defer src="app/edit-tools.js?v=20261011-02"></script>
+    <script defer src="app/cell-format.js?v=20261011-02"></script>
+    <script defer src="app/ui-controls.js?v=20261011-02"></script>
+    <script defer src="app/filter-bar.js?v=20261011-02"></script>
+    <script defer src="app/qs-history.js?v=20261011-02"></script>
+    <script defer src="app/undo.js?v=20261011-02"></script>
+    <script defer src="app/drafts.js?v=20261011-02"></script>
+    <script defer src="app/transcribe.js?v=20261011-02"></script>
+    <script defer src="app/report.js?v=20261011-02"></script>
+    <script defer src="app/freeze-pane.js?v=20261011-02"></script>
+    <script defer src="app/app-frame.js?v=20261011-02"></script>
+    <script defer src="app/sheet-edit-ui.js?v=20261011-02"></script>
+    <script defer src="app/frame-compact.js?v=20261011-02"></script>
+    <script defer src="app/formula-ui.js?v=20261011-02"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20261010-03"></script>
-    <script defer src="app/bootstrap.js?v=20261010-03"></script>
+    <script defer src="app/debug-loaders.js?v=20261011-02"></script>
+    <script defer src="app/bootstrap.js?v=20261011-02"></script>
   </body>
 </html>

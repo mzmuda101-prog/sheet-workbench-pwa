@@ -72,7 +72,7 @@ async function loadFixture(page) {
   });
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 15000 });
   await sleep(200);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await sleep(700);
   await page.evaluate(() => { try { setSidebarOpen && setSidebarOpen(false); } catch {} document.documentElement.classList.remove("sidebar-open"); });
   await sleep(120);
@@ -104,7 +104,7 @@ async function run() {
   }
 
   // ── 1. Domyślnie wyłączone + wykryte scalenia ─────────────────────────────
-  await page.click("#transcribeBtn");
+  await page.evaluate(() => document.getElementById("transcribeBtn").click());
   await sleep(300);
   const start = await state(page);
   report.start = { inherit: start.inherit, mergeCols: start.mergeCols, longMode: start.longMode, rows: start.rows };
@@ -221,7 +221,7 @@ async function run() {
   await page.click("#quickSearchBtn");
   await sleep(600);
   const filteredRows = await page.evaluate(() => viewRows.length);
-  await page.click("#transcribeBtn");
+  await page.evaluate(() => document.getElementById("transcribeBtn").click());
   await sleep(300);
   const filtered = await state(page);
   const nazwiskoFiltered = fieldByLabel(filtered, "Nazwisko");
@@ -236,7 +236,7 @@ async function run() {
   await page.keyboard.press("Escape");
   await sleep(200);
   await loadFixture(page);
-  await page.click("#transcribeBtn");
+  await page.evaluate(() => document.getElementById("transcribeBtn").click());
   await sleep(350);
   const restored = await state(page);
   report.restored = { inherit: restored.inherit, inheritCols: restored.inheritCols, auto: restored.auto };
@@ -252,7 +252,7 @@ async function run() {
   await page.setInputFiles("#fileInput", STRESS);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 20000 });
   await sleep(300);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await sleep(1200);
   await page.evaluate(() => { try { setSidebarOpen && setSidebarOpen(false); } catch {} document.documentElement.classList.remove("sidebar-open"); });
   const toggleVisible = await page.evaluate(() => {
@@ -261,9 +261,9 @@ async function run() {
   });
   report.longMode = { toggleVisible };
   if (toggleVisible) {
-    await page.click("#wideLongToggle");
+    await page.evaluate(() => document.getElementById("wideLongToggle").click());
     await sleep(900);
-    await page.click("#transcribeBtn");
+    await page.evaluate(() => document.getElementById("transcribeBtn").click());
     await sleep(400);
     const longState = await state(page);
     const disabled = await page.evaluate(() => ({

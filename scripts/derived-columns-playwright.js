@@ -72,7 +72,7 @@ async function run() {
   // wybierz arkusz Zamowienia (pierwszy) i wczytaj
   await page.evaluate(() => { document.getElementById("sheetSelect").value = "Zamowienia"; });
   await sleep(200);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await sleep(800);
 
   // (1) Kolumna z wyrażenia: [Ilosc]*2

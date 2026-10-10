@@ -92,7 +92,7 @@ async function run() {
   await page.evaluate(() => document.getElementById("heroSplash")?.remove());
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 20000 }).catch(() => {});
-  await page.click("#loadBtn").catch(() => {});
+  await page.evaluate(() => loadBtn.click()).catch(() => {});
   await page.waitForFunction(() => document.querySelectorAll("#dataTable tbody tr").length > 5, null, { timeout: 20000 }).catch(() => {});
   check("offline: plik wczytany, tabela jest", await page.evaluate(() => document.querySelectorAll("#dataTable tbody tr").length > 5));
   const workerOk = await page.evaluate(() => new Promise((resolve) => {

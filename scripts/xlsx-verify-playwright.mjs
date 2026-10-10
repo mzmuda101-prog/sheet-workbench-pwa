@@ -15,6 +15,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
+import { createRequire } from "node:module";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
@@ -82,6 +83,18 @@ async function appSave(bytes, cycles) {
   return Buffer.from(b64, "base64");
 }
 
+// Schemat Office (Open XML SDK, tools/ooxml-validator) — łapie to, czego openpyxl nie widzi:
+// złą kolejność elementów w <font>/<border>/<xf>, złe atrybuty. Liczą się tylko NOWE błędy
+// (prawdziwe pliki z innych programów bywają już nie w pełni zgodne). Bez .NET — pomijane
+// z ostrzeżeniem; walidator, który się nie uruchomił, to BŁĄD (nie „brak nowych błędów”).
+const ooxml = createRequire(import.meta.url)("./ooxml-validate.js");
+const hasOoxml = ooxml.available();
+function newSchemaErrors(orig, saved) {
+  const [vo, vs] = ooxml.validate([orig, saved]);
+  if (vs.error) return [`zapis nie otwiera się w Open XML SDK: ${vs.error}`];
+  return ooxml.newErrors(vo, vs).map(ooxml.short);
+}
+
 function pyVerify(orig, saved, cyclesFile) {
   const r = spawnSync(PY, [VERIFY, "verify", orig, saved, cyclesFile], { encoding: "utf8" });
   return { ok: r.status === 0, out: (r.stdout || "") + (r.stderr || "") };
@@ -102,6 +115,14 @@ for (const file of files) {
   console.log(`${res.ok ? "✅" : "❌"} ${name} — ${Object.keys(cycles[0]).length} ark., ${nEdits} edycji w 2 cyklach`);
   if (res.out.trim()) console.log(res.out.replace(/\s+$/, ""));
   if (!res.ok) failed.push(name);
+  if (hasOoxml) {
+    const schema = newSchemaErrors(file, saved);
+    if (schema.length) {
+      console.log(`  ❌ schemat Office: ${schema.length} nowych błędów`);
+      schema.slice(0, 8).forEach((e) => console.log("     " + e));
+      failed.push(name + " (schemat)");
+    }
+  }
 
   // KANARZEK: ten sam zapis porównany BEZ listy edycji musi zostać odrzucony —
   // inaczej weryfikator niczego nie widzi i zielony wynik nic nie znaczy.
@@ -120,4 +141,4 @@ if (failed.length) {
   console.error("\n❌ xlsx-verify FAIL: " + failed.join("; "));
   process.exit(1);
 }
-console.log(`\n✅ xlsx-verify: ${files.length} plik(ów) zgodnych wg openpyxl`);
+console.log(`\n✅ xlsx-verify: ${files.length} plik(ów) zgodnych wg openpyxl${hasOoxml ? " i schematu Office" : " (schemat Office pominięty — brak tools/ooxml-validator)"}`);

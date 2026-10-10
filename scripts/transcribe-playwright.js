@@ -29,7 +29,7 @@ async function loadSheet(page) {
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 15000 });
   await sleep(300);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await sleep(1000);
   await page.evaluate(() => { try { setSidebarOpen && setSidebarOpen(false); } catch {} document.documentElement.classList.remove("sidebar-open"); });
   await sleep(150);
@@ -60,7 +60,7 @@ async function run() {
   await loadSheet(page);
 
   // ── 1. Otwarcie: nakładka widoczna, domyślne pola, karta = wiersz 1 ────────
-  await page.click("#transcribeBtn");
+  await page.evaluate(() => document.getElementById("transcribeBtn").click());
   await sleep(250);
   const opened = await state(page);
   report.opened = opened;
@@ -252,10 +252,11 @@ async function run() {
   if (!closed.hidden) failures.push("Esc powinien zamknąć tryb spisywania");
   if (closed.bodyLock) failures.push("po zamknięciu body.tr-active powinno zniknąć");
   if (closed.appInert) failures.push("po zamknięciu inert powinien zejść z .app");
-  if (closed.focus !== "transcribeBtn") failures.push(`fokus powinien wrócić na przycisk, jest "${closed.focus}"`);
+  // przycisk mieszka w menu „Więcej ▾” — po zamknięciu fokus wraca na „Więcej”
+  if (closed.focus !== "transcribeBtn" && closed.focus !== "moreMenuBtn") failures.push(`fokus powinien wrócić na przycisk (Spisywanie albo „Więcej”), jest "${closed.focus}"`);
 
   await loadSheet(page);
-  await page.click("#transcribeBtn");
+  await page.evaluate(() => document.getElementById("transcribeBtn").click());
   await sleep(300);
   const restored = await state(page);
   const restoredFirstLabel = await page.evaluate(() => document.querySelector("#trCard .tr-field-label")?.textContent);

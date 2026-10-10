@@ -165,6 +165,26 @@ function unshareTouchedGroupsString(inner, cells, formulaMap, cellMap) {
   return out;
 }
 
+const FILE_ERROR_CODES = new Set(["#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A"]);
+
+// Komórka z formułą: <f> + ostatni policzony wynik w <v> (Excel i tak przelicza przy
+// otwarciu — fullCalcOnLoad). Typ wyniku: liczba bez t, tekst t="str", logiczna t="b",
+// błąd t="e". Brak wyniku (funkcja, której nie liczymy) = sama formuła, bez <v>.
+function buildFormulaCellXml(ref, payload, attrs) {
+  const a = String(attrs || "").replace(/\/\s*$/g, "").replace(/\s*\bt="[^"]*"/g, "").trim();
+  const f = `<f>${escapeFormulaXml(sanitizeXmlText(String(payload.f).replace(/^=/, "")))}</f>`;
+  const v = payload.v;
+  let tAttr = "";
+  let vXml = "";
+  if (v instanceof Date) vXml = `<v>${dateToExcelSerial(v)}</v>`;
+  else if (typeof v === "number" && Number.isFinite(v)) vXml = `<v>${v}</v>`;
+  else if (typeof v === "boolean") { tAttr = ' t="b"'; vXml = `<v>${v ? 1 : 0}</v>`; }
+  // Tylko 7 klasycznych kodów: #SPILL!/#CALC! zapisane w <v> Excel „naprawia” na tekst.
+  else if (payload.err && FILE_ERROR_CODES.has(payload.err)) { tAttr = ' t="e"'; vXml = `<v>${payload.err}</v>`; }
+  else if (typeof v === "string") { tAttr = ' t="str"'; vXml = `<v>${escapeXmlText(sanitizeXmlText(v))}</v>`; }
+  return `<c r="${ref}"${a ? " " + a : ""}${tAttr}>${f}${vXml}</c>`;
+}
+
 function normalizeCellAttrs(attrs, payload) {
   // [EN] Strip stray "/" left if a self-closing cell was ever mis-parsed as open.
   let a = String(attrs || "").replace(/\/\s*$/g, "").replace(/\s*\bt="[^"]*"/g, "").trim();
@@ -176,6 +196,7 @@ function buildCellXml(ref, payload, attrs, dateStyler) {
   // Data zapisuje się jako liczba seryjna — bez formatu daty w stylu Excel pokazałby
   // „45424”. Styler podmienia s= na wariant tego samego stylu z formatem daty.
   if (dateStyler && payload.t === "d") attrs = withDateStyle(attrs, dateStyler);
+  if (payload.f) return buildFormulaCellXml(ref, payload, attrs);
   const attrStr = normalizeCellAttrs(attrs, payload);
   if (payload.t === "s") {
     const t = escapeXmlText(sanitizeXmlText(payload.v));
@@ -184,6 +205,8 @@ function buildCellXml(ref, payload, attrs, dateStyler) {
   let num;
   if (payload.t === "d" && payload.v instanceof Date) num = dateToExcelSerial(payload.v);
   else num = Number(payload.v);
+  // NaN / Infinity / 1e400 w <v> to dla Excela uszkodzenie (naprawia na tekst) — pusta wartość.
+  if (!Number.isFinite(num)) return `<c r="${ref}"${attrStr}/>`;
   return `<c r="${ref}"${attrStr}><v>${num}</v></c>`;
 }
 
@@ -261,7 +284,41 @@ function patchSheetDataInner(inner, cells, formulaMap, dateStyler) {
       return;
     }
 
-    const cellXml = buildCellXml(ref, payload, existing ? existing.attrs : "", dateStyler);
+    // Zmiana formatu (pasek „Narzędzia główne”): nowy styl = styl z pliku + delta.
+    const fmt = payload.fmt && dateStyler && typeof dateStyler.withFmt === "function" ? payload.fmt : null;
+    if (fmt && (payload.clear || !("t" in payload))) {
+      const curAttrs = existing ? existing.attrs : "";
+      const idx = dateStyler.withFmt(cellStyleIdx(curAttrs), fmt);
+      let text;
+      if (payload.clear || !existing) text = `<c r="${ref}"${withCellStyleIdx(curAttrs.replace(/\s*\bt="[^"]*"/g, "").replace(/\/\s*$/g, ""), idx)}/>`;
+      else {
+        const a = withCellStyleIdx(existing.attrs.replace(/\/\s*$/g, ""), idx);
+        text = existing.selfClose ? `<c r="${ref}"${a}/>` : `<c r="${ref}"${a}>${existing.inner}</c>`;
+      }
+      if (/^<c r="[A-Z]+\d+"\/>$/.test(text) && !existing) return; // pusta komórka bez stylu — nic do wstawienia
+      if (existing) replacements.push({ start: existing.start, len: existing.full.length, text });
+      else inserts.push({ ref, cellXml: text });
+      return;
+    }
+
+    // Bez pisarza stylów (plik bez styles.xml) sama zmiana formatu nie ma czego zapisać;
+    // „wyczyść + format” zostaje zwykłym wyczyszczeniem.
+    if (payload.clear) {
+      if (existing) {
+        const s = (existing.attrs.match(/\bs="\d+"/) || [])[0];
+        replacements.push({ start: existing.start, len: existing.full.length, text: s ? `<c r="${ref}" ${s}/>` : "" });
+      }
+      return;
+    }
+    if (!("t" in payload)) return;
+
+    let attrsIn = existing ? existing.attrs : "";
+    let styler = dateStyler;
+    if (fmt) {
+      attrsIn = withCellStyleIdx(attrsIn, dateStyler.withFmt(cellStyleIdx(attrsIn), fmt, { date: payload.t === "d" }));
+      styler = null; // format daty już rozstrzygnięty w withFmt
+    }
+    const cellXml = buildCellXml(ref, payload, attrsIn, styler);
     if (existing) {
       replacements.push({ start: existing.start, len: existing.full.length, text: cellXml });
     } else {
@@ -365,6 +422,292 @@ function withDateStyle(attrs, dateStyler) {
   return next === 0 ? a : `${a} s="${next}"`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FORMATOWANIE KOMÓREK (pasek „Narzędzia główne”) → styles.xml, stringowo.
+//
+// Edycja niesie „deltę” formatu (fmt), nie gotowy styl: { b, i, u, strike, sz, color,
+// fill, h, v, wrap, numFmt, border: { top|bottom|left|right: {style,color}|null }, reset }.
+// Przy zapisie bierzemy styl, który komórka ma W PLIKU (s="N"), robimy jego kopię
+// z naniesioną deltą i dopisujemy na końcu <fonts>/<fills>/<borders>/<numFmts>/<cellXfs>.
+// Wszystko, czego delta nie dotyka (krój, obramowanie, ochrona, wcięcie…), zostaje.
+// Identyczne wyniki są scalane (ten sam xf/font/fill nie mnoży się przy 500 komórkach).
+// Ten sam obiekt obsługuje też daty (ensure) — dwa osobne pisarze dopisujące do
+// <cellXfs> rozjechałyby sobie numerację.
+const STYLE_FONT_ORDER = ["b", "i", "strike", "condense", "extend", "outline", "shadow", "u", "vertAlign", "sz", "color", "name", "family", "charset", "scheme"];
+const STYLE_BORDER_ORDER = ["start", "end", "left", "right", "top", "bottom", "diagonal", "vertical", "horizontal"];
+const BUILTIN_NUMFMT_IDS = {
+  General: 0, "0": 1, "0.00": 2, "#,##0": 3, "#,##0.00": 4, "0%": 9, "0.00%": 10, "0.00E+00": 11,
+  "# ?/?": 12, "# ??/??": 13, "h:mm": 20, "h:mm:ss": 21, "@": 49,
+};
+
+function styleSection(xml, name) {
+  const re = new RegExp(`<((?:[\\w-]+:)?)${name}\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/\\1${name}>)`);
+  const m = xml.match(re);
+  if (!m) return null;
+  return { prefix: m[1], attrs: m[2], body: m[3] || "" };
+}
+
+function styleItems(body, name) {
+  const re = new RegExp(`<((?:[\\w-]+:)?)${name}\\b(?:[^>]*?\\/>|[^>]*?>[\\s\\S]*?<\\/\\1${name}>)`, "g");
+  return body.match(re) || [];
+}
+
+function parseXmlAttrs(s) {
+  const out = new Map();
+  const re = /([\w:.-]+)="([^"]*)"/g;
+  let m;
+  while ((m = re.exec(s || ""))) out.set(m[1], m[2]);
+  return out;
+}
+
+function attrsToString(map) {
+  let s = "";
+  map.forEach((v, k) => { s += ` ${k}="${v}"`; });
+  return s;
+}
+
+function escapeXmlAttr(s) {
+  return escapeXmlText(s).replace(/"/g, "&quot;");
+}
+
+// Element złożony z dzieci (font, border): { p, name, attrs, kids:{local:raw}, extra:[raw] }.
+function parseStyleElement(xml, name) {
+  const open = String(xml || "").match(new RegExp(`^<((?:[\\w-]+:)?)${name}\\b([^>]*?)(\\/?)>`));
+  if (!open) return { p: "", name, attrs: "", kids: {}, extra: [] };
+  const el = { p: open[1], name, attrs: open[2], kids: {}, extra: [] };
+  if (open[3]) return el;
+  const inner = xml.slice(open[0].length, xml.lastIndexOf("</"));
+  const re = /<((?:[\w-]+:)?)([A-Za-z]+)\b[^>]*?(?:\/>|>[\s\S]*?<\/\1\2>)/g;
+  let m;
+  while ((m = re.exec(inner))) {
+    if (el.kids[m[2]] === undefined) el.kids[m[2]] = m[0];
+    else el.extra.push(m[0]);
+  }
+  return el;
+}
+
+function serializeStyleElement(el, order) {
+  const known = order.map((k) => el.kids[k] || "").join("");
+  const other = Object.keys(el.kids).filter((k) => !order.includes(k)).map((k) => el.kids[k]).join("");
+  const body = known + other + el.extra.join("");
+  return body ? `<${el.p}${el.name}${el.attrs}>${body}</${el.p}${el.name}>` : `<${el.p}${el.name}${el.attrs}/>`;
+}
+
+function normHexColor(c) {
+  const h = String(c || "").replace(/^#/, "").toUpperCase();
+  if (/^[0-9A-F]{6}$/.test(h)) return `FF${h}`;
+  if (/^[0-9A-F]{8}$/.test(h)) return h;
+  return null;
+}
+
+function createStyleWriter(stylesXml) {
+  const xfSec = styleSection(stylesXml, "cellXfs");
+  if (!xfSec) return null;
+  const P = xfSec.prefix;
+  const sections = {
+    font: styleSection(stylesXml, "fonts"),
+    fill: styleSection(stylesXml, "fills"),
+    border: styleSection(stylesXml, "borders"),
+  };
+  const lists = {
+    xf: styleItems(xfSec.body, "xf"),
+    font: sections.font ? styleItems(sections.font.body, "font") : [],
+    fill: sections.fill ? styleItems(sections.fill.body, "fill") : [],
+    border: sections.border ? styleItems(sections.border.body, "border") : [],
+  };
+  if (!lists.xf.length) return null;
+  const base = { xf: lists.xf.length, font: lists.font.length, fill: lists.fill.length, border: lists.border.length };
+  const numFmtSec = styleSection(stylesXml, "numFmts");
+  const numFmtTags = numFmtSec ? styleItems(numFmtSec.body, "numFmt") : [];
+  const baseNumFmts = numFmtTags.length;
+  const customFmts = {};
+  let maxFmtId = 163;
+  numFmtTags.forEach((tag) => {
+    const a = parseXmlAttrs(tag);
+    const id = Number(a.get("numFmtId"));
+    const code = decodeXmlEntitiesSimple(a.get("formatCode") || "");
+    if (Number.isFinite(id)) { customFmts[id] = code; maxFmtId = Math.max(maxFmtId, id); }
+  });
+  const indexOfItem = new Map(); // `${kind}|${xml}` → indeks (scalanie identycznych)
+  ["xf", "font", "fill", "border"].forEach((kind) => lists[kind].forEach((x, i) => {
+    const key = `${kind}|${x}`;
+    if (!indexOfItem.has(key)) indexOfItem.set(key, i);
+  }));
+  const addItem = (kind, xml) => {
+    const key = `${kind}|${xml}`;
+    if (indexOfItem.has(key)) return indexOfItem.get(key);
+    lists[kind].push(xml);
+    const idx = lists[kind].length - 1;
+    indexOfItem.set(key, idx);
+    return idx;
+  };
+  const numFmtIdFor = (code) => {
+    if (code == null) return 0;
+    if (Object.prototype.hasOwnProperty.call(BUILTIN_NUMFMT_IDS, code)) return BUILTIN_NUMFMT_IDS[code];
+    for (const id of Object.keys(customFmts)) if (customFmts[id] === code) return Number(id);
+    maxFmtId += 1;
+    customFmts[maxFmtId] = code;
+    numFmtTags.push(`<${P}numFmt numFmtId="${maxFmtId}" formatCode="${escapeXmlAttr(code)}"/>`);
+    return maxFmtId;
+  };
+  const isDateFmtId = (id) => BUILTIN_DATE_FMT_IDS.has(id) || (customFmts[id] != null && isDateFormatCode(customFmts[id]));
+
+  const parseXf = (xml) => {
+    const el = parseStyleElement(xml, "xf");
+    const attrs = parseXmlAttrs(el.attrs);
+    const alignment = el.kids.alignment ? parseXmlAttrs(el.kids.alignment) : new Map();
+    return { el, attrs, alignment };
+  };
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const clampXf = (sIdx) => (Number.isFinite(sIdx) && sIdx >= 0 && sIdx < lists.xf.length ? sIdx : 0);
+
+  const fontKeys = ["b", "i", "u", "strike", "sz", "color", "fontName"];
+  function patchFont(fontXml, fmt) {
+    const el = parseStyleElement(fontXml || `<${P}font/>`, "font");
+    if (!el.name) el.name = "font";
+    const p = el.p;
+    const flag = (key, tag, raw) => {
+      if (!(key in fmt)) return;
+      if (fmt[key]) el.kids[tag] = raw || `<${p}${tag}/>`;
+      else delete el.kids[tag];
+    };
+    flag("b", "b");
+    flag("i", "i");
+    flag("strike", "strike");
+    flag("u", "u");
+    if ("sz" in fmt && Number(fmt.sz) > 0) el.kids.sz = `<${p}sz val="${Number(fmt.sz)}"/>`;
+    if ("color" in fmt) {
+      const rgb = normHexColor(fmt.color);
+      if (rgb) el.kids.color = `<${p}color rgb="${rgb}"/>`;
+      else delete el.kids.color; // „Automatyczny”
+    }
+    if ("fontName" in fmt && fmt.fontName) el.kids.name = `<${p}name val="${escapeXmlAttr(fmt.fontName)}"/>`;
+    return serializeStyleElement(el, STYLE_FONT_ORDER);
+  }
+  function fillXml(color) {
+    const rgb = normHexColor(color);
+    if (!rgb) return `<${P}fill><${P}patternFill patternType="none"/></${P}fill>`;
+    return `<${P}fill><${P}patternFill patternType="solid"><${P}fgColor rgb="${rgb}"/><${P}bgColor indexed="64"/></${P}patternFill></${P}fill>`;
+  }
+  function patchBorder(borderXml, edges) {
+    const el = parseStyleElement(borderXml || `<${P}border/>`, "border");
+    const p = el.p;
+    ["left", "right", "top", "bottom"].forEach((side) => {
+      if (!(side in edges)) return;
+      const e = edges[side];
+      if (!e || !e.style || e.style === "none") { el.kids[side] = `<${p}${side}/>`; return; }
+      const rgb = normHexColor(e.color);
+      const color = rgb ? `<${p}color rgb="${rgb}"/>` : `<${p}color indexed="64"/>`;
+      el.kids[side] = `<${p}${side} style="${e.style}">${color}</${p}${side}>`;
+    });
+    // Excel zawsze pisze komplet krawędzi (puste też) — trzymamy się tego kształtu.
+    ["left", "right", "top", "bottom", "diagonal"].forEach((side) => { if (!el.kids[side]) el.kids[side] = `<${p}${side}/>`; });
+    return serializeStyleElement(el, STYLE_BORDER_ORDER);
+  }
+
+  const cache = new Map();
+  function withFmt(sIdx, fmt, opts = {}) {
+    const i0 = clampXf(sIdx);
+    const f = fmt || {};
+    const key = `${i0}|${opts.date ? 1 : 0}|${JSON.stringify(f)}`;
+    if (cache.has(key)) return cache.get(key);
+    const xf = parseXf(lists.xf[f.reset ? 0 : i0]);
+    const { attrs, alignment } = xf;
+    if (fontKeys.some((k) => k in f)) {
+      const fontId = num(attrs.get("fontId"));
+      attrs.set("fontId", String(addItem("font", patchFont(lists.font[fontId], f))));
+      attrs.set("applyFont", "1");
+    }
+    if ("fill" in f) {
+      attrs.set("fillId", String(addItem("fill", fillXml(f.fill))));
+      attrs.set("applyFill", "1");
+    }
+    if (f.border && typeof f.border === "object") {
+      const borderId = num(attrs.get("borderId"));
+      attrs.set("borderId", String(addItem("border", patchBorder(lists.border[borderId], f.border))));
+      attrs.set("applyBorder", "1");
+    }
+    if ("numFmt" in f) {
+      attrs.set("numFmtId", String(numFmtIdFor(f.numFmt)));
+      attrs.set("applyNumberFormat", "1");
+    } else if (opts.date && !isDateFmtId(num(attrs.get("numFmtId")))) {
+      attrs.set("numFmtId", "14");
+      attrs.set("applyNumberFormat", "1");
+    }
+    let alignChanged = false;
+    const setAlign = (key, attr, val) => {
+      if (!(key in f)) return;
+      alignChanged = true;
+      if (val == null || val === "" || val === false) alignment.delete(attr);
+      else alignment.set(attr, String(val));
+    };
+    setAlign("h", "horizontal", f.h);
+    setAlign("v", "vertical", f.v);
+    setAlign("wrap", "wrapText", f.wrap ? "1" : null);
+    if (alignChanged) {
+      attrs.set("applyAlignment", "1");
+      if (alignment.size) xf.el.kids.alignment = `<${xf.el.p}alignment${attrsToString(alignment)}/>`;
+      else delete xf.el.kids.alignment;
+    }
+    for (const k of ["fontId", "fillId", "borderId", "numFmtId"]) if (!attrs.has(k)) attrs.set(k, "0");
+    xf.el.attrs = attrsToString(attrs);
+    const idx = addItem("xf", serializeStyleElement(xf.el, ["alignment", "protection", "extLst"]));
+    cache.set(key, idx);
+    return idx;
+  }
+
+  function rewriteSection(xml, name, kind) {
+    const total = lists[kind].length;
+    if (total === base[kind]) return xml;
+    const added = lists[kind].slice(base[kind]).join("");
+    const re = new RegExp(`<((?:[\\w-]+:)?)${name}\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/\\1${name}>)`);
+    return xml.replace(re, (all, p, attrs, body) => {
+      const a = /\bcount="/.test(attrs) ? attrs.replace(/\bcount="\d+"/, `count="${total}"`) : `${attrs} count="${total}"`;
+      return `<${p}${name}${a}>${body || ""}${added}</${p}${name}>`;
+    });
+  }
+
+  return {
+    withFmt,
+    // zgodność z dawnym stylerem dat (withDateStyle)
+    ensure(sIdx) { return withFmt(sIdx, null, { date: true }); },
+    get changed() {
+      return lists.xf.length !== base.xf || lists.font.length !== base.font || lists.fill.length !== base.fill
+        || lists.border.length !== base.border || numFmtTags.length !== baseNumFmts;
+    },
+    apply(xml) {
+      let out = xml;
+      if (numFmtTags.length !== baseNumFmts) {
+        const body = numFmtTags.join("");
+        const tag = `<${P}numFmts count="${numFmtTags.length}">${body}</${P}numFmts>`;
+        if (numFmtSec) out = out.replace(/<((?:[\w-]+:)?)numFmts\b[^>]*?(?:\/>|>[\s\S]*?<\/\1numFmts>)/, tag);
+        else out = out.replace(/<((?:[\w-]+:)?)styleSheet\b[^>]*>/, (open) => open + tag);
+      }
+      if (sections.font) out = rewriteSection(out, "fonts", "font");
+      if (sections.fill) out = rewriteSection(out, "fills", "fill");
+      if (sections.border) out = rewriteSection(out, "borders", "border");
+      out = rewriteSection(out, "cellXfs", "xf");
+      return out;
+    },
+    prefix: P,
+  };
+}
+
+function decodeXmlEntitiesSimple(s) {
+  return String(s).replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
+function cellStyleIdx(attrs) {
+  const m = String(attrs || "").match(/\bs="(\d+)"/);
+  return m ? Number(m[1]) : 0;
+}
+
+function withCellStyleIdx(attrs, idx) {
+  const a = String(attrs || "");
+  if (/\bs="\d+"/.test(a)) return a.replace(/\bs="\d+"/, `s="${idx}"`);
+  return idx ? `${a} s="${idx}"` : a;
+}
+
 async function resolveStylesPath(zip) {
   const rels = zip.file("xl/_rels/workbook.xml.rels");
   if (rels) {
@@ -432,16 +775,17 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
   const zip = await JSZip.loadAsync(originalBytes);
   const sheetPaths = await resolveSheetPaths(zip);
 
-  // Styler dat tylko gdy jakaś edycja zapisuje datę (zwykły zapis tekstu nie rusza styles.xml).
-  const hasDateEdit = Object.values(edits || {}).some((cells) => cells && Object.values(cells).some((p) => p && p.t === "d"));
+  // Pisarz stylów tylko gdy jakaś edycja zapisuje datę albo zmienia format
+  // (zwykły zapis tekstu nie rusza styles.xml).
+  const needsStyles = Object.values(edits || {}).some((cells) => cells && Object.values(cells).some((p) => p && (p.t === "d" || p.fmt)));
   let dateStyler = null;
   let stylesPath = null;
   let stylesXml = null;
-  if (hasDateEdit) {
+  if (needsStyles) {
     stylesPath = await resolveStylesPath(zip);
     if (stylesPath) {
       stylesXml = await zip.file(stylesPath).async("string");
-      dateStyler = createDateStyler(stylesXml);
+      dateStyler = createStyleWriter(stylesXml) || createDateStyler(stylesXml);
     }
   }
 
@@ -478,6 +822,7 @@ if (typeof module !== "undefined" && module.exports) {
     buildCellXml,
     zipWriteUtf8Xml,
     createDateStyler,
+    createStyleWriter,
     isDateFormatCode,
   };
 }

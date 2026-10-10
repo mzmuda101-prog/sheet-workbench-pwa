@@ -54,7 +54,7 @@ async function run() {
     if (typeof applyAutoHeaderRowIfEnabled === "function") applyAutoHeaderRowIfEnabled();
   });
   await sleep(400);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await sleep(1500);
 
   // ── Niezależne oczekiwania: pary „od"/„do" wprost z nagłówków ────────────────

@@ -51,7 +51,7 @@ async function run() {
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 20000 });
   await sleep(300);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await sleep(1200);
 
   // ── 1. Roving tabindex: DOKŁADNIE jedna komórka jest punktem wejścia ──────────
@@ -587,10 +587,11 @@ async function run() {
   // Objaw zgłoszony przez użytkownika: „zaznaczam Shift+tapem i nie mogę zacząć pisać".
   await page.evaluate(() => { closeQuickSearchPopup(); setSidebarOpen(false); });
   await sleep(300);
-  const przyciskId = "excelLayoutToggle";
-  if (TOUCH) await page.tap("#" + przyciskId); else await page.click("#" + przyciskId);
+  // przycisk z paska nad tabelą (aktywny tryb „Edycja” — klik nic nie zmienia, zostawia fokus)
+  const przycisk = '#sheetModeSwitch .mode-btn[data-mode="edit"]';
+  if (TOUCH) await page.tap(przycisk); else await page.click(przycisk);
   await sleep(250);
-  const naPrzycisku = await page.evaluate((id) => document.activeElement?.id === id, przyciskId);
+  const naPrzycisku = await page.evaluate((sel) => document.activeElement === document.querySelector(sel), przycisk);
 
   await page.keyboard.down("Shift");
   if (TOUCH) await page.tap('#dataTable tbody tr[data-row-key] td[data-col-index="2"]');

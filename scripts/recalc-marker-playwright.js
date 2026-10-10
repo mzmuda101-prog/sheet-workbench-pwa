@@ -65,7 +65,7 @@ async function run() {
     document.getElementById("headerRow").value = "1";
     document.getElementById("autoHeaderRow").checked = false;
   });
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await page.waitForFunction(() => typeof baseRows !== "undefined" && baseRows.length === 3, null, { timeout: 15000 });
   await sleep(400);
 

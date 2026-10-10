@@ -560,13 +560,19 @@ let internalClipboard = null; // { tsv, rows, cols, ts }
 function writeCellFromInput(model, row, col, raw) {
   if (!row || row.isLongViewRow || row.isSubheader) return "skip";
   if (col < 0 || col >= model.headers.length) return "skip";
+  if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) return "skip"; // kolumna wyliczana
   const parsed = parseInputValue(raw);
-  if (parsed && parsed.type === "formula") return "formula";
+  if (parsed && parsed.type === "formula") {
+    // wklejona / wypełniona formuła (Excel też wkleja tekst „=…” jako formułę)
+    if (typeof swbFormulaCommit !== "function") return "formula";
+    return swbFormulaCommit(row, col, raw, { silent: true }) === "ok" ? "ok" : "formula";
+  }
   updateSheetCell(row.rowIndex0, col, parsed);
   const newVal = parsed ? parsed.value : null;
   if (Array.isArray(row.values)) row.values[col] = newVal;
   if (Array.isArray(row.rawValues)) row.rawValues[col] = newVal;
   if (Array.isArray(row.display)) row.display[col] = newVal == null ? "" : toDisplay(newVal);
+  if (typeof cfmtRefreshDisplay === "function") cfmtRefreshDisplay(row, col);
   return "ok";
 }
 
@@ -615,6 +621,7 @@ async function readClipboardTsv() {
 // opts.source === "app" → tylko własny bufor (menu komórki pokazuje w etykiecie, CO
 // wklei, więc musi wkleić dokładnie to; przy okazji iOS nie pyta o zgodę na schowek).
 async function pasteClipboardToSelection(opts = {}) {
+  if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
   if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") {
     toast(t("editWideOnly"), "info");
     return;
@@ -679,6 +686,7 @@ async function pasteClipboardToSelection(opts = {}) {
 // zakres, jedno tapnięcie i pierwsza komórka rozlewa się na resztę. Nie dotyka schowka
 // systemowego, więc nie ma tu żadnej zgody do wyklikania i nic nie może odmówić.
 function fillSelection(direction) {
+  if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
   if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") {
     toast(t("editWideOnly"), "info");
     return;
@@ -696,22 +704,31 @@ function fillSelection(direction) {
     else if (res === "formula") skippedFormula += 1;
   };
 
+  // Źródło z formułą wypełnia się jak w Excelu: odwołania względne przesuwają się
+  // o odległość w ARKUSZU (przy filtrze pominięte wiersze się nie liczą jako cel).
+  const srcRef = (row, c) => XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + c });
+  const hasFormula = (row, c) => typeof swbFormulaShifted === "function" && !!(workbook.Sheets[currentSheetName]?.[srcRef(row, c)]?.f);
   if (direction === "down") {
     for (let c = rect.colMin; c <= rect.colMax; c++) {
       const src = model.rows[rect.rowStart];
       if (!src) continue;
+      const formula = hasFormula(src, c);
       const raw = cellEditString(src, c);
       for (let r = rect.rowStart + 1; r <= rect.rowEnd; r++) {
-        bump(writeCellFromInput(model, model.rows[r], c, raw));
+        const target = model.rows[r];
+        const text = formula && target ? swbFormulaShifted(currentSheetName, srcRef(src, c), target.rowIndex0 - src.rowIndex0, 0) : raw;
+        bump(writeCellFromInput(model, target, c, text ?? raw));
       }
     }
   } else {
     for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
       const row = model.rows[r];
       if (!row) continue;
+      const formula = hasFormula(row, rect.colMin);
       const raw = cellEditString(row, rect.colMin);
       for (let c = rect.colMin + 1; c <= rect.colMax; c++) {
-        bump(writeCellFromInput(model, row, c, raw));
+        const text = formula ? swbFormulaShifted(currentSheetName, srcRef(row, rect.colMin), 0, c - rect.colMin) : raw;
+        bump(writeCellFromInput(model, row, c, text ?? raw));
       }
     }
   }
@@ -982,6 +999,7 @@ if (cellActionFillDownEl) cellActionFillDownEl.addEventListener("click", () => f
 if (cellActionFillRightEl) cellActionFillRightEl.addEventListener("click", () => fillSelection("right"));
 
 function updateCellStats() {
+  if (typeof sheetEditUi !== "undefined") sheetEditUi.sync(); // pasek formuły + stan przycisków formatu
   updateClearSelectionFab();
   if (typeof updateUndoButtons === "function") updateUndoButtons(); // nowy plik → chowa stare Cofnij
   updateCellActionBar();
@@ -1228,6 +1246,7 @@ function renderActiveTable() {
     doRender();
   }
   updateWideLongToggle();
+  if (typeof sheetEditUi !== "undefined") sheetEditUi.sync(); // paski edycji: pokaż po wczytaniu, odśwież po zmianie
 }
 
 function updateSortControls() {
@@ -1661,7 +1680,9 @@ function applyEdgeBorder(td, edge) {
   const borderStyle = edge.style || edge.Style || "";
   if (!borderStyle || borderStyle === "none") return;
   const color = colorFromStyleNode(edge.color || edge.Color) || "rgba(0,0,0,0.32)";
-  return `1px solid ${color}`;
+  const width = /^(medium|thick|mediumDashed|mediumDashDot|mediumDashDotDot)$/.test(borderStyle) ? 2 : 1;
+  const line = /dash|dot/i.test(borderStyle) ? (/dot/i.test(borderStyle) && !/dash/i.test(borderStyle) ? "dotted" : "dashed") : (borderStyle === "double" ? "double" : "solid");
+  return `${borderStyle === "double" ? 3 : width}px ${line} ${color}`;
 }
 
 function applyCellStyle(td, style) {
@@ -1671,7 +1692,8 @@ function applyCellStyle(td, style) {
     // Gdy komórka ma jawny kolor tekstu (i pokazujemy kolory), renderuj tło pełnym
     // kryciem — to wierna para fg+bg z Excela (np. biały tekst na pełnym kolorze).
     // Pozostałe wypełnienia zostają subtelne (0.28), żeby nie przytłaczać widoku.
-    const strongFill = cellStyleShowFontColors && style.hasCustomFontColor;
+    // Kolor wybrany ręcznie na pasku formatu (userFill) — pełny, bo o taki prosił user.
+    const strongFill = (cellStyleShowFontColors && style.hasCustomFontColor) || !!style.userFill;
     const bg = hexToRgba(style.fillColor, strongFill ? 1 : 0.28);
     if (bg) td.style.background = bg;
   }
@@ -1696,7 +1718,11 @@ function applyCellStyle(td, style) {
   // żeby dało się je wyłączyć (użytkownik nie zawsze chce dziedziczyć pogrubienia z pliku).
   if (cellStyleShowFonts && style.bold) td.style.fontWeight = "700";
   if (cellStyleShowFonts && style.italic) td.style.fontStyle = "italic";
-  if (cellStyleShowFonts && style.underline) td.style.textDecoration = "underline";
+  if (cellStyleShowFonts && (style.underline || style.strike)) {
+    td.style.textDecoration = [style.underline ? "underline" : "", style.strike ? "line-through" : ""].filter(Boolean).join(" ");
+  }
+  // Zawijanie nadane ręcznie na pasku formatu (z pliku dalej steruje przełącznik w Widoku).
+  if (style.userWrap) td.classList.add("cell-wrap");
   if (style.horizontal) td.style.textAlign = style.horizontal;
   if (style.vertical) td.style.verticalAlign = style.vertical;
   // Zawijanie tekstu NIE jest brane z pliku per komórka (dawało nieoczekiwane
@@ -1928,6 +1954,7 @@ function computeRenderEnvKey(model, headers, useExcelLayout, limit, hasCfMap) {
     headers.join("\u0001"),
     typeof sheetDataStamp === "number" ? sheetDataStamp : 0,
     typeof dcAppliedCount === "number" ? dcAppliedCount : 0,
+    document.documentElement.dataset.density || "", // gęstość wierszy = inne wysokości
     useExcelLayout ? 1 : 0,
     cellStyleShowFontColors ? 1 : 0,
     cellStyleShowFills ? 1 : 0,

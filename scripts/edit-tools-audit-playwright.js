@@ -70,7 +70,7 @@ async function auditFileInner(browser, file, res) {
     if (bestName) { selEl.value = bestName; selEl.dispatchEvent(new Event("change", { bubbles: true })); }
   }, sheetName || null);
   await sleep(300);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await page.waitForFunction(() => Array.isArray(baseRows) && baseRows.length > 0 && currentDisplayModel, null, { timeout: 60000 });
   await sleep(800);
   await page.evaluate(() => {

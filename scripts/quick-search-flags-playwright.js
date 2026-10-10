@@ -41,7 +41,7 @@ async function run() {
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 15000 });
   await sleep(300);
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await sleep(1200);
 
   const failures = [];
@@ -177,11 +177,19 @@ async function run() {
     const modeA = await page.evaluate(() => ({
       mode: getNormalizedSelectValue(filterModeEl),
       pressed: [...document.querySelectorAll('#qsFlagsPopup .qs-flag[aria-pressed="true"]')].map((b) => b.dataset.qsFlag),
+      cls: [...document.getElementById("quickSearchWrap").classList].filter((c) => c.startsWith("qs-mode-")),
+      border: getComputedStyle(document.getElementById("quickSearchWrap")).borderTopColor,
+      base: getComputedStyle(document.querySelector(".qs-field input")).color,
     }));
     ok("= potem a… → tylko „Zaczyna się”", modeA.mode === "starts_with" && modeA.pressed.join() === "starts_with", modeA);
+    // każdy tryb barwi pole jak negacja (tu: fiolet „zaczyna się”), klasa tylko jednego trybu
+    ok("tryb „Zaczyna się” koloruje pole szukania", modeA.cls.join() === "qs-mode-starts_with", modeA);
     await page.click('#qsFlagsPopup [data-qs-flag="starts_with"]');
-    const modeB = await page.evaluate(() => getNormalizedSelectValue(filterModeEl));
-    ok("ponowny klik wraca do „Zawiera”", modeB === "contains", modeB);
+    const modeB = await page.evaluate(() => ({
+      mode: getNormalizedSelectValue(filterModeEl),
+      cls: [...document.getElementById("quickSearchWrap").classList].filter((c) => c.startsWith("qs-mode-")),
+    }));
+    ok("ponowny klik wraca do „Zawiera” (bez koloru trybu)", modeB.mode === "contains" && modeB.cls.length === 0, modeB);
 
     // zmiana w panelu → ikonki nadążają
     const fromPanel = await page.evaluate(() => {

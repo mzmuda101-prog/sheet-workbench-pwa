@@ -40,7 +40,7 @@ async function run() {
   await page.evaluate(() => ensureXlsxLibs(false));
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 20000 });
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await page.waitForFunction(() => document.querySelectorAll("#dataTable tbody tr").length > 5, null, { timeout: 20000 });
   await sleep(800);
   await page.evaluate(() => setSidebarOpen(false));

@@ -42,6 +42,8 @@ function undoSnapshot(sheetName, cellRef, rowIndex0, col, rowMap) {
       v: Array.isArray(row.values) ? row.values[col] : undefined,
       r: Array.isArray(row.rawValues) ? row.rawValues[col] : undefined,
       d: Array.isArray(row.display) ? row.display[col] : undefined,
+      // styl do rysowania (format z paska „Narzędzia główne” — cell-format.js)
+      s: Array.isArray(row.cellStyles) ? row.cellStyles[col] : undefined,
     };
   }
   return snap;
@@ -50,7 +52,13 @@ function undoSnapshot(sheetName, cellRef, rowIndex0, col, rowMap) {
 function undoValueKey(cell) {
   if (!cell) return "∅";
   const v = cell.v instanceof Date ? `d${cell.v.getTime()}` : String(cell.v);
-  return `${cell.t}|${v}|${cell.f || ""}`;
+  return `${cell.t}|${v}|${cell.f || ""}|${cell.z || ""}`;
+}
+
+// Wpis w pendingEdits jako tekst — sama zmiana formatu (fmt) też jest zmianą do cofnięcia.
+function undoPendingKey(p) {
+  if (p === undefined) return "u";
+  return JSON.stringify(p, (k, v) => (v instanceof Date ? `d${v.getTime()}` : v));
 }
 
 // Wołane z updateSheetCell() PRZED zmianą.
@@ -80,7 +88,8 @@ function undoCloseStep() {
   const pendNow = pendingEdits[step.sheet];
   step.changes = step.changes.filter((ch) =>
     undoValueKey(ch.snap.cell) !== undoValueKey(sheet ? sheet[ch.cellRef] : null)
-    || ch.snap.pendingHas !== (!!pendNow && Object.prototype.hasOwnProperty.call(pendNow, ch.cellRef)));
+    || ch.snap.pendingHas !== (!!pendNow && Object.prototype.hasOwnProperty.call(pendNow, ch.cellRef))
+    || undoPendingKey(ch.snap.pending) !== undoPendingKey(pendNow ? pendNow[ch.cellRef] : undefined));
   delete step.seen;
   delete step.rowMap;
   if (!step.changes.length) return;
@@ -115,12 +124,21 @@ function undoApplyStep(step) {
         if (Array.isArray(row.values)) row.values[ch.col] = v;
         if (Array.isArray(row.rawValues)) row.rawValues[ch.col] = rv ? rv.r : v;
         if (Array.isArray(row.display)) row.display[ch.col] = rv ? rv.d : (v == null ? "" : toDisplay(v));
+        if (rv && Array.isArray(row.cellStyles)) row.cellStyles[ch.col] = rv.s;
       }
     }
   } finally {
     undoApplying = false;
   }
   bumpSheetDataStamp();
+  // formuły: indeks (komórka mogła odzyskać/stracić formułę) + przeliczenie zależnych
+  step.changes.forEach((ch) => {
+    if (typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(step.sheet, ch.cellRef);
+    if (typeof swbFormulaTouched === "function") {
+      const { r, c } = XLSX.utils.decode_cell(ch.cellRef);
+      swbFormulaTouched(step.sheet, r, c);
+    }
+  });
   return inverse;
 }
 

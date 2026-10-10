@@ -162,7 +162,10 @@ function syncQuickSearchModeControls() {
     btn.setAttribute("aria-pressed", String(on));
   });
   [quickSearchWrap, quickSearchPopupEl].forEach((el) => {
-    if (el) el.classList.toggle("qs-negated", negated);
+    if (!el) return;
+    el.classList.toggle("qs-negated", negated);
+    // tryb dopasowania koloruje ramkę pola jak negacja (każdy tryb swój kolor)
+    QS_MODE_FLAGS.forEach((m) => el.classList.toggle(`qs-mode-${m}`, mode === m));
   });
 }
 
@@ -784,6 +787,7 @@ async function handleFile(file, fileHandle = null) {
     // Wczytaj reguły Data Validation (listy/słowniki jak w Excelu) — type="list".
     // Konsumowane przez openCellEditor: dropdown + tryb (blokuj/ostrzegaj/podpowiadaj).
     if (typeof buildDataValidations === "function") await buildDataValidations(originalFileBytes, workbook);
+    currentWorkbookActiveSheet = await readActiveSheetName(originalFileBytes, workbook);
     releaseSharedZipTextCache(); // rozpakowany XML nie jest już potrzebny
     sheetSelect.replaceChildren();
     workbook.SheetNames.forEach((s) => {
@@ -827,12 +831,42 @@ async function handleFile(file, fileHandle = null) {
     renderSortPresets();
     toast(t("fileLoaded"), "success");
     log(`Wczytano plik: ${file.name}`, "success");
+    return true;
   } catch (err) {
     toast(describeFileLoadError(err, file), "error");
     log(`Blad przy wczytywaniu pliku "${file.name}": ${(err && err.message) || err}`, "error");
+    return false;
   } finally {
     setLoading(false);
   }
+}
+
+// Arkusz, na którym plik zapisano w Excelu (<workbookView activeTab>), jak Excel przy
+// otwarciu; ukryty albo brak informacji → pierwszy widoczny. SheetJS tego nie podaje.
+let currentWorkbookActiveSheet = "";
+async function readActiveSheetName(bytes, wb) {
+  const names = (wb && wb.SheetNames) || [];
+  const meta = (wb && wb.Workbook && wb.Workbook.Sheets) || [];
+  const visible = (i) => !meta[i] || !meta[i].Hidden;
+  let idx = -1;
+  try {
+    const zip = await getSharedWorkbookZip(bytes);
+    const xml = zip ? await readSharedZipText(zip, "xl/workbook.xml") : "";
+    const m = xml && xml.match(/<(?:[\w-]+:)?workbookView\b[^>]*\bactiveTab="(\d+)"/);
+    if (m) idx = Number(m[1]);
+  } catch { idx = -1; }
+  if (idx >= 0 && names[idx] && visible(idx)) return names[idx];
+  return names.find((_, i) => visible(i)) || names[0] || "";
+}
+
+// Po wybraniu pliku od razu otwórz arkusz (jak Excel) — bez kroku „wybierz arkusz
+// i kliknij Wczytaj”. Arkusz, wiersz nagłówka, limit itd. dalej zmienia się w panelu
+// „Plik i arkusz” albo w nagłówku (przełącznik arkuszy).
+function openDefaultSheet() {
+  if (!workbook || !workbook.SheetNames.length) return;
+  const name = currentWorkbookActiveSheet && workbook.Sheets[currentWorkbookActiveSheet] ? currentWorkbookActiveSheet : workbook.SheetNames[0];
+  sheetSelect.value = name;
+  loadBtn.click();
 }
 
 // Przykładowy arkusz procesowy/SLA generowany lokalnie w pamięci (SheetJS CE).
@@ -1024,9 +1058,9 @@ async function loadSampleFile() {
   const file = new File([buffer], t("sampleFileName"), {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  await handleFile(file);
+  const opened = await handleFile(file);
   // Auto-wykryj wiersz nagłówka (pomija wiersze KPI) i od razu wczytaj arkusz do tabeli.
-  if (workbook) {
+  if (opened && workbook) {
     if (autoHeaderRowEl) autoHeaderRowEl.checked = true;
     applyAutoHeaderRowIfEnabled();
     loadBtn.click();
@@ -1972,59 +2006,45 @@ async function saveWorkbookAs() {
 }
 
 // Otwarcie pliku przez File System Access API — daje uchwyt do zapisu w miejscu.
-// Po wczytaniu pliku przy ZAMKNIĘTYM sidebarze (np. przyciskiem w pustym stanie)
-// prowadzi użytkownika do następnego kroku: otwiera sidebar z panelem „Plik i arkusz",
-// pulsuje na wyborze arkusza i przycisku „Wczytaj arkusz" oraz pokazuje toast.
-// Sterowanie wyglądem pulsu: klasa .guide-attention w CSS.
-let guideAttentionTimer = null;
-function guideToSheetConfig() {
-  if (!workbook) return; // plik się nie wczytał — nie ma do czego prowadzić
-  setSidebarOpen(true);
-  const filePanel = document.getElementById("panel-file-sheet");
-  if (filePanel) filePanel.open = true;
-  const targets = [sheetSelect, loadBtn].filter(Boolean);
-  if (guideAttentionTimer) window.clearTimeout(guideAttentionTimer);
-  requestAnimationFrame(() => {
-    if (filePanel) filePanel.scrollIntoView({ behavior: "smooth", block: "start" });
-    targets.forEach((el) => {
-      el.classList.remove("guide-attention");
-      void el.offsetWidth; // restart animacji przy ponownym wczytaniu pliku
-      el.classList.add("guide-attention");
-    });
-  });
-  guideAttentionTimer = window.setTimeout(() => {
-    targets.forEach((el) => el.classList.remove("guide-attention"));
-    guideAttentionTimer = null;
-  }, 4600);
-  toast(t("guideChooseSheet"), "info");
-}
-
+// Arkusz otwiera się od razu (openDefaultSheet) — dawny „przewodnik” do wyboru arkusza
+// i przycisku „Wczytaj” (guideToSheetConfig) nie jest już potrzebny.
 async function openWorkbookViaFsa() {
   if (!canOpenFSA) return;
-  const sidebarWasClosed = !isSidebarOpen();
+  let handle = null;
+  let file = null;
   try {
-    const [handle] = await window.showOpenFilePicker({
+    [handle] = await window.showOpenFilePicker({
       types: FSA_FILE_TYPES,
       multiple: false,
     });
     if (!handle) return;
-    const file = await handle.getFile();
-    await handleFile(file, handle);
-    if (sidebarWasClosed) guideToSheetConfig();
+    file = await handle.getFile();
   } catch (err) {
     if (err && err.name === "AbortError") return;
-    // Picker FSA mimo wszystko zawiódł (np. nierozpoznany webview/iframe) —
-    // cofnij się do natywnego <input>, nie pokazuj błędu.
-    log("FSA picker niedostępny — fallback do natywnego wyboru pliku.", "warning");
+    // Picker FSA mimo wszystko zawiódł (np. podgląd w aplikacji / webview: okno wyboru
+    // otwiera się, ale po wyborze zwraca błąd) — cofnij się do natywnego <input>.
+    log(`FSA picker niedostępny (${(err && err.name) || "błąd"}) — fallback do natywnego wyboru pliku.`, "warning");
     fileInput.click();
+    return;
   }
+  // Wczytanie POZA try wyboru: błąd przy otwieraniu pliku nie może wyglądać jak awaria
+  // okna wyboru (dawniej taki błąd otwierał drugi wybór pliku — w kółko).
+  if (await handleFile(file, handle)) openDefaultSheet();
+}
+
+// Pole pliku NIE może mieszkać w panelu bocznym: schowany panel jest `inert`, a wtedy
+// przeglądarka gubi wybór pliku z okna (zapasowa ścieżka po nieudanym FSA nic nie
+// wczytywała — 2026-10-10, panel domyślnie schowany przy pasku ikon). Strefa
+// upuszczania zostaje etykietą tego pola przez `for`.
+if (fileInput && dropZone && dropZone.contains(fileInput)) {
+  dropZone.htmlFor = "fileInput";
+  fileInput.classList.add("file-input-global");
+  document.body.appendChild(fileInput);
 }
 
 fileInput.addEventListener("change", async (e) => {
   const file = e.target.files[0];
-  const sidebarWasClosed = !isSidebarOpen();
-  await handleFile(file);
-  if (sidebarWasClosed) guideToSheetConfig();
+  if (await handleFile(file)) openDefaultSheet();
 });
 
 if (loadSampleBtn) {
@@ -2059,19 +2079,21 @@ if (removeFilter2Btn) {
   });
 }
 
+let sheetLoadSeq = 0;
 loadBtn.addEventListener("click", () => {
   if (!isXlsxAvailable(true)) return;
-  // Użytkownik dotarł do przycisku — zgaś prowadzący puls (guideToSheetConfig)
-  if (guideAttentionTimer) { window.clearTimeout(guideAttentionTimer); guideAttentionTimer = null; }
-  [sheetSelect, loadBtn].forEach((el) => el && el.classList.remove("guide-attention"));
   if (!workbook) {
     toast(t("chooseFileFirst"), "warning");
     log("Najpierw wybierz plik.", "warn");
     return;
   }
   setLoading(true, t("loadingSheet"), { mode: "skeleton" });
+  // Ostatnie kliknięcie wygrywa: automatyczne otwarcie arkusza i ręczne „Wczytaj” tuż po
+  // nim nie mogą się przeplatać (starsze, wolniejsze wczytanie nadpisałoby nowsze).
+  const loadSeq = ++sheetLoadSeq;
   setTimeout(async () => {
     try {
+      if (loadSeq !== sheetLoadSeq) return;
       const sheetName = sheetSelect.value;
       const sheet = workbook.Sheets[sheetName];
       if (!sheet) {
@@ -2089,6 +2111,7 @@ loadBtn.addEventListener("click", () => {
       updateSheetTabActive(sheetName);
       if (typeof appFrame !== "undefined") appFrame.syncFile();
       const data = await buildRowsAsync(sheet, headerRow, workbook);
+      if (loadSeq !== sheetLoadSeq) return; // w międzyczasie kliknięto inny arkusz
       currentHeaders = data.headers;
       // Limit wierszy dobrany do zmierzonej szybkości urządzenia (chyba że wpisany ręcznie).
       if (typeof renderBudget !== "undefined") renderBudget.applyToSheet(currentHeaders.length);
@@ -2098,6 +2121,7 @@ loadBtn.addEventListener("click", () => {
       currentSheetColWidths = Array.isArray(data.colWidths) ? data.colWidths : [];
       currentSheetRowHeights = data.rowHeights || {};
       currentSheetStats = data.stats || null;
+      if (typeof cfmtOverlayRows === "function") cfmtOverlayRows(data.rows);
       baseRows = markSubheaderRows(data.rows);
       const kpiData = collectKpiEntries(sheet, headerRow);
       currentKpiEntries = Array.isArray(kpiData?.entries) ? kpiData.entries : [];
@@ -4137,6 +4161,11 @@ function openCellEditor(td, options = {}) {
     toast(t("editBlockedRow"), "info");
     return;
   }
+  if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(colIndex0)) {
+    toast(t("editDerivedCol"), "info");
+    return;
+  }
+  if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
 
   setFocusedCell(rowKey, colIndex0, { scroll: false });
 
@@ -4146,7 +4175,11 @@ function openCellEditor(td, options = {}) {
   input.className = "cell-editor";
   input.setAttribute("aria-label", t("editCellAria"));
   const initialChar = options.initialChar;
-  input.value = initialChar != null ? initialChar : cellEditString(row, colIndex0);
+  // Komórka z formułą: w edytorze formuła (jak w Excelu), nie jej wynik.
+  const formulaText = typeof swbFormulaText === "function"
+    ? swbFormulaText(currentSheetName, XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + colIndex0 }))
+    : null;
+  input.value = initialChar != null ? initialChar : (formulaText != null ? formulaText : cellEditString(row, colIndex0));
   // PUSTA KOMÓRKA NA DOTYKU: w komórce z treścią tekst zaznacza się sam, więc systemowe
   // menu („Wklej") wychodzi po zwykłym tapnięciu w tekst. W pustej nie ma czego zaznaczyć
   // i to samo tapnięcie nie robi nic — trzeba PRZYTRZYMAĆ. Sprawdzone na symulatorze
@@ -4231,9 +4264,23 @@ function openCellEditor(td, options = {}) {
     }
     const parsed = parseInputValue(input.value);
     if (parsed && parsed.type === "formula") {
-      toast(t("formulaEditBlocked"), "warning");
-      shakeCellEditor(input);
-      input.focus();
+      // Formuła (formula-calc.js): błąd składni zostawia edytor otwarty z komunikatem.
+      const res = typeof swbFormulaCommit === "function" ? swbFormulaCommit(row, colIndex0, input.value) : "error";
+      if (res !== "ok") {
+        if (res === "skip") toast(t("formulaEditBlocked"), "warning");
+        shakeCellEditor(input);
+        input.focus();
+        return;
+      }
+      close();
+      td.textContent = Array.isArray(row.display) ? row.display[colIndex0] : "";
+      setDirtyState(true);
+      flashCellSaved(td);
+      if (move) {
+        setFocusedCell(rowKey, colIndex0, { scroll: false });
+        moveFocusedCell(move.row || 0, move.col || 0);
+      }
+      updateCellStats();
       return;
     }
     // Egzekwuj regułę Data Validation (lista). stop=blokuj commit, warning=ostrzeż
@@ -4257,8 +4304,9 @@ function openCellEditor(td, options = {}) {
     rememberColumnValue(colIndex0, newVal instanceof Date ? formatDateForEdit(newVal) : newVal);
     if (Array.isArray(row.values)) row.values[colIndex0] = newVal;
     if (Array.isArray(row.rawValues)) row.rawValues[colIndex0] = newVal;
-    const display = newVal == null ? "" : toDisplay(newVal);
-    if (Array.isArray(row.display)) row.display[colIndex0] = display;
+    if (Array.isArray(row.display)) row.display[colIndex0] = newVal == null ? "" : toDisplay(newVal);
+    if (typeof cfmtRefreshDisplay === "function") cfmtRefreshDisplay(row, colIndex0);
+    const display = Array.isArray(row.display) ? row.display[colIndex0] : (newVal == null ? "" : toDisplay(newVal));
     close();
     td.textContent = display;
     setDirtyState(true);
@@ -4313,6 +4361,11 @@ function openCellEditor(td, options = {}) {
     // input chwilowo traci focus) — w trakcie interakcji z popupem pomijamy commit.
     if (dvSuggest && dvSuggest.isInteracting()) return;
     if (emptyPaste && emptyPaste.isInteracting()) return;
+    // Pisanie formuły: tap w inną komórkę wstawia jej adres (formula-ui.js), a nie kończy edycji.
+    if (typeof swbFormulaPointingUntil === "number" && Date.now() < swbFormulaPointingUntil) {
+      setTimeout(() => { if (activeCellEditor && activeCellEditor.input === input) input.focus(); }, 0);
+      return;
+    }
     // Tap w obrębie TEJ SAMEJ komórki (margines wokół pola) — to nie jest wyjście
     // z edycji. Oddajemy focus polu; zapis nastąpi dopiero przy tapnięciu POZA nią.
     if (Date.now() - lastPointerInEditedCell < 400) {

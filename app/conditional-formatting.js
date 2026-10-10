@@ -629,11 +629,18 @@ async function parseTables(zip) {
     let cm, idx = 0;
     const colRe = /<tableColumn\b[^>]*\bname="([^"]+)"/g;
     while ((cm = colRe.exec(xml))) { cols[decodeXmlEntities(cm[1]).toLowerCase()] = startCol + idx; idx++; }
+    const colNames = [];
+    const colNameRe = /<tableColumn\b[^>]*\bname="([^"]+)"/g;
+    let cn;
+    while ((cn = colNameRe.exec(xml))) colNames.push(decodeXmlEntities(cn[1]).replace(/_x000a_/gi, "\n"));
     const meta = {
       columns: cols,
+      colNames, // kolejność kolumn — do odwołań Tabela[Kolumna] w silniku formuł
       ref: refM[1],
       sheetName: tableToSheet[f] || null,
       totalsRowShown: /\btotalsRowShown="1"/.test(xml),
+      headerRows: Number((xml.match(/\bheaderRowCount="(\d+)"/) || [])[1] ?? 1),
+      totalsRows: Number((xml.match(/\btotalsRowCount="(\d+)"/) || [])[1] ?? 0),
     };
     const nameM = xml.match(/<table\b[^>]*\bname="([^"]+)"/);
     const dispM = xml.match(/\bdisplayName="([^"]+)"/);

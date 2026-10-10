@@ -463,7 +463,8 @@ dropZone.addEventListener("drop", (e) => {
   e.preventDefault();
   dropZone.classList.remove("dragover");
   const file = e.dataTransfer.files[0];
-  handleFile(file); // drag-drop nie daje uchwytu FSA → zapis przez picker / pobranie
+  // drag-drop nie daje uchwytu FSA → zapis przez picker / pobranie; arkusz otwiera się od razu
+  handleFile(file).then((ok) => { if (ok) openDefaultSheet(); });
 });
 
 // Gdy dostępne File System Access API, kliknięcie/aktywacja strefy otwiera plik

@@ -366,7 +366,10 @@ const appFrame = (() => {
   function placeStatus() {
     if (typeof statusEl === "undefined" || !statusEl || !heroMeta || !toolbarEl) return;
     const narrow = !!(narrowMq && narrowMq.matches);
-    if (narrow && statusEl.parentElement !== toolbarEl) toolbarEl.insertBefore(statusEl, toolbarToggleBtn);
+    // telefon: pod tabelą, obok sum (rząd z szukaniem jest pełny: [szukaj][Aa][⚒][▾])
+    const foot = document.getElementById("tableFoot");
+    if (narrow && foot && statusEl.parentElement !== foot) foot.prepend(statusEl);
+    else if (narrow && !foot && statusEl.parentElement !== toolbarEl) toolbarEl.insertBefore(statusEl, toolbarToggleBtn);
     if (!narrow && statusEl.parentElement !== heroMeta) heroMeta.appendChild(statusEl);
   }
   if (narrowMq) {
@@ -400,7 +403,9 @@ const appFrame = (() => {
   }
   function dockedInitialOpen() {
     if (!isDocked()) return typeof matchMedia === "function" && matchMedia("(min-width: 769px)").matches;
-    try { return localStorage.getItem(DOCK_KEY) !== "0"; } catch (_) { return true; }
+    // Pasek ikon (frame-compact.js): na starcie panel jest otwarty tylko wtedy, gdy
+    // użytkownik go przypiął — inaczej tabela dostaje całą szerokość.
+    try { return localStorage.getItem("swb-panel-pinned-v1") === "1" && localStorage.getItem(DOCK_KEY) !== "0"; } catch (_) { return false; }
   }
   // Świadome przełączenie (🔧, uchwyt, ✕ w panelu) — zapamiętaj przy dokowaniu.
   if (typeof window.toggleSidebar === "function") {

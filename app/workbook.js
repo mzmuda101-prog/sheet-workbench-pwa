@@ -150,6 +150,7 @@ function rebuildCurrentSheetData() {
   const sheet = workbook.Sheets[currentSheetName];
   if (!sheet) return;
   const data = buildRows(sheet, currentHeaderRow, workbook);
+  if (typeof cfmtOverlayRows === "function") cfmtOverlayRows(data.rows);
   baseRows = markSubheaderRows(data.rows);
   applyFilters();
   sortRows();
@@ -590,13 +591,19 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   if (!workbook || !currentSheetName) return;
   const sheet = workbook.Sheets[currentSheetName];
   if (!sheet) return;
+  // Kolumna wyliczana (wirtualna, dopisana na końcu) nie istnieje w pliku — zapis trafiłby
+  // do prawdziwej kolumny za danymi.
+  if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(colIndex0)) return;
   const absoluteCol = currentStartCol + colIndex0;
   const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
   if (!parsed || parsed.value === null) {
     if (typeof undoCaptureCell === "function") undoCaptureCell(rowIndex0, colIndex0); // stan „przed" do Cofnij
+    const hadFormula = !!(sheet[cellRef] && sheet[cellRef].f);
     delete sheet[cellRef];
     bumpSheetDataStamp(); // zawartość arkusza się zmieniła -> unieważnij cache'e
     recordPendingEdit(currentSheetName, cellRef, null); // null = usunięcie przy zapisie
+    if (hadFormula && typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(currentSheetName, cellRef);
+    if (typeof swbFormulaTouched === "function") swbFormulaTouched(currentSheetName, rowIndex0, absoluteCol);
     return;
   }
   if (parsed.type === "formula") {
@@ -621,15 +628,71 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
     cell.t = "s";
   }
   sheet[cellRef] = cell;
+  swbEnsureSheetRef(sheet, rowIndex0, absoluteCol);
   bumpSheetDataStamp(); // zawartość arkusza się zmieniła -> unieważnij cache'e
   // Zarejestruj edycję do naniesienia metodą ZIP-patch przy zapisie (zachowuje plik).
   recordPendingEdit(currentSheetName, cellRef, { v: cell.v, t: cell.t });
+  // Formuły czytające tę komórkę — przeliczenie raz na koniec bieżącego zadania.
+  if (prev && prev.f && typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(currentSheetName, cellRef);
+  if (typeof swbFormulaTouched === "function") swbFormulaTouched(currentSheetName, rowIndex0, absoluteCol);
+}
+
+// Zapis formuły wpisanej przez użytkownika (formula-calc.js: swbFormulaCommit).
+// fileF = formuła w zapisie pliku (angielskie nazwy, „,”), value = wynik policzony przez
+// silnik (null = funkcja, której silnik nie zna — wynik policzy Excel przy otwarciu).
+function updateSheetFormulaCell(rowIndex0, colIndex0, fileF, value) {
+  if (!workbook || !currentSheetName) return;
+  const sheet = workbook.Sheets[currentSheetName];
+  if (!sheet) return;
+  if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(colIndex0)) return;
+  const absoluteCol = currentStartCol + colIndex0;
+  const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
+  if (typeof undoCaptureCell === "function") undoCaptureCell(rowIndex0, colIndex0);
+  const prev = sheet[cellRef];
+  const cell = { f: fileF };
+  if (prev && prev.s) cell.s = prev.s;
+  if (prev && prev.z) cell.z = prev.z;
+  let payload;
+  if (value === null || value === undefined) {
+    cell.t = "s";
+    cell.v = "";
+    cell.w = typeof t === "function" ? t("formulaExcelWillCalc") : "";
+    payload = { f: fileF, t: "n", v: null };
+  } else {
+    fcStore(cell, value);
+    if (cell.t === "e") payload = { f: fileF, t: "e", err: cell.v };
+    else payload = { f: fileF, t: cell.t === "d" ? "n" : cell.t, v: cell.v instanceof Date ? FormulaEngine.jsDateToSerial(cell.v) : cell.v };
+  }
+  sheet[cellRef] = cell;
+  swbEnsureSheetRef(sheet, rowIndex0, absoluteCol);
+  bumpSheetDataStamp();
+  recordPendingEdit(currentSheetName, cellRef, payload);
+  if (typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(currentSheetName, cellRef);
+  if (typeof swbFormulaTouched === "function") swbFormulaTouched(currentSheetName, rowIndex0, absoluteCol);
+}
+
+// Komórka poza zakresem arkusza (np. suma pod ostatnim wierszem) — poszerz !ref,
+// inaczej przebudowa tabeli by jej nie zobaczyła.
+function swbEnsureSheetRef(sheet, r, c) {
+  const ref = sheet["!ref"];
+  if (!ref) { sheet["!ref"] = XLSX.utils.encode_range({ s: { r, c }, e: { r, c } }); return; }
+  const rng = XLSX.utils.decode_range(ref);
+  if (r <= rng.e.r && c <= rng.e.c && r >= rng.s.r && c >= rng.s.c) return;
+  rng.s.r = Math.min(rng.s.r, r); rng.s.c = Math.min(rng.s.c, c);
+  rng.e.r = Math.max(rng.e.r, r); rng.e.c = Math.max(rng.e.c, c);
+  sheet["!ref"] = XLSX.utils.encode_range(rng);
 }
 
 // Zapamiętuje pojedynczą edycję komórki w pendingEdits[sheetName][cellRef].
+// Format nadany w tej sesji (pasek „Narzędzia główne”, cell-format.js) przeżywa zmianę
+// wartości: nowa wartość dostaje go z powrotem, a wyczyszczenie zostawia sam format.
 function recordPendingEdit(sheetName, cellRef, payload) {
   if (!sheetName) return;
   if (!pendingEdits[sheetName]) pendingEdits[sheetName] = {};
+  const prev = pendingEdits[sheetName][cellRef];
+  if (prev && prev.fmt && (payload === null || (payload && !payload.fmt))) {
+    payload = payload === null ? { clear: true, fmt: prev.fmt } : { ...payload, fmt: prev.fmt };
+  }
   pendingEdits[sheetName][cellRef] = payload;
 }
 

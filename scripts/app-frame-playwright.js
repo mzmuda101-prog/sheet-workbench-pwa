@@ -170,7 +170,9 @@ async function run() {
   }));
   check("7. liczba przy „Narzędzia” = liczba aktywnych filtrów", count.badge > 0 && count.badge === count.chips, JSON.stringify(count));
 
-  // 8. opcja uchwytu
+  // 8. opcja uchwytu — uchwyt istnieje poniżej 1024 px (szerzej zastępuje go pasek ikon)
+  await page.setViewportSize({ width: 900, height: 900 });
+  await sleep(400);
   const handle = await page.evaluate(async () => {
     const opt = document.getElementById("showPanelHandle");
     const vis = () => getComputedStyle(document.getElementById("panelHandle")).display !== "none";
@@ -181,6 +183,8 @@ async function run() {
     return { a, b, c: vis() };
   });
   check("8. „Pokaż uchwyt panelu” chowa i przywraca uchwyt", handle.a && !handle.b && handle.c, JSON.stringify(handle));
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await sleep(400);
 
   check("brak błędów strony (desktop)", errors.length === 0, errors.join(" | "));
   await context.close();
@@ -197,27 +201,96 @@ async function run() {
       docH: document.scrollingElement.scrollHeight, vh: innerHeight, vw: innerWidth,
     };
   });
-  await page.evaluate(() => setSidebarOpen(true));
+  const railState = () => page.evaluate(() => ({
+    pressed: [...document.querySelectorAll(".rail-btn[aria-pressed='true']")].map((x) => x.dataset.group),
+    groups: [...document.querySelectorAll(".sidebar .sidebar-group")].filter((g) => getComputedStyle(g).display !== "none").map((g) => g.id),
+    pinned: document.documentElement.classList.contains("panel-pinned"),
+    railVisible: getComputedStyle(document.getElementById("sidebarRail")).display !== "none",
+  }));
+  // R1. start: pasek ikon, panel schowany, tabela tuż obok paska
+  const d0 = await dock();
+  const r0 = await railState();
+  check("R1. ≥1024: pasek ikon widoczny, panel schowany, tabela obok paska", r0.railVisible && !d0.open && d0.mainLeft < 150, JSON.stringify({ d0, r0 }));
+  check("R1. strona nie wystaje", d0.docH <= d0.vh + 1 && d0.mainRight <= d0.vw, JSON.stringify(d0));
+  // R2. klik „Filtry” → tylko ta grupa, NAD tabelą (tabela się nie przesuwa)
+  await page.click('.rail-btn[data-group="group-filters"]');
   await sleep(500);
   const d1 = await dock();
-  check("C1. ≥1024: panel obok tabeli, bez nachodzenia i bez zasłony", d1.docked && d1.open && d1.sideRight <= d1.mainLeft && d1.scrim === "none", JSON.stringify(d1));
-  check("C1. strona nie wystaje z otwartym panelem", d1.docH <= d1.vh + 1 && d1.mainRight <= d1.vw, JSON.stringify(d1));
-  // Esc w tabeli nie zamyka panelu obok tabeli
+  const r1 = await railState();
+  check("R2. klik w ikonę wysuwa tylko tę grupę", d1.open && r1.groups.join() === "group-filters" && r1.pressed.join() === "group-filters", JSON.stringify(r1));
+  check("R2. tabela się nie przesuwa, bez zasłony", d1.mainLeft === d0.mainLeft && d1.scrim === "none", JSON.stringify({ d0, d1 }));
+  // R3. ten sam klik chowa; inna ikona przełącza; Esc i klik w tabelę chowają
+  await page.click('.rail-btn[data-group="group-filters"]');
+  await sleep(400);
+  check("R3. drugi klik w tę samą ikonę chowa panel", !(await dock()).open, "");
+  await page.click('.rail-btn[data-group="group-view"]');
+  await sleep(400);
+  await page.keyboard.press("Escape");
+  await sleep(400);
+  check("R3. Esc chowa wysunięty panel", !(await dock()).open, "");
+  await page.click('.rail-btn[data-group="group-view"]');
+  await sleep(400);
+  await page.mouse.click(d0.mainLeft + 600, 500);
+  await sleep(400);
+  check("R3. klik w tabelę chowa wysunięty panel", !(await dock()).open, "");
+  // R4. 📌 przypina: wszystkie grupy, panel OBOK tabeli, pamiętane po przeładowaniu
+  await page.click('.rail-btn[data-group="group-data"]');
+  await sleep(300);
+  await page.click("#sidebarPinBtn");
+  await sleep(600);
+  const d4 = await dock();
+  const r4 = await railState();
+  check("R4. przypięty: panel obok tabeli bez nachodzenia, wszystkie grupy", d4.open && r4.pinned && d4.sideRight <= d4.mainLeft && r4.groups.length === 6, JSON.stringify({ d4, r4 }));
+  check("R4. strona nie wystaje z przypiętym panelem", d4.docH <= d4.vh + 1 && d4.mainRight <= d4.vw, JSON.stringify(d4));
+  await page.reload({ waitUntil: "load" });
+  await page.evaluate(() => document.getElementById("heroSplash")?.remove());
+  await sleep(700);
+  check("R4. przypięcie pamiętane po przeładowaniu", (await page.evaluate(() => isSidebarOpen() && document.documentElement.classList.contains("panel-pinned"))), "");
+  await page.evaluate(() => document.getElementById("loadSampleBtn")?.click());
+  await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 30000 });
+  await sleep(500);
+  // R5. Esc w tabeli nie zamyka przypiętego panelu
   await page.evaluate(() => { const td = document.querySelector("#dataTable tbody tr[data-row-key] td[data-col-index='1']"); td.click(); });
   await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await sleep(200);
-  check("C2. Esc w tabeli nie zamyka panelu obok tabeli", (await dock()).open, "");
-  // ‹ w panelu zamyka i zapamiętuje
+  check("R5. Esc w tabeli nie zamyka przypiętego panelu", (await dock()).open, "");
+  // R6. ‹ chowa i odpina; tabela wraca obok paska
   await page.click("#sidebarCloseBtn");
   await sleep(500);
   const d2 = await dock();
-  const stored = await page.evaluate(() => localStorage.getItem("swb-panel-docked-open-v1"));
-  check("C3. ‹ zamyka panel, tabela wraca na całą szerokość", !d2.open && d2.mainLeft < 100, JSON.stringify(d2));
-  check("C3. zamknięcie jest zapamiętane", stored === "0", String(stored));
-  // szukajka ustawień
-  await page.evaluate(() => setSidebarOpen(true));
+  check("R6. ‹ chowa i odpina panel, tabela wraca obok paska", !d2.open && d2.mainLeft < 150 && !(await railState()).pinned, JSON.stringify(d2));
+  check("R6. odpięcie zapamiętane", (await page.evaluate(() => localStorage.getItem("swb-panel-pinned-v1"))) === "0", "");
+  // R7. menu „Więcej ▾” ma Spisywanie/Raport/Eksport; Eksport otwiera okno
+  await page.click("#moreMenuBtn");
+  await sleep(200);
+  const more = await page.evaluate(() => ({ open: !document.getElementById("moreMenu").hidden, ids: [...document.querySelectorAll("#moreMenu > button")].map((b) => b.id) }));
+  check("R7. „Więcej ▾”: Spisywanie, Raport, Eksport", more.open && more.ids.join() === "transcribeBtn,reportBtn,exportCsvBtn", JSON.stringify(more));
+  await page.click("#exportCsvBtn");
   await sleep(300);
+  check("R7. Eksport z menu otwiera okno eksportu i zamyka menu", await page.evaluate(() => !document.getElementById("exportModal").classList.contains("hidden") && document.getElementById("moreMenu").hidden), "");
+  await page.keyboard.press("Escape");
+  await sleep(200);
+  // R8. powiększenie + gęstość
+  const rowH = () => page.evaluate(() => Math.round(document.querySelector("#dataTable tbody tr[data-row-key]").getBoundingClientRect().height));
+  const h0 = await rowH();
+  await page.click("#zoomInBtn");
+  await sleep(300);
+  check("R8. + powiększa tabelę (110%)", (await page.evaluate(() => zoomLevelEl.value + "|" + document.getElementById("zoomNowText").textContent)) === "1.1|110%", "");
+  await page.click("#zoomOutBtn");
+  await sleep(300);
+  await page.click("#zoomNowBtn");
+  await sleep(200);
+  await page.click("#zoomMenu .density-opt:nth-of-type(3)");
+  await sleep(500);
+  const h1 = await rowH();
+  check("R8. gęstość Kompaktowa: niższe wiersze, zapamiętana", h1 < h0 - 8 && (await page.evaluate(() => localStorage.getItem("swb-row-density-v1"))) === "compact", JSON.stringify({ h0, h1 }));
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => frameCompact.setDensity(""));
+  await sleep(300);
+  // szukajka ustawień (przypięty panel — wszystkie grupy)
+  await page.evaluate(() => frameCompact.setPinned(true));
+  await sleep(500);
   await page.fill("#sidebarFinder", "zawijaj");
   await sleep(200);
   const f1 = await page.evaluate(() => ({
@@ -249,6 +322,46 @@ async function run() {
   check("brak błędów strony (panel obok tabeli)", errors.length === 0, errors.join(" | "));
   await context.close();
 
+  // ── A. wybór pliku = od razu arkusz (jak Excel), ten, na którym plik zapisano ──
+  {
+    const { context: ctxA, page: pa, errors: errA } = await open(browser, { width: 1280, height: 860 });
+    const b64 = await pa.evaluate(async () => {
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Lp", "Nazwa"], [1, "pierwszy"]]), "Pierwszy");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Kod", "Opis", "Ilość"], ["A1", "aktywny", 3], ["A2", "też", 5], ["A3", "trzeci", 7], ["A4", "czwarty", 2], ["A5", "piąty", 9]]), "Aktywny");
+      const zip = await JSZip.loadAsync(XLSX.write(wb, { bookType: "xlsx", type: "array" }));
+      let xml = await zip.file("xl/workbook.xml").async("string");
+      xml = /<workbookView\b/.test(xml)
+        ? xml.replace(/<workbookView\b/, '<workbookView activeTab="1"')
+        : xml.replace(/<sheets>/, '<bookViews><workbookView activeTab="1"/></bookViews><sheets>');
+      zip.file("xl/workbook.xml", xml);
+      const u8 = await zip.generateAsync({ type: "uint8array" });
+      let str = ""; for (let i = 0; i < u8.length; i++) str += String.fromCharCode(u8[i]);
+      return btoa(str);
+    });
+    await pa.setInputFiles("#fileInput", { name: "aktywny.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer: Buffer.from(b64, "base64") });
+    const okA = await pa.waitForFunction(() => currentFileName === "aktywny.xlsx" && currentSheetName === "Aktywny" && baseRows.length > 0 && !!document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 15000, polling: 100 }).then(() => true, (e) => { console.error("A1 wait:", e.message.split("\n")[0]); return false; });
+    const stA = await pa.evaluate(() => ({ sheet: currentSheetName, rows: baseRows.length, hero: document.getElementById("heroSheetName").textContent }));
+    check("A1. wybór pliku od razu pokazuje arkusz (bez „Wczytaj”)", okA && stA.rows === 5, JSON.stringify(stA));
+    check("A1. otwiera arkusz, na którym plik zapisano (activeTab)", stA.sheet === "Aktywny" && stA.hero === "Aktywny", JSON.stringify(stA));
+    // A2. okno wyboru FSA działa, ale po wyborze zwraca błąd (podgląd w aplikacji / webview):
+    //     ma pójść JEDNO zapasowe okno <input>, a plik ma się wczytać — przy schowanym panelu
+    //     też (pole pliku nie może być „inert”; zgłoszenie Mateusza 2026-10-10: okno w kółko).
+    let choosers = 0;
+    pa.on("filechooser", async (fc) => { choosers++; await fc.setFiles(require("path").join(__dirname, "stress-test-workbench.xlsx")); });
+    await pa.evaluate(() => {
+      if (typeof setSidebarOpen === "function") setSidebarOpen(false);
+      window.showOpenFilePicker = async () => { const e = new Error("not allowed"); e.name = "SecurityError"; throw e; };
+    });
+    const fsa = await pa.evaluate(() => canOpenFSA);
+    await pa.evaluate(() => { if (canOpenFSA) openWorkbookViaFsa(); else fileInput.click(); });
+    const okA2 = await pa.waitForFunction(() => currentFileName === "stress-test-workbench.xlsx" && baseRows.length > 0, null, { timeout: 15000, polling: 100 }).then(() => true, () => false);
+    await sleep(800);
+    check("A2. nieudane okno FSA → jedno zapasowe okno i plik wczytany (panel schowany)", okA2 && choosers === 1, JSON.stringify({ fsa, choosers, okA2 }));
+    check("brak błędów strony (otwieranie pliku)", errA.length === 0, errA.join(" | "));
+    await ctxA.close();
+  }
+
   // ── przełączanie arkusza z nagłówka (plik z kilkoma arkuszami) ──
   {
     const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 860 } });
@@ -260,7 +373,7 @@ async function run() {
     await pg.evaluate(() => { document.getElementById("heroSplash")?.remove(); try { ensureXlsxLibs && ensureXlsxLibs(false); } catch (_) {} });
     await pg.setInputFiles("#fileInput", require("path").join(__dirname, "stress-test-workbench.xlsx"));
     await pg.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 1, null, { timeout: 20000 });
-    await pg.click("#loadBtn");
+    await pg.evaluate(() => loadBtn.click());
     await pg.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
     await sleep(600);
     const before = await pg.evaluate(() => ({ sheet: currentSheetName, names: workbook.SheetNames, multi: document.getElementById("heroSheetBtn").classList.contains("is-multi"), tabsVisible: !!document.getElementById("sheetTabs")?.offsetParent }));

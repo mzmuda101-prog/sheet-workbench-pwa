@@ -18,6 +18,7 @@ Polecenia:
 Format edycji = to, co przyjmuje buildPatchedXlsx (app/xlsx-patch.js), po cyklach:
   [ { "Arkusz": { "B2": {"t": "s", "v": "tekst"}, "C3": null, "D4": {"t": "d", "v": "2026-06-21T00:00:00"} } }, … ]
 """
+import copy
 import datetime as dt
 import json
 import re
@@ -136,9 +137,15 @@ def snapshot(path):
 
 
 def default_style(path):
-    """Styl komórki bez formatowania w danym pliku — jej usunięcie przy czyszczeniu nic nie gubi."""
+    """Styl komórki bez formatowania w danym pliku (cellXfs[0]) — jej usunięcie przy czyszczeniu
+    nic nie gubi. Pusta komórka openpyxl ma zerowe identyfikatory (np. Alignment() bez zawijania),
+    a xf 0 pliku potrafi mieć własne wyrównanie — dlatego styl bierzemy wprost z xf 0."""
     wb = load(path)
-    return style_key(wb.worksheets[0].cell(row=1048576, column=16384))
+    cell = wb.worksheets[0].cell(row=1048576, column=16384)
+    styles = getattr(wb, "_cell_styles", None)
+    if styles:
+        cell._style = copy.copy(styles[0])
+    return style_key(cell)
 
 
 snapshot_default_style = None
@@ -152,13 +159,83 @@ def same_value(a, b):
     return a == b
 
 
+def to_serial(v):
+    """Data z odczytu ({"date": ISO}) → liczba seryjna Excela (system 1900)."""
+    if isinstance(v, dict) and "date" in v:
+        d = dt.datetime.fromisoformat(v["date"])
+        delta = d - dt.datetime(1899, 12, 30)
+        return delta.days + delta.seconds / 86400
+    return v
+
+
+def merge_fmt(old, new):
+    """Delta formatu (pasek „Narzędzia główne”) — jak cfmtMerge w app/cell-format.js."""
+    if new.get("reset"):
+        out = dict(new)
+        if "border" in new:
+            out["border"] = dict(new["border"])
+        return out
+    out = dict(old or {})
+    for k, v in new.items():
+        if k == "border":
+            out["border"] = {**out.get("border", {}), **v}
+        else:
+            out[k] = v
+    return out
+
+
 def merge_cycles(cycles):
-    """Edycje z kolejnych zapisów → stan końcowy (późniejszy cykl wygrywa)."""
+    """Edycje z kolejnych zapisów → stan końcowy {ref: {"val": …, "fmt": …}}.
+    val: "keep" (wartość z oryginału), None (wyczyszczona) albo {"t","v"} (późniejszy cykl wygrywa).
+    fmt: delty formatu złożone po kolei (każdy cykl nakłada swoją na poprzedni zapis)."""
     final = {}
     for cycle in cycles:
         for sheet, cells in cycle.items():
-            final.setdefault(sheet, {}).update(cells)
+            fs = final.setdefault(sheet, {})
+            for ref, p in cells.items():
+                cur = fs.get(ref) or {"val": "keep", "fmt": None}
+                val, fmt = cur["val"], cur["fmt"]
+                if p is None or p.get("clear"):
+                    val = None
+                elif "t" in p:
+                    val = {"t": p["t"], "v": p.get("v")}
+                    if p.get("f"):
+                        val["f"] = p["f"]
+                if p is not None and p.get("fmt"):
+                    fmt = merge_fmt(fmt, p["fmt"])
+                fs[ref] = {"val": val, "fmt": fmt}
     return final
+
+
+def expected_style(base, fmt, default):
+    """Styl po nałożeniu delty — w kształcie style_key()."""
+    st = json.loads(json.dumps(default if fmt.get("reset") else base))
+    font, align = st["font"], st["align"]
+    hexc = lambda c: ("FF" + c.upper()) if c else None
+    if "b" in fmt: font[2] = bool(fmt["b"])
+    if "i" in fmt: font[3] = bool(fmt["i"])
+    if "u" in fmt: font[4] = "single" if fmt["u"] else None
+    if "strike" in fmt: font[5] = bool(fmt["strike"])
+    if "sz" in fmt: font[1] = float(fmt["sz"])
+    if "color" in fmt: font[6] = hexc(fmt["color"])
+    if "fill" in fmt: st["fill"] = ["solid", hexc(fmt["fill"])] if fmt["fill"] else None
+    if "h" in fmt: align[0] = fmt["h"] or None
+    if "v" in fmt: align[1] = fmt["v"] or None
+    if "wrap" in fmt: align[2] = True if fmt["wrap"] else None
+    if "numFmt" in fmt: st["numfmt"] = fmt["numFmt"]
+    sides = {"left": 0, "right": 1, "top": 2, "bottom": 3}
+    for side, e in (fmt.get("border") or {}).items():
+        st["border"][sides[side]] = [e["style"], hexc(e.get("color")) or "idx64"] if e else [None, None]
+    return st
+
+
+def norm_style(st):
+    """Porównanie stylów odporne na drobiazgi zapisu (krotki/listy, False ≡ brak, 14 ≡ 14.0)."""
+    out = json.loads(json.dumps(st))
+    out["font"][2] = bool(out["font"][2]); out["font"][3] = bool(out["font"][3]); out["font"][5] = bool(out["font"][5])
+    out["align"][2] = bool(out["align"][2])
+    out["border"] = [[None, None] if (not e or e[0] is None) else list(e) for e in out["border"]]
+    return out
 
 
 def expected_check(ref, payload, got):
@@ -166,6 +243,9 @@ def expected_check(ref, payload, got):
     v = got["v"] if got else None
     if payload is None:
         return [] if v is None else [f"{ref}: miała zostać wyczyszczona, jest {v!r}"]
+    if payload.get("f"):
+        want_f = "=" + payload["f"]
+        return [] if v == want_f else [f"{ref}: formuła {v!r} ≠ oczekiwana {want_f!r}"]
     t, want = payload["t"], payload["v"]
     if t == "s":
         want = ILLEGAL_XML.sub("", str(want))
@@ -214,8 +294,36 @@ def verify(orig_path, saved_path, cycles):
         ca, cb = sa["cells"], sb["cells"]
         for ref in sorted(set(ca) | set(cb), key=lambda x: (int(re.sub(r"\D", "", x)), len(x), x)):
             before, after = ca.get(ref), cb.get(ref)
+            if ref in sheet_edits and sheet_edits[ref]["fmt"]:
+                entry = sheet_edits[ref]
+                payload = entry["val"]
+                if payload == "keep":
+                    # Nowy format liczb / „Wyczyść formatowanie” zmienia tylko WYGLĄD: data bez
+                    # formatu daty to ta sama liczba seryjna (jak w Excelu).
+                    loose = entry["fmt"].get("reset") or "numFmt" in entry["fmt"]
+                    bv, av = (before["v"] if before else None), (after["v"] if after else None)
+                    if loose:
+                        bv, av = to_serial(bv), to_serial(av)
+                    if not same_value(bv, av) if isinstance(bv, (int, float)) and isinstance(av, (int, float)) else bv != av:
+                        errors.append(f"{pre}{ref}: zmiana formatu ruszyła wartość {before and before['v']!r} → {after and after['v']!r}")
+                else:
+                    errors += [pre + e for e in expected_check(ref, payload, after)]
+                if after is None:
+                    errors.append(f"{pre}{ref}: komórka z nowym formatem zniknęła z pliku")
+                    continue
+                base = before["style"] if before else snapshot_default_style
+                want = expected_style(base, entry["fmt"], snapshot_default_style)
+                if payload not in ("keep", None) and payload["t"] == "d" and "numFmt" not in entry["fmt"]:
+                    want["numfmt"] = after["style"]["numfmt"]
+                if norm_style(want) != norm_style(after["style"]):
+                    errors.append(f"{pre}{ref}: format {after['style']} ≠ oczekiwany {want}")
+                continue
             if ref in sheet_edits:
-                payload = sheet_edits[ref]
+                payload = sheet_edits[ref]["val"]
+                if payload == "keep":
+                    payload = None if before is None else {"t": "keep"}
+                if payload == {"t": "keep"}:
+                    continue
                 errors += [pre + e for e in expected_check(ref, payload, after)]
                 if before is not None:
                     if after is None:
@@ -320,8 +428,30 @@ def plan(path):
             e1[num] = {"t": "n", "v": 12345.678}
         if clr:
             e2[clr] = None
+        # Format z paska „Narzędzia główne” (cell-format.js): sam format, wartość + format,
+        # nowa pusta komórka z wypełnieniem, wyczyszczenie z formatem, „Wyczyść formatowanie”.
+        fmt_txt = pick(lambda cell: cell.value is not None and not is_formula(cell))
+        fmt_num = pick(lambda cell: cell.data_type == "n" and isinstance(cell.value, (int, float)) and not is_formula(cell))
+        fmt_clr = pick(lambda cell: cell.value is not None and not is_formula(cell))
+        fmt_rst = pick(lambda cell: cell.value is not None and not is_formula(cell) and cell.has_style)
+        if fmt_txt:
+            e1[fmt_txt] = {"fmt": {"b": True, "fill": "FFFF00", "h": "center", "color": "C00000",
+                                   "border": {"bottom": {"style": "thin"}, "top": {"style": "medium", "color": "0070C0"}}}}
+            e2[fmt_txt] = {"fmt": {"b": False, "i": True, "wrap": True, "u": True, "sz": 14}}
+        if fmt_num:
+            e1[fmt_num] = {"t": "n", "v": 1234.5, "fmt": {"numFmt": '#,##0.00 "zł"', "strike": True}}
+            e2[fmt_num] = {"fmt": {"numFmt": "0.0%", "fill": None}}
+        if fmt_clr:
+            e2[fmt_clr] = {"clear": True, "fmt": {"fill": "92D050", "border": {"left": {"style": "thin"}, "right": {"style": "thin"}}}}
+        if fmt_rst:
+            e2[fmt_rst] = {"fmt": {"reset": True}}
         last_row, last_col = ws.max_row, ws.max_column
+        e1[f"D{last_row + 2}"] = {"fmt": {"fill": "DDEBF7", "numFmt": "yyyy-mm-dd"}}
         e1[f"A{last_row + 2}"] = {"t": "s", "v": "nowy wiersz pod danymi"}
+        # formuła wpisana w aplikacji (formula-calc.js): <f> + wynik w <v>; i taka bez wyniku
+        e1[f"E{last_row + 2}"] = {"t": "n", "v": 3, "f": "1+2"}
+        e2[f"F{last_row + 2}"] = {"t": "n", "v": None, "f": 'IF(A2="","",SUM(B2:B3))'}
+        e2[f"G{last_row + 2}"] = {"t": "e", "err": "#DIV/0!", "f": "1/0"}
         e1[f"{get_column_letter(last_col + 1)}2"] = {"t": "n", "v": 7}
         e2[f"B{last_row + 3}"] = {"t": "d", "v": "2026-06-21T00:00:00"}
         e2[f"C{last_row + 3}"] = {"t": "s", "v": "znak\x01sterujący\x0bwycięty"}

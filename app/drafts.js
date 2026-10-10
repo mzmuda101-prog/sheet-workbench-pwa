@@ -163,11 +163,18 @@ const swbDrafts = (() => {
       const sheet = workbook.Sheets[sheetName];
       if (!sheet) return;
       Object.entries(cells || {}).forEach(([ref, p]) => {
-        if (p === null) { delete sheet[ref]; return; }
+        if (p === null || (p && p.clear)) { delete sheet[ref]; return; }
+        if (p && !("t" in p)) { // sam format — wartość z pliku zostaje (nakłada go cfmtOverlayRows)
+          if (sheet[ref] && p.fmt && "numFmt" in p.fmt) sheet[ref].z = p.fmt.numFmt;
+          return;
+        }
         const prev = sheet[ref];
-        const cell = { v: p.v, t: p.t };
+        const cell = p.t === "e" ? { v: p.err, t: "e", w: p.err } : { v: p.v, t: p.t };
+        if (p.f) cell.f = p.f; // formuła wpisana w aplikacji (formula-calc.js)
+        if (p.f && (p.v === null || p.v === undefined) && p.t !== "e") { cell.t = "s"; cell.v = ""; }
         if (prev && prev.s) cell.s = prev.s;
         if (prev && prev.z) cell.z = prev.z;
+        if (p.fmt && "numFmt" in p.fmt) cell.z = p.fmt.numFmt;
         sheet[ref] = cell;
       });
     });

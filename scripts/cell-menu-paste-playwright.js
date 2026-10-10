@@ -41,7 +41,7 @@ async function run() {
   await page.evaluate(() => ensureXlsxLibs(false));
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 20000 });
-  await page.click("#loadBtn");
+  await page.evaluate(() => loadBtn.click());
   await page.waitForFunction(() => document.querySelectorAll("#dataTable tbody tr").length > 10, null, { timeout: 20000 });
   await sleep(1000);
   await page.evaluate(() => setSidebarOpen(false));
@@ -108,11 +108,16 @@ async function run() {
   await page.evaluate(() => undoLast()); await sleep(150);
   check("6. Cofnij przywraca", (await val(3, col)) !== src && (await pending()) === p0, await val(3, col));
 
-  // 3. formuła ze schowka się nie wkleja
+  // 3. formuła ze schowka wkleja się jako formuła (jak w Excelu, od 2026-10 — formula-calc.js),
+  //    a błędna składnia — nie (komórka bez zmian)
   await page.evaluate(() => { internalClipboard = { tsv: "=1+1", rows: 1, cols: 1, ts: Date.now() }; });
+  await menu(5, col); await clickItem("paste");
+  check("3. formuła wklejona i policzona", String(await val(5, col)) === "2", await val(5, col));
+  await page.evaluate(() => undoLast()); await sleep(150);
+  await page.evaluate(() => { internalClipboard = { tsv: "=SUMA(1", rows: 1, cols: 1, ts: Date.now() }; });
   const before5 = await val(5, col);
   await menu(5, col); await clickItem("paste");
-  check("3. formuła nie wklejona", (await val(5, col)) === before5, await val(5, col));
+  check("3. formuła z błędem składni nie wklejona", (await val(5, col)) === before5, await val(5, col));
 
   // 4. jedna wartość + zakres 3×1 → wszystkie 3
   await menu(0, col); await clickItem("copy");

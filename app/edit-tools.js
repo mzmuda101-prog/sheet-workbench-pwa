@@ -316,13 +316,17 @@ function planEditChanges() {
 }
 
 function applyEditTool() {
+  if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
   const plan = planEditChanges();
   if (plan.err) { toast(t(plan.err), plan.level || "warning"); return; }
+  // kolumna wyliczana nie istnieje w pliku — tylko podgląd, bez zapisu
+  plan.changes = plan.changes.filter(({ col }) => typeof cfmtIsRealCol !== "function" || cfmtIsRealCol(col));
   plan.changes.forEach(({ row, col, value, type }) => {
     updateSheetCell(row.rowIndex0, col, { value, type });
     row.values[col] = value;
     if (Array.isArray(row.rawValues)) row.rawValues[col] = value;
     if (Array.isArray(row.display)) row.display[col] = value == null ? "" : toDisplay(value);
+    if (typeof cfmtRefreshDisplay === "function") cfmtRefreshDisplay(row, col);
   });
   hideEditPreview();
   if (editOpEl.value === "unify" && plan.changes.length) clearUnifyList();
