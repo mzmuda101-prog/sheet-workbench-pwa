@@ -501,11 +501,18 @@ sheetSelect.addEventListener("change", () => {
 });
 
 if (autoHeaderRowEl) {
-  autoHeaderRowEl.addEventListener("change", () => {
+  autoHeaderRowEl.addEventListener("change", (e) => {
+    // świadomy klik = preferencja na kolejne pliki (zmiany z kodu nie mają isTrusted)
+    if (e.isTrusted) { try { localStorage.setItem(AUTO_HEADER_KEY, autoHeaderRowEl.checked ? "1" : "0"); } catch { /* */ } }
     if (applyAutoHeaderRowIfEnabled()) {
       toast(t("headerDetected"), "info");
     }
   });
+}
+// Ręcznie wpisany wiersz nagłówka wygrywa z wykrywaniem — ale tylko dla tego pliku
+// (preferencja „Auto” wraca przy następnym otwarciu pliku).
+if (headerRowEl && autoHeaderRowEl) {
+  headerRowEl.addEventListener("input", (e) => { if (e.isTrusted) autoHeaderRowEl.checked = false; });
 }
 
 // ── Skoki między regionami (obsługa bez myszy) ───────────────────────────────

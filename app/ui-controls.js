@@ -39,40 +39,75 @@ function markSubheaderRows(rows, maxCheck = 10) {
   return rows;
 }
 
+// Wiersz nagłówka = najbardziej „nagłówkowy” wiersz (dużo wypełnionych komórek, tekst,
+// bez liczb), POD KTÓRYM są dane. Remis → WCZEŚNIEJSZY wiersz: w tabeli z samym tekstem
+// (np. lista nazwisk) nagłówek i dane punktują tak samo, a dawna premia za dalsze wiersze
+// wybierała wtedy ostatni wiersz (RODO „Baza danych” → 17 zamiast 1; 2026-10-11).
+// Tytuł nad tabelą, wiersz KPI czy etykiety grup („1 Cykl”) przegrywają, bo mają mniej
+// wypełnionych komórek albo liczby.
 function detectHeaderRowSimple(sheet) {
   const range = computeEffectiveSheetRange(sheet, 1);
   const maxRow = Math.min(range.e.r, range.s.r + 100);
-  let bestRow = range.s.r;
-  let bestScore = -Infinity;
-  for (let r = range.s.r; r <= maxRow; r++) {
+  const stats = [];
+  for (let r = range.s.r; r <= Math.min(range.e.r, maxRow + 5); r++) {
     let filled = 0;
     let stringCount = 0;
     let numericCount = 0;
     let formulaCount = 0;
+    const cols = new Set();
     for (let c = range.s.c; c <= range.e.c; c++) {
       const cell = sheet[XLSX.utils.encode_cell({ r, c })];
       if (!cell) continue;
       const v = cell.v;
       if (v === null || v === "") continue;
       filled += 1;
+      cols.add(c);
       if (typeof v === "string") stringCount += 1;
       if (typeof v === "number" || v instanceof Date) numericCount += 1;
       if (cell.f) formulaCount += 1;
     }
-    if (!filled) continue;
+    stats.push({ r, filled, stringCount, numericCount, formulaCount, cols });
+  }
+  let bestRow = range.s.r;
+  let bestScore = -Infinity;
+  stats.forEach((st, i) => {
+    if (st.r > maxRow || !st.filled) return;
+    const { filled, stringCount, numericCount, formulaCount } = st;
     const textRatio = stringCount / filled;
     const numericRatio = numericCount / filled;
     let score = (filled * 5) + (stringCount * 4) - (numericCount * 3) - formulaCount;
     if (filled >= 4) score += 10;
     if (textRatio >= 0.7) score += 10;
     if (numericRatio === 0) score += 4;
-    if (r > range.s.r) score += Math.min(4, r - range.s.r);
+    // pod nagłówkiem muszą być dane (choć jeden z 5 kolejnych wierszy z treścią)
+    const need = filled >= 3 ? 2 : 1;
+    const below = stats.slice(i + 1, i + 6).filter((x) => x.filled >= need).length;
+    if (below === 0) score -= 40;
+    // Nagłówek ZACZYNA blok danych. Gdy wiersz tuż nad (do 2 wyżej) wypełnia te same kolumny
+    // i jest podobnie gęsty, ten wiersz jest w środku danych — np. nagłówek drugiej, mniejszej
+    // tabeli obok pierwszej (RODO „Baza danych”, wiersz 17). Rzadkie etykiety grup nad
+    // nagłówkiem („1 Cykl”, „Okres A”) tej kary nie dostają. Liczy się tylko wiersz TUŻ nad:
+    // pusty wiersz odcina blok (np. „Suma 1234 Średnia 56,7” nad tabelą to nie są jej dane).
+    const prev = i > 0 && stats[i - 1].filled > 0 ? stats[i - 1] : null;
+    if (prev && prev.filled >= 2 && prev.filled >= filled * 0.5) {
+      let shared = 0;
+      prev.cols.forEach((c) => { if (st.cols.has(c)) shared += 1; });
+      if (shared / prev.filled >= 0.8) score -= 60;
+    }
     if (score > bestScore) {
       bestScore = score;
-      bestRow = r;
+      bestRow = st.r;
     }
-  }
+  });
   return bestRow + 1;
+}
+
+// „Auto wykryj wiersz nagłówka” — domyślnie WŁĄCZONE (2026-10-11): plik otwiera się od
+// razu, więc wykrywanie musi zadziałać samo, jak Excel pokazujący od razu tabelę. Klucz
+// trzyma świadomy wybór użytkownika; nowy plik startuje z tą preferencją.
+const AUTO_HEADER_KEY = "swb-auto-header-v1";
+function autoHeaderPreferred() {
+  try { return localStorage.getItem(AUTO_HEADER_KEY) !== "0"; } catch { return true; }
 }
 
 function applyAutoHeaderRowIfEnabled() {
@@ -788,6 +823,7 @@ async function handleFile(file, fileHandle = null) {
     // Konsumowane przez openCellEditor: dropdown + tryb (blokuj/ostrzegaj/podpowiadaj).
     if (typeof buildDataValidations === "function") await buildDataValidations(originalFileBytes, workbook);
     currentWorkbookActiveSheet = await readActiveSheetName(originalFileBytes, workbook);
+    if (autoHeaderRowEl) autoHeaderRowEl.checked = autoHeaderPreferred(); // nowy plik = preferencja
     releaseSharedZipTextCache(); // rozpakowany XML nie jest już potrzebny
     sheetSelect.replaceChildren();
     workbook.SheetNames.forEach((s) => {

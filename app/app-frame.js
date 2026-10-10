@@ -446,6 +446,9 @@ const appFrame = (() => {
   }
   window.addEventListener("resize", () => syncDock(), { passive: true });
   if (typeof ResizeObserver === "function" && heroEl) new ResizeObserver(() => syncDock()).observe(heroEl);
+  // Panel zmienia szerokość sam (szersze sekcje analiz, z animacją) — margines tabeli
+  // przy przypiętym panelu musi nadążać, inaczej panel nachodził na tabelę.
+  if (typeof ResizeObserver === "function" && sidebarNode) new ResizeObserver(() => { if (isDocked()) syncDock(); }).observe(sidebarNode);
 
   // ── „Znajdź ustawienie…” ───────────────────────────────────────────────────
   // Filtruje sekcje panelu po tekście (tytuł sekcji, etykiety pól, przyciski, opisy).

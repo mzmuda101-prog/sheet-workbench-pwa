@@ -233,6 +233,19 @@ async function run() {
   await page.mouse.click(d0.mainLeft + 600, 500);
   await sleep(400);
   check("R3. klik w tabelę chowa wysunięty panel", !(await dock()).open, "");
+  // R3b. szeroka sekcja (Agregacje) w innej grupie nie poszerza „Plik i arkusz”
+  await page.click('.rail-btn[data-group="group-analyze"]');
+  await sleep(300);
+  await page.evaluate(() => { document.getElementById("panel-aggregation-workbench").open = true; });
+  await sleep(500);
+  const wWide = await page.evaluate(() => Math.round(document.querySelector(".sidebar").getBoundingClientRect().width));
+  await page.click('.rail-btn[data-group="group-data"]');
+  await sleep(600);
+  const wFile = await page.evaluate(() => Math.round(document.querySelector(".sidebar").getBoundingClientRect().width));
+  check("R3b. po szerokiej sekcji „Plik i arkusz” wraca do zwykłej szerokości", wWide > wFile + 60 && wFile <= 380, JSON.stringify({ wWide, wFile }));
+  await page.evaluate(() => { document.getElementById("panel-aggregation-workbench").open = false; });
+  await page.keyboard.press("Escape");
+  await sleep(300);
   // R4. 📌 przypina: wszystkie grupy, panel OBOK tabeli, pamiętane po przeładowaniu
   await page.click('.rail-btn[data-group="group-data"]');
   await sleep(300);

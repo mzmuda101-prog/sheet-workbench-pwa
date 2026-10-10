@@ -8245,3 +8245,12 @@ button.fx-label:hover, button.fx-label:focus-visible { background: var(--accent-
   .quick-search.qs-expanded > #quickSearchColumnsBtn { flex: 1 1 0; justify-content: center; }
   .quick-search.qs-expanded .qs-scope-text { display: inline; }
 }
+
+/* Panel z paska ikon (rail-focus): poszerza się tylko od „gęstej” sekcji BIEŻĄCEJ grupy.
+   Otwarta sekcja w schowanej grupie (np. Agregacje) zostawiała szeroki panel także dla
+   „Plik i arkusz” (zgłoszenie Mateusza 2026-10-11). */
+:root.rail-focus .sidebar:not(:has(.sidebar-group.rail-current :is(#panel-sheet-inspector, #panel-aggregation-workbench, #panel-formula-workbench, #panel-workbench-analysis, #panel-kpi-extractor, #panel-sort-workbench, #panel-monthly-summary, #panel-shortcuts)[open])) {
+  width: min(clamp(280px, 5.5vw + 255px, 360px), calc(100vw - 24px));
+}
+/* „Auto wykryj” obok pola wiersza nagłówka (na dole rzędu, równo z polem) */
+.row > .header-auto-field { align-self: end; min-height: 40px; align-items: center; }
