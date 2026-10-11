@@ -294,42 +294,65 @@ window.MateuszCursorHint = (() => {
       return { tx, ty, originX, originY };
     }
 
-    // Przesuwa dymek w kierunku pozycji (x, y) z płynną interpolacją (lerp).
-    // Każde wywołanie tylko aktualizuje target — animacja sama dobiegnie do celu.
-    function moveCursorHint(x, y) {
+    // Przesuwa dymek za kursorem. Płynne „gonienie” liczy KOMPOZYTOR (Web Animations na
+    // transform), a nie pętla rAF w JS. Dawniej (lerp 24%/klatkę) każda klatka zmieniała
+    // styl dymka, a przy wczytanym arkuszu — setki warstw tabeli — przeglądarka za każdym
+    // razem od nowa układała warstwy CAŁEJ strony (Layerize ~10 ms/klatkę przy CPU×4):
+    // dymek lagował tylko z otwartym plikiem (zgłoszenie Mateusza 2026-10-11). Teraz jedna
+    // zmiana na klatkę z ruchem myszy (ruchy zbierane w rAF — myszy bywają 120 Hz), a
+    // klatki pomiędzy przesuwa kompozytor bez udziału strony.
+    const hintCalm = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+    let hintAnim = null;
+    let hintOrigin = "";
+    let hintMoveFrame = null;
+    let hintRawX = 0;
+    let hintRawY = 0;
+    let hintPlacedVisible = false; // czy ostatnie ustawienie było już widocznym dymkiem
+    function applyHintMove() {
+      hintMoveFrame = null;
       if (!cursorHint) return;
-
-      const { tx, ty, originX, originY } = computeHintPosition(x, y);
-
-      // transformOrigin musi być ustawiony przed każdym ruchem bo może się
-      // zmienić gdy hint przeskakuje między narożnikami ekranu
-      cursorHint.style.transformOrigin = `${originX} ${originY}`;
+      const { tx, ty, originX, originY } = computeHintPosition(hintRawX, hintRawY);
+      const origin = `${originX} ${originY}`;
+      if (origin !== hintOrigin) { cursorHint.style.transformOrigin = origin; hintOrigin = origin; }
       cursorHintTargetX = tx;
       cursorHintTargetY = ty;
-
-      // Nie startuj nowej pętli animacji jeśli już działa
-      if (cursorHintFrame !== null) return;
-
-      const animateHint = () => {
-        // Lerp 24% per klatka — hint "goni" kursor z lekkim opóźnieniem
-        cursorHintX += (cursorHintTargetX - cursorHintX) * 0.24;
-        cursorHintY += (cursorHintTargetY - cursorHintY) * 0.24;
-
-        // Snap do celu gdy różnica jest sub-pikselowa — zatrzymuje pętlę rAF
-        if (Math.abs(cursorHintTargetX - cursorHintX) < 0.2) cursorHintX = cursorHintTargetX;
-        if (Math.abs(cursorHintTargetY - cursorHintY) < 0.2) cursorHintY = cursorHintTargetY;
-
-        cursorHint.style.transform = `translate3d(${cursorHintX}px, ${cursorHintY}px, 0)`;
-
-        // Kontynuuj animację dopóki nie dotrzemy do celu
-        if (cursorHintX !== cursorHintTargetX || cursorHintY !== cursorHintTargetY) {
-          cursorHintFrame = window.requestAnimationFrame(animateHint);
-        } else {
-          cursorHintFrame = null; // animacja skończona, pętla się zatrzyma
+      if (tx === cursorHintX && ty === cursorHintY) return;
+      const to = `translate3d(${tx}px, ${ty}px, 0)`;
+      const visible = cursorHint.classList.contains("is-visible");
+      // Pierwsze pokazanie i chowanie = skok bez animacji (inaczej dymek przylatywałby
+      // z miejsca, gdzie zniknął poprzedni).
+      const glide = visible && hintPlacedVisible && !(hintCalm && hintCalm.matches);
+      let from = `translate3d(${cursorHintX}px, ${cursorHintY}px, 0)`;
+      if (hintAnim) {
+        // w trakcie ruchu: start z BIEŻĄCEGO miejsca, żeby nie było szarpnięcia
+        if (glide && hintAnim.playState === "running") {
+          const cur = getComputedStyle(cursorHint).transform;
+          if (cur && cur !== "none") from = cur;
         }
-      };
-
-      cursorHintFrame = window.requestAnimationFrame(animateHint);
+        hintAnim.cancel();
+        hintAnim = null;
+      }
+      cursorHint.style.transform = to;
+      if (glide && typeof cursorHint.animate === "function") {
+        hintAnim = cursorHint.animate([{ transform: from }, { transform: to }], { duration: 150, easing: "cubic-bezier(.2,.75,.3,1)" });
+      }
+      cursorHintX = tx;
+      cursorHintY = ty;
+      hintPlacedVisible = visible;
+    }
+    function moveCursorHint(x, y) {
+      if (!cursorHint) return;
+      hintRawX = x;
+      hintRawY = y;
+      const visible = cursorHint.classList.contains("is-visible");
+      // pokazanie / chowanie: od razu (bez klatki zwłoki), żeby dymek nie mignął w starym miejscu
+      if (visible !== hintPlacedVisible) {
+        if (hintMoveFrame !== null) { window.cancelAnimationFrame(hintMoveFrame); hintMoveFrame = null; }
+        applyHintMove();
+        hintPlacedVisible = visible;
+        return;
+      }
+      if (hintMoveFrame === null) hintMoveFrame = window.requestAnimationFrame(applyHintMove);
     }
 
     // Anuluje oczekujący timer opóźnienia (jeśli istnieje)
