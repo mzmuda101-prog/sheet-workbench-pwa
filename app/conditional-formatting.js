@@ -359,16 +359,13 @@ function parseSheetCF(sheetXml) {
 }
 function cfSheetPathsFromRels(relsXml) {
   const map = new Map();
-  const re = /<Relationship\b[^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"[^>]*?\/?>/g;
-  let m;
-  while ((m = re.exec(relsXml))) {
-    const target = m[2];
-    if (!/worksheets\//.test(target)) continue;
+  parseRelationshipTargets(relsXml).forEach((target, id) => {
+    if (!/worksheets\//.test(target)) return;
     let path = decodeXmlEntities(target);
     if (path.startsWith("/")) path = path.slice(1);
     else if (!path.startsWith("xl/")) path = "xl/" + path.replace(/^\.\//, "");
-    map.set(m[1], path);
-  }
+    map.set(id, path);
+  });
   return map;
 }
 async function buildConditionalFormatting(bytes, wb) {

@@ -522,6 +522,22 @@ function sheetXmlWithoutData(xml) {
 }
 
 function bumpSheetDataStamp() { sheetDataStamp += 1; }
+
+// <Relationship …/> → Map(Id → Target) BEZ względu na kolejność atrybutów. Excel pisze
+// Id przed Target, openpyxl/LibreOffice odwrotnie — regex „Id…Target” nie widział wtedy
+// żadnego arkusza: bez stylów (czcionki, ramki, format pustych komórek), formatowania
+// warunkowego i list wyboru z takich plików.
+function parseRelationshipTargets(relsXml) {
+  const map = new Map();
+  const tagRe = /<Relationship\b[^>]*>/g;
+  let m;
+  while ((m = tagRe.exec(relsXml || ""))) {
+    const id = (m[0].match(/\bId="([^"]+)"/) || [])[1];
+    const target = (m[0].match(/\bTarget="([^"]+)"/) || [])[1];
+    if (id && target) map.set(id, target);
+  }
+  return map;
+}
 let currentHeaders = [];
 let baseRows = [];
 let viewRows = [];
@@ -655,7 +671,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261011-16";
+const APP_BUILD_VERSION = "20261011-20";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

@@ -566,7 +566,8 @@ function parseDateFlexible(value) {
   // Pozwalamy na niego tylko, gdy każde słowo w wartości jest nazwą miesiąca
   // (formaty słowne typu "March 27, 2029" / "7 czerwca 2026"); inaczej → to nie data.
   const alphaTokens = v.toLowerCase().match(/[a-ząćęłńóśźż]+/g) || [];
-  const onlyMonthWords = alphaTokens.every(tok => {
+  // bez ani jednego słowa nie ma czego tłumaczyć — Date.parse z „12,5” robił 2001-12-05
+  const onlyMonthWords = alphaTokens.length > 0 && alphaTokens.every(tok => {
     const key = tok.replace(/\.$/, "");
     return DATE_MONTH_MAP[key] != null;
   });
@@ -577,14 +578,35 @@ function parseDateFlexible(value) {
   return memo(null);
 }
 
+// Tekst wpisany/wklejony do komórki → wartość (jak Excel w polskich ustawieniach).
+// KOLEJNOŚĆ MA ZNACZENIE: najpierw liczba, potem data. Wcześniej data szła pierwsza,
+// a parseDateFlexible traktuje gołą liczbę jak numer seryjny daty Excela — wpisane „42”
+// zapisywało się jako 10.02.1900 (także do pliku), „12,5” jako data z 2001 r.
 function parseInputValue(raw) {
   const text = String(raw ?? "").trim();
   if (!text) return null;
   if (text.startsWith("=")) return { value: text, type: "formula" };
-  const asDate = parseDateFlexible(text);
-  if (asDate) return { value: asDate, type: "date" };
-  if (/^-?\d+(\.\d+)?$/.test(text)) return { value: Number(text), type: "number" };
+  const num = parseTypedNumber(text);
+  if (num !== null) return { value: num, type: "number" };
+  // data tylko z wyraźnym zapisem daty: cyfry z separatorem - . / albo nazwa miesiąca
+  if (/\d[-./]\d|[a-ząćęłńóśźż]/i.test(text)) {
+    const asDate = parseDateFlexible(text);
+    if (asDate) return { value: asDate, type: "date" };
+  }
   return { value: text, type: "string" };
+}
+
+// Liczba w zapisie polskim lub angielskim: 42, -3,75, 12.5, 1 234,50 (spacja/twarda spacja
+// jako separator tysięcy), 1.234,5. Nie liczby: „1,5,7”, „12%”, „12 zł”, „500 600 700”; kody z zerem
+// wiodącym zostają liczbami jak w Excelu (007 → 7).
+function parseTypedNumber(text) {
+  let s = String(text).trim().replace(/^\+/, "");
+  // odstęp tysięcy: „1 234” albo z częścią dziesiętną; „500 600 700” (telefon) zostaje tekstem
+  if (/^-?\d{1,3}[ \u00a0\u202f]\d{3}([.,]\d+)?$/.test(s) || /^-?\d{1,3}([ \u00a0\u202f]\d{3})+[.,]\d+$/.test(s)) s = s.replace(/[ \u00a0\u202f]/g, "");
+  else if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(s)) s = s.replace(/\./g, "");
+  if (!/^-?\d+([.,]\d+)?$/.test(s) && !/^-?[.,]\d+$/.test(s)) return null;
+  const n = Number(s.replace(",", "."));
+  return Number.isFinite(n) ? n : null;
 }
 
 function updateSheetCell(rowIndex0, colIndex0, parsed) {
@@ -598,8 +620,21 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
   if (!parsed || parsed.value === null) {
     if (typeof undoCaptureCell === "function") undoCaptureCell(rowIndex0, colIndex0); // stan „przed" do Cofnij
-    const hadFormula = !!(sheet[cellRef] && sheet[cellRef].f);
-    delete sheet[cellRef];
+    const prevCell = sheet[cellRef];
+    const hadFormula = !!(prevCell && prevCell.f);
+    // „Wyczyść zawartość” jak w Excelu: znika wartość/formuła, FORMAT ZOSTAJE. Wcześniej
+    // komórka znikała w całości — zapis i tak trzymał styl (xlsx-patch), ale w aplikacji
+    // pasek pokazywał „Ogólny”, a nowa wartość wpisana w to miejsce traciła format (np.
+    // data jako liczba) aż do ponownego otwarcia pliku. Pusta komórka-zaślepka (t:"z")
+    // jest dla formuł i wykrywania zakresu pusta.
+    if (prevCell && (prevCell.s || prevCell.z)) {
+      const stub = { t: "z" };
+      if (prevCell.s) stub.s = prevCell.s;
+      if (prevCell.z) stub.z = prevCell.z;
+      sheet[cellRef] = stub;
+    } else {
+      delete sheet[cellRef];
+    }
     bumpSheetDataStamp(); // zawartość arkusza się zmieniła -> unieważnij cache'e
     recordPendingEdit(currentSheetName, cellRef, null); // null = usunięcie przy zapisie
     if (hadFormula && typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(currentSheetName, cellRef);

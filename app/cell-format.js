@@ -218,9 +218,25 @@ function cfmtActiveCell() {
   const ref = cfmtRef(row.rowIndex0, col);
   const fmt = cfmtPendingFmt(currentSheetName, ref);
   const cell = workbook?.Sheets?.[currentSheetName]?.[ref] || null;
-  let numFmt = fmt && "numFmt" in fmt ? fmt.numFmt : (cell && cell.z) || "General";
+  let numFmt = fmt && "numFmt" in fmt ? fmt.numFmt : (cell && cell.z) || cfmtFileNumFmt(ref) || "General";
   if (typeof numFmt === "number") numFmt = "General";
   return { row, col, ref, style, fmt, cell, numFmt, real: cfmtIsRealCol(col) };
+}
+
+// Format liczbowy z pliku (xf komórki) — dla komórki pustej, ale sformatowanej (np. pusta
+// kolumna dat): SheetJS nie tworzy dla niej obiektu komórki, więc bez tego pasek pokazywał
+// „Ogólny”, choć Excel pokazałby format daty. Indeks xf mamy z buildStyleIndexMap.
+function cfmtFileNumFmt(ref) {
+  const idx = currentStyleIndexMap && currentStyleIndexMap.get(currentSheetName)
+    ? currentStyleIndexMap.get(currentSheetName).get(ref) : undefined;
+  const st = workbook && workbook.Styles;
+  const xf = Number.isInteger(idx) && st && Array.isArray(st.CellXf) ? st.CellXf[idx] : null;
+  if (!xf) return null;
+  const id = Number(xf.numFmtId ?? xf.numfmtid);
+  if (!Number.isFinite(id) || id === 0) return null;
+  const code = (st.NumberFmt && st.NumberFmt[id])
+    || (XLSX.SSF && typeof XLSX.SSF.get_table === "function" ? XLSX.SSF.get_table()[id] : null);
+  return typeof code === "string" && code !== "General" ? code : null;
 }
 
 // Główna akcja: delta (obiekt) albo funkcja (komórka → delta | null) na zaznaczeniu.

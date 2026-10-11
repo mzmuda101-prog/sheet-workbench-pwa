@@ -59,7 +59,7 @@ function detectHeaderRowSimple(sheet) {
       const cell = sheet[XLSX.utils.encode_cell({ r, c })];
       if (!cell) continue;
       const v = cell.v;
-      if (v === null || v === "") continue;
+      if (v == null || v === "") continue; // także pusta komórka z samym formatem (v undefined)
       filled += 1;
       cols.add(c);
       if (typeof v === "string") stringCount += 1;

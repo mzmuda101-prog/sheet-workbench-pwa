@@ -1560,17 +1560,7 @@ async function buildStyleIndexMap(bytes, wb) {
     const relsXml = await readSharedZipText(zip, "xl/_rels/workbook.xml.rels");
     if (!wbXml || !relsXml) return null;
 
-    const ridToPath = new Map();
-    const relRe = /<Relationship\b[^>]*?Id="([^"]+)"[^>]*?Target="([^"]+)"[^>]*?\/?>/g;
-    let rm;
-    while ((rm = relRe.exec(relsXml))) {
-      const target = rm[2];
-      if (!/worksheets\//.test(target)) continue;
-      let path = decodeXmlEntities(target);
-      if (path.startsWith("/")) path = path.slice(1);
-      else if (!path.startsWith("xl/")) path = "xl/" + path.replace(/^\.\//, "");
-      ridToPath.set(rm[1], path);
-    }
+    const ridToPath = cfSheetPathsFromRels(relsXml); // Id/Target w dowolnej kolejności
 
     const result = new Map();
     const sheetRe = /<sheet\b[^>]*?name="([^"]+)"[^>]*?r:id="([^"]+)"[^>]*?\/?>/g;
@@ -2212,7 +2202,7 @@ function collectPreHeaderRows(colCount) {
     for (let i = 0; i < colCount; i++) {
       const ref = XLSX.utils.encode_cell({ r, c: currentStartCol + i });
       const cell = sheet[ref];
-      let v = cell ? cell.v : null;
+      let v = cell && cell.v !== undefined ? cell.v : null; // pusta komórka z samym formatem (t:"z") = null
       let shown = cell && cell.w ? String(cell.w) : toDisplay(v);
       shown = localizeDisplayedDate(v, shown, cell);
       // jak w buildRows: „Stan na dziś: =TODAY()” pokazuje dzisiejszą wartość (tylko podgląd)
@@ -2612,7 +2602,7 @@ function buildRows(sheet, headerRow, wb) {
     for (let c = range.s.c; c <= range.e.c; c++) {
       const ref = XLSX.utils.encode_cell({ r, c });
       const cell = sheet[ref];
-      let v = cell ? cell.v : null;
+      let v = cell && cell.v !== undefined ? cell.v : null; // pusta komórka z samym formatem (t:"z") = null
       let shown = cell && cell.w ? String(cell.w) : toDisplay(v);
       shown = localizeDisplayedDate(v, shown, cell);
       if (cell && cell.f) {

@@ -342,7 +342,7 @@
       for (let c = range.s.c; c <= range.e.c; c++) {
         const ref = XLSX.utils.encode_cell({ r, c });
         const cell = sheet[ref];
-        let v = cell ? cell.v : null;
+        let v = cell && cell.v !== undefined ? cell.v : null; // pusta komórka z samym formatem (t:"z") = null
         let shown = cell && cell.w ? String(cell.w) : toDisplay(v);
         shown = localizeDisplayedDate(v, shown, cell, locale);
         if (cell && cell.f) {
