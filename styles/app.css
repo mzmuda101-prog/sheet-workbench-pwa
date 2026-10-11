@@ -8278,3 +8278,48 @@ button.fx-label:hover, button.fx-label:focus-visible { background: var(--accent-
   }
   .table-panel { padding: 8px 7px 0; border-radius: 14px; }
 }
+
+/* Wiersze nad nagłówkiem (punkt A1, table.js appendPreHeaderRows): wyglądają jak zwykłe
+   komórki tabeli, nie jak nagłówek — tytuł/KPI/opis z pliku, z jego stylami. Nie są
+   przyklejone: przy przewijaniu odjeżdżają pod litery kolumn, a nagłówek tabeli zostaje. */
+thead tr.pre-row > td {
+  padding: calc(var(--cell-pad-y, 7px) * var(--table-zoom)) calc(12px * var(--table-zoom));
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: calc(12.5px * var(--table-zoom) * var(--cell-font-scale, 1));
+  font-weight: 400;
+  color: var(--ink);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+thead tr.pre-row > td.row-head {
+  background: var(--panel);
+  text-align: center;
+  font-weight: 600;
+  color: var(--table-num);
+  padding: calc(var(--cell-pad-y, 7px) * var(--table-zoom)) calc(6px * var(--table-zoom));
+}
+/* tekst wylewa się na puste komórki obok, jak w Excelu */
+thead tr.pre-row > td.pre-spill { overflow: visible; text-overflow: clip; }
+/* ostatni wiersz nad nagłówkiem: wyraźna granica „tu zaczyna się tabela” */
+thead tr.pre-row + tr.header-row th { border-top: 1px solid var(--border); }
+.table-wrap.freeze-first-col thead tr.pre-row > td.row-head,
+.table-wrap.freeze-first-col thead tr.pre-row > td.row-head + td {
+  position: sticky;
+  z-index: 5;
+}
+.table-wrap.freeze-first-col thead tr.pre-row > td.row-head { left: 0; }
+.table-wrap.freeze-first-col thead tr.pre-row > td.row-head + td { left: var(--row-head-w, 44px); background: var(--surface); }
+/* Przyklejony rząd liter (A, B, C…) i narożnik muszą być NIEPRZEZROCZYSTE: --panel w ciemnym
+   motywie ma 75% krycia, więc przewijane wiersze prześwitywały przez litery (widoczne
+   zwłaszcza z wierszami nad nagłówkiem). Panel kładziemy na pełnym --surface. */
+.table-wrap.freeze-headers thead .guide-row th,
+.table-wrap.freeze-headers thead .corner-cell,
+.table-wrap.freeze-first-col thead tr.pre-row > td.row-head {
+  background: linear-gradient(var(--panel), var(--panel)), var(--surface);
+}
+/* komórka nad nagłówkiem: zaznaczona (klik) i w edycji (dwuklik / drugie tapnięcie) */
+thead tr.pre-row > td.pre-cell { cursor: cell; }
+thead tr.pre-row > td.pre-active { box-shadow: inset 0 0 0 2px var(--accent); }
+thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }

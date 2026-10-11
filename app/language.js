@@ -60,6 +60,8 @@ const I18N = {
     defaultSort: "Domyślne sortowanie",
     excelView: "Wymiary z Excela",
     excelViewOn: "Wymiary z Excela: ON",
+    rowsAboveHeader: "Wiersze nad nagłówkiem",
+    rowsAboveHeaderOn: "Wiersze nad nagłówkiem: ON",
     classicView: "Widok klasyczny",
     loadingFile: "Wczytywanie pliku...",
     loadingSheet: "Budowanie tabeli...",
@@ -1281,6 +1283,8 @@ const I18N = {
     defaultSort: "Default sort",
     excelView: "Excel dimensions",
     excelViewOn: "Excel dimensions: ON",
+    rowsAboveHeader: "Rows above header",
+    rowsAboveHeaderOn: "Rows above header: ON",
     classicView: "Classic view",
     loadingFile: "Loading file...",
     loadingSheet: "Building table...",
@@ -3817,6 +3821,7 @@ function applyLanguage(lang) {
   updateNetworkBadge();
   updateQuickSearchColumnButtons();
   updateExcelLayoutButtonLabel();
+  if (typeof syncRowsAboveHeaderToggle === "function") syncRowsAboveHeaderToggle();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));
   renderSortRules();

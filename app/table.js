@@ -2160,6 +2160,235 @@ function buildTableRow(ctx, row, rowPos) {
   return tr;
 }
 
+// ── Wiersze NAD nagłówkiem (punkt A1, 2026-10-11) ─────────────────────────────
+// Excel pokazuje arkusz od wiersza 1: tytuł, KPI, opisy nad tabelą. Rysujemy je w <thead>
+// między literami kolumn a nagłówkiem tabeli — przy przewijaniu odjeżdżają pod przyklejone
+// litery, a nagłówek („Zablokuj wiersze nagłówków”) przykleja się jak „Zablokuj okienka”.
+// Filtry, sortowanie, szukanie i analizy dalej liczą tylko tabelę POD nagłówkiem — te
+// wiersze stoją w miejscu, dokładnie jak wiersze nad zakresem autofiltru w Excelu.
+// Przełącznik: Widok → „Wiersze nad nagłówkiem” (domyślnie pokazane).
+const ROWS_ABOVE_HEADER_KEY = "swb-rows-above-header-v1";
+const PRE_HEADER_MAX_ROWS = 60; // nagłówek bardzo nisko — pokazujemy ostatnie 60 wierszy nad nim
+let _preHeaderCache = { key: "", rows: [] };
+
+function rowsAboveHeaderEnabled() {
+  try { return localStorage.getItem(ROWS_ABOVE_HEADER_KEY) !== "0"; } catch (_) { return true; }
+}
+
+function setRowsAboveHeaderEnabled(on) {
+  try { localStorage.setItem(ROWS_ABOVE_HEADER_KEY, on ? "1" : "0"); } catch (_) { /* tryb prywatny */ }
+  syncRowsAboveHeaderToggle();
+}
+
+function syncRowsAboveHeaderToggle() {
+  const btn = document.getElementById("rowsAboveHeaderToggle");
+  if (!btn) return;
+  const on = rowsAboveHeaderEnabled();
+  btn.setAttribute("aria-pressed", String(on));
+  btn.textContent = on ? t("rowsAboveHeaderOn") : t("rowsAboveHeader");
+}
+
+// Wiersze 1…(nagłówek−1) bieżącego arkusza w kolumnach tabeli. Puste na całej szerokości
+// zostają (jak w Excelu), ale gdy NIC nad nagłówkiem nie ma treści — nie ma czego pokazywać.
+function collectPreHeaderRows(colCount) {
+  if (!workbook || !currentSheetName || !(currentHeaderRow > 1) || !colCount) return [];
+  const sheet = workbook.Sheets[currentSheetName];
+  if (!sheet) return [];
+  const mode = displayModeEl ? displayModeEl.value : "values";
+  const key = [currentSheetName, currentHeaderRow, currentStartCol, colCount, sheetDataStamp, mode, currentLang, recalcDateFormulas ? 1 : 0].join("\u001f");
+  if (_preHeaderCache.key === key) return _preHeaderCache.rows;
+  const rowMeta = sheet["!rows"] || [];
+  const styleIndexForSheet = currentStyleIndexMap ? currentStyleIndexMap.get(currentSheetName) : null;
+  const xfStyleAt = (ref) => (styleIndexForSheet ? resolveXfStyleFromIndex(styleIndexForSheet.get(ref), workbook) : null);
+  const last = currentHeaderRow - 2; // 0-based: ostatni wiersz nad nagłówkiem
+  const first = Math.max(0, last - PRE_HEADER_MAX_ROWS + 1);
+  const rows = [];
+  let anyContent = false;
+  for (let r = first; r <= last; r++) {
+    if (rowMeta[r] && rowMeta[r].hidden) continue;
+    const values = [];
+    const display = [];
+    const cellStyles = [];
+    for (let i = 0; i < colCount; i++) {
+      const ref = XLSX.utils.encode_cell({ r, c: currentStartCol + i });
+      const cell = sheet[ref];
+      let v = cell ? cell.v : null;
+      let shown = cell && cell.w ? String(cell.w) : toDisplay(v);
+      shown = localizeDisplayedDate(v, shown, cell);
+      // jak w buildRows: „Stan na dziś: =TODAY()” pokazuje dzisiejszą wartość (tylko podgląd)
+      if (cell && cell.f && recalcDateFormulas && mode !== "formulas"
+          && /\b(?:TODAY|NOW)\s*\(/i.test(cell.f) && typeof cfRecomputeCellFormula === "function") {
+        const rv = cfRecomputeCellFormula(sheet, cell.f, r);
+        if (typeof rv === "string") { v = rv; shown = rv; }
+        else if (typeof rv === "number") {
+          const fmt = reuseNumberFormat(cell.w, rv);
+          if (fmt !== null) { v = rv; shown = fmt; }
+        }
+      }
+      if (mode === "formulas" && cell && cell.f) { v = "=" + cell.f; shown = v; }
+      if (v !== null && v !== undefined && v !== "") anyContent = true;
+      values.push(v);
+      display.push(shown == null ? "" : String(shown));
+      cellStyles.push(extractCellStyle(cell, workbook, xfStyleAt(ref)));
+    }
+    rows.push({ rowIndex0: r, values, display, cellStyles });
+  }
+  _preHeaderCache = { key, rows: anyContent ? rows : [] };
+  return _preHeaderCache.rows;
+}
+
+function appendPreHeaderRows(model, headers) {
+  if (model.mode !== "wide" || !rowsAboveHeaderEnabled()) return 0;
+  const pre = collectPreHeaderRows(headers.length);
+  if (!pre.length) return 0;
+  // Scalenia leżące w całości nad nagłówkiem → colspan/rowspan (tytuły zwykle są scalone).
+  const firstR = pre[0].rowIndex0;
+  const lastR = pre[pre.length - 1].rowIndex0;
+  const shownRows = new Set(pre.map((p) => p.rowIndex0));
+  const anchors = new Map();
+  const covered = new Set();
+  (currentMerges || []).forEach((m) => {
+    if (!m || !m.s || !m.e || m.s.r < firstR || m.e.r > lastR) return;
+    const c0 = m.s.c - currentStartCol;
+    const c1 = Math.min(m.e.c - currentStartCol, headers.length - 1);
+    if (c0 < 0 || c0 >= headers.length || c1 < c0) return;
+    let rowspan = 0;
+    for (let r = m.s.r; r <= m.e.r; r++) if (shownRows.has(r)) rowspan += 1;
+    anchors.set(`${m.s.r}:${c0}`, { colspan: c1 - c0 + 1, rowspan: Math.max(1, rowspan) });
+    for (let r = m.s.r; r <= m.e.r; r++) {
+      for (let c = c0; c <= c1; c++) if (r !== m.s.r || c !== c0) covered.add(`${r}:${c}`);
+    }
+  });
+  const frag = document.createDocumentFragment();
+  pre.forEach((p) => {
+    const tr = document.createElement("tr");
+    tr.className = "pre-row";
+    tr.dataset.rowIndex = String(p.rowIndex0);
+    const head = document.createElement("td");
+    head.className = "row-head";
+    head.textContent = String(p.rowIndex0 + 1);
+    tr.appendChild(head);
+    for (let i = 0; i < headers.length; i++) {
+      const k = `${p.rowIndex0}:${i}`;
+      if (covered.has(k)) continue;
+      const td = document.createElement("td");
+      td.className = "pre-cell";
+      td.dataset.colIndex = String(i);
+      const text = p.display[i] || "";
+      td.textContent = text;
+      if (p.cellStyles[i]) applyCellStyle(td, p.cellStyles[i]);
+      const merge = anchors.get(k);
+      if (merge) {
+        if (merge.colspan > 1) td.colSpan = merge.colspan;
+        if (merge.rowspan > 1) td.rowSpan = merge.rowspan;
+        td.classList.add("cell-merged");
+      } else if (text && typeof p.values[i] === "string") {
+        // Tekst „wylewa się” na puste komórki obok — jak w Excelu (liczby nie).
+        const next = i + 1;
+        if (next < headers.length && !p.display[next] && !covered.has(`${p.rowIndex0}:${next}`) && !anchors.has(`${p.rowIndex0}:${next}`)) {
+          td.classList.add("pre-spill");
+        }
+      }
+      tr.appendChild(td);
+    }
+    frag.appendChild(tr);
+  });
+  theadEl.appendChild(frag);
+  return pre.length;
+}
+
+// Edycja komórek nad nagłówkiem (punkt A2): dwuklik (dotyk: drugie tapnięcie w zaznaczoną
+// komórkę) otwiera pole w komórce; Enter/Tab = zapisz, Esc = anuluj, wyjście z pola = zapisz.
+// Zapis tą samą drogą co zwykłe komórki (updateSheetCell / formuły) — więc działa Cofnij,
+// szkic i zapis do pliku. Edytor zgłasza się jako activeCellEditor, żeby przebudowa tabeli
+// (flushCellEditor) zatwierdziła go zamiast zgubić.
+function openPreCellEditor(td) {
+  if (!td || !td.isConnected || !workbook || !currentSheetName) return;
+  if (typeof activeCellEditor !== "undefined" && activeCellEditor) {
+    if (activeCellEditor.td === td) return;
+    if (typeof flushCellEditor === "function") flushCellEditor();
+    if (activeCellEditor) return;
+  }
+  if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
+  const rowIndex0 = parseInt(td.parentElement?.dataset.rowIndex || "", 10);
+  const col = parseInt(td.dataset.colIndex || "", 10);
+  if (!Number.isFinite(rowIndex0) || !Number.isFinite(col)) return;
+  if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) { toast(t("editDerivedCol"), "info"); return; }
+  const sheet = workbook.Sheets[currentSheetName];
+  const ref = XLSX.utils.encode_cell({ r: rowIndex0, c: currentStartCol + col });
+  const cell = sheet ? sheet[ref] : null;
+  const formulaText = typeof swbFormulaText === "function" ? swbFormulaText(currentSheetName, ref) : null;
+  const raw = cell ? cell.v : null;
+  const base = formulaText != null ? formulaText
+    : raw == null ? "" : (raw instanceof Date ? formatDateForEdit(raw) : String(raw));
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "cell-editor";
+  input.setAttribute("aria-label", t("editCellAria"));
+  input.value = base;
+  td.classList.add("cell-editing");
+  td.appendChild(input);
+  let finished = false;
+  const close = () => {
+    if (finished) return;
+    finished = true;
+    input.remove();
+    td.classList.remove("cell-editing");
+    if (activeCellEditor && activeCellEditor.input === input) activeCellEditor = null;
+  };
+  // fromRender: wołane z flushCellEditor w trakcie renderTable — bez ponownego renderu
+  const commit = (fromRender) => {
+    if (finished) return;
+    const text = input.value;
+    if (text === base) { close(); return; }
+    const parsed = parseInputValue(text);
+    if (parsed && parsed.type === "formula") {
+      const res = typeof swbFormulaCommitAt === "function" ? swbFormulaCommitAt(rowIndex0, col, text) : "skip";
+      if (res !== "ok") {
+        if (res === "skip") toast(t("formulaEditBlocked"), "warning");
+        if (typeof shakeCellEditor === "function") shakeCellEditor(input);
+        if (!fromRender) input.focus();
+        return;
+      }
+    } else {
+      updateSheetCell(rowIndex0, col, parsed);
+    }
+    close();
+    setDirtyState(true);
+    if (!fromRender) {
+      renderActiveTable();
+      const fresh = theadEl.querySelector(`tr.pre-row[data-row-index="${rowIndex0}"] td.pre-cell[data-col-index="${col}"]`);
+      if (fresh && typeof flashCellSaved === "function") flashCellSaved(fresh);
+    }
+  };
+  activeCellEditor = { td, input, commit: () => commit(true), close };
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commit(false); }
+    else if (e.key === "Escape") { e.preventDefault(); close(); }
+  });
+  input.addEventListener("blur", () => setTimeout(() => commit(false), 0));
+  input.focus();
+  try { input.select(); } catch (_) { /* */ }
+}
+
+if (theadEl && !theadEl.dataset.preEditBound) {
+  theadEl.dataset.preEditBound = "1";
+  theadEl.addEventListener("click", (e) => {
+    const td = e.target.closest("td.pre-cell");
+    if (!td || td.classList.contains("cell-editing")) return;
+    const wasActive = td.classList.contains("pre-active");
+    theadEl.querySelectorAll("td.pre-active").forEach((x) => x.classList.remove("pre-active"));
+    td.classList.add("pre-active");
+    // dotyk nie ma dwukliku: drugie tapnięcie w zaznaczoną komórkę = edycja
+    if (wasActive && e.pointerType !== "mouse" && (e.pointerType || matchMedia("(pointer: coarse)").matches)) openPreCellEditor(td);
+  });
+  theadEl.addEventListener("dblclick", (e) => {
+    const td = e.target.closest("td.pre-cell");
+    if (td) openPreCellEditor(td);
+  });
+}
+
 function renderTable(modelOrHeaders, maybeRows) {
   const model = Array.isArray(modelOrHeaders)
     ? {
@@ -2247,6 +2476,8 @@ function renderTable(modelOrHeaders, maybeRows) {
     guideRow.appendChild(th);
   });
   theadEl.appendChild(guideRow);
+  const preRowCount = appendPreHeaderRows(model, headers);
+  if (tableWrapEl) tableWrapEl.classList.toggle("has-pre-rows", preRowCount > 0);
 
   const headRow = document.createElement("tr");
   headRow.className = "header-row";

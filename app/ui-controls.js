@@ -116,9 +116,64 @@ function applyAutoHeaderRowIfEnabled() {
   const sheetName = sheetSelect.value;
   const sheet = workbook.Sheets[sheetName];
   if (!sheet) return false;
-  const detected = detectHeaderRowSimple(sheet);
+  const frozen = frozenHeaderRowFor(sheetName, sheet);
+  const detected = frozen || detectHeaderRowSimple(sheet);
   headerRowEl.value = String(detected);
   return true;
+}
+
+// Zablokowane okienka z pliku (Excel: Widok → Zablokuj okienka) — <pane ySplit="N"
+// state="frozen"/> w arkuszu. Autor pliku sam wskazał, które wiersze mają stać u góry,
+// więc ostatni zablokowany wiersz to najpewniejszy kandydat na nagłówek — pewniejszy niż
+// zgadywanie po treści. Bierzemy go, gdy wygląda na nagłówek (≥2 wypełnione komórki,
+// w tym tekst) i pod nim są dane; inaczej zwykłe wykrywanie.
+let currentFrozenRowsBySheet = new Map(); // nazwa arkusza → liczba zablokowanych wierszy
+async function readFrozenRows(bytes, wb) {
+  const map = new Map();
+  if (typeof JSZip === "undefined" || !bytes || !wb) return map;
+  try {
+    const zip = await getSharedWorkbookZip(bytes);
+    if (!zip) return map;
+    const wbXml = await readSharedZipText(zip, "xl/workbook.xml");
+    const relsXml = await readSharedZipText(zip, "xl/_rels/workbook.xml.rels");
+    if (!wbXml || !relsXml || typeof cfSheetPathsFromRels !== "function") return map;
+    const ridToPath = cfSheetPathsFromRels(relsXml);
+    const sheetRe = /<(?:[\w-]+:)?sheet\b[^>]*?name="([^"]+)"[^>]*?r:id="([^"]+)"[^>]*?\/?>/g;
+    let sm;
+    while ((sm = sheetRe.exec(wbXml))) {
+      const path = ridToPath.get(sm[2]);
+      const xml = path ? await readSharedZipText(zip, path) : null;
+      if (!xml) continue;
+      // <sheetViews> leży przed <sheetData> — wystarczy początek pliku
+      const dataAt = xml.indexOf("sheetData");
+      const head = dataAt > 0 ? xml.slice(0, dataAt) : xml.slice(0, 4000);
+      const pane = head.match(/<(?:[\w-]+:)?pane\b([^>]*)\/?>/);
+      if (!pane) continue;
+      const attrs = pane[1];
+      const state = (attrs.match(/\bstate="([^"]+)"/) || [])[1] || "";
+      const ySplit = Number((attrs.match(/\bySplit="([\d.]+)"/) || [])[1]);
+      if (!/^frozen/.test(state) || !Number.isInteger(ySplit) || ySplit < 1 || ySplit > 100) continue;
+      map.set(decodeXmlEntities(sm[1]), ySplit);
+    }
+  } catch { /* uszkodzony XML — zwykłe wykrywanie */ }
+  return map;
+}
+
+function frozenHeaderRowFor(sheetName, sheet) {
+  const n = currentFrozenRowsBySheet.get(sheetName);
+  if (!n || !sheet) return 0;
+  let filled = 0;
+  let text = 0;
+  let range;
+  try { range = XLSX.utils.decode_range(sheet["!ref"] || "A1"); } catch { return 0; }
+  if (n - 1 > range.e.r - 1) return 0; // pod zablokowanymi wierszami nie ma już danych
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: n - 1, c })];
+    if (!cell || cell.v == null || cell.v === "") continue;
+    filled += 1;
+    if (typeof cell.v === "string") text += 1;
+  }
+  return filled >= 2 && text >= 1 ? n : 0;
 }
 
 function columnSummary(set) {
@@ -823,6 +878,7 @@ async function handleFile(file, fileHandle = null) {
     // Konsumowane przez openCellEditor: dropdown + tryb (blokuj/ostrzegaj/podpowiadaj).
     if (typeof buildDataValidations === "function") await buildDataValidations(originalFileBytes, workbook);
     currentWorkbookActiveSheet = await readActiveSheetName(originalFileBytes, workbook);
+    currentFrozenRowsBySheet = await readFrozenRows(originalFileBytes, workbook);
     if (autoHeaderRowEl) autoHeaderRowEl.checked = autoHeaderPreferred(); // nowy plik = preferencja
     releaseSharedZipTextCache(); // rozpakowany XML nie jest już potrzebny
     sheetSelect.replaceChildren();
@@ -4462,6 +4518,17 @@ zoomLevelEl.addEventListener("change", () => {
     }
   }, 50);
 });
+
+// Widok → „Wiersze nad nagłówkiem” (table.js, punkt A1)
+const rowsAboveHeaderToggleEl = document.getElementById("rowsAboveHeaderToggle");
+if (rowsAboveHeaderToggleEl) {
+  syncRowsAboveHeaderToggle();
+  rowsAboveHeaderToggleEl.addEventListener("click", () => {
+    setRowsAboveHeaderEnabled(!rowsAboveHeaderEnabled());
+    replayPop(rowsAboveHeaderToggleEl, "btn-pop");
+    renderActiveTable();
+  });
+}
 
 if (excelLayoutToggleEl) {
   excelLayoutToggleEl.addEventListener("click", () => {
