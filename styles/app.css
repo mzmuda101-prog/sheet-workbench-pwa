@@ -8366,3 +8366,5 @@ thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }
 .key-bar-key.is-op { color: var(--accent); }
 .key-bar-key:active { background: var(--accent-light); border-color: var(--accent-border, var(--accent)); }
 [data-theme="dark"] .key-bar { box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.35); }
+/* .btn ustawia display — bez tego [hidden] nie chowa przełącznika na komputerze/tablecie */
+#keyBarToggle[hidden] { display: none !important; }

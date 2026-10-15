@@ -86,6 +86,17 @@ async function run() {
   await p.evaluate(() => quickSearchEl.blur());
   await sleep(200);
   ok("3. po wyjściu z pola pasek znika", (await p.evaluate(() => swbKeyBar.visible)) === false, null);
+  // 5. Widok → „Pasek cyfr”: przełącznik widać na telefonie; wyłączony = brak paska, zapamiętane
+  const tog = await p.evaluate(() => { const b = document.getElementById("keyBarToggle"); return { shown: !!b && !b.hidden && getComputedStyle(b).display !== "none", pressed: b?.getAttribute("aria-pressed") }; });
+  ok("5. telefon: przełącznik „Pasek cyfr” w Widoku, włączony", tog.shown && tog.pressed === "true", tog);
+  await p.evaluate(() => document.getElementById("keyBarToggle").click());
+  await p.evaluate(() => quickSearchEl.focus());
+  await sleep(200);
+  const off = await p.evaluate(() => ({ visible: swbKeyBar.visible, pref: localStorage.getItem("swb-keybar-v1"), pressed: document.getElementById("keyBarToggle").getAttribute("aria-pressed") }));
+  ok("5. wyłączony pasek nie pokazuje się i wybór jest zapamiętany", !off.visible && off.pref === "0" && off.pressed === "false", off);
+  await p.evaluate(() => { quickSearchEl.blur(); document.getElementById("keyBarToggle").click(); quickSearchEl.focus(); });
+  await sleep(200);
+  ok("5. ponowne włączenie przywraca pasek", (await p.evaluate(() => swbKeyBar.visible)) === true, null);
   ok("brak błędów strony (telefon)", phone.errors.length === 0, phone.errors);
   await phone.ctx.close();
 
@@ -94,6 +105,7 @@ async function run() {
   await desk.page.evaluate(() => { quickSearchEl.focus(); });
   await sleep(200);
   ok("4. komputer: paska nie ma", (await desk.page.evaluate(() => swbKeyBar.visible)) === false, null);
+  ok("4. komputer: przełącznika „Pasek cyfr” nie ma w Widoku", (await desk.page.evaluate(() => getComputedStyle(document.getElementById("keyBarToggle")).display === "none")), null);
   ok("brak błędów strony (komputer)", desk.errors.length === 0, desk.errors);
   await desk.ctx.close();
 

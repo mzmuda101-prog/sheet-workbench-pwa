@@ -64,6 +64,8 @@ const I18N = {
     keyBarCellAria: "Cyfry i znaki formuł",
     keyBarSearchAria: "Operatory wyszukiwania i cyfry",
     keyBarOpsOn: "Włączono operatory wyszukiwania dla tego pola",
+    keyBarToggle: "Pasek cyfr",
+    keyBarToggleOn: "Pasek cyfr: ON",
     rowsAboveHeaderOn: "Wiersze nad nagłówkiem: ON",
     classicView: "Widok klasyczny",
     loadingFile: "Wczytywanie pliku...",
@@ -1290,6 +1292,8 @@ const I18N = {
     keyBarCellAria: "Digits and formula characters",
     keyBarSearchAria: "Search operators and digits",
     keyBarOpsOn: "Search operators turned on for this field",
+    keyBarToggle: "Digit bar",
+    keyBarToggleOn: "Digit bar: ON",
     rowsAboveHeaderOn: "Rows above header: ON",
     classicView: "Classic view",
     loadingFile: "Loading file...",
@@ -3828,6 +3832,7 @@ function applyLanguage(lang) {
   updateQuickSearchColumnButtons();
   updateExcelLayoutButtonLabel();
   if (typeof syncRowsAboveHeaderToggle === "function") syncRowsAboveHeaderToggle();
+  if (typeof swbKeyBar !== "undefined" && swbKeyBar.syncToggle) swbKeyBar.syncToggle();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));
   renderSortRules();

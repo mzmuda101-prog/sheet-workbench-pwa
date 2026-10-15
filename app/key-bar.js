@@ -30,6 +30,11 @@
     searchQuery2: "filterOperators2",
   };
 
+  // Widok → „Pasek cyfr” (przełącznik widoczny tylko na telefonie), domyślnie włączony.
+  const PREF_KEY = "swb-keybar-v1";
+  const enabled = () => { try { return localStorage.getItem(PREF_KEY) !== "0"; } catch (_) { return true; } };
+  const toggleBtn = document.getElementById("keyBarToggle");
+
   let bar = null;
   let row = null;
   let field = null;      // pole, do którego piszemy
@@ -140,14 +145,31 @@
 
   function sync() {
     const el = document.activeElement;
-    const m = phoneMq && phoneMq.matches ? fieldMode(el) : "";
+    const m = phoneMq && phoneMq.matches && enabled() ? fieldMode(el) : "";
     if (m) show(el, m); else { field = null; hide(); }
   }
+
+  function syncToggle() {
+    if (!toggleBtn) return;
+    const on = enabled();
+    toggleBtn.hidden = !(phoneMq && phoneMq.matches);
+    toggleBtn.setAttribute("aria-pressed", String(on));
+    if (typeof t === "function") toggleBtn.textContent = t(on ? "keyBarToggleOn" : "keyBarToggle");
+  }
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      try { localStorage.setItem(PREF_KEY, enabled() ? "0" : "1"); } catch (_) { /* tryb prywatny */ }
+      syncToggle();
+      sync();
+    });
+  }
+  if (phoneMq && typeof phoneMq.addEventListener === "function") phoneMq.addEventListener("change", () => { syncToggle(); sync(); });
+  syncToggle();
 
   document.addEventListener("focusin", () => setTimeout(sync, 0));
   document.addEventListener("focusout", () => setTimeout(sync, 0));
   // klawiatura wjeżdża PO focusin — dopiero wtedy wiadomo, że jest otwarta
   if (vv) vv.addEventListener("resize", () => { if (field || fieldMode(document.activeElement)) sync(); });
 
-  window.swbKeyBar = { sync, get visible() { return !!(bar && !bar.hidden); }, get mode() { return mode; } };
+  window.swbKeyBar = { sync, syncToggle, get visible() { return !!(bar && !bar.hidden); }, get mode() { return mode; } };
 })();
