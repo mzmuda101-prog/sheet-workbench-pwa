@@ -253,6 +253,36 @@ function scrollTableHorizontally(dir) {
   return tableWrapEl.scrollLeft !== before;
 }
 
+// Przewinięcie do komórki PO ZATWIERDZENIU wpisu (Enter/Tab w edytorze) odkładamy do
+// najbliższej klatki (rAF biegnie przed malowaniem — na ekranie to samo). Wołane od razu
+// wymuszało ułożenie tabeli w środku zmian DOM, a WebKit układa całą tabelę po zmianie
+// jednej komórki: wpis pojawiał się z opóźnieniem (2026-10-15, iPhone). Strzałki NIE —
+// przy kilku krokach na klatkę odłożone przewinięcie dawało skoki widoku (virt-guard).
+let _cellScrollTarget = null;
+let _cellScrollFrame = 0;
+let _deferCellScrollDepth = 0;
+function withDeferredCellScroll(fn) {
+  _deferCellScrollDepth += 1;
+  try { return fn(); } finally { _deferCellScrollDepth -= 1; }
+}
+function scrollCellIntoView(el) {
+  if (_deferCellScrollDepth > 0) {
+    _cellScrollTarget = el;
+    if (!_cellScrollFrame) {
+      _cellScrollFrame = requestAnimationFrame(() => {
+        _cellScrollFrame = 0;
+        const target = _cellScrollTarget;
+        _cellScrollTarget = null;
+        if (target && target.isConnected) target.scrollIntoView({ block: "nearest", inline: "nearest" });
+      });
+    }
+    return;
+  }
+  // zwykłe przewinięcie od razu — i bez starego, odłożonego celu, który cofnąłby widok
+  if (_cellScrollFrame) { cancelAnimationFrame(_cellScrollFrame); _cellScrollFrame = 0; _cellScrollTarget = null; }
+  el.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
 function syncFocusedCellInDom(options = {}) {
   // Hak dla CSS: obwódka fokusu na POJEDYNCZEJ komórce ma się rysować wyłącznie
   // wtedy, gdy pracujemy na poziomie komórki. Przy zaznaczonym wierszu wyglądała
@@ -284,9 +314,7 @@ function syncFocusedCellInDom(options = {}) {
   // passive = odświeżenie po dorysowaniu okna w trakcie przewijania: same klasy i tabindex,
   // bez focus() i bez przewijania (inaczej walczylibyśmy z palcem użytkownika).
   const keepDomFocus = !options.passive && (options.focusDom || hadGridFocus);
-  if (options.scroll && !options.passive) {
-    (cell || rowEl).scrollIntoView({ block: "nearest", inline: "nearest" });
-  }
+  if (options.scroll && !options.passive) scrollCellIntoView(cell || rowEl);
   syncGridRovingTabindex(cell);
   // W trybie „Sama komórka" aktywna komórka niesie całe podświetlenie — niezależnie
   // od tego, czy wszedłeś do niej myszą, dotykiem czy strzałką (obwódka :focus-visible
@@ -311,9 +339,7 @@ function syncSelectedCellInDom(options = {}) {
     return null;
   }
   cell.classList.add("cell-selected");
-  if (options.scroll) {
-    cell.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }
+  if (options.scroll) scrollCellIntoView(cell);
   return cell;
 }
 

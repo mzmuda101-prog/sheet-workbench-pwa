@@ -4208,9 +4208,18 @@ function cellEditString(row, i) {
 // Krótki wizualny pulse na komórce po zapisaniu edycji (zob. .cell-saved-pulse w CSS).
 // Reflow między usunięciem a dodaniem klasy pozwala animacji odpalić się ponownie,
 // gdy ta sama komórka jest edytowana kilka razy z rzędu.
+// BEZ `void td.offsetWidth` (2026-10-15): ten trik restartu animacji wymuszał ułożenie
+// tabeli w środku zatwierdzania, a WebKit układa CAŁĄ tabelę po zmianie jednej komórki —
+// na iPhonie wpis pojawiał się w komórce z wyczuwalnym opóźnieniem (po „OK”, wyborze
+// z listy, przy wklejaniu — tu raz na każdą wklejoną komórkę). Trwającą animację cofamy
+// do początku przez Web Animations, nową uruchamia sama klasa.
 function flashCellSaved(td) {
-  td.classList.remove("cell-saved-pulse");
-  void td.offsetWidth;
+  if (!td) return;
+  const running = typeof td.getAnimations === "function"
+    ? td.getAnimations().find((a) => a.animationName === "cellSavedPulse")
+    : null;
+  if (running) { running.currentTime = 0; running.play(); return; }
+  if (td.classList.contains("cell-saved-pulse")) return; // klasa jest, animacja jeszcze nie wystartowała
   td.classList.add("cell-saved-pulse");
   td.addEventListener("animationend", () => td.classList.remove("cell-saved-pulse"), { once: true });
 }
@@ -4349,7 +4358,7 @@ function openCellEditor(td, options = {}) {
       close();
       if (move) {
         setFocusedCell(rowKey, colIndex0, { scroll: false });
-        moveFocusedCell(move.row || 0, move.col || 0);
+        withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0));
       }
       updateCellStats();
       return;
@@ -4370,7 +4379,7 @@ function openCellEditor(td, options = {}) {
       flashCellSaved(td);
       if (move) {
         setFocusedCell(rowKey, colIndex0, { scroll: false });
-        moveFocusedCell(move.row || 0, move.col || 0);
+        withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0));
       }
       updateCellStats();
       return;
@@ -4405,7 +4414,7 @@ function openCellEditor(td, options = {}) {
     flashCellSaved(td);
     if (move) {
       setFocusedCell(rowKey, colIndex0, { scroll: false });
-      moveFocusedCell(move.row || 0, move.col || 0);
+      withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0));
     }
     updateCellStats();
   };

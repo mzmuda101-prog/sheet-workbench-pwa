@@ -8323,3 +8323,46 @@ thead tr.pre-row + tr.header-row th { border-top: 1px solid var(--border); }
 thead tr.pre-row > td.pre-cell { cursor: cell; }
 thead tr.pre-row > td.pre-active { box-shadow: inset 0 0 0 2px var(--accent); }
 thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }
+
+/* Pasek cyfr i operatorów nad klawiaturą telefonu (key-bar.js). Pozycję (transform)
+   ustawia skrypt z visualViewport; jeden rząd przewijany w bok z wygaszeniem krawędzi. */
+.key-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9990;
+  padding: 5px max(6px, env(safe-area-inset-right)) 5px max(6px, env(safe-area-inset-left));
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 12px rgba(20, 30, 20, 0.08);
+  will-change: transform;
+}
+.key-bar[hidden] { display: none !important; }
+.key-bar-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.key-bar-row::-webkit-scrollbar { display: none; }
+.key-bar-key {
+  flex: 0 0 auto;
+  min-width: 40px;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--ink) 5%, var(--surface));
+  color: var(--ink);
+  font: 600 17px/1 ui-monospace, "SF Mono", Menlo, monospace;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+.key-bar-key.is-op { color: var(--accent); }
+.key-bar-key:active { background: var(--accent-light); border-color: var(--accent-border, var(--accent)); }
+[data-theme="dark"] .key-bar { box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.35); }
