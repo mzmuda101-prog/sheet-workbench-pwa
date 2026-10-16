@@ -294,6 +294,74 @@ function swbOpenFormulaExplain({ formula, sheet = currentSheetName, r, c }) {
   if (!dlg.open) dlg.showModal();
 }
 
+// ── Wzory bez AI: najczęstsze prośby rozpoznane regułami ─────────────────────
+// Mały model (0.8B) mylił się nawet przy „ile dni minęło od daty” (pomiar 2026-10-17), a te
+// prośby to większość codziennych formuł — więc rozpoznaje je kod, natychmiast i bez pobierania.
+function swbTplFold(x) {
+  return String(x).normalize("NFD").replace(/\p{M}/gu, "").replace(/ł/g, "l").replace(/Ł/g, "L").toLocaleLowerCase("pl").trim();
+}
+
+// „kolumna C”, „kolumnie od”, „daty w kolumnie Data od”, „od” → indeks kolumny tabeli (0…) albo -1
+function swbTplColumn(phrase) {
+  // najpierw sama nazwa kolumny („kolumna do” → „do”) — nazwy bywają przyimkami (od / do)
+  const bare = swbTplFold(phrase).replace(/[„”"'.,:;!?]/g, " ").replace(/\b(w\s+)?kolumn\w*\b/g, " ").replace(/\s+/g, " ").trim();
+  const key = (x) => swbTplFold(x).replace(/[„”"'.,:;!?]/g, " ").replace(/\s+/g, " ").trim();
+  const exact = currentHeaders.findIndex((h) => key(h) === bare);
+  if (exact >= 0) return exact;
+  let p = swbTplFold(phrase).replace(/[„”"'.,:;!?]/g, " ").replace(/\b(w|z|ze|do|kolumn\w*|dat\w*|wartosc\w*|pol\w*|komork\w*)\b/g, " ").replace(/\s+/g, " ").trim();
+  if (!p) return -1;
+  const letter = String(phrase).trim().match(/(?:^|\s)([A-Z]{1,2})$/);
+  if (letter) {
+    const c = FormulaEngine.colToIndex(letter[1]) - currentStartCol;
+    if (c >= 0 && c < currentHeaders.length) return c;
+  }
+  const heads = currentHeaders.map((h) => key(h));
+  let i = heads.findIndex((h) => h === p);
+  if (i < 0) i = heads.findIndex((h) => h && (p.endsWith(` ${h}`) || p.startsWith(`${h} `)));
+  if (i < 0 && p.length >= 4) i = heads.findIndex((h) => h.startsWith(p.slice(0, Math.max(4, p.length - 2))));
+  return i;
+}
+
+function swbFormulaFromTemplate(description, target) {
+  const d = String(description).trim();
+  const ref = (c) => `${FormulaEngine.indexToCol(currentStartCol + c)}${target.r + 1}`;
+  const unitOf = (u) => (/^mies/.test(swbTplFold(u)) ? "M" : /^(lat|rok)/.test(swbTplFold(u)) ? "Y" : "D");
+  let m;
+  // ile dni/miesięcy/lat między A a B
+  if ((m = d.match(/(?:ile|liczba)\s+(dni|miesi\S*|lat)\s+(?:minęło\s+|upłynęło\s+)?(?:między|pomiędzy|od)\s+(.+?)\s+(?:a|do)\s+(.+?)\s*$/i))) {
+    const a = swbTplColumn(m[2]); const b = swbTplColumn(m[3]);
+    if (a >= 0 && b >= 0 && !/^(dzi|teraz)/i.test(m[3])) return `=DATEDIF(${ref(a)},${ref(b)},"${unitOf(m[1])}")`;
+  }
+  // ile dni/miesięcy/lat minęło od A (do dziś)
+  if ((m = d.match(/(?:ile|liczba)\s+(dni|miesi\S*|lat)\s+(?:minęło|upłynęło|mija|trwa)?\s*(?:od\s+)?(.+?)(?:\s+do\s+(?:dziś|dzisiaj|teraz))?\s*$/i))) {
+    const a = swbTplColumn(m[2].replace(/^(minęło|upłynęło)\s+od\s+/i, ""));
+    if (a >= 0) return `=DATEDIF(${ref(a)},TODAY(),"${unitOf(m[1])}")`;
+  }
+  // „X”, gdy kolumna K jest wypełniona/pusta, inaczej „Y”
+  if ((m = d.match(/^(?:napisz|wpisz|pokaż|daj)?\s*[„"]?([^„”",]+?)[”"]?,?\s+(?:gdy|jeśli|jeżeli|kiedy)\s+(.+?)\s+(?:jest\s+)?(wypełnion\S*|niepust\S*|uzupełnion\S*|pust\S*)\s*,?\s*(?:inaczej|w przeciwnym razie|a jak nie)\s+[„"]?([^„”"]+?)[”"]?\.?$/i))) {
+    const c = swbTplColumn(m[2]);
+    if (c >= 0) return `=IF(${ref(c)}${/^pust/i.test(m[3]) ? '=""' : '<>""'},"${m[1].trim()}","${m[4].trim()}")`;
+  }
+  // połącz A i B (myślnikiem / spacją / przecinkiem / ukośnikiem)
+  if ((m = d.match(/^(?:połącz|złącz|sklej)\s+(.+?)\s+(?:i|oraz|z)\s+(.+?)(?:\s+(?:z\s+|przez\s+)?(myślnik\S*|spacj\S*|przecink\S*|ukośnik\S*))?\s*$/i))) {
+    const a = swbTplColumn(m[1]); const b = swbTplColumn(m[2]);
+    const sep = !m[3] ? " " : /^myśl/i.test(m[3]) ? " - " : /^przec/i.test(m[3]) ? ", " : /^ukoś/i.test(m[3]) ? "/" : " ";
+    if (a >= 0 && b >= 0) return `=${ref(a)}&"${sep}"&${ref(b)}`;
+  }
+  // suma / średnia / największa / najmniejsza / ile niepustych w kolumnie K (wiersze danych)
+  if ((m = d.match(/^(suma|zsumuj|średnia|najwięks\S*|maksimum|najmniejsz\S*|minimum|ile\s+(?:jest\s+)?(?:wypełnionych|niepustych|wpisów|wartości))\s+(?:wartości\s+)?(?:z\s+|w\s+)?(.+?)\s*$/i))) {
+    const c = swbTplColumn(m[2]);
+    if (c >= 0) {
+      const col = FormulaEngine.indexToCol(currentStartCol + c);
+      const first = (typeof currentHeaderRow === "number" ? currentHeaderRow : 1) + 1;
+      const last = Math.max(first, ...baseRows.map((row) => row.rowIndex0 + 1));
+      const fn = /^(suma|zsumuj)/i.test(m[1]) ? "SUM" : /^śr/i.test(m[1]) ? "AVERAGE" : /^(najwięk|maks)/i.test(m[1]) ? "MAX" : /^(najmniej|mini)/i.test(m[1]) ? "MIN" : "COUNTA";
+      return `=${fn}(${col}${first}:${col}${last})`;
+    }
+  }
+  return null;
+}
+
 // ── ✦ Opisz słowami → formuła (AI + sprawdzenie) ─────────────────────────────
 function swbFormulaAiSystem(target) {
   const cols = currentHeaders.slice(0, 40).map((h, i) => `${swbExplainColLetter(currentStartCol + i)} = „${h}”`).join("; ");
@@ -308,17 +376,30 @@ function swbFormulaFromAnswer(answer) {
   return line.replace(/[.;]\s*$/, "");
 }
 
-// target: { r, c, ref } aktywnej komórki → { formula, info } albo { error }
-async function swbWriteFormula(description, target) {
-  const answer = await LocalAI.generate({ system: swbFormulaAiSystem(target), user: description, maxTokens: 120 });
-  const formula = swbFormulaFromAnswer(answer);
+// target: { r, c, ref } aktywnej komórki → { formula, info, source } albo { error }
+// Najpierw wzory z reguł (bez AI), dopiero potem model — z przykładami i wymuszonym „=”.
+async function swbWriteFormula(description, target, { allowAi = true } = {}) {
+  const tpl = swbFormulaFromTemplate(description, target);
+  let formula = tpl;
+  if (!formula) {
+    if (!allowAi) return { error: t("fxWriteNoTemplate") };
+    const r = target.r + 1;
+    const answer = await LocalAI.generate({
+      system: swbFormulaAiSystem(target),
+      shots: [["suma dwóch pierwszych kolumn", `=${FormulaEngine.indexToCol(currentStartCol)}${r}+${FormulaEngine.indexToCol(currentStartCol + 1)}${r}`]],
+      user: description,
+      prefix: "=",
+      maxTokens: 80,
+    });
+    formula = swbFormulaFromAnswer(answer);
+  }
   if (!formula) return { error: t("fxWriteNoFormula") };
   const info = swbExplainFormula(formula, { sheet: currentSheetName, r: target.r, c: target.c });
   if (!info.ok) return { error: t("fxExplainSyntax", { msg: info.error }), formula };
   if (info.unknown.length) return { error: t("fxExplainUnknown", { fns: info.unknown.join(", ") }), formula };
   if (info.selfRef) return { error: t("fxExplainSelfRef"), formula };
   const lang = typeof currentLang === "string" ? currentLang : "pl";
-  return { formula: "=" + FormulaEngine.serialize(info.ast, { lang }), info };
+  return { formula: "=" + FormulaEngine.serialize(info.ast, { lang }), info, source: tpl ? "rule" : "ai" };
 }
 
 function swbFormulaTarget() {
@@ -342,13 +423,14 @@ function swbFormulaWriterSection(onInsert) {
     if (!desc) { input.focus(); return; }
     const target = swbFormulaTarget();
     if (!target) { toast(t("fxWriteNoCell"), "info"); return; }
-    if (!(await LocalAI.ensure({ reason: t("fxWriteReason") }))) return;
+    // wzór z reguł nie potrzebuje asystenta; okno zgody dopiero, gdy reguły nie rozpoznały prośby
+    if (!swbFormulaFromTemplate(desc, target) && !(await LocalAI.ensure({ reason: t("fxWriteReason") }))) return;
     go.disabled = true;
     out.hidden = false;
     out.replaceChildren(Object.assign(document.createElement("p"), { className: "lai-note", textContent: "…" }));
     try {
       const res = await swbWriteFormula(desc, target);
-      out.replaceChildren(Object.assign(document.createElement("span"), { className: "ai-badge", textContent: t("aiBadge") }));
+      out.replaceChildren(Object.assign(document.createElement("span"), { className: "ai-badge", textContent: t(res.source === "rule" ? "fxWriteRuleBadge" : "aiBadge") }));
       if (res.error) {
         if (res.formula) out.append(Object.assign(document.createElement("code"), { className: "fx-explain-formula", textContent: res.formula }));
         out.append(Object.assign(document.createElement("p"), { className: "lai-warn", textContent: res.error }));

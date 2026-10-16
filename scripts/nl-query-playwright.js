@@ -66,6 +66,10 @@ async function run() {
       noStart: p("bez startu"),
       surname: p("sprawy Kowalskiej"),
       unknown: p("sprawy Wiśniewskiego"),
+      words: p("zaległe sprawy powyżej dwóch miesięcy"),
+      month: p("rozliczone dłużej niż miesiąc"),
+      half: p("otwarte ponad pół roku"),
+      keep: p("jedna sprawa Kowalskiej"),
     };
   });
   check("„otwarte” → @wtoku", JSON.stringify(rules.open.tokens) === '["@wtoku"]', JSON.stringify(rules.open));
@@ -74,6 +78,10 @@ async function run() {
   check("„ponad 2 tygodnie” → @dni>>14", rules.weeks.tokens.includes("@dni>>14"), JSON.stringify(rules.weeks));
   check("„bez startu” → @bezstartu", rules.noStart.tokens.includes("@bezstartu"), JSON.stringify(rules.noStart));
   check("„Kowalskiej” → szukaj „Kowalsk” (odmiana)", rules.surname.terms[0] === "Kowalsk" && !rules.surname.unknown.length, JSON.stringify(rules.surname));
+  check("„zaległe … powyżej dwóch miesięcy” → @wtoku + @dni>>60", rules.words.tokens.includes("@wtoku") && rules.words.tokens.includes("@dni>>60"), JSON.stringify(rules.words));
+  check("„rozliczone dłużej niż miesiąc” → @zamkniete + @dni>>30", rules.month.tokens.includes("@zamkniete") && rules.month.tokens.includes("@dni>>30"), JSON.stringify(rules.month));
+  check("„ponad pół roku” → @dni>>183", rules.half.tokens.includes("@dni>>183"), JSON.stringify(rules.half));
+  check("„jedna sprawa” — liczebnik bez jednostki zostaje słowem", !rules.keep.tokens.length && rules.keep.terms[0] === "Kowalsk", JSON.stringify(rules.keep));
   check("słowo spoza danych → „nie rozpoznałem”", rules.unknown.unknown.includes("Wiśniewskiego") && !rules.unknown.terms.length, JSON.stringify(rules.unknown));
 
   // 2) prawdziwy arkusz: osoba z otwartym cyklem, nazwisko w odmianie
@@ -135,7 +143,7 @@ async function run() {
   const ai = await page.evaluate(async () => {
     window.__localAiMock = () => '```json\n{"szukaj": ["Xyzzyq"], "tryby": ["@wtoku", "@hack"], "dni_ponad": 60, "grupuj": "Nieistniejąca"}\n```';
     const input = document.getElementById("nlqInput");
-    input.value = "zaległe sprawy";
+    input.value = "pilne sprawy";
     document.getElementById("nlqBtn").click();
     const aiBtn = [...document.querySelectorAll("#nlqResult .nlq-actions .btn")].find((b) => b.textContent === "Zapytaj AI");
     if (!aiBtn) return { error: "no ai button" };

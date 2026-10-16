@@ -113,6 +113,8 @@ leaves the device. The model only *proposes*; the app's own engine computes and 
   through the same checks
 - **Similar names** grouping mode (`app/similar-names.js`, no AI): “Gr1 Julian Olsz”, “Olsz Julian”,
   “J. Olsz”, “Łukasz/Lukasz” join one group; one-letter differences are only *suggested* (Join / Split)
+- **Formula templates without AI**: “ile dni minęło od …”, “ile miesięcy między … a …”, “X gdy kolumna … wypełniona,
+  inaczej Y”, “połącz A i B myślnikiem”, “suma/średnia kolumny …” — recognised by rules; the AI is asked only for the rest
 - **Explain formula** (cell menu, `app/formula-explain.js`, no AI): the formula tree in Polish with column
   names, IF chains as steps, current values of references, the result. **✦ Describe in words** (fx dialog):
   the AI writes a formula, the app parses, checks and explains it before it goes to the formula bar

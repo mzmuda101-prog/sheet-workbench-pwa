@@ -2131,9 +2131,9 @@ async function rpSummaryWriteAi() {
   if (btn) { btn.disabled = true; btn.textContent = t("rpSummaryAiWorking"); }
   try {
     const text = (await LocalAI.generate({
-      system: "Piszesz po polsku jeden krótki akapit (2–4 zdania) podsumowania raportu z arkusza. Korzystasz WYŁĄCZNIE " +
-        "z podanych faktów; nie dodajesz liczb, ocen ani przyczyn, których w nich nie ma. Bez wstępu i bez wypunktowań.",
-      user: `Fakty:\n${factsText}`,
+      // dostrojone pod małe modele (docs/llm-bench/prompts.html, 2026-10-17: 0.8B 1/2 → 2/2)
+      system: "Streszczasz podane fakty w 2–3 zdaniach po polsku. Przepisujesz liczby dokładnie tak, jak w faktach; nie dodajesz innych liczb, ocen ani przyczyn.",
+      user: `Fakty:\n${factsText}\n\nStreszczenie:`,
       maxTokens: 220,
     })).trim();
     const known = new Set(rpNumbersIn(factsText));

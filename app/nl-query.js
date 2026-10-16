@@ -19,15 +19,30 @@ const NLQ_STOP = new Set(("pokaż pokaz wyświetl wyswietl znajdź znajdz szukaj
 
 const NLQ_RULES = [
   // kolejność ma znaczenie: zaprzeczenia przed pozytywami („niezakończone” zawiera „zakończone”)
-  { re: /\b(niezakończon\w*|niezakonczon\w*|niezamknięt\w*|niezamkniet\w*|otwart\w*|w\s+toku|w\s+trakcie|trwając\w*|trwajac\w*|aktywn\w*|open|in\s+progress|ongoing)\b/giu, token: "@wtoku", label: "nlqOpen", needsState: true },
+  { re: /\b(niezakończon\w*|niezakonczon\w*|niezamknięt\w*|niezamkniet\w*|niezałatwion\w*|niezalatwion\w*|zaległ\w*|zalegl\w*|otwart\w*|w\s+toku|w\s+trakcie|w\s+realizacji|trwając\w*|trwajac\w*|aktywn\w*|open|in\s+progress|ongoing|overdue|pending)\b/giu, token: "@wtoku", label: "nlqOpen", needsState: true },
   { re: /\b(wszystk\w*\s+zamknięt\w*|wszystk\w*\s+zamkniet\w*|all\s+closed)\b/giu, token: "@wszystkozamkniete", label: "nlqAllClosed", needsState: true },
-  { re: /\b(zamknięt\w*|zamkniet\w*|zakończon\w*|zakonczon\w*|skończon\w*|skonczon\w*|closed|finished|done)\b/giu, token: "@zamkniete", label: "nlqClosed", needsState: true },
+  { re: /\b(zamknięt\w*|zamkniet\w*|zakończon\w*|zakonczon\w*|skończon\w*|skonczon\w*|załatwion\w*|zalatwion\w*|rozliczon\w*|sfinalizowan\w*|closed|finished|done|completed)\b/giu, token: "@zamkniete", label: "nlqClosed", needsState: true },
   { re: /\b(bez\s+(startu|początku|poczatku|daty\s+(rozpoczęcia|rozpoczecia|startu))|no\s+start)\b/giu, token: "@bezstartu", label: "nlqNoStart", needsState: true },
   { re: /\b(niezaczęt\w*|niezaczet\w*|nierozpoczęt\w*|nierozpoczet\w*|nothing\s+started)\b/giu, token: "@niezaczete", label: "nlqNone" },
   { re: /\b(ostatni\w*(\s+(cykl\w*|etap\w*|blok\w*|wpis\w*))?|last(\s+cycle)?)\b/giu, token: "@ostatni", label: "nlqLast" },
   { re: /\b(pierwsz\w*(\s+(cykl\w*|etap\w*|blok\w*|wpis\w*))?|first(\s+cycle)?)\b/giu, token: "@pierwszy", label: "nlqFirst" },
 ];
-const NLQ_DAYS_RE = /\b(dłużej|dluzej|ponad|powyżej|powyzej|więcej|wiecej|over|more|longer|starsz\w*|older)\s*(niż|niz|od|than)?\s*(\d+(?:[.,]\d+)?)\s*(dni|dnia|dzień|dzien|days?|tyg\w*|weeks?|miesi\w*|mies\.?|months?)\b/iu;
+const NLQ_DAYS_RE = /\b(dłużej|dluzej|ponad|powyżej|powyzej|więcej|wiecej|over|more|longer|starsz\w*|older)\s*(niż|niz|od|than)?\s*(\d+(?:[.,]\d+)?)\s*(dni|dnia|dzień|dzien|days?|tyg\w*|tydzie\w*|weeks?|miesi\w*|mies\.?|months?|lat|lata|rok\w*|years?)\b/iu;
+// Liczebniki słowami → cyfry („dwóch miesięcy”, „pół roku”); jednostka bez liczby = 1 („dłużej niż miesiąc”).
+const NLQ_NUMBER_WORDS = [
+  [/(?<!\p{L})(jeden|jednego|jednej|jedna)(?!\p{L})/giu, "1"], [/(?<!\p{L})(dwa|dwóch|dwoch|dwu|dwie)(?!\p{L})/giu, "2"], [/(?<!\p{L})(trzy|trzech)(?!\p{L})/giu, "3"],
+  [/(?<!\p{L})(cztery|czterech)(?!\p{L})/giu, "4"], [/(?<!\p{L})(pięć|piec|pięciu|pieciu)(?!\p{L})/giu, "5"], [/(?<!\p{L})(sześć|szesc|sześciu|szesciu)(?!\p{L})/giu, "6"],
+  [/(?<!\p{L})(siedem|siedmiu)(?!\p{L})/giu, "7"], [/(?<!\p{L})(osiem|ośmiu|osmiu)(?!\p{L})/giu, "8"], [/(?<!\p{L})(dziewięć|dziewiec|dziewięciu|dziewieciu)(?!\p{L})/giu, "9"],
+  [/(?<!\p{L})(dziesięć|dziesiec|dziesięciu|dziesieciu)(?!\p{L})/giu, "10"], [/(?<!\p{L})(czternaście|czternastu)(?!\p{L})/giu, "14"], [/(?<!\p{L})(piętnaście|pietnascie|piętnastu|pietnastu)(?!\p{L})/giu, "15"],
+  [/(?<!\p{L})(dwadzieścia|dwadziescia|dwudziestu)(?!\p{L})/giu, "20"], [/(?<!\p{L})(trzydzieści|trzydziesci|trzydziestu)(?!\p{L})/giu, "30"], [/(?<!\p{L})(pół|pol)(?!\p{L})/giu, "0.5"],
+];
+function nlqNormalizeNumbers(text) {
+  let s = String(text);
+  // tylko przed jednostką czasu — „jedna sprawa” zostaje słowem
+  const unit = /^\s+(dni|dnia|dzień|dzien|tyg\S*|tydz\S*|miesi\S*|mies\.|lat|lata|rok\S*)/iu;
+  for (const [re, n] of NLQ_NUMBER_WORDS) s = s.replace(re, (m, _w, off, all) => (unit.test(all.slice(off + m.length)) ? n : m));
+  return s.replace(/(?<!\p{L})(dłużej|dluzej|ponad|powyżej|powyzej|więcej|wiecej)\s*(niż|niz|od)?\s*(tydzień|tydzien|tygodnia|miesiąc|miesiac|miesiąca|miesiaca|rok|roku)(?!\p{L})/giu, (m, a, b, unit) => `${a} ${b || ""} 1 ${unit}`);
+}
 const NLQ_GROUP_RE = /\b(według|wedlug|wg\.?|na\s+(?:każd\w*\s+)?|per|po|dla\s+każd\w*|for\s+each|by|grupuj\w*\s+(?:po|wg|według)?)\s+([\p{L}][\p{L}\-]{2,})/giu;
 const NLQ_GROUP_HINTS = { osob: "entity", pracownik: "entity", kto: "entity", person: "entity", employee: "entity", owner: "entity", nazwisk: "entity" };
 
@@ -76,7 +91,7 @@ function nlqFindHeader(word) {
 
 // → { terms: [...], tokens: [{ token, label }], days, groupBy, unknown: [...] }
 function parseNlQuery(text, { corpus = null } = {}) {
-  let rest = ` ${String(text || "")} `;
+  let rest = ` ${nlqNormalizeNumbers(text || "")} `;
   const tokens = [];
   const addToken = (token, label) => { if (!tokens.some((x) => x.token === token)) tokens.push({ token, label }); };
   let days = null;
@@ -84,7 +99,7 @@ function parseNlQuery(text, { corpus = null } = {}) {
   if (dm) {
     const n = Number(dm[3].replace(",", "."));
     const unit = nlqFold(dm[4]);
-    days = Math.round(n * (/^(tyg|week)/.test(unit) ? 7 : /^(mies|month)/.test(unit) ? 30 : 1));
+    days = Math.round(n * (/^(tyg|tydz|week)/.test(unit) ? 7 : /^(mies|month)/.test(unit) ? 30 : /^(lat|rok|year)/.test(unit) ? 365 : 1));
     rest = rest.replace(dm[0], " ");
   }
   for (const rule of NLQ_RULES) {
@@ -136,10 +151,16 @@ function nlqAiSystem() {
 }
 
 async function nlqAskAi(text, corpus) {
+  const who = currentHeaders.find((h) => /imi|nazwisk|osob|pracownik/i.test(h)) || currentHeaders[0] || "";
   const { value, problem } = await LocalAI.json({
     system: nlqAiSystem(),
+    shots: [
+      ["otwarte sprawy Wiśniewskiej dłużej niż tydzień", '{"szukaj": ["Wiśniewsk"], "tryby": ["@wtoku"], "dni_ponad": 7, "grupuj": null}'],
+      ["ile zamkniętych na osobę", `{"szukaj": [], "tryby": ["@zamkniete"], "dni_ponad": null, "grupuj": ${JSON.stringify(who)}}`],
+    ],
+    prefix: '{"szukaj": ["',
     user: text,
-    maxTokens: 160,
+    maxTokens: 100,
     validate: (j) => (Array.isArray(j.tryby) || j.tryby == null ? "" : "tryby-not-array"),
   });
   if (!value) return { error: problem || "invalid" };
@@ -193,7 +214,11 @@ function renderNlq(parsed, sourceText) {
   apply.disabled = !parsed.terms.length && !parsed.tokens.length && !parsed.groupBy;
   apply.addEventListener("click", () => applyNlq(parsed));
   actions.append(apply);
-  if (parsed.unknown.length && !parsed.ai && typeof LocalAI !== "undefined") {
+  // „Zapytaj AI” tylko przy dokładniejszym modelu: lekki 0.8B nie umiał ani złożyć filtra, ani
+  // przypisać słowa do trybu (pomiar docs/llm-bench/prompts.html, 2026-10-17: 0/3 i 2/8).
+  const st = typeof LocalAI !== "undefined" ? LocalAI.status() : null;
+  const weakModel = st && st.status === "ready" && st.backend === "webgpu" && st.loadedChoice === "qwen3.5-0.8b";
+  if (parsed.unknown.length && !parsed.ai && typeof LocalAI !== "undefined" && !weakModel) {
     const ai = Object.assign(document.createElement("button"), { type: "button", className: "btn btn-sm ghost", textContent: t("nlqAskAi") });
     ai.addEventListener("click", () => runNlqAi(sourceText));
     actions.append(ai);

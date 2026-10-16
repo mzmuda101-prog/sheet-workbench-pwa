@@ -108,6 +108,29 @@ async function run() {
   check("tabela Excela + łańcuch JEŻELI: krok „Jeżeli „od” jest puste → puste”", /^Jeżeli „od” jest puste → puste$/.test(real.steps?.[0] || ""), real.sentence);
   check("okno: formuła, zdanie, odwołania i wynik", /^=/.test(real.formula || "") && (real.sentence || "").length > 10 && real.refs >= 1 && /^Wynik w tej komórce: /.test(real.result || ""), JSON.stringify(real));
 
+  // 2b) wzory bez AI na prawdziwych kolumnach („od”, „do”, „Nr.”, „Imię i Nazwisko”)
+  const tpl = await page.evaluate(() => {
+    const r = baseRows[2].rowIndex0;
+    const target = { r, c: currentStartCol + currentHeaders.length - 1, ref: "" };
+    const L = (name) => FormulaEngine.indexToCol(currentStartCol + currentHeaders.findIndex((h) => String(h).trim() === name)) + (r + 1);
+    const f = (q) => swbFormulaFromTemplate(q, target);
+    return {
+      exp: { od: L("od"), do: L("do"), nr: L("Nr."), who: L("Imię i Nazwisko") },
+      since: f("ile dni minęło od daty w kolumnie od"),
+      between: f("ile miesięcy między od a do"),
+      ifFilled: f("napisz Zakończone, gdy kolumna do jest wypełniona, inaczej W trakcie"),
+      concat: f("połącz Nr. i Imię i Nazwisko myślnikiem"),
+      sum: f("suma kolumny Nr."),
+      none: f("policz premię kwartalną dla działu"),
+    };
+  });
+  check("wzór: „ile dni minęło od daty w kolumnie od” → DATEDIF(od; DZIŚ)", tpl.since === `=DATEDIF(${tpl.exp.od},TODAY(),"D")`, JSON.stringify(tpl));
+  check("wzór: „ile miesięcy między od a do” → DATEDIF(od; do; „M”)", tpl.between === `=DATEDIF(${tpl.exp.od},${tpl.exp.do},"M")`, JSON.stringify(tpl));
+  check("wzór: „Zakończone, gdy kolumna do jest wypełniona…” → JEŻELI", tpl.ifFilled === `=IF(${tpl.exp.do}<>"","Zakończone","W trakcie")`, JSON.stringify(tpl));
+  check("wzór: „połącz Nr. i Imię i Nazwisko myślnikiem”", tpl.concat === `=${tpl.exp.nr}&" - "&${tpl.exp.who}`, JSON.stringify(tpl));
+  check("wzór: „suma kolumny Nr.” → SUMA(zakres danych)", /^=SUM\([A-Z]+\d+:[A-Z]+\d+\)$/.test(tpl.sum || ""), tpl.sum);
+  check("nierozpoznana prośba → brak wzoru (idzie do AI)", tpl.none === null, tpl.none);
+
   // 3) ✦ Opisz słowami (atrapa AI) w oknie fx
   const writer = await page.evaluate(async () => {
     const row = baseRows[2];
@@ -122,7 +145,7 @@ async function run() {
       fxBtn.click();
       if (document.querySelector(".fx-dialog")?.hidden) fxBtn.click();
       const input = document.querySelector(".fx-dialog .fx-write-input");
-      input.value = "ile dni minęło od daty";
+      input.value = "policz okres od pierwszego wpisu";
       document.querySelector(".fx-dialog .fx-write .btn").click();
       for (let i = 0; i < 40 && !document.querySelector(".fx-dialog .fx-write-out .ai-badge"); i++) await new Promise((r) => setTimeout(r, 50));
       const out = document.querySelector(".fx-dialog .fx-write-out");
