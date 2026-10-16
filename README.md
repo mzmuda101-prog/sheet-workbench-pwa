@@ -103,6 +103,22 @@ of cell text:
 - Filter by function type, error type, or free-text search
 - Navigate directly to any formula location in the table
 
+### On-device AI assistant (optional)
+Menu ⋯ → “AI assistant…” (`app/local-ai.js`, shared with Documents Workbench). A language model runs in the
+browser — Chrome's built-in one, or a WebGPU model downloaded once with your consent. Workbook data never
+leaves the device. The model only *proposes*; the app's own engine computes and checks everything:
+- **Ask in plain words** (✦ in quick search, `app/nl-query.js`): “open cases for Kowalska longer than 30 days,
+  how many per person” → `Kowalsk @wtoku @dni>>30` + grouping by the person column. Rules first (no AI,
+  Polish inflection matched against the data); “Ask AI” only for what the rules could not read, filtered
+  through the same checks
+- **Similar names** grouping mode (`app/similar-names.js`, no AI): “Gr1 Julian Olsz”, “Olsz Julian”,
+  “J. Olsz”, “Łukasz/Lukasz” join one group; one-letter differences are only *suggested* (Join / Split)
+- **Explain formula** (cell menu, `app/formula-explain.js`, no AI): the formula tree in Polish with column
+  names, IF chains as steps, current values of references, the result. **✦ Describe in words** (fx dialog):
+  the AI writes a formula, the app parses, checks and explains it before it goes to the formula bar
+- **Report summary**: a paragraph at the top of the report built from the findings; “✦ Write it smoother (AI)”
+  is accepted only when every number appears in the findings
+
 ### UI and experience
 - Full Polish / English UI with live language switching
 - Light and dark mode

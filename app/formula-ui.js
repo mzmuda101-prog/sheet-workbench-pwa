@@ -431,7 +431,18 @@ let swbFormulaPointingUntil = 0;
     search.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { const first = list.querySelector(".fx-dialog-item"); if (first) first.click(); e.preventDefault(); }
     });
-    dlg.replaceChildren(head, search, tabs, list, hint);
+    // ✦ Opisz słowami (formula-explain.js): formuła od AI, sprawdzona i wyjaśniona przed wstawieniem
+    const writer = typeof swbFormulaWriterSection === "function" && typeof LocalAI !== "undefined"
+      ? swbFormulaWriterSection((formula) => {
+        closeDlg(false);
+        if (!fxInput || fxInput.disabled) return;
+        if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
+        fxInput.focus();
+        setInput(fxInput, formula, formula.length);
+        render(fxInput);
+      })
+      : null;
+    dlg.replaceChildren(...[head, writer, search, tabs, list, hint].filter(Boolean));
     fill();
     if (typeof attachOverflowFade === "function") attachOverflowFade(tabs);
     return search;

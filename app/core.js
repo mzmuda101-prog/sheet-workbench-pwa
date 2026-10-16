@@ -663,6 +663,7 @@ let aggregationWorkbenchState = {
   matchMode: "contains",
   groupMode: "exact",
   groupPattern: "=*",
+  similarPairs: [], // „Podobne nazwiska”: ręcznie zatwierdzone literówki [[a, b]] (similar-names.js)
   showCount: 20,
   havingMode: "all",
   havingValue: 10,
@@ -671,7 +672,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261015-06";
+const APP_BUILD_VERSION = "20261016-01";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

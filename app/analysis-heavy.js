@@ -611,6 +611,76 @@ function renderDurationAnalysis() {
   });
 }
 
+// „Podobne nazwiska” (similar-names.js): co zostało scalone + literówki do zatwierdzenia.
+// Każde scalenie jest widoczne — nic nie znika z liczenia po cichu.
+function renderSimilarNamesNote(similar) {
+  const pairs = aggregationWorkbenchState.similarPairs || [];
+  if (!similar.clusters.length && !similar.suggestions.length && !pairs.length) return null;
+  const box = document.createElement("details");
+  box.className = "similar-names-note";
+  box.open = similar.suggestions.length > 0;
+  const variants = similar.clusters.reduce((n, c) => n + c.members.length, 0);
+  const summary = document.createElement("summary");
+  summary.textContent = similar.clusters.length
+    ? t("similarSummary", { variants, groups: similar.clusters.length })
+    : t("similarNothing");
+  if (similar.suggestions.length) summary.append(Object.assign(document.createElement("span"), { className: "similar-badge", textContent: t("similarToCheck", { n: similar.suggestions.length }) }));
+  box.appendChild(summary);
+  if (similar.suggestions.length) {
+    const head = document.createElement("div");
+    head.className = "similar-head";
+    head.textContent = t("similarSuggestTitle");
+    box.appendChild(head);
+    similar.suggestions.forEach(({ a, b }) => {
+      const row = document.createElement("div");
+      row.className = "similar-row";
+      row.append(Object.assign(document.createElement("span"), { textContent: `${a} ↔ ${b}` }));
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "btn btn-sm ghost";
+      btn.dataset.similarMerge = JSON.stringify([a, b]);
+      btn.textContent = t("similarMerge");
+      row.appendChild(btn);
+      box.appendChild(row);
+    });
+  }
+  similar.clusters.slice(0, 40).forEach((cluster) => {
+    const row = document.createElement("div");
+    row.className = "similar-row similar-cluster";
+    row.append(Object.assign(document.createElement("strong"), { textContent: cluster.canonical }));
+    row.append(Object.assign(document.createElement("span"), {
+      className: "similar-members",
+      textContent: cluster.members.filter((m) => m.label !== cluster.canonical).map((m) => `${m.label} (${m.count})`).join(" · "),
+    }));
+    box.appendChild(row);
+  });
+  pairs.forEach(([a, b]) => {
+    const row = document.createElement("div");
+    row.className = "similar-row";
+    row.append(Object.assign(document.createElement("span"), { textContent: t("similarApproved", { a, b }) }));
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-sm ghost";
+    btn.dataset.similarSplit = JSON.stringify([a, b]);
+    btn.textContent = t("similarSplit");
+    row.appendChild(btn);
+    box.appendChild(row);
+  });
+  return box;
+}
+
+document.addEventListener("click", (e) => {
+  const merge = e.target.closest?.("[data-similar-merge]");
+  const split = e.target.closest?.("[data-similar-split]");
+  if (!merge && !split) return;
+  const pair = JSON.parse((merge || split).dataset[merge ? "similarMerge" : "similarSplit"]);
+  const list = aggregationWorkbenchState.similarPairs || [];
+  aggregationWorkbenchState.similarPairs = merge
+    ? [...list, pair]
+    : list.filter(([a, b]) => !(a === pair[0] && b === pair[1]));
+  renderAggregationWorkbench();
+});
+
 function renderAggregationWorkbench() {
   renderMonthlySummary(); // panel „Podsumowanie miesięczne" odświeża się tym samym cyklem (ma własną bramkę)
   if (deferAnalysis("aggregation")) return;
@@ -685,6 +755,11 @@ function renderAggregationWorkbench() {
     smartNote.className = "duration-analysis-note";
     smartNote.textContent = t("aggregationSmartNote");
     aggregationWorkbenchSummaryEl.appendChild(smartNote);
+  }
+
+  if (result.similar) {
+    const similarNote = renderSimilarNamesNote(result.similar);
+    if (similarNote) aggregationWorkbenchSummaryEl.appendChild(similarNote);
   }
 
   const controls = document.createElement("div");

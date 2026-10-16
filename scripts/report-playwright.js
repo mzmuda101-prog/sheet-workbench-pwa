@@ -128,12 +128,12 @@ async function run() {
 
   // ── 1b. Presety i wybór sekcji ───────────────────────────────────────────
   const secs = () => page.evaluate(() => window.__report.sections());
-  check("domyślnie krótki: liczby, wnioski, wykres", (await secs()).join() === "tiles,findings,chart", await secs());
+  check("domyślnie krótki: podsumowanie, liczby, wnioski, wykres", (await secs()).join() === "summary,tiles,findings,chart", await secs());
   await page.click("#rpContentBtn");
   check("panel zawartości otwarty", await page.evaluate(() => !document.getElementById("rpContentPanel").classList.contains("hidden")));
   await page.click('#rpPresets [data-preset="normal"]');
   await sleep(100);
-  check("normalny: + zestawienia, miesiące i statystyki liczb", (await secs()).join() === "tiles,findings,chart,aggAuto,months,numbers", await secs());
+  check("normalny: + zestawienia, miesiące i statystyki liczb", (await secs()).join() === "summary,tiles,findings,chart,aggAuto,months,numbers", await secs());
   const catRow = await page.evaluate(() => {
     const cb = document.querySelector('#rpSectionList input[value="categories"]');
     return { disabled: cb.disabled, why: cb.closest("label").textContent };
@@ -145,9 +145,10 @@ async function run() {
   check("miesiące po kolei: sty, lut, mar", monthBars.length === 3 && /stycze/.test(monthBars[0]) && /marzec/.test(monthBars[2]), monthBars);
   await page.click('#rpPresets [data-preset="detailed"]');
   await sleep(100);
-  check("szczegółowy: + przegląd kolumn i dane", (await secs()).join() === "tiles,findings,chart,aggAuto,months,numbers,aggPanel,columns,data", await secs());
+  check("szczegółowy: + przegląd kolumn i dane", (await secs()).join() === "summary,tiles,findings,chart,aggAuto,months,numbers,aggPanel,columns,data", await secs());
   const detail = await page.evaluate(() => ({
-    dataRows: document.querySelectorAll('#rpPage [data-section="data"] tbody tr').length,
+    // bez wierszy przerwy strony i powtórzonego nagłówka (tabela może przejść na 2. stronę)
+    dataRows: document.querySelectorAll('#rpPage [data-section="data"] tbody tr:not(.rp-gap-row):not(.rp-head-repeat)').length,
     dataCols: document.querySelectorAll('#rpPage [data-section="data"] thead th').length,
     colRows: Array.from(document.querySelectorAll('#rpPage [data-section="columns"] tbody tr')).map((tr) => `${tr.cells[0].textContent}:${tr.cells[1].textContent}`),
   }));

@@ -38,6 +38,7 @@ const RP_MAX_MONTHS = 18;
 // liście — jest zawsze, bo wydruk bez niego łatwo wziąć za pełne dane.
 // `has` = czy sekcja ma w tym arkuszu z czego powstać; bez tego pusty rozdział.
 const RP_SECTIONS = [
+  { id: "summary", label: "rpSecSummary" },
   { id: "tiles", label: "rpSecTiles" },
   { id: "findings", label: "rpSecFindings" },
   { id: "state", label: "rpSecState", has: (d) => !!d.state },
@@ -53,8 +54,8 @@ const RP_SECTIONS = [
   { id: "data", label: "rpSecData" },
 ];
 const RP_PRESETS = {
-  short: ["tiles", "findings", "chart"],
-  normal: ["tiles", "findings", "chart", "aggAuto", "months", "numbers", "categories"],
+  short: ["summary", "tiles", "findings", "chart"],
+  normal: ["summary", "tiles", "findings", "chart", "aggAuto", "months", "numbers", "categories"],
   // Sekcje kątów (Stan teraz / Porównanie) dokłada wybór kąta albo ręczne zaznaczenie — długość raportu ich nie włącza.
   detailed: RP_SECTIONS.map((sec) => sec.id).filter((id) => id !== "state" && id !== "compare" && id !== "periods"),
 };
@@ -2092,7 +2093,83 @@ function rpTable(headers, rows, { numCols = [] } = {}) {
 
 const RP_KIND_LABEL = { num: "rpKindNum", date: "rpKindDate", text: "rpKindText", empty: "rpKindEmpty" };
 
+// ── Podsumowanie: akapit z wniosków ─────────────────────────────────────────
+// Bez AI: zakres + 3 pierwsze wnioski + ile uwag do sprawdzenia — te same zdania, co niżej,
+// tylko jako akapit na górze kartki. Z AI (local-ai.js, przycisk na ekranie): asystent pisze
+// płynniej z TYCH SAMYCH faktów; tekst wchodzi na kartkę tylko, gdy każda jego liczba
+// występuje w faktach — inaczej zostaje wersja z reguł.
+let rpSummaryAi = null; // { key, text }
+
+function rpSummaryFacts(d) {
+  const findings = rpFindings(d);
+  const main = findings.filter((f) => !f.tone).slice(0, 3).map((f) => f.text);
+  const warns = findings.filter((f) => f.tone === "warn");
+  const scope = d.filtering
+    ? t("rpSummaryScopeFiltered", { rows: rpNum(d.rows, 0), total: rpNum(d.total, 0) })
+    : t("rpSummaryScope", { rows: rpNum(d.rows, 0) });
+  return { scope, main, warns: warns.map((f) => f.text), key: [scope, ...main, ...warns.map((f) => f.text)].join("\n") };
+}
+
+function rpSummaryRuleText(facts) {
+  const parts = [facts.scope, ...facts.main];
+  if (facts.warns.length) parts.push(t("rpSummaryWarns", { n: facts.warns.length }));
+  return parts.map((p) => p.trim().replace(/[.]?$/, ".")).join(" ");
+}
+
+function rpNumbersIn(text) {
+  return (String(text).match(/\d[\d\s\u00a0.,]*\d|\d/g) || [])
+    .map((n) => n.replace(/[\s\u00a0]/g, "").replace(/[.,]0+$/, "").replace(/[.,]$/, ""))
+    .filter(Boolean);
+}
+
+async function rpSummaryWriteAi() {
+  if (!rpData || typeof LocalAI === "undefined") return;
+  if (!(await LocalAI.ensure({ reason: t("rpSummaryAiReason") }))) return;
+  const facts = rpSummaryFacts(rpData);
+  const factsText = [facts.scope, ...facts.main, ...facts.warns].join("\n");
+  const btn = document.querySelector(".rp-summary-ai");
+  if (btn) { btn.disabled = true; btn.textContent = t("rpSummaryAiWorking"); }
+  try {
+    const text = (await LocalAI.generate({
+      system: "Piszesz po polsku jeden krótki akapit (2–4 zdania) podsumowania raportu z arkusza. Korzystasz WYŁĄCZNIE " +
+        "z podanych faktów; nie dodajesz liczb, ocen ani przyczyn, których w nich nie ma. Bez wstępu i bez wypunktowań.",
+      user: `Fakty:\n${factsText}`,
+      maxTokens: 220,
+    })).trim();
+    const known = new Set(rpNumbersIn(factsText));
+    const unknown = rpNumbersIn(text).filter((n) => !known.has(n));
+    if (!text || unknown.length) {
+      rpSummaryAi = null;
+      toast(t("rpSummaryAiRejected", { nums: unknown.join(", ") || "—" }), "warning");
+    } else {
+      rpSummaryAi = { key: facts.key, text };
+    }
+  } catch (err) {
+    toast(t("aiFailed", { msg: err.message || err }), "warning");
+  }
+  rpRender();
+}
+
 const RP_BUILDERS = {
+  summary(d) {
+    const facts = rpSummaryFacts(d);
+    const ai = rpSummaryAi && rpSummaryAi.key === facts.key ? rpSummaryAi.text : "";
+    const sec = rpSection(t("rpSummaryTitle"), "rp-summary");
+    sec.append(rpEl("p", "rp-summary-text", ai || rpSummaryRuleText(facts)));
+    if (ai) sec.append(rpEl("p", "rp-summary-note", t("rpSummaryAiNote")));
+    // przyciski tylko na ekranie (nie na wydruku)
+    if (typeof LocalAI !== "undefined") {
+      const row = rpEl("div", "rp-summary-actions rp-screen-only");
+      const b = rpEl("button", "btn btn-sm ghost rp-summary-ai", ai ? t("rpSummaryRuleBtn") : t("rpSummaryAiBtn"));
+      b.type = "button";
+      b.addEventListener("click", () => {
+        if (ai) { rpSummaryAi = null; rpRender(); } else rpSummaryWriteAi();
+      });
+      row.append(b);
+      sec.append(row);
+    }
+    return sec;
+  },
   tiles(d) {
     const el = rpEl("section", "rp-tiles");
     rpTiles(d).forEach((tile) => {
@@ -3140,7 +3217,7 @@ async function rpDownloadPdf({ deliver = true, intent = "save" } = {}) {
         width: Math.round(W),
         height: Math.round(P),
         logging: false,
-        ignoreElements: (el) => !keep(el) || el.classList?.contains("rp-sheet-band"),
+        ignoreElements: (el) => !keep(el) || el.classList?.contains("rp-sheet-band") || el.classList?.contains("rp-screen-only"),
       });
       images.push({ bytes: await rpCanvasToJpeg(canvas), w: canvas.width, h: canvas.height });
       canvas.width = 0; // zwolnij pamięć od razu (iPad)

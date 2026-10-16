@@ -1232,16 +1232,31 @@ const AGGREGATION_GROUP_TRANSFORMS = [
     needsPattern: true,
     build: (opts) => compileGroupPattern(opts && opts.pattern),
   },
+  {
+    // „Podobne nazwiska” (similar-names.js) — warianty tej samej osoby: kolejność słów, „Gr 1”,
+    // tytuły, inicjały, polskie znaki. Potrzebuje WSZYSTKICH etykiet kolumny naraz (needsLabels).
+    id: "similar",
+    labelKey: "aggGroupSimilar",
+    needsPattern: false,
+    needsLabels: true,
+    build: (opts) => {
+      if (typeof SimilarNames === "undefined") return (label) => String(label ?? "").trim();
+      const res = SimilarNames.buildSimilarNameGroups(opts.labels || [], { extraPairs: aggregationWorkbenchState.similarPairs || [] });
+      lastSimilarGroups = res;
+      return (label) => res.map.get(String(label ?? "").trim()) || String(label ?? "").trim();
+    },
+  },
 ];
+let lastSimilarGroups = null; // ostatnie scalenia „Podobnych nazwisk” — do opisu pod wynikami
 
 function getAggregationGroupTransformDef(id) {
   return AGGREGATION_GROUP_TRANSFORMS.find((def) => def.id === id) || AGGREGATION_GROUP_TRANSFORMS[0];
 }
 
-function getActiveGroupTransform() {
+function getActiveGroupTransform(labels = null) {
   const def = getAggregationGroupTransformDef(aggregationWorkbenchState.groupMode);
   try {
-    return def.build({ pattern: aggregationWorkbenchState.groupPattern }) || ((label) => String(label ?? "").trim());
+    return def.build({ pattern: aggregationWorkbenchState.groupPattern, labels }) || ((label) => String(label ?? "").trim());
   } catch {
     return (label) => String(label ?? "").trim();
   }
@@ -1272,7 +1287,16 @@ function buildAggregationWorkbenchResult() {
   const measureFilterMode = aggregationWorkbenchState.measureFilterMode || "all";
   const measureFilterValue = aggregationWorkbenchState.measureFilterValue || "";
   const buckets = new Map();
-  const groupTransform = getActiveGroupTransform();
+  const groupDisplay = (row, groupIdx) => String(getDisplayValue(row, groupIdx) || row.values?.[groupIdx] || "(puste)").trim() || "(puste)";
+  // tryb potrzebujący wszystkich etykiet (Podobne nazwiska): najpierw policz warianty
+  let groupLabelCounts = null;
+  lastSimilarGroups = null;
+  if (getAggregationGroupTransformDef(aggregationWorkbenchState.groupMode).needsLabels) {
+    const counts = new Map();
+    model.rows.forEach((row) => groupIndexes.forEach((gi) => { const l = groupDisplay(row, gi); counts.set(l, (counts.get(l) || 0) + 1); }));
+    groupLabelCounts = [...counts].map(([label, count]) => ({ label, count }));
+  }
+  const groupTransform = getActiveGroupTransform(groupLabelCounts);
   model.rows.forEach((row) => {
     if (measureFilterMode !== "all" && measureFilterValue && activeMeasures.length) {
       const rowMeasureText = activeMeasures
@@ -1286,8 +1310,7 @@ function buildAggregationWorkbenchResult() {
       if (measureFilterMode === "exact" && rowMeasureLower !== filterLower) return;
     }
     const groupLabels = groupIndexes.map((groupIdx) => {
-      const rawGroup = row.values?.[groupIdx];
-      const display = String(getDisplayValue(row, groupIdx) || rawGroup || "(puste)").trim() || "(puste)";
+      const display = groupDisplay(row, groupIdx);
       // Wzorzec/preset scala warianty do wspólnego rdzenia (np. Osoba1 → Osoba)
       return groupTransform(display) || display;
     });
@@ -1383,6 +1406,7 @@ function buildAggregationWorkbenchResult() {
       sourceRows: model.rows.length,
       measuredRows: entries.reduce((sum, entry) => sum + entry.count, 0),
     },
+    similar: lastSimilarGroups,
   };
 }
 

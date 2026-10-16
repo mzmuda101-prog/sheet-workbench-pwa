@@ -436,9 +436,9 @@ async function run() {
       id: document.activeElement?.id || document.activeElement?.className,
     }));
     if (info.out) escapes++;
-    // 9 przystanków: tyle ma okno z paskiem chipów „Tryby auto"; bez niego pętla
-    // i tak wraca do pola wcześniej (asercja szuka pola w odwiedzonych).
-    if (i < 9) visited.push(info.id);
+    // 11 przystanków: tyle ma okno z paskiem chipów „Tryby auto" i polem „✦ Opisz słowami”
+    // (nlqInput + nlqBtn); bez chipów pętla i tak wraca do pola wcześniej.
+    if (i < 11) visited.push(info.id);
   }
   check("Tab nie ucieka z okna szukania (pułapka fokusu)", escapes === 0, `ucieczek: ${escapes}`);
   check("obieg Tab wraca do pola szukania", visited.includes("quickSearchPopupInput"), visited.join(" → "));
@@ -505,7 +505,7 @@ async function run() {
     return !!el && !el.classList.contains("hidden") && el.querySelectorAll("button").length > 0;
   });
   const obieg = [];
-  for (let i = 0; i < (chipBarVisible ? 8 : 7); i++) {
+  for (let i = 0; i < (chipBarVisible ? 10 : 9); i++) {
     await page.keyboard.press("Tab");
     obieg.push(await page.evaluate(() => {
       const a = document.activeElement;
@@ -524,6 +524,7 @@ async function run() {
   const oczekiwany = ["qsFlagsPopup", "quickSearchPopupAction", "quickSearchPopupOperators",
     "qsAllSheetsPopup", "quickSearchPopupColumnsBtn", "quickSearchPopupBtn",
     ...(chipBarVisible ? ["quickSearchSmartChips"] : []),
+    "nlqInput", "nlqBtn", // „✦ Opisz słowami” (nl-query.js) — na górze okna, więc po pętli
     "quickSearchPopupInput"];
   check("obieg Tab w oknie szukania jest taki sam w każdym silniku i na dotyku",
     obieg.join(",") === oczekiwany.join(","), obieg.join(" → "));

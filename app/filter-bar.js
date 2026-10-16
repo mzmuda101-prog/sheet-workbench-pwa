@@ -362,6 +362,16 @@ function cellMenuPasteItem(target) {
   return { id: "paste", label, run: () => { closeCellMenu(); pasteClipboardToSelection({ source: "app" }); } };
 }
 
+// „Wyjaśnij formułę” (formula-explain.js) — tylko gdy komórka ma formułę z pliku/wpisaną
+function cellMenuExplainItem(target) {
+  if (typeof swbOpenFormulaExplain !== "function" || !target.row || !Number.isFinite(target.row.rowIndex0) || currentDisplayModel?.mode !== "wide") return null;
+  const r = target.row.rowIndex0;
+  const c = currentStartCol + target.col;
+  const formula = typeof swbFormulaText === "function" ? swbFormulaText(currentSheetName, XLSX.utils.encode_cell({ r, c })) : null;
+  if (!formula) return null;
+  return { id: "explain", label: t("cellMenuExplain"), run: () => { closeCellMenu(); swbOpenFormulaExplain({ formula, r, c }); } };
+}
+
 function cellMenuItems(target) {
   const paste = cellMenuPasteItem(target);
   if (target.multi) {
@@ -378,6 +388,7 @@ function cellMenuItems(target) {
     { id: "hide", label: t(empty ? "cellMenuHideEmpty" : "cellMenuHide"), run: () => applyCellFilter(true) },
     { id: "copy", label: t("cellMenuCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
     paste,
+    cellMenuExplainItem(target),
   ].filter(Boolean);
 }
 
@@ -411,7 +422,7 @@ function openCellMenu(td, point, { viaKeyboard = false } = {}) {
     setFocusedCell(rowKey, colIndex0, { scroll: false });
     const header = currentDisplayModel.headers[colIndex0];
     const value = String(getDisplayValue(row, colIndex0) ?? "");
-    cellMenuTarget = { header, value, td };
+    cellMenuTarget = { header, value, td, row, col: colIndex0 };
     h.textContent = afShort(header || "—", 28);
     v.textContent = value.trim() ? `„${afShort(value, 34)}”` : t("cellMenuEmptyValue");
   }

@@ -5075,7 +5075,9 @@ html.low-power .loading-overlay.is-file {
   margin-bottom: 6px;
   flex-wrap: wrap;
 }
-.quick-search-popup-row input:not([type="checkbox"]) {
+.quick-search-popup-row input:not([type="checkbox"]),
+.nlq-row input,
+.fx-write-input {
   flex: 1;
   min-width: 180px;
   padding: 8px 12px;
@@ -5107,18 +5109,24 @@ html.low-power .loading-overlay.is-file {
 }
 
 .quick-search-popup-row select:focus,
-.quick-search-popup-row input:focus {
+.quick-search-popup-row input:focus,
+.nlq-row input:focus,
+.fx-write-input:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px rgba(47,111,92,.14);
 }
 
 [data-theme="dark"] .quick-search-popup-row input:not([type="checkbox"]),
+[data-theme="dark"] .nlq-row input,
+[data-theme="dark"] .fx-write-input,
 [data-theme="dark"] .quick-search-popup-row select {
   background-color: var(--field);
   box-shadow: inset 0 1px 3px rgba(0,0,0,0.15);
 }
 [data-theme="dark"] .quick-search-popup-row select:focus,
-[data-theme="dark"] .quick-search-popup-row input:focus {
+[data-theme="dark"] .quick-search-popup-row input:focus,
+[data-theme="dark"] .nlq-row input:focus,
+[data-theme="dark"] .fx-write-input:focus {
   box-shadow: 0 0 0 3px rgba(77,184,143,.18);
 }
 .quick-search-popup-hint {
@@ -6438,6 +6446,8 @@ body.tr-active .toast-container {
   .field textarea,
   .quick-search input:not([type="checkbox"]),
   .quick-search-popup-row input:not([type="checkbox"]),
+  .nlq-row input,
+  .fx-write-input,
   .modal-search,
   .aggregation-result-search,
   .aggregation-having-value,
@@ -8368,3 +8378,89 @@ thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }
 [data-theme="dark"] .key-bar { box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.35); }
 /* .btn ustawia display — bez tego [hidden] nie chowa przełącznika na komputerze/tablecie */
 #keyBarToggle[hidden] { display: none !important; }
+
+/* ── Asystent AI na urządzeniu (local-ai.js) — ten sam blok w Sheet i Documents ── */
+.lai-dialog {
+  position: fixed; inset: 0; margin: auto; height: fit-content;
+  width: min(520px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto;
+  border: 1px solid var(--border); border-radius: 18px; padding: 0;
+  background: var(--surface); color: var(--ink); box-shadow: 0 18px 48px rgba(8, 14, 28, 0.25);
+}
+.lai-dialog::backdrop { background: rgba(8, 14, 28, 0.38); }
+.lai-box { padding: 18px 18px 16px; display: grid; gap: 10px; }
+.lai-title { margin: 0; font-size: 1.1rem; }
+.lai-intro, .lai-note, .lai-meta { color: var(--muted); font-size: 0.86rem; margin: 0; }
+.lai-reason { margin: 0; font-weight: 600; }
+.lai-warn { margin: 0; color: var(--warning); font-size: 0.88rem; }
+.lai-options { display: grid; gap: 8px; }
+.lai-option {
+  display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start; cursor: pointer;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--field, var(--surface));
+}
+.lai-option:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.lai-option:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
+.lai-option input { margin-top: 3px; accent-color: var(--accent); }
+.lai-option-body { display: grid; gap: 2px; }
+.lai-status { font-size: 0.88rem; color: var(--muted); min-height: 1.3em; }
+.lai-status.is-ready { color: var(--success); }
+.lai-status.is-error { color: var(--warning); }
+.lai-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; margin-top: 6px; }
+.lai-bar > i { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
+.lai-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.lai-btn {
+  font: inherit; font-size: 0.9rem; min-height: 40px; padding: 8px 14px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+}
+.lai-btn.is-primary { background: var(--accent); border-color: transparent; color: #fff; }
+.lai-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.lai-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Wynik AI — zawsze podpisany jako propozycja do sprawdzenia */
+.ai-badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 600; background: var(--accent-light); color: var(--accent);
+}
+
+/* ── Podobne nazwiska (similar-names.js) ── */
+.similar-names-note { margin: 8px 0; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; font-size: 0.85rem; background: var(--surface); }
+.similar-names-note > summary { cursor: pointer; font-weight: 600; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.similar-badge { font-size: 0.75rem; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--warning-bg); color: var(--warning); }
+.similar-head { margin: 8px 0 4px; color: var(--muted); }
+.similar-row { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; padding: 4px 0; border-top: 1px solid var(--border-subtle, var(--border)); }
+.similar-members { color: var(--muted); overflow-wrap: anywhere; }
+
+/* ── ✦ Zapytaj zwykłymi słowami (nl-query.js) ── */
+.nlq { display: grid; gap: 6px; margin: 4px 0 8px; }
+.nlq-row { display: flex; gap: 6px; align-items: center; }
+.nlq-icon { color: var(--accent); font-size: 1rem; }
+.nlq-row input { flex: 1 1 auto; min-width: 0; }
+.nlq-result { display: grid; gap: 6px; padding: 8px 10px; border-radius: 10px; background: var(--accent-light); font-size: 0.85rem; }
+.nlq-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.nlq-lead { color: var(--muted); }
+.nlq-chip { padding: 2px 8px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+.nlq-chip.is-mode { border-color: var(--accent-border, var(--accent)); color: var(--accent); }
+.nlq-chip.is-group { font-weight: 600; }
+.nlq-chip.is-empty { color: var(--muted); }
+.nlq-note { margin: 0; color: var(--muted); }
+.nlq-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.nlq-open-btn span { color: var(--accent); font-size: 1rem; line-height: 1; }
+
+/* ── Formuły słowami (formula-explain.js) ── */
+.fx-explain-formula { display: block; padding: 8px 10px; border-radius: 8px; background: var(--field, var(--surface)); border: 1px solid var(--border); font-size: 0.85rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+.fx-explain-sentence { margin: 0; font-size: 0.95rem; line-height: 1.5; }
+.fx-explain-label { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+.fx-explain-refs { margin: 0; padding-left: 18px; font-size: 0.85rem; display: grid; gap: 2px; overflow-wrap: anywhere; }
+.fx-explain-result { margin: 0; font-weight: 600; }
+.fx-write { display: grid; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--border); margin-bottom: 6px; }
+.fx-write-row { display: flex; gap: 6px; align-items: center; }
+.fx-write-input { flex: 1 1 auto; min-width: 0; }
+.fx-write-out { display: grid; gap: 6px; padding: 8px; border-radius: 10px; background: var(--accent-light); }
+.fx-explain-steps { margin: 0; padding-left: 20px; display: grid; gap: 4px; font-size: 0.9rem; line-height: 1.45; }
+
+/* ── Raport: Podsumowanie (report.js) ── */
+.rp-summary-text { margin: 0; line-height: 1.5; }
+.rp-summary-note { margin: 1.5mm 0 0; font-size: 0.8em; color: #6b6f76; }
+.rp-summary-actions { margin-top: 2mm; }
+@media print { .rp-screen-only { display: none !important; } }
+/* kartka raportu jest zawsze biała — przycisk na niej nie bierze kolorów z ciemnego motywu */
+.rp-summary-ai.btn, .rp-summary-ai.btn:hover { color: #1f2a37; background: #ffffff; border: 1px solid #b8bec8; }
+.lai-box > .ai-badge, .fx-write-out > .ai-badge, .compare-describe-ai > .ai-badge { justify-self: start; }

@@ -111,7 +111,7 @@ async function run() {
   check("przycisk: „Zawartość: Stan teraz · krótki”", ui.btn === "Zawartość: Stan teraz · krótki", ui.btn);
   check("opis wykrycia w panelu (otwarte = W toku, Nowe, niezakończone; zamknięte = Zakończone, Anulowane)",
     /Status/.test(ui.info) && /otwarte = .*„W toku”.*„Nowe”/.test(ui.info) && /niezakończone/.test(ui.info.split("zamknięte")[0]) && /zamknięte = .*„Zakończone”.*„Anulowane”/.test(ui.info), ui.info);
-  check("krótki preset + sekcja kąta (kafelki, wnioski, stan, wykres)", JSON.stringify(ui.sections) === JSON.stringify(["tiles", "findings", "state", "chart"]), ui.sections);
+  check("krótki preset + sekcja kąta (podsumowanie, kafelki, wnioski, stan, wykres)", JSON.stringify(ui.sections) === JSON.stringify(["summary", "tiles", "findings", "state", "chart"]), ui.sections);
   check("checkbox sekcji kąta zaznaczony i zablokowany „z wybranego kąta”", ui.forced && /z wybranego kąta/.test(ui.forcedNote), ui);
 
   // Strażnik: po wielu odświeżeniach kartki JEDEN klik = jedno przełączenie panelu (nasłuchy
