@@ -331,6 +331,89 @@ function toDisplay(value) {
   return String(value);
 }
 
+// ── Tekst komórki jak w polskim Excelu ──────────────────────────────────────────
+// SheetJS (SSF 0.20.3) rzuca wyjątek na kropce w formacie daty — a „dd.mm.yyyy” to
+// najczęstszy format w polskich plikach. Komórka zostawała bez tekstu (w), widok
+// pokazywał zapasowe „12-03-25”, a data z godziną („dd.mm.yyyy hh:mm”) gubiła godzinę.
+// Kropka poza cudzysłowem i [ ], nie po 0 # ? (separator dziesiętny) i nie przed 0
+// (ułamek sekundy „ss.000”) jest w dacie zwykłym znakiem — escapujemy ją i próbujemy jeszcze raz.
+function swbEscapeFormatDots(code) {
+  let out = "";
+  let quoted = false;
+  let bracket = false;
+  for (let i = 0; i < code.length; i++) {
+    const ch = code[i];
+    if (ch === "\\" && !quoted) { out += ch + (code[i + 1] ?? ""); i++; continue; }
+    if (ch === '"') quoted = !quoted;
+    else if (!quoted && ch === "[") bracket = true;
+    else if (!quoted && ch === "]") bracket = false;
+    else if (ch === "." && !quoted && !bracket && !/[0#?]/.test(code[i - 1] || "") && code[i + 1] !== "0") {
+      out += "\\.";
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function swbSsfFormat(code, value) {
+  const ssf = typeof XLSX !== "undefined" && XLSX.SSF;
+  if (!ssf || code == null) return null;
+  try { return ssf.format(code, value); } catch { /* druga próba niżej */ }
+  const fixed = swbEscapeFormatDots(String(code));
+  if (fixed === code) return null;
+  try { return ssf.format(fixed, value); } catch { return null; }
+}
+
+// Po XLSX.read: uzupełnij tekst komórek, których SheetJS nie umiał sformatować.
+function swbFillMissingCellText(wb) {
+  if (!wb || !wb.Sheets) return 0;
+  let filled = 0;
+  for (const name of wb.SheetNames || Object.keys(wb.Sheets)) {
+    const sheet = wb.Sheets[name];
+    if (!sheet) continue;
+    for (const ref in sheet) {
+      if (ref.charCodeAt(0) === 33) continue; // „!ref”, „!merges”…
+      const cell = sheet[ref];
+      if (!cell || cell.w !== undefined || cell.v == null || typeof cell.z !== "string") continue;
+      if (cell.t !== "n" && cell.t !== "d") continue;
+      const w = swbSsfFormat(cell.z, cell.v);
+      if (w != null) { cell.w = w; filled += 1; }
+    }
+  }
+  return filled;
+}
+
+function swbIsDateFormat(code) {
+  if (typeof code !== "string" || !code || code === "General") return false;
+  try { return !!(XLSX.SSF && XLSX.SSF.is_date(code)); } catch { return /[dmyhs]/i.test(code.replace(/"[^"]*"|\[[^\]]*\]/g, "")); }
+}
+
+// SSF formatuje liczby po amerykańsku („1,234.50”, „12.5%”, TRUE), polski Excel pokazuje
+// „1 234,50”, „12,5%”, PRAWDA. Separatory zamieniamy TYLKO w ciągach cyfr (tekst z formatu,
+// np. „szt.”, zostaje) i tylko dla liczb w formacie innym niż data (tam kropka to separator daty).
+// Kopia w build-rows-core.js (wątek roboczy) — trzymać obie w zgodzie.
+function swbLocalizeCellText(shown, cell, lang) {
+  if (lang === "en" || typeof shown !== "string" || !cell) return shown;
+  if (cell.t === "b") return cell.v ? "PRAWDA" : "FAŁSZ";
+  if (cell.t !== "n" || !/\d[.,]\d/.test(shown)) return shown;
+  if (swbIsDateFormat(cell.z)) return shown;
+  return shown.replace(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d*\.\d+/g, (tok) => tok.replace(/,/g, " ").replace(".", ","));
+}
+
+// Wartość bez formatu (Ogólny) — jak pokazuje ją polski Excel: 12,5 zamiast 12.5,
+// 0,3 zamiast 0.30000000000000004, PRAWDA zamiast true.
+function swbGeneralText(value) {
+  if (currentLang === "en") {
+    if (typeof value === "number" && Number.isFinite(value)) return String(Number(value.toPrecision(15)));
+    if (typeof value === "boolean") return value ? "TRUE" : "FALSE";
+    return toDisplay(value);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return String(Number(value.toPrecision(15))).replace(".", ",");
+  if (typeof value === "boolean") return value ? "PRAWDA" : "FAŁSZ";
+  return toDisplay(value);
+}
+
 // Tworzenie Intl.DateTimeFormat jest DROGIE (buduje reguły lokalizacji), a tu leciało
 // po jednym na każdą komórkę z datą — przy wczytywaniu arkusza 563×33 dało to 420 ms
 // z 3,5 s całego profilu CPU. Formatery zależą wyłącznie od (język, zestaw opcji),
@@ -578,35 +661,196 @@ function parseDateFlexible(value) {
   return memo(null);
 }
 
-// Tekst wpisany/wklejony do komórki → wartość (jak Excel w polskich ustawieniach).
+// Tekst wpisany/wklejony do komórki → wartość, jak polski Excel. Wzorzec: wyniki z Excela
+// (formula local przez AppleScript, 2026-10-17) i parser OnlyOffice (sdkjs FormatParser.parse).
 // KOLEJNOŚĆ MA ZNACZENIE: najpierw liczba, potem data. Wcześniej data szła pierwsza,
 // a parseDateFlexible traktuje gołą liczbę jak numer seryjny daty Excela — wpisane „42”
 // zapisywało się jako 10.02.1900 (także do pliku), „12,5” jako data z 2001 r.
-function parseInputValue(raw) {
+// Wynik: { value, type: "number"|"date"|"boolean"|"string"|"formula", numFmt? } albo null
+// (pusto). numFmt = format, który Excel nadaje komórce w formacie Ogólny („12%” → 0%,
+// „8:30” → h:mm, „1 234” → #,##0); komórka z własnym formatem go zachowuje (updateSheetCell).
+// opts.numFmt = bieżący format komórki: „@” (Tekst) = wszystko zostaje tekstem, jak w Excelu.
+//
+// Świadome odstępstwa od Excela: „12.5” zostaje liczbą (Excel robi z tego 12 maja),
+// „500 600 700” zostaje tekstem (numer telefonu, Excel daje liczbę), „1.234,5” jest liczbą.
+function parseInputValue(raw, opts = {}) {
   const text = String(raw ?? "").trim();
   if (!text) return null;
+  // Apostrof na początku = „zapisz jako tekst”: '007 → „007”, '=A1 → tekst „=A1”.
+  // Wcześniej apostrof trafiał do komórki razem z treścią.
+  if (text[0] === "'") {
+    const s = text.slice(1);
+    return s ? { value: s, type: "string" } : null;
+  }
+  if (opts.numFmt === "@") return { value: text, type: "string" };
   if (text.startsWith("=")) return { value: text, type: "formula" };
-  const num = parseTypedNumber(text);
-  if (num !== null) return { value: num, type: "number" };
+  const en = (opts.lang || (typeof currentLang === "string" ? currentLang : "pl")) === "en";
+
+  const low = text.toLowerCase();
+  if (low === (en ? "true" : "prawda")) return { value: true, type: "boolean" };
+  if (low === (en ? "false" : "fałsz")) return { value: false, type: "boolean" };
+
+  const num = parseTypedNumberInfo(text);
+  if (num) return withInputFmt(num.n, "number", num.grouped ? (num.frac ? "#,##0.00" : "#,##0") : null);
+
+  // Ułamek z częścią całkowitą: „1 1/2” → 1,5 w formacie „# ?/?” (mianownik 2+ cyfr → „# ??/??”),
+  // „0 3/4” → 0,75. Bez całości („1/2”) to data, jak w Excelu; „-3/4” i „1  1/2” zostają tekstem.
+  const frac = parseTypedFraction(text);
+  if (frac) return withInputFmt(frac.n, "number", frac.fmt);
+
+  // (100) = −100; 12% = 0,12; 12 zł = 12 w formacie złotowym — także razem: (12 zł), -12%
+  const paren = /^\((.+)\)$/.exec(text);
+  let body = paren ? paren[1].trim() : text;
+  let kind = null;
+  let m = /^(.+?)\s?%$/.exec(body);
+  if (m) { kind = "percent"; body = m[1]; }
+  else if ((m = /^(.+?)\s?zł$/i.exec(body))) { kind = "pln"; body = m[1]; }
+  if ((kind || paren) && !(paren && /^[-+]/.test(body))) {
+    // „1 1/2%” → 0,015 (0,00%), „1 1/2 zł” → 1,5 w formacie ułamka — tak robi Excel
+    const fr = kind && !paren ? parseTypedFraction(body) : null;
+    if (fr) {
+      return kind === "percent"
+        ? withInputFmt(Number((fr.n / 100).toPrecision(15)), "number", "0.00%")
+        : withInputFmt(fr.n, "number", fr.fmt);
+    }
+    const info = parseTypedNumberInfo(body);
+    if (info) {
+      const n = paren ? -info.n : info.n;
+      if (kind === "percent") return withInputFmt(Number((n / 100).toPrecision(15)), "number", info.frac ? "0.00%" : "0%");
+      if (kind === "pln") return withInputFmt(n, "number", info.frac ? '#,##0.00 "zł"' : '#,##0 "zł"');
+      return withInputFmt(n, "number", info.grouped ? (info.frac ? "#,##0.00" : "#,##0") : null);
+    }
+  }
+
+  // 1E5, 1,5E3 → zapis naukowy
+  m = /^([+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+))[eE]([+-]?\d{1,3})$/.exec(text);
+  if (m) {
+    const n = Number(`${m[1].replace(",", ".")}e${m[2]}`);
+    if (Number.isFinite(n)) return withInputFmt(n, "number", "0.00E+00");
+  }
+
+  // 8:30, 8:30:15, 25:30, 8:30 PM → ułamek doby (Excel: liczba w formacie godziny)
+  const time = parseTypedTime(text);
+  if (time) return withInputFmt(time.value, "number", time.fmt);
+
+  // data z godziną: 12.03.2025 10:30, 2025-03-12 10:30, 2025-03-12T10:30
+  // (parseDateFlexible obcina godzinę — wpisana data z godziną traciła czas)
+  m = /^(.+?)(?:\s+|T)(\d{1,2}:\d{1,2}(?::\d{1,2})?)$/.exec(text);
+  if (m && /\d[-./]\d/.test(m[1])) {
+    const d = parseDateFlexible(m[1]);
+    const tm = parseTypedTime(m[2]);
+    if (d && tm && tm.value < 1) {
+      const secs = Math.round(tm.value * 86400);
+      const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(secs / 3600), Math.floor(secs / 60) % 60, secs % 60);
+      const fmt = en ? (tm.seconds ? "yyyy-mm-dd hh:mm:ss" : "yyyy-mm-dd hh:mm") : (tm.seconds ? "dd.mm.yyyy hh:mm:ss" : "dd.mm.yyyy hh:mm");
+      return withInputFmt(dt, "date", fmt);
+    }
+  }
+
+  const noYear = parseTypedPartialDate(text);
+  if (noYear) return { value: noYear, type: "date" };
+
   // data tylko z wyraźnym zapisem daty: cyfry z separatorem - . / albo nazwa miesiąca
+  // (12-mar-2025 i 12.mar.2025 → jak „12 mar 2025”)
   if (/\d[-./]\d|[a-ząćęłńóśźż]/i.test(text)) {
-    const asDate = parseDateFlexible(text);
+    const asDate = parseDateFlexible(text.replace(/(\d)[-./](?=[a-ząćęłńóśźż])|([a-ząćęłńóśźż])[-./](?=\d)/gi, "$1$2 "));
     if (asDate) return { value: asDate, type: "date" };
   }
   return { value: text, type: "string" };
 }
 
-// Liczba w zapisie polskim lub angielskim: 42, -3,75, 12.5, 1 234,50 (spacja/twarda spacja
-// jako separator tysięcy), 1.234,5. Nie liczby: „1,5,7”, „12%”, „12 zł”, „500 600 700”; kody z zerem
-// wiodącym zostają liczbami jak w Excelu (007 → 7).
-function parseTypedNumber(text) {
+// „całość licznik/mianownik” z JEDNĄ spacją (sprawdzone w Excelu: dwie spacje = tekst,
+// mianownik 0 = tekst, licznik większy od mianownika wolno: „1 10/3” → 4,333…).
+function parseTypedFraction(text) {
+  const m = /^([+-]?)(\d{1,15}) (\d{1,15})\/(\d{1,15})$/.exec(text);
+  if (!m) return null;
+  const den = Number(m[4]);
+  if (!den) return null;
+  const n = Number((Number(m[2]) + Number(m[3]) / den).toPrecision(15));
+  return { n: m[1] === "-" ? -n : n, fmt: m[4].length > 1 ? "# ??/??" : "# ?/?" };
+}
+
+function withInputFmt(value, type, numFmt) {
+  return numFmt ? { value, type, numFmt } : { value, type };
+}
+
+// Mianownik nazw miesięcy (marzec 2025) — TYLKO dla wpisywania. DATE_MONTH_MAP celowo ich
+// nie ma: słowa „Maj”, „Lipiec” w danych nie mają się zamieniać w daty w analizach.
+const INPUT_MONTH_NOMINATIVE = {
+  "styczeń": 1, "styczen": 1, "luty": 2, "marzec": 3, "kwiecień": 4, "kwiecien": 4, "czerwiec": 6,
+  "lipiec": 7, "sierpień": 8, "sierpien": 8, "wrzesień": 9, "wrzesien": 9, "październik": 10,
+  "pazdziernik": 10, "listopad": 11, "grudzień": 12, "grudzien": 12,
+};
+
+function inputMonthNumber(word) {
+  const key = String(word).toLowerCase().replace(/\.$/, "");
+  return DATE_MONTH_MAP[key] || INPUT_MONTH_NOMINATIVE[key] || null;
+}
+
+// Daty bez roku albo bez dnia, jak w Excelu: 12-03 i 1/2 → bieżący rok, 12 mar → bieżący rok,
+// 3/2025, mar 2025, marzec 2025, mar 25 → pierwszy dzień miesiąca. Z kropką („12.03”) nie —
+// to zostaje liczbą (patrz parseInputValue).
+function parseTypedPartialDate(text) {
+  const year = new Date().getFullYear();
+  let m = /^(\d{1,2})[-/](\d{1,2})$/.exec(text);
+  if (m) return makeValidDate(year, Number(m[2]), Number(m[1]));
+  m = /^(\d{1,2})[-/](\d{4})$/.exec(text);
+  if (m) return makeValidDate(Number(m[2]), Number(m[1]), 1);
+  m = /^(\d{1,2})[\s-]+([a-ząćęłńóśźż]+\.?)$/i.exec(text);
+  if (m && inputMonthNumber(m[2])) return makeValidDate(year, inputMonthNumber(m[2]), Number(m[1]));
+  m = /^([a-ząćęłńóśźż]+\.?)[\s-]+(\d{2}|\d{4})$/i.exec(text);
+  if (m && inputMonthNumber(m[1])) return makeValidDate(m[2].length === 2 ? 2000 + Number(m[2]) : Number(m[2]), inputMonthNumber(m[1]), 1);
+  return null;
+}
+
+// Godzina → { value: ułamek doby, fmt, seconds }. Godziny do 9999 (25:30 = 1,0625 doby,
+// format [h]:mm:ss jak w Excelu), minuty i sekundy < 60, AM/PM tylko z godzinami 0–12.
+function parseTypedTime(text) {
+  const m = /^(\d{1,4}):(\d{1,2})(?::(\d{1,2}))?(?:\s*([AaPp])\.?[Mm]\.?)?$/.exec(String(text).trim());
+  if (!m) return null;
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  const sec = m[3] != null ? Number(m[3]) : 0;
+  if (min > 59 || sec > 59) return null;
+  const ampm = m[4] ? m[4].toUpperCase() : null;
+  if (ampm) {
+    if (h > 12) return null;
+    if (ampm === "P" && h < 12) h += 12;
+    if (ampm === "A" && h === 12) h = 0;
+  }
+  const value = (h * 3600 + min * 60 + sec) / 86400;
+  const seconds = m[3] != null;
+  let fmt;
+  if (ampm) fmt = seconds ? "h:mm:ss AM/PM" : "h:mm AM/PM";
+  else if (h >= 24) fmt = "[h]:mm:ss";
+  else fmt = seconds ? "h:mm:ss" : "h:mm";
+  return { value, fmt, seconds };
+}
+
+// Liczba w zapisie polskim lub angielskim: 42, -3,75, 12.5, „5,” (jak Excel = 5), 1 234,50
+// (spacja/twarda spacja jako separator tysięcy), 1.234,5. Nie liczby: „1,5,7”, „12 zł”,
+// „500 600 700”; kody z zerem wiodącym zostają liczbami jak w Excelu (007 → 7).
+// grouped = użyto separatora tysięcy (Excel nadaje wtedy format #,##0), frac = część dziesiętna.
+function parseTypedNumberInfo(text) {
   let s = String(text).trim().replace(/^\+/, "");
+  let grouped = false;
   // odstęp tysięcy: „1 234” albo z częścią dziesiętną; „500 600 700” (telefon) zostaje tekstem
-  if (/^-?\d{1,3}[ \u00a0\u202f]\d{3}([.,]\d+)?$/.test(s) || /^-?\d{1,3}([ \u00a0\u202f]\d{3})+[.,]\d+$/.test(s)) s = s.replace(/[ \u00a0\u202f]/g, "");
-  else if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(s)) s = s.replace(/\./g, "");
-  if (!/^-?\d+([.,]\d+)?$/.test(s) && !/^-?[.,]\d+$/.test(s)) return null;
+  if (/^-?\d{1,3}[   ]\d{3}([.,]\d+)?$/.test(s) || /^-?\d{1,3}([   ]\d{3})+[.,]\d+$/.test(s)) {
+    s = s.replace(/[   ]/g, "");
+    grouped = true;
+  } else if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(s)) {
+    s = s.replace(/\./g, "");
+    grouped = true;
+  }
+  // „5,” = 5 jak w Excelu; „1.” zostaje tekstem (numeracja „1.”, „2.” w danych)
+  if (!/^-?\d+(,\d*|\.\d+)?$/.test(s) && !/^-?[.,]\d+$/.test(s)) return null;
   const n = Number(s.replace(",", "."));
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) ? { n, grouped, frac: /[.,]\d/.test(s) } : null;
+}
+
+function parseTypedNumber(text) {
+  const info = parseTypedNumberInfo(text);
+  return info ? info.n : null;
 }
 
 function updateSheetCell(rowIndex0, colIndex0, parsed) {
@@ -652,12 +896,20 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   const cell = {};
   if (prev && prev.s) cell.s = prev.s;
   if (prev && prev.z) cell.z = prev.z;
+  // Format jak w Excelu: „12%” w komórce Ogólny dostaje 0%, „8:30” — h:mm, „1 234” — #,##0.
+  // Komórka z własnym formatem go zachowuje (Excel też: „12%” w formacie 0.00 daje 0,12).
+  const autoFmt = parsed.numFmt && typeof cfmtNumFmtAt === "function"
+    && cfmtNumFmtAt(rowIndex0, colIndex0) === "General" ? parsed.numFmt : null;
+  if (autoFmt) cell.z = autoFmt;
   if (parsed.type === "date") {
     cell.v = parsed.value;
     cell.t = "d";
   } else if (parsed.type === "number") {
     cell.v = parsed.value;
     cell.t = "n";
+  } else if (parsed.type === "boolean") {
+    cell.v = !!parsed.value;
+    cell.t = "b";
   } else {
     cell.v = parsed.value;
     cell.t = "s";
@@ -667,6 +919,7 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   bumpSheetDataStamp(); // zawartość arkusza się zmieniła -> unieważnij cache'e
   // Zarejestruj edycję do naniesienia metodą ZIP-patch przy zapisie (zachowuje plik).
   recordPendingEdit(currentSheetName, cellRef, { v: cell.v, t: cell.t });
+  if (autoFmt && typeof cfmtRecord === "function") cfmtRecord(currentSheetName, cellRef, { numFmt: autoFmt });
   // Formuły czytające tę komórkę — przeliczenie raz na koniec bieżącego zadania.
   if (prev && prev.f && typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(currentSheetName, cellRef);
   if (typeof swbFormulaTouched === "function") swbFormulaTouched(currentSheetName, rowIndex0, absoluteCol);
@@ -1245,12 +1498,84 @@ function resolveIndexes(headers, selected) {
   return headers.map((h, i) => (selected.has(h) ? i : -1)).filter((i) => i >= 0);
 }
 
+// Kolejność sortowania jak w Excelu (sprawdzone na polskim Excelu przez AppleScript,
+// 2026-10-17): liczby i daty < tekst < FAŁSZ < PRAWDA < błędy, a PUSTE ZAWSZE NA KOŃCU —
+// także przy sortowaniu malejącym (wtedy: błędy, PRAWDA, FAŁSZ, tekst Z→A, liczby 9→0).
+// Tekst bez rozróżniania wielkości liter, polskie litery osobno (a < ą < b, l < ł),
+// remisy zostają w kolejności z pliku — Intl.Collator("pl", accent) daje dokładnie to.
+// Wcześniej: 0 i FAŁSZ lądowały wśród pustych („0 || ''”), puste szły NA POCZĄTEK
+// rosnąco, błędy (#DZIEL/0! ma w SheetJS v = kod liczbowy) mieszały się z liczbami,
+// a tekst „10” był traktowany jak data seryjna i wchodził między liczby.
+// Świadome odstępstwo: tekst, który JEST datą („12.03.2025”, „12 mar 2025”), stoi
+// razem z prawdziwymi datami po czasie — Excel zostawiłby go wśród tekstów.
+const SWB_SORT_COLLATOR = new Intl.Collator("pl", { sensitivity: "accent" });
+const SWB_ERROR_TEXT_RE = /^#(?:NULL!|DIV\/0!|VALUE!|REF!|NAME\?|NUM!|N\/A|GETTING_DATA|SPILL!|CALC!|FIELD!|BLOCKED!|CONNECT!|BUSY!|UNKNOWN!|ZERO!|DZIEL\/0!|ARG!|ADR!|NAZWA\?|LICZBA!|N\/D!?|ROZLANIE!|OBL!)$/;
+const SWB_SORT_BLANK = 4;
+
+function swbSerialFromDate(d) {
+  return (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds())
+    - Date.UTC(1899, 11, 30)) / 86400000;
+}
+
+// Klucz sortowania komórki: [ranga, wartość]. Ranga: 0 liczba/data, 1 tekst, 2 logiczna,
+// 3 błąd, 4 pusta. `shown` = tekst w tabeli — tylko po nim poznać błąd z pliku.
+function swbSortKey(v, shown) {
+  if (v == null || v === "") return [SWB_SORT_BLANK, 0];
+  if (typeof v === "boolean") return [2, v ? 1 : 0];
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? [1, ""] : [0, swbSerialFromDate(v)];
+  if (typeof v === "number") {
+    if (typeof shown === "string" && shown[0] === "#" && SWB_ERROR_TEXT_RE.test(shown)) return [3, 0];
+    return Number.isFinite(v) ? [0, v] : [3, 0];
+  }
+  const s = String(v);
+  if (!s.trim()) return [1, s];
+  if (s[0] === "#" && SWB_ERROR_TEXT_RE.test(s.trim())) return [3, 0];
+  // czysta liczba w tekście („10”, „0012”) zostaje tekstem — parseDateFlexible
+  // wziąłby ją za numer seryjny daty
+  if (!/^[+-]?[\d\s]*\d(?:[.,]\d+)?$/.test(s)) {
+    const d = parseDateFlexible(s);
+    if (d) return [0, swbSerialFromDate(d)];
+  }
+  return [1, s];
+}
+
+function swbCompareSortKeys(a, b) {
+  if (a[0] !== b[0]) return a[0] - b[0];
+  if (a[0] === 1) return SWB_SORT_COLLATOR.compare(a[1], b[1]);
+  return a[1] - b[1];
+}
+
+// Zgodność wstecz (inne moduły porównują pojedyncze wartości).
 function compareSortValues(av, bv) {
-  const ad = parseDateFlexible(av);
-  const bd = parseDateFlexible(bv);
-  if (ad && bd) return ad - bd;
-  if (typeof av === "number" && typeof bv === "number") return av - bv;
-  return String(av || "").localeCompare(String(bv || ""), "pl");
+  return swbCompareSortKeys(swbSortKey(av), swbSortKey(bv));
+}
+
+// Sortowanie wierszy według reguł — klucze liczone RAZ na wiersz (komparator woła się
+// n·log n razy, a parseDateFlexible/kolacja na każde porównanie to zbędny koszt).
+function swbSortRowsByRules(rows, rules) {
+  if (!rules.length || rows.length < 2) return;
+  const keyed = rows.map((row, i) => {
+    const vals = row.rawValues || row.values || [];
+    const keys = rules.map((rule) => swbSortKey(vals[rule.idx], row.display ? row.display[rule.idx] : undefined));
+    return { row, keys, i };
+  });
+  keyed.sort((a, b) => {
+    for (let k = 0; k < rules.length; k++) {
+      const ka = a.keys[k];
+      const kb = b.keys[k];
+      // puste zawsze na dole, niezależnie od kierunku (jak Excel)
+      const ab = ka[0] === SWB_SORT_BLANK;
+      const bb = kb[0] === SWB_SORT_BLANK;
+      if (ab || bb) {
+        if (ab && bb) continue;
+        return ab ? 1 : -1;
+      }
+      const cmp = swbCompareSortKeys(ka, kb);
+      if (cmp !== 0) return rules[k].dir === "desc" ? -cmp : cmp;
+    }
+    return a.i - b.i;
+  });
+  for (let i = 0; i < keyed.length; i++) rows[i] = keyed[i].row;
 }
 
 function normalizeSortState() {
@@ -1586,31 +1911,13 @@ function sortRows() {
   normalizeSortState();
   if (!multiSortState.length) return;
   flipNextRender = true; // następny render tabeli animuje przestawienie wierszy (FLIP)
-  const rules = resolveSortRules(currentHeaders);
-  viewRows.sort((a, b) => {
-    for (const rule of rules) {
-      const av = a.rawValues ? a.rawValues[rule.idx] : a.values[rule.idx];
-      const bv = b.rawValues ? b.rawValues[rule.idx] : b.values[rule.idx];
-      const cmp = compareSortValues(av, bv);
-      if (cmp !== 0) return rule.dir === "desc" ? -cmp : cmp;
-    }
-    return 0;
-  });
+  swbSortRowsByRules(viewRows, resolveSortRules(currentHeaders));
 }
 
 function sortRowsForHeaders(rows, headers) {
   normalizeSortState();
   if (!multiSortState.length || !Array.isArray(rows) || !Array.isArray(headers)) return;
-  const rules = resolveSortRules(headers);
-  rows.sort((a, b) => {
-    for (const rule of rules) {
-      const av = a.rawValues ? a.rawValues[rule.idx] : a.values[rule.idx];
-      const bv = b.rawValues ? b.rawValues[rule.idx] : b.values[rule.idx];
-      const cmp = compareSortValues(av, bv);
-      if (cmp !== 0) return rule.dir === "desc" ? -cmp : cmp;
-    }
-    return 0;
-  });
+  swbSortRowsByRules(rows, resolveSortRules(headers));
 }
 
 // `Array#sort` wywołuje komparator wielokrotnie, więc wyszukiwanie nazwy kolumny

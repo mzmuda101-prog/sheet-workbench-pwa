@@ -200,7 +200,7 @@ function fcFormatted(cell, v) {
   if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
   if (typeof v === "string") return v;
   const z = cell && cell.z && cell.z !== "General" ? cell.z : null;
-  if (z && typeof XLSX !== "undefined" && XLSX.SSF) { try { return XLSX.SSF.format(z, v); } catch { /* format spoza SSF */ } }
+  if (z) { const w = swbSsfFormat(z, v); if (w != null) return w; } // też „dd.mm.yyyy”, na którym SSF się wywraca
   return FC.generalText(v);
 }
 
@@ -252,6 +252,7 @@ function fcRefreshRow(sheet, r, c) {
     let shown = cell ? (cell.w != null ? String(cell.w) : (v == null ? "" : toDisplay(v))) : "";
     if (v instanceof Date && typeof localizeDisplayedDate === "function") shown = localizeDisplayedDate(v, shown, cell);
     if (cell && cell.t === "e") shown = cell.w || String(cell.v);
+    else shown = swbLocalizeCellText(shown, cell, currentLang);
     row.display[col] = shown;
   }
   if (row.recalcCells && row.recalcCells[col] !== undefined) delete row.recalcCells[col];

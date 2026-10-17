@@ -133,7 +133,8 @@ async function run() {
   await page.selectOption("#fmtNumFormat", "pln");
   await sleep(200);
   const pln = await cellView(1, numCol);
-  const expected = await page.evaluate((v) => XLSX.SSF.format('#,##0.00 "zł"', v), numBefore.value);
+  // jak w polskim Excelu: „9 885,66 zł” (SSF daje „9,885.66 zł” — widok zamienia separatory)
+  const expected = await page.evaluate((v) => swbLocalizeCellText(XLSX.SSF.format('#,##0.00 "zł"', v), { t: "n", z: '#,##0.00 "zł"' }, "pl"), numBefore.value);
   ok("4. Waluta zł zmienia wygląd", pln.text === expected && / zł$/.test(pln.text), { pln: pln.text, expected });
   ok("4. wartość bez zmian", pln.value === numBefore.value, { before: numBefore.value, after: pln.value });
   await page.click("#fmtDecMore");

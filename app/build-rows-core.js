@@ -306,6 +306,21 @@
     }
   }
 
+  // Kopia swbLocalizeCellText z workbook.js (wątek roboczy nie ma dostępu do wątku głównego):
+  // SSF daje „1,234.50” / TRUE, polski Excel pokazuje „1 234,50” / PRAWDA.
+  function isDateFormatCode(code) {
+    if (typeof code !== "string" || !code || code === "General") return false;
+    try { return !!(XLSX.SSF && XLSX.SSF.is_date(code)); } catch { return /[dmyhs]/i.test(code.replace(/"[^"]*"|\[[^\]]*\]/g, "")); }
+  }
+
+  function localizeCellText(shown, cell, lang) {
+    if (lang === "en" || typeof shown !== "string" || !cell) return shown;
+    if (cell.t === "b") return cell.v ? "PRAWDA" : "FAŁSZ";
+    if (cell.t !== "n" || !/\d[.,]\d/.test(shown)) return shown;
+    if (isDateFormatCode(cell.z)) return shown;
+    return shown.replace(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d*\.\d+/g, (tok) => tok.replace(/,/g, "\u00a0").replace(".", ","));
+  }
+
   function buildRowsCore(sheet, headerRow, wb, options) {
     const opts = options || {};
     const displayMode = opts.displayMode || "values";
@@ -345,6 +360,7 @@
         let v = cell && cell.v !== undefined ? cell.v : null; // pusta komórka z samym formatem (t:"z") = null
         let shown = cell && cell.w ? String(cell.w) : toDisplay(v);
         shown = localizeDisplayedDate(v, shown, cell, locale);
+        shown = localizeCellText(shown, cell, lang);
         if (cell && cell.f) {
           formulaCount += 1;
           if (cell.v == null && cell.w == null) formulaMissingResultCount += 1;

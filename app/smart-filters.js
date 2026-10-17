@@ -132,6 +132,9 @@ function smartInferRolesFromData(group) {
         if (!smartCellFilled(row, col)) continue;
         const raw = row.values[col];
         if (raw instanceof Date) { dateHits[k] += 1; continue; }
+        // Liczba to nie data: daty z pliku przychodzą jako Date (cellDates), a „9885.66”
+        // z kropką w widoku przechodziło test /\d[-/.]\d/ i kwoty robiły za daty startu/końca.
+        if (typeof raw === "number") continue;
         const display = getDisplayValue(row, col);
         const ds = String(display);
         const looksDate = /\d[-/.]\d/.test(ds) || (/\d/.test(ds) && /[a-ząćęłńóśźż]/i.test(ds) && parseDateFlexible(raw ?? display) instanceof Date);
@@ -777,7 +780,14 @@ function smartApplyRovingTabindex(activeIndex = 0) {
   if (!smartQuickChipsEl) return;
   const chips = Array.from(smartQuickChipsEl.querySelectorAll("button"));
   if (!chips.length) return;
-  const idx = Math.max(0, Math.min(activeIndex, chips.length - 1));
+  let idx = Math.max(0, Math.min(activeIndex, chips.length - 1));
+  // Przystanek na wyłączonym chipie = pasek wypada z obiegu Tab (wyłączonego przycisku
+  // nie da się sfokusować) — bierzemy najbliższy włączony.
+  if (chips[idx].disabled) {
+    const alt = chips.findIndex((c, i) => i >= idx && !c.disabled);
+    const any = alt >= 0 ? alt : chips.findIndex((c) => !c.disabled);
+    if (any >= 0) idx = any;
+  }
   chips.forEach((chip, i) => { chip.tabIndex = i === idx ? 0 : -1; });
   smartQuickChipsEl.setAttribute("role", "group");
 }
@@ -785,7 +795,7 @@ function smartApplyRovingTabindex(activeIndex = 0) {
 if (smartQuickChipsEl) {
   smartQuickChipsEl.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight" && e.key !== "Home" && e.key !== "End") return;
-    const chips = Array.from(smartQuickChipsEl.querySelectorAll("button"));
+    const chips = Array.from(smartQuickChipsEl.querySelectorAll("button")).filter((c) => !c.disabled);
     if (!chips.length) return;
     const current = chips.indexOf(document.activeElement);
     if (current < 0) return;
@@ -794,7 +804,8 @@ if (smartQuickChipsEl) {
       : e.key === "End" ? chips.length - 1
       : e.key === "ArrowRight" ? (current + 1) % chips.length
       : (current - 1 + chips.length) % chips.length;
-    smartApplyRovingTabindex(next);
+    const all = Array.from(smartQuickChipsEl.querySelectorAll("button"));
+    smartApplyRovingTabindex(all.indexOf(chips[next]));
     chips[next].focus();
   });
 }

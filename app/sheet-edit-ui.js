@@ -484,7 +484,7 @@ var sheetEditUi = (() => {
     if (text === fxBaseline) { setFxDirty(false); afterCommitMove(move); return true; }
     if (!swbEditGuard()) { revertFx(); return false; }
     if (a.row.isSubheader) { toast(t("editBlockedRow"), "info"); revertFx(); return false; }
-    const parsed = typeof parseInputValue === "function" ? parseInputValue(text) : null;
+    const parsed = typeof parseCellInput === "function" ? parseCellInput(text, a.row.rowIndex0, a.col) : null;
     if (parsed && parsed.type === "formula" && typeof swbFormulaCommit !== "function") {
       toast(t("formulaEditBlocked"), "warning");
       return false;
@@ -612,6 +612,13 @@ var sheetEditUi = (() => {
     if (document.querySelector(".modal:not(.hidden)")) return;
     const meta = e.ctrlKey || e.metaKey;
     if (e.key === "Escape" && painterFmt) { e.preventDefault(); stopPainter(); return; }
+    // Ctrl+D / Ctrl+R = wypełnij w dół / w prawo (kopia, jak w Excelu; autofill.js).
+    // Na Macu też ⌘D (Excel tak ma); ⌘R zostaje przeglądarce (odświeżanie).
+    if (!e.altKey && !e.shiftKey && (e.ctrlKey || (e.metaKey && e.code === "KeyD")) && (e.code === "KeyD" || e.code === "KeyR")) {
+      e.preventDefault();
+      if (typeof swbFillCopy === "function") swbFillCopy(e.code === "KeyD" ? "down" : "right");
+      return;
+    }
     if (meta && !e.altKey && !e.shiftKey) {
       const code = e.code || "";
       const map = { KeyB: "b", KeyI: "i", KeyU: "u", Digit5: "strike" };

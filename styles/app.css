@@ -3986,6 +3986,58 @@ tbody td.cell-active.cell-light-text { color: var(--ink) !important; }
 [data-theme="dark"] tbody td.cell-selected.cell-dark-text,
 [data-theme="dark"] tbody td.cell-active.cell-dark-text { color: var(--ink) !important; }
 
+/* Uchwyt wypełniania (autofill.js) — kwadracik w prawym dolnym rogu zaznaczenia.
+   Wewnątrz komórki (td ma overflow: hidden), na dotyku z większym polem chwytu. */
+tbody td.has-fill-handle { position: relative; }
+.fill-handle {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 9px;
+  height: 9px;
+  cursor: crosshair;
+  touch-action: none;
+  z-index: 2;
+}
+.fill-handle::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 7px;
+  height: 7px;
+  background: var(--accent);
+  border: 1px solid var(--surface, #fff);
+  box-sizing: border-box;
+}
+@media (pointer: coarse) {
+  .fill-handle { width: 20px; height: 20px; }
+  .fill-handle::after { width: 10px; height: 10px; border-radius: 2px; }
+}
+.swb-filling, .swb-filling * { cursor: crosshair !important; }
+.swb-filling #dataTable { user-select: none; -webkit-user-select: none; }
+
+/* Kolor z formatu liczbowego ([Red]/[Czerwony], [Blue]…) — wygrywa z kolorem czcionki,
+   jak w Excelu. Jasny motyw = kolory Excela, poza zielonym/żółtym/turkusowym (czyste
+   #00FF00 / #FFFF00 na białym są nieczytelne — przyciemnione); ciemny = te same odcienie
+   rozjaśnione (czysty #0000FF na grafitowym znika). */
+tbody td.nf-red { color: #FF0000 !important; }
+tbody td.nf-blue { color: #0000FF !important; }
+tbody td.nf-green { color: #00A000 !important; }
+tbody td.nf-magenta { color: #FF00FF !important; }
+tbody td.nf-cyan { color: #00A0A0 !important; }
+tbody td.nf-yellow { color: #B8A000 !important; }
+tbody td.nf-black { color: #000000 !important; }
+tbody td.nf-white { color: #FFFFFF !important; }
+tbody td.nf-color { color: var(--nf-color) !important; }
+[data-theme="dark"] tbody td.nf-red { color: #FF6B6B !important; }
+[data-theme="dark"] tbody td.nf-blue { color: #7FA8FF !important; }
+[data-theme="dark"] tbody td.nf-green { color: #5BE37D !important; }
+[data-theme="dark"] tbody td.nf-magenta { color: #FF7BFF !important; }
+[data-theme="dark"] tbody td.nf-cyan { color: #5CE1E6 !important; }
+[data-theme="dark"] tbody td.nf-yellow { color: #FFE45C !important; }
+[data-theme="dark"] tbody td.nf-black { color: var(--ink) !important; }
+
 tbody tr.row-focused td:first-child {
   box-shadow:
   inset 1px 0 0 color-mix(in srgb, var(--accent) 40%, transparent),

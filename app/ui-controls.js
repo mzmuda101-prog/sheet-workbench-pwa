@@ -869,6 +869,7 @@ async function handleFile(file, fileHandle = null) {
     } catch {
       workbook = XLSX.read(data, { cellDates: true });
     }
+    swbFillMissingCellText(workbook); // „dd.mm.yyyy” itp. — SSF nie umiał ich sformatować
     // Odzyskaj mapę indeksów stylów z surowego pliku (font/kolor/rozmiar jak w Excelu).
     bumpSheetDataStamp(); // nowy skoroszyt -> cache'e liczone na starych danych do kosza
     currentStyleIndexMap = await buildStyleIndexMap(originalFileBytes, workbook);
@@ -4363,7 +4364,7 @@ function openCellEditor(td, options = {}) {
       updateCellStats();
       return;
     }
-    const parsed = parseInputValue(input.value);
+    const parsed = parseCellInput(input.value, row.rowIndex0, colIndex0);
     if (parsed && parsed.type === "formula") {
       // Formuła (formula-calc.js): błąd składni zostawia edytor otwarty z komunikatem.
       const res = typeof swbFormulaCommit === "function" ? swbFormulaCommit(row, colIndex0, input.value) : "error";

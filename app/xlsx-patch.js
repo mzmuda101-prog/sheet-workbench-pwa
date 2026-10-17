@@ -189,6 +189,7 @@ function normalizeCellAttrs(attrs, payload) {
   // [EN] Strip stray "/" left if a self-closing cell was ever mis-parsed as open.
   let a = String(attrs || "").replace(/\/\s*$/g, "").replace(/\s*\bt="[^"]*"/g, "").trim();
   if (payload && payload.t === "s") a = (a ? a + " " : "") + 't="inlineStr"';
+  else if (payload && payload.t === "b") a = (a ? a + " " : "") + 't="b"'; // PRAWDA/FAŁSZ: <v>1</v> / <v>0</v>
   return a ? " " + a : "";
 }
 

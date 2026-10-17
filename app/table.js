@@ -587,7 +587,7 @@ function writeCellFromInput(model, row, col, raw) {
   if (!row || row.isLongViewRow || row.isSubheader) return "skip";
   if (col < 0 || col >= model.headers.length) return "skip";
   if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) return "skip"; // kolumna wyliczana
-  const parsed = parseInputValue(raw);
+  const parsed = parseCellInput(raw, row.rowIndex0, col);
   if (parsed && parsed.type === "formula") {
     // wklejona / wypełniona formuła (Excel też wkleja tekst „=…” jako formułę)
     if (typeof swbFormulaCommit !== "function") return "formula";
@@ -712,67 +712,18 @@ async function pasteClipboardToSelection(opts = {}) {
 // zakres, jedno tapnięcie i pierwsza komórka rozlewa się na resztę. Nie dotyka schowka
 // systemowego, więc nie ma tu żadnej zgody do wyklikania i nic nie może odmówić.
 function fillSelection(direction) {
-  if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
-  if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") {
-    toast(t("editWideOnly"), "info");
-    return;
-  }
-  const rect = getSelectionRectangle();
-  if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) {
-    toast(t("fillNeedsRange"), "info");
-    return;
-  }
-  const model = rect.model;
-  let changed = 0;
-  let skippedFormula = 0;
-  const bump = (res) => {
-    if (res === "ok") changed += 1;
-    else if (res === "formula") skippedFormula += 1;
-  };
-
-  // Źródło z formułą wypełnia się jak w Excelu: odwołania względne przesuwają się
-  // o odległość w ARKUSZU (przy filtrze pominięte wiersze się nie liczą jako cel).
-  const srcRef = (row, c) => XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + c });
-  const hasFormula = (row, c) => typeof swbFormulaShifted === "function" && !!(workbook.Sheets[currentSheetName]?.[srcRef(row, c)]?.f);
-  if (direction === "down") {
-    for (let c = rect.colMin; c <= rect.colMax; c++) {
-      const src = model.rows[rect.rowStart];
-      if (!src) continue;
-      const formula = hasFormula(src, c);
-      const raw = cellEditString(src, c);
-      for (let r = rect.rowStart + 1; r <= rect.rowEnd; r++) {
-        const target = model.rows[r];
-        const text = formula && target ? swbFormulaShifted(currentSheetName, srcRef(src, c), target.rowIndex0 - src.rowIndex0, 0) : raw;
-        bump(writeCellFromInput(model, target, c, text ?? raw));
-      }
-    }
-  } else {
-    for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
-      const row = model.rows[r];
-      if (!row) continue;
-      const formula = hasFormula(row, rect.colMin);
-      const raw = cellEditString(row, rect.colMin);
-      for (let c = rect.colMin + 1; c <= rect.colMax; c++) {
-        const text = formula ? swbFormulaShifted(currentSheetName, srcRef(row, rect.colMin), 0, c - rect.colMin) : raw;
-        bump(writeCellFromInput(model, row, c, text ?? raw));
-      }
-    }
-  }
-
-  if (changed > 0) {
-    setDirtyState(true);
-    renderActiveTable();
-    toast(t("cellsFilled", { count: changed }), "success");
-    log(`Wypelniono ${changed} komorek (${direction})`, "success");
-  } else {
-    toast(t("editToolNoChange"), "info");
-  }
-  if (skippedFormula > 0) toast(t("fillSkippedFormulas", { count: skippedFormula }), "warning");
+  // Kopia jak Ctrl+D / Ctrl+R w Excelu (autofill.js): zakres → pierwszy wiersz/kolumna
+  // rozlewa się na resztę; jeden wiersz (albo komórka) → kopia wiersza nad zaznaczeniem.
+  // Wcześniej kopia szła przez tekst (cellEditString → parser), więc tekst „007” wracał
+  // jako liczba 7, a kwota/procent traciły format.
+  return swbFillCopy(direction);
 }
 
 // Podświetla prostokąt zaznaczenia: wypełnienie + obwódkę całego zakresu
 // (klasy krawędziowe na komórkach brzegowych — jak w Arkuszach Google).
 function syncRangeHighlightInDom() {
+  // uchwyt wypełniania idzie za zaznaczeniem (autofill.js)
+  if (typeof swbFillHandleSync === "function") swbFillHandleSync();
   tbodyEl
     .querySelectorAll("td.cell-in-range")
     .forEach((c) => c.classList.remove(...RANGE_EDGE_CLASSES));
@@ -2158,6 +2109,8 @@ function buildTableRow(ctx, row, rowPos) {
     }
 
     if (row.cellStyles && row.cellStyles[i]) applyCellStyle(td, row.cellStyles[i]);
+    // kolor z formatu liczbowego ([Red]/[Czerwony] dla ujemnych…) — cell-format.js
+    if (row.nfFmt && row.nfFmt[i] && typeof swbApplyNumFmtColor === "function") swbApplyNumFmtColor(td, row, i);
     if (cfMapForRender) {
       const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
       if (cf) {
@@ -2231,6 +2184,7 @@ function collectPreHeaderRows(colCount) {
       let v = cell && cell.v !== undefined ? cell.v : null; // pusta komórka z samym formatem (t:"z") = null
       let shown = cell && cell.w ? String(cell.w) : toDisplay(v);
       shown = localizeDisplayedDate(v, shown, cell);
+      shown = swbLocalizeCellText(shown, cell, currentLang);
       // jak w buildRows: „Stan na dziś: =TODAY()” pokazuje dzisiejszą wartość (tylko podgląd)
       if (cell && cell.f && recalcDateFormulas && mode !== "formulas"
           && /\b(?:TODAY|NOW)\s*\(/i.test(cell.f) && typeof cfRecomputeCellFormula === "function") {
@@ -2357,7 +2311,7 @@ function openPreCellEditor(td) {
     if (finished) return;
     const text = input.value;
     if (text === base) { close(); return; }
-    const parsed = parseInputValue(text);
+    const parsed = parseCellInput(text, rowIndex0, col);
     if (parsed && parsed.type === "formula") {
       const res = typeof swbFormulaCommitAt === "function" ? swbFormulaCommitAt(rowIndex0, col, text) : "skip";
       if (res !== "ok") {
@@ -2631,6 +2585,7 @@ function buildRows(sheet, headerRow, wb) {
       let v = cell && cell.v !== undefined ? cell.v : null; // pusta komórka z samym formatem (t:"z") = null
       let shown = cell && cell.w ? String(cell.w) : toDisplay(v);
       shown = localizeDisplayedDate(v, shown, cell);
+      shown = swbLocalizeCellText(shown, cell, currentLang);
       if (cell && cell.f) {
         formulaCount += 1;
         if (cell.v == null && cell.w == null) formulaMissingResultCount += 1;
