@@ -392,10 +392,18 @@ function swbIsDateFormat(code) {
 // SSF formatuje liczby po amerykańsku („1,234.50”, „12.5%”, TRUE), polski Excel pokazuje
 // „1 234,50”, „12,5%”, PRAWDA. Separatory zamieniamy TYLKO w ciągach cyfr (tekst z formatu,
 // np. „szt.”, zostaje) i tylko dla liczb w formacie innym niż data (tam kropka to separator daty).
+// Błędy: plik i SheetJS trzymają angielskie kody (#DIV/0!), polski Excel pokazuje
+// #DZIEL/0! (sprawdzone przez AppleScript `formula local`, 2026-10-17). Tłumaczymy TYLKO
+// tekst w widoku — cell.w/cell.v zostają angielskie dla formuł i zapisu (xlsx-patch).
 // Kopia w build-rows-core.js (wątek roboczy) — trzymać obie w zgodzie.
+const SWB_ERR_PL = {
+  "#NULL!": "#ZERO!", "#DIV/0!": "#DZIEL/0!", "#VALUE!": "#ARG!", "#REF!": "#ADR!",
+  "#NAME?": "#NAZWA?", "#NUM!": "#LICZBA!", "#N/A": "#N/D", "#SPILL!": "#ROZLANIE!", "#CALC!": "#OBL!",
+};
 function swbLocalizeCellText(shown, cell, lang) {
   if (lang === "en" || typeof shown !== "string" || !cell) return shown;
   if (cell.t === "b") return cell.v ? "PRAWDA" : "FAŁSZ";
+  if (cell.t === "e") return SWB_ERR_PL[shown] || shown;
   if (cell.t !== "n" || !/\d[.,]\d/.test(shown)) return shown;
   if (swbIsDateFormat(cell.z)) return shown;
   return shown.replace(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d*\.\d+/g, (tok) => tok.replace(/,/g, " ").replace(".", ","));
@@ -673,6 +681,12 @@ function parseDateFlexible(value) {
 //
 // Świadome odstępstwa od Excela: „12.5” zostaje liczbą (Excel robi z tego 12 maja),
 // „500 600 700” zostaje tekstem (numer telefonu, Excel daje liczbę), „1.234,5” jest liczbą.
+const SWB_TYPED_ERRORS = ["#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAME?", "#NUM!", "#N/A"];
+function swbTypedErrorCode(text, en) {
+  const up = String(text).trim().toUpperCase();
+  return SWB_TYPED_ERRORS.find((code) => (en ? code : SWB_ERR_PL[code]) === up) || null;
+}
+
 function parseInputValue(raw, opts = {}) {
   const text = String(raw ?? "").trim();
   if (!text) return null;
@@ -689,6 +703,14 @@ function parseInputValue(raw, opts = {}) {
   const low = text.toLowerCase();
   if (low === (en ? "true" : "prawda")) return { value: true, type: "boolean" };
   if (low === (en ? "false" : "fałsz")) return { value: false, type: "boolean" };
+
+  // Wpisany błąd: polski Excel bierze „#DZIEL/0!”, „#n/d”… (bez względu na wielkość liter)
+  // za błąd, a angielskie „#DIV/0!” za zwykły tekst; #OBL!/#ROZLANIE! wpisać się nie da
+  // (wyrocznia, 2026-10-17). value = angielski kod — taki idzie do pliku (t="e").
+  if (text[0] === "#") {
+    const code = swbTypedErrorCode(text, en);
+    if (code) return { value: code, type: "error" };
+  }
 
   const num = parseTypedNumberInfo(text);
   if (num) return withInputFmt(num.n, "number", num.grouped ? (num.frac ? "#,##0.00" : "#,##0") : null);
@@ -910,6 +932,11 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   } else if (parsed.type === "boolean") {
     cell.v = !!parsed.value;
     cell.t = "b";
+  } else if (parsed.type === "error") {
+    // jak wynik formuły (fcStore): v i w = angielski kod, widok tłumaczy swbLocalizeCellText
+    cell.v = parsed.value;
+    cell.w = parsed.value;
+    cell.t = "e";
   } else {
     cell.v = parsed.value;
     cell.t = "s";
@@ -918,7 +945,7 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   swbEnsureSheetRef(sheet, rowIndex0, absoluteCol);
   bumpSheetDataStamp(); // zawartość arkusza się zmieniła -> unieważnij cache'e
   // Zarejestruj edycję do naniesienia metodą ZIP-patch przy zapisie (zachowuje plik).
-  recordPendingEdit(currentSheetName, cellRef, { v: cell.v, t: cell.t });
+  recordPendingEdit(currentSheetName, cellRef, cell.t === "e" ? { t: "e", err: cell.v } : { v: cell.v, t: cell.t });
   if (autoFmt && typeof cfmtRecord === "function") cfmtRecord(currentSheetName, cellRef, { numFmt: autoFmt });
   // Formuły czytające tę komórkę — przeliczenie raz na koniec bieżącego zadania.
   if (prev && prev.f && typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(currentSheetName, cellRef);

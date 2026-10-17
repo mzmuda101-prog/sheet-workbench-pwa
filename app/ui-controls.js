@@ -4203,6 +4203,13 @@ function cellEditString(row, i) {
   const raw = Array.isArray(row.values) ? row.values[i] : null;
   if (raw == null || raw === "") return "";
   if (raw instanceof Date) return formatDateForEdit(raw);
+  // Błąd: SheetJS trzyma w v kod liczbowy (7 = #DIV/0!), wpis z aplikacji — angielski kod.
+  // W edytorze nazwa jak w widoku („#DZIEL/0!”) — zatwierdzona bez zmian zostaje błędem.
+  if ((typeof raw === "number" || (typeof raw === "string" && raw[0] === "#"))
+      && typeof workbook !== "undefined" && workbook && currentSheetName && Number.isFinite(row.rowIndex0)) {
+    const cell = workbook.Sheets[currentSheetName]?.[XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i })];
+    if (cell && cell.t === "e") return swbLocalizeCellText(String(cell.w || cell.v), cell, currentLang);
+  }
   return String(raw);
 }
 

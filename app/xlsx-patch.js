@@ -190,6 +190,7 @@ function normalizeCellAttrs(attrs, payload) {
   let a = String(attrs || "").replace(/\/\s*$/g, "").replace(/\s*\bt="[^"]*"/g, "").trim();
   if (payload && payload.t === "s") a = (a ? a + " " : "") + 't="inlineStr"';
   else if (payload && payload.t === "b") a = (a ? a + " " : "") + 't="b"'; // PRAWDA/FAŁSZ: <v>1</v> / <v>0</v>
+  else if (payload && payload.t === "e") a = (a ? a + " " : "") + 't="e"'; // wpisany błąd: <v>#DIV/0!</v>
   return a ? " " + a : "";
 }
 
@@ -202,6 +203,13 @@ function buildCellXml(ref, payload, attrs, dateStyler) {
   if (payload.t === "s") {
     const t = escapeXmlText(sanitizeXmlText(payload.v));
     return `<c r="${ref}"${attrStr}><is><t xml:space="preserve">${t}</t></is></c>`;
+  }
+  // Wpisany błąd (#DZIEL/0! → kod angielski). W <v> zawsze angielski kod z listy — polska
+  // nazwa czy #SPILL! w pliku to dla Excela uszkodzenie; spoza listy = tekst, nie błąd.
+  if (payload.t === "e") {
+    if (FILE_ERROR_CODES.has(payload.err)) return `<c r="${ref}"${attrStr}><v>${payload.err}</v></c>`;
+    const t = escapeXmlText(sanitizeXmlText(String(payload.err ?? "")));
+    return `<c r="${ref}"${normalizeCellAttrs(attrs, { t: "s" })}><is><t xml:space="preserve">${t}</t></is></c>`;
   }
   let num;
   if (payload.t === "d" && payload.v instanceof Date) num = dateToExcelSerial(payload.v);

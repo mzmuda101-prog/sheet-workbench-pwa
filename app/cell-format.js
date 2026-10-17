@@ -157,10 +157,13 @@ function cfmtFormatValue(value, code) {
 function cfmtDisplayFor(row, col) {
   const v = Array.isArray(row.values) ? row.values[col] : null;
   const ref = cfmtRef(row.rowIndex0, col);
+  const sheetCell = workbook?.Sheets?.[currentSheetName]?.[ref];
+  // Błąd (wpisany „#DZIEL/0!” albo z pliku): format liczbowy go nie dotyczy, nazwa po polsku.
+  if (sheetCell && sheetCell.t === "e") return swbLocalizeCellText(String(sheetCell.w || sheetCell.v), sheetCell, currentLang);
   const fmt = cfmtPendingFmt(currentSheetName, ref);
   let code = fmt && "numFmt" in fmt ? fmt.numFmt : null;
   if (code == null) {
-    const cell = workbook?.Sheets?.[currentSheetName]?.[ref];
+    const cell = sheetCell;
     if (cell && cell.z && cell.z !== "General" && !(v instanceof Date)) code = cell.z;
   }
   if (code != null) {

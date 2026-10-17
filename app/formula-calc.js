@@ -252,7 +252,7 @@ function fcRefreshRow(sheet, r, c) {
     let shown = cell ? (cell.w != null ? String(cell.w) : (v == null ? "" : toDisplay(v))) : "";
     if (v instanceof Date && typeof localizeDisplayedDate === "function") shown = localizeDisplayedDate(v, shown, cell);
     if (cell && cell.t === "e") shown = cell.w || String(cell.v);
-    else shown = swbLocalizeCellText(shown, cell, currentLang);
+    shown = swbLocalizeCellText(shown, cell, currentLang);
     row.display[col] = shown;
   }
   if (row.recalcCells && row.recalcCells[col] !== undefined) delete row.recalcCells[col];

@@ -307,15 +307,22 @@
   }
 
   // Kopia swbLocalizeCellText z workbook.js (wątek roboczy nie ma dostępu do wątku głównego):
-  // SSF daje „1,234.50” / TRUE, polski Excel pokazuje „1 234,50” / PRAWDA.
+  // SSF daje „1,234.50” / TRUE / #DIV/0!, polski Excel pokazuje „1 234,50” / PRAWDA / #DZIEL/0!.
   function isDateFormatCode(code) {
     if (typeof code !== "string" || !code || code === "General") return false;
     try { return !!(XLSX.SSF && XLSX.SSF.is_date(code)); } catch { return /[dmyhs]/i.test(code.replace(/"[^"]*"|\[[^\]]*\]/g, "")); }
   }
 
+  // #DIV/0! → #DZIEL/0! — tylko tekst w widoku, cell.w/cell.v zostają angielskie (zapis, formuły).
+  const ERR_PL = {
+    "#NULL!": "#ZERO!", "#DIV/0!": "#DZIEL/0!", "#VALUE!": "#ARG!", "#REF!": "#ADR!",
+    "#NAME?": "#NAZWA?", "#NUM!": "#LICZBA!", "#N/A": "#N/D", "#SPILL!": "#ROZLANIE!", "#CALC!": "#OBL!",
+  };
+
   function localizeCellText(shown, cell, lang) {
     if (lang === "en" || typeof shown !== "string" || !cell) return shown;
     if (cell.t === "b") return cell.v ? "PRAWDA" : "FAŁSZ";
+    if (cell.t === "e") return ERR_PL[shown] || shown;
     if (cell.t !== "n" || !/\d[.,]\d/.test(shown)) return shown;
     if (isDateFormatCode(cell.z)) return shown;
     return shown.replace(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d*\.\d+/g, (tok) => tok.replace(/,/g, "\u00a0").replace(".", ","));
