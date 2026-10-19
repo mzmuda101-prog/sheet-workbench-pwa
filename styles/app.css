@@ -8600,3 +8600,43 @@ thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }
 /* kartka raportu jest zawsze biała — przycisk na niej nie bierze kolorów z ciemnego motywu */
 .rp-summary-ai.btn, .rp-summary-ai.btn:hover { color: #1f2a37; background: #ffffff; border: 1px solid #b8bec8; }
 .lai-box > .ai-badge, .fx-write-out > .ai-badge, .compare-describe-ai > .ai-badge { justify-self: start; }
+
+/* Notatki w panelu filtrów + nawigacja w oknie notatki (cell-notes.js, 2026-10-20) */
+.notes-filter-group { display: flex; flex-direction: column; gap: inherit; }
+.notes-filter-group.hidden { display: none; }
+.note-modal .modal-head { gap: 8px; }
+.note-modal .modal-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-modal-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--surface);
+  padding: 1px;
+}
+.note-modal-navbtn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--r-full);
+  background: transparent;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+.note-modal-navbtn:hover { background: var(--accent-light); color: var(--accent); }
+.note-modal-navbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.note-modal-pos {
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 3.2em;
+  text-align: center;
+  white-space: nowrap;
+}
+@media (pointer: coarse) {
+  .note-modal-navbtn { width: 36px; height: 36px; }
+}

@@ -2679,6 +2679,17 @@ const STATIC_TRANSLATIONS = {
     noteAdded: "Dodano notatkę w {ref}",
     noteSaved: "Zapisano notatkę w {ref}",
     noteRemoved: "Usunięto notatkę z {ref}",
+    notesOnlyLabel: "Tylko wiersze z notatkami ({n})",
+    notesSearchLabel: "Szukaj też w treści notatek",
+    activeFiltersNotes: "Tylko z notatkami",
+    noteNavPos: "{i} z {n}",
+    noteNavCount: "notatek: {n}",
+    noteNavPrev: "Poprzednia notatka",
+    noteNavNext: "Następna notatka",
+    noteNavWrapStart: "Od początku — pierwsza notatka w widoku",
+    noteNavWrapEnd: "Od końca — ostatnia notatka w widoku",
+    noteNavNone: "Ten arkusz nie ma notatek",
+    noteNavHidden: "Notatki są tylko w wierszach ukrytych przez filtr",
     fxExplainTitle: "Co liczy ta formuła",
     fxExplainRefs: "Odwołania (wartości teraz):",
     fxExplainResult: "Wynik w tej komórce: {value}",
@@ -2791,7 +2802,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchActionCells: "Podświetl pasujące",
     quickSearchActionFilterCells: "Filtruj + podświetl",
     quickSearchOperatorsLabel: "&&·||",
-    quickSearchOperatorsTitle: "Włącz operatory szukania: || (lub) · && (oraz) · ! (bez słowa) · {…} (grupowanie) · >> (większe) · << (mniejsze; z „=” → ≥/≤) · dl>>/dl<< (długość tekstu) · Kolumna:wartość (tylko ta kolumna). /| Przykłady: „Kowalski && Faktura”, „>>1000”, „dl>>20”, „Status:!Anulowana”, „Kwota:>>1000”, „!\"Jan Kowalski\"”.",
+    quickSearchOperatorsTitle: "Włącz operatory szukania: || (lub) · && (oraz) · ! (bez słowa) · {…} (grupowanie) · >> (większe) · << (mniejsze; z „=” → ≥/≤) · dl>>/dl<< (długość tekstu) · Kolumna:wartość (tylko ta kolumna) · @notatka (wiersze z notatką; @notatka:słowo — w treści, !@notatka — bez notatek). /| Przykłady: „Kowalski && Faktura”, „>>1000”, „dl>>20”, „Status:!Anulowana”, „Kwota:>>1000”, „!\"Jan Kowalski\"”, „@notatka:faktura”.",
     searchOperatorsToggle: "Operatory wyszukiwania",
     searchOperatorsTitle: "Operatory wyszukiwania",
     arrows: "Strzałki",
@@ -3017,6 +3028,17 @@ const STATIC_TRANSLATIONS = {
     noteAdded: "Note added in {ref}",
     noteSaved: "Note saved in {ref}",
     noteRemoved: "Note removed from {ref}",
+    notesOnlyLabel: "Only rows with notes ({n})",
+    notesSearchLabel: "Also search note text",
+    activeFiltersNotes: "Only with notes",
+    noteNavPos: "{i} of {n}",
+    noteNavCount: "notes: {n}",
+    noteNavPrev: "Previous note",
+    noteNavNext: "Next note",
+    noteNavWrapStart: "Back to the start — first note in view",
+    noteNavWrapEnd: "Back to the end — last note in view",
+    noteNavNone: "This sheet has no notes",
+    noteNavHidden: "Notes are only in rows hidden by the filter",
     fxExplainTitle: "What this formula calculates",
     fxExplainRefs: "References (current values):",
     fxExplainResult: "Result in this cell: {value}",
@@ -3129,7 +3151,7 @@ const STATIC_TRANSLATIONS = {
     quickSearchActionCells: "Highlight matches",
     quickSearchActionFilterCells: "Filter + highlight",
     quickSearchOperatorsLabel: "&&·||",
-    quickSearchOperatorsTitle: "Enable search operators: || (or) · && (and) · ! (without word) · {…} (grouping) · >> (greater) · << (less; add „=” → ≥/≤) · dl>>/dl<< (text length) · Column:value (that column only). /| Examples: „Kowalski && Invoice”, „>>1000”, „len>>20”, „Status:!Cancelled”, „Amount:>>1000”, „!\"John Smith\"”.",
+    quickSearchOperatorsTitle: "Enable search operators: || (or) · && (and) · ! (without word) · {…} (grouping) · >> (greater) · << (less; add „=” → ≥/≤) · dl>>/dl<< (text length) · Column:value (that column only) · @note (rows with a note; @note:word — in the text, !@note — without notes). /| Examples: „Kowalski && Invoice”, „>>1000”, „len>>20”, „Status:!Cancelled”, „Amount:>>1000”, „!\"John Smith\"”, „@note:invoice”.",
     searchOperatorsToggle: "Search operators",
     searchOperatorsTitle: "Search operators",
     arrows: "Arrow keys",
@@ -4028,6 +4050,7 @@ function applyLanguage(lang) {
   updateExcelLayoutButtonLabel();
   if (typeof syncRowsAboveHeaderToggle === "function") syncRowsAboveHeaderToggle();
   if (typeof swbKeyBar !== "undefined" && swbKeyBar.syncToggle) swbKeyBar.syncToggle();
+  if (typeof swbNotesSyncFilterUi === "function") swbNotesSyncFilterUi();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));
   renderSortRules();

@@ -162,10 +162,235 @@ function swbSetNote(r, col, text, author) {
   swbNotesRecord(currentSheetName, ref, note);
   if (note && typeof swbEnsureSheetRef === "function") swbEnsureSheetRef(sheet, r, currentStartCol + col);
   swbNotesRepaintRef(ref);
+  swbNotesSyncFilterUi();
   if (typeof setDirtyState === "function") setDirtyState(true);
   if (typeof scheduleViewRefresh === "function") scheduleViewRefresh({ filterBadge: true });
   return true;
 }
+
+// ── Szukanie i filtrowanie po notatkach (2026-10-20) ──────────────────────────
+// Panel filtrów (pod „Tylko wiersze z danymi”, widoczne tylko gdy arkusz ma notatki):
+//   • „Tylko wiersze z notatkami” — filtr wiersza jak „tylko niezgodne” z walidacji:
+//     działa od razu (bez „Filtruj”), ma pigułkę w pasku „co teraz filtruje”,
+//   • „Szukaj też w treści notatek” — szukanie (Filtr 1/2, szybkie szukanie) traktuje treść
+//     notatki jak drugą zawartość jej komórki. Domyślnie wyłączone: wiersz pasujący „przez
+//     notatkę” bez tego wyglądałby na błąd. Koszt: jedno Map.get na wiersz (notatek jest mało).
+const SWB_NOTES_SEARCH_KEY = "swb-notes-search-v1";
+let swbNotesOnly = false;
+const swbNotesOnlyEl = document.getElementById("notesOnly");
+const swbNotesSearchEl = document.getElementById("notesSearch");
+const swbNotesFilterGroupEl = document.getElementById("notesFilterGroup");
+
+function swbNotesSearchEnabled() {
+  try { return localStorage.getItem(SWB_NOTES_SEARCH_KEY) === "1"; } catch { return false; }
+}
+
+// kolumny (widoku) z notatką w wierszu tabeli — tylko widok „wide”
+function swbRowNoteCols(row) {
+  if (!row || row.isLongViewRow || currentDisplayModel?.mode === "long") return null;
+  const abs = swbNotesRowCols(row.rowIndex0);
+  if (!abs) return null;
+  const width = Array.isArray(currentHeaders) ? currentHeaders.length : 0;
+  const out = [];
+  abs.forEach((c) => { const col = c - currentStartCol; if (col >= 0 && col < width) out.push(col); });
+  return out.length ? out.sort((a, b) => a - b) : null;
+}
+
+function swbRowHasNote(row) {
+  return !!swbRowNoteCols(row);
+}
+
+// Dla workbook.js (scopedTermMatcher): czy treść notatki komórki pasuje do termu.
+function swbNoteMatchesTerm(row, i, q, mode) {
+  const abs = swbNotesRowCols(row.rowIndex0);
+  if (!abs || !abs.has(currentStartCol + i)) return false;
+  const note = swbNoteOf(currentSheetName, XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
+  if (!note) return false;
+  if (mode === "regex") {
+    const re = typeof compileSearchRegex === "function" ? compileSearchRegex(q) : null;
+    return re ? re.test(note.text) : false;
+  }
+  const text = note.text.toLowerCase();
+  if (mode === "equals") return text.trim() === q;
+  if (mode === "starts_with") return text.startsWith(q);
+  return text.includes(q);
+}
+
+function swbSheetNoteCount() {
+  const rows = swbNotesRowIndex();
+  let n = 0;
+  if (rows) rows.forEach((set) => { n += set.size; });
+  return n;
+}
+
+// Pokazanie/ukrycie grupy w panelu + etykiety z licznikiem. Arkusz bez notatek: nic nie widać
+// (a przełącznik „tylko z notatkami” gaśnie, żeby nie zostawić pustej tabeli bez wyjaśnienia).
+let swbNotesUiKey = "";
+function swbNotesSyncFilterUi() {
+  if (!swbNotesFilterGroupEl) return;
+  const n = workbook && currentSheetName ? swbSheetNoteCount() : 0;
+  // wołane przy każdym renderze tabeli — DOM ruszamy tylko, gdy coś się zmieniło
+  const key = `${n}|${swbNotesOnly}|${swbNotesSearchEnabled()}|${typeof currentLang !== "undefined" ? currentLang : ""}`;
+  if (key === swbNotesUiKey) return;
+  swbNotesUiKey = key;
+  swbNotesFilterGroupEl.classList.toggle("hidden", n === 0 && !swbNotesOnly);
+  if (swbNotesOnlyEl) {
+    swbNotesOnlyEl.checked = swbNotesOnly;
+    const label = swbNotesOnlyEl.closest("label")?.querySelector("span");
+    if (label) label.textContent = t("notesOnlyLabel", { n });
+  }
+  if (swbNotesSearchEl) {
+    swbNotesSearchEl.checked = swbNotesSearchEnabled();
+    const label = swbNotesSearchEl.closest("label")?.querySelector("span");
+    if (label) label.textContent = t("notesSearchLabel");
+  }
+}
+
+function swbRerunFilters() {
+  if (typeof applyFilters !== "function") return;
+  applyFilters();
+  if (typeof sortRows === "function") sortRows();
+  if (typeof renderActiveTable === "function") renderActiveTable();
+  if (typeof updateFilterBadge === "function") updateFilterBadge();
+  if (typeof scheduleViewRefresh === "function") scheduleViewRefresh({ analyses: true });
+}
+
+function swbSetNotesOnly(on, { rerun = true } = {}) {
+  swbNotesOnly = !!on;
+  swbNotesSyncFilterUi();
+  if (rerun) swbRerunFilters();
+}
+
+if (swbNotesOnlyEl) swbNotesOnlyEl.addEventListener("change", () => swbSetNotesOnly(swbNotesOnlyEl.checked));
+if (swbNotesSearchEl) {
+  swbNotesSearchEl.addEventListener("change", () => {
+    try { localStorage.setItem(SWB_NOTES_SEARCH_KEY, swbNotesSearchEl.checked ? "1" : "0"); } catch { /* tryb prywatny */ }
+    swbRerunFilters();
+  });
+}
+
+// Token w polu szukania (jak @wtoku z Trybów auto): @notatka = wiersz ma notatkę,
+// !@notatka = nie ma, @notatka:słowo / @notatka:"cała fraza" = treść notatki zawiera tekst.
+// Synonimy: @notatki, @komentarz(e), @note(s), @comment(s). Wycinamy je z zapytania,
+// zanim zobaczy je parser termów; reszta zapytania działa jak zwykle (AND z tokenem).
+const SWB_NOTE_TOKEN_RE = /(^|\s)(!?)@(?:notatk[aiy]?|komentarz[ey]?|notes?|comments?)(?::("[^"]*"|\S+))?(?=\s|$)/giu;
+
+function swbExtractNoteTokens(query) {
+  const q = String(query || "");
+  if (!q.includes("@")) return { query: q, rules: null };
+  const rules = [];
+  const rest = q.replace(SWB_NOTE_TOKEN_RE, (all, pre, neg, term) => {
+    let text = term ? term.replace(/^"|"$/g, "").trim().toLowerCase() : "";
+    rules.push({ negated: neg === "!", text });
+    return pre;
+  });
+  if (!rules.length) return { query: q, rules: null };
+  // spójniki zostawione przez wycięty token („@notatka && Kowalski” → „Kowalski”)
+  const query2 = rest.replace(/^\s*(&&|\|\|)\s*/, "").replace(/\s*(&&|\|\|)\s*$/, "").replace(/\s+(&&)\s+(&&)\s+/g, " && ").trim();
+  return { query: query2, rules };
+}
+
+// Wiersz spełnia wszystkie tokeny notatek (AND).
+function swbRowPassesNoteRules(row, rules) {
+  if (!rules || !rules.length) return true;
+  const cols = swbRowNoteCols(row);
+  return rules.every((rule) => {
+    let hit;
+    if (!rule.text) hit = !!cols;
+    else hit = !!cols && cols.some((col) => {
+      const note = swbNoteOf(currentSheetName, XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + col }));
+      return !!note && note.text.toLowerCase().includes(rule.text);
+    });
+    return rule.negated ? !hit : hit;
+  });
+}
+
+// Notatki widoczne w tabeli, w kolejności widoku (sortowanie/filtr), wiersz po wierszu.
+function swbNotesInView() {
+  const model = currentDisplayModel;
+  if (!model || model.mode !== "wide" || !Array.isArray(model.rows)) return [];
+  const rows = swbNotesRowIndex();
+  if (!rows || !rows.size) return [];
+  const out = [];
+  model.rows.forEach((row) => {
+    if (!row || !rows.has(row.rowIndex0)) return;
+    const cols = swbRowNoteCols(row);
+    if (cols) cols.forEach((col) => out.push({ r: row.rowIndex0, col, rowKey: getRowSelectionKey(row) }));
+  });
+  return out;
+}
+
+// Sąsiednia notatka względem pozycji { r, col } (albo aktywnej komórki), z zawijaniem.
+function swbNoteNeighbor(from, dir) {
+  const list = swbNotesInView();
+  if (!list.length) return null;
+  const model = currentDisplayModel;
+  let pos = -1; // pozycja „między” notatkami: indeks wiersza w widoku * szerokość + kolumna
+  const width = (model?.headers?.length || 0) + 1;
+  const rowPos = new Map();
+  model.rows.forEach((row, k) => { if (row && !rowPos.has(row.rowIndex0)) rowPos.set(row.rowIndex0, k); });
+  if (from && rowPos.has(from.r)) pos = rowPos.get(from.r) * width + from.col;
+  const key = (x) => rowPos.get(x.r) * width + x.col;
+  let hit = null;
+  if (dir > 0) hit = list.find((x) => key(x) > pos) || null;
+  else for (let k = list.length - 1; k >= 0; k--) if (key(list[k]) < pos) { hit = list[k]; break; }
+  if (!hit) {
+    hit = dir > 0 ? list[0] : list[list.length - 1];
+    if (list.length > 1 || !from || key(hit) !== pos) toast(t(dir > 0 ? "noteNavWrapStart" : "noteNavWrapEnd"), "info");
+  }
+  return hit;
+}
+
+function swbFocusNoteCell(n) {
+  setFocusedCell(n.rowKey, n.col, { scroll: true });
+  return document.querySelector(`#dataTable tbody tr[data-row-key="${CSS.escape(n.rowKey)}"] td[data-col-index="${n.col}"]`);
+}
+
+// Skrót w tabeli: przejdź do notatki i pokaż jej treść (podpowiedź komórki).
+function swbGoToNote(dir) {
+  if (!workbook || currentDisplayModel?.mode !== "wide") return false;
+  const list = swbNotesInView();
+  if (!list.length) {
+    toast(t(swbSheetNoteCount() ? "noteNavHidden" : "noteNavNone"), "info");
+    return false;
+  }
+  let from = null;
+  if (focusedCellState) {
+    const row = currentDisplayModel.rows.find((x) => getRowSelectionKey(x) === focusedCellState.rowKey);
+    if (row) from = { r: row.rowIndex0, col: focusedCellState.colIndex0 };
+  }
+  const next = swbNoteNeighbor(from, dir);
+  if (!next) return false;
+  if (typeof hideCellTooltip === "function") hideCellTooltip(); // poprzednia treść nie może zostać pod nową komórką
+  swbFocusNoteCell(next);
+  // komórka mogła dopiero co wjechać w widok (przewijanie / wirtualizacja) — podpowiedź po klatce
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const td = document.querySelector(`#dataTable tbody tr[data-row-key="${CSS.escape(next.rowKey)}"] td[data-col-index="${next.col}"]`);
+    if (td && typeof showCellTooltip === "function") showCellTooltip(td, true);
+  }));
+  return true;
+}
+
+// Ctrl/⌘+Alt+N = następna notatka, z Shift = poprzednia; F8 / Shift+F8 jako alias (klawiatury
+// tabletowe często nie mają rzędu F). e.key przy wciśniętym Ctrl/⌘ zostaje literą, a AltGr+N
+// na polskim układzie daje „ń” — więc polskie znaki nie są przechwytywane.
+document.addEventListener("keydown", (e) => {
+  const meta = e.ctrlKey || e.metaKey;
+  const combo = meta && e.altKey && (String(e.key).toLowerCase() === "n" || (e.metaKey && e.code === "KeyN"));
+  const fkey = e.key === "F8" && !meta && !e.altKey;
+  if (!combo && !fkey) return;
+  if (!workbook) return;
+  const dir = e.shiftKey ? -1 : 1;
+  if (swbNoteModal.isOpen) { e.preventDefault(); e.stopPropagation(); swbNoteModal.go(dir); return; }
+  if (document.querySelector(".modal:not(.hidden)")) return;
+  if (typeof activeCellEditor !== "undefined" && activeCellEditor) return;
+  const a = document.activeElement;
+  const tag = a?.tagName;
+  if ((tag === "INPUT" || tag === "TEXTAREA" || a?.isContentEditable) && !a.closest("#dataTable")) return;
+  e.preventDefault();
+  e.stopPropagation();
+  swbGoToNote(dir);
+}, true);
 
 // ── Okno notatki ────────────────────────────────────────────────────────────────
 const swbNoteModal = (() => {
@@ -185,6 +410,11 @@ const swbNoteModal = (() => {
       <div class="modal-content" tabindex="-1">
         <div class="modal-head">
           <div class="modal-title" id="noteModalTitle"></div>
+          <div class="note-modal-nav" hidden>
+            <button class="note-modal-navbtn" type="button" data-act="prev"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg></button>
+            <span class="note-modal-pos"></span>
+            <button class="note-modal-navbtn" type="button" data-act="next"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg></button>
+          </div>
           <button class="modal-close" type="button" data-act="cancel">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
           </button>
@@ -221,6 +451,10 @@ const swbNoteModal = (() => {
       del: el.querySelector(".note-modal-delete"),
       cancel: el.querySelector(".note-modal-cancel"),
       save: el.querySelector(".note-modal-save"),
+      nav: el.querySelector(".note-modal-nav"),
+      pos: el.querySelector(".note-modal-pos"),
+      prev: el.querySelector('[data-act="prev"]'),
+      next: el.querySelector('[data-act="next"]'),
     };
     el.addEventListener("click", (e) => {
       if (e.target === el) { close(); return; }
@@ -228,6 +462,7 @@ const swbNoteModal = (() => {
       if (act === "cancel") close();
       else if (act === "save") save();
       else if (act === "delete") remove();
+      else if (act === "prev" || act === "next") go(act === "next" ? 1 : -1);
     });
     // Klawisze okna łapiemy na dokumencie (faza przechwytywania): Esc wciśnięty tuż po
     // otwarciu, zanim fokus wejdzie do pola, trafiał do siatki i okno zostawało otwarte.
@@ -289,6 +524,20 @@ const swbNoteModal = (() => {
     refs.cancel.textContent = t(readOnly ? "noteClose" : "noteCancel");
     refs.save.textContent = t("noteSave");
     refs.save.hidden = readOnly;
+    // „Poprzednia / Następna notatka” jak w Excelu — po notatkach widocznych w tabeli
+    const list = swbNotesInView();
+    const at = list.findIndex((x) => x.r === r && x.col === col);
+    const others = list.length - (at >= 0 ? 1 : 0);
+    refs.nav.hidden = others < 1;
+    refs.pos.textContent = at >= 0 ? t("noteNavPos", { i: at + 1, n: list.length }) : t("noteNavCount", { n: list.length });
+    refs.prev.setAttribute("aria-label", t("noteNavPrev"));
+    refs.next.setAttribute("aria-label", t("noteNavNext"));
+    refs.prev.dataset.hint = "";
+    refs.prev.dataset.hintPl = "Poprzednia notatka (Ctrl/⌘+Alt+Shift+N · Shift+F8)";
+    refs.prev.dataset.hintEn = "Previous note (Ctrl/⌘+Alt+Shift+N · Shift+F8)";
+    refs.next.dataset.hint = "";
+    refs.next.dataset.hintPl = "Następna notatka (Ctrl/⌘+Alt+N · F8)";
+    refs.next.dataset.hintEn = "Next note (Ctrl/⌘+Alt+N · F8)";
     if (typeof hideCellTooltip === "function") hideCellTooltip();
     el.classList.remove("hidden");
     // Dotyk + istniejąca notatka: najpierw do przeczytania — klawiatura wysunięta od razu
@@ -329,6 +578,25 @@ const swbNoteModal = (() => {
     }
   }
 
+  // Przejście do sąsiedniej notatki. Zmieniona treść bieżącej zapisuje się po drodze
+  // (jak w Excelu — tam też nie ma „Anuluj” przy przechodzeniu między notatkami).
+  function go(dir) {
+    if (!target) return;
+    const { r, col } = target;
+    if (!refs.text.readOnly) {
+      const cur = swbNoteOf(currentSheetName, target.ref);
+      const text = refs.text.value;
+      if ((cur ? cur.text : "") !== text.replace(/\r\n?/g, "\n").replace(/\s+$/, "")) {
+        if (!refs.author.readOnly) { try { localStorage.setItem(SWB_NOTE_AUTHOR_KEY, refs.author.value.trim()); } catch { /* tryb prywatny */ } }
+        swbSetNote(r, col, text, refs.author.readOnly ? "" : refs.author.value.trim());
+      }
+    }
+    const next = swbNoteNeighbor({ r, col }, dir);
+    if (!next) return;
+    const td = swbFocusNoteCell(next);
+    open(next.r, next.col, { focusBack: td || returnFocus });
+  }
+
   function remove() {
     if (!target) return;
     const { r, col, ref } = target;
@@ -336,7 +604,7 @@ const swbNoteModal = (() => {
     if (swbSetNote(r, col, "", "")) toast(t("noteRemoved", { ref }), "success");
   }
 
-  return { open, close, get isOpen() { return !!el && !el.classList.contains("hidden"); } };
+  return { open, close, go, get isOpen() { return !!el && !el.classList.contains("hidden"); } };
 })();
 
 // Pozycje menu komórki (filter-bar.js). target = { row, col, td }.

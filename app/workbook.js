@@ -1288,6 +1288,11 @@ function scopedTermMatcher(term, criterion) {
   scoped.cellHit = cmp
     ? (row, i) => cellSatisfiesComparison(row, i, cmp)
     : (row, i) => cellMatchesTerm(row, i, q, mode);
+  // „Szukaj też w treści notatek” — notatka liczy się jak druga zawartość swojej komórki
+  if (!cmp && criterion.searchNotes && typeof swbNoteMatchesTerm === "function") {
+    const base = scoped.cellHit;
+    scoped.cellHit = (row, i) => base(row, i) || swbNoteMatchesTerm(row, i, q, mode);
+  }
   return scoped;
 }
 
@@ -1867,6 +1872,17 @@ function applyFilters() {
     },
   ];
 
+  // Notatki komórek (cell-notes.js): „Szukaj też w treści notatek” + tokeny @notatka w polach szukania.
+  const searchNotes = typeof swbNotesSearchEnabled === "function" && swbNotesSearchEnabled();
+  const noteRules = [];
+  criteria.forEach((c) => {
+    c.searchNotes = searchNotes;
+    if (typeof swbExtractNoteTokens !== "function") return;
+    const ex = swbExtractNoteTokens(c.query);
+    if (ex.rules) { c.query = ex.query; noteRules.push(...ex.rules); }
+  });
+  const notesOnly = typeof swbNotesOnly !== "undefined" && swbNotesOnly;
+
   const dateFilter = {
     indexes: resolveIndexes(currentHeaders, columnSelections.date),
     range: getDateRange(),
@@ -1898,6 +1914,8 @@ function applyFilters() {
     if (!rowMatchesDateFilter(row, dateFilter)) return false;
     // Walidacja listą: w trybie „pokaż tylko niezgodne" zostają wyłącznie naruszenia.
     if (validationState.showOnly && !rowIsValidationViolation(row)) return false;
+    if (notesOnly && !swbRowHasNote(row)) return false;
+    if (noteRules.length && !swbRowPassesNoteRules(row, noteRules)) return false;
     if (!smartActive) return rowMatchesTextFilter(row, criteria, onlyNonEmpty);
 
     const records = buildSmartRecords(row, smartModel);
@@ -1925,7 +1943,7 @@ function applyFilters() {
     if (cols.size) matchedCellsByRow.set(row.rowIndex0, cols);
   };
 
-  const shouldFilterRows = (filtersCommitted || validationState.showOnly) && !quickSearchHighlightMode && !quickSearchCellsMode;
+  const shouldFilterRows = (filtersCommitted || validationState.showOnly || notesOnly) && !quickSearchHighlightMode && !quickSearchCellsMode;
   if (shouldFilterRows) {
     // Tryb „filtruj": tylko pasujące wiersze (po kliknięciu Filtruj lub równoważnej akcji)
     matchedRowIndexes = new Set();
@@ -1950,6 +1968,7 @@ function applyFilters() {
     total: baseRows.length,
   };
   if (typeof renderActiveFilters === "function") renderActiveFilters();
+  if (typeof swbNotesSyncFilterUi === "function") swbNotesSyncFilterUi();
 }
 
 function sortRows() {

@@ -38,6 +38,7 @@ The goal is to build a workbench *around* Excel files: local-first, safe for sou
 - Auto-detect header rows, choose any sheet, configure starting column
 - Save modified workbooks back to `.xlsx` or export to CSV
 - Cell notes like in Excel: red corner marker, read on hover / tap, add, edit and delete from the cell menu or Shift+F2 — saved into the file (threaded Excel 365 comments are shown read-only)
+- Find notes: "Only rows with notes" filter, `@note` / `@note:word` / `!@note` in search, optional search inside note text, next/previous note (Ctrl/⌘+Alt+N, F8)
 
 ### Filtering and search
 - Two independent text filters with multiple match modes (contains, starts with, equals)

@@ -1224,6 +1224,7 @@ function renderActiveTable() {
   }
   updateWideLongToggle();
   if (typeof sheetEditUi !== "undefined") sheetEditUi.sync(); // paski edycji: pokaż po wczytaniu, odśwież po zmianie
+  if (typeof swbNotesSyncFilterUi === "function") swbNotesSyncFilterUi(); // notatki w panelu filtrów (arkusz mógł się zmienić)
 }
 
 function updateSortControls() {

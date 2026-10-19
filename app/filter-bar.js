@@ -145,6 +145,7 @@ function afCollectChips() {
   const smartN = typeof smartActiveCount === "function" ? smartActiveCount() : 0;
   if (smartN) chips.push({ id: "smart", parts: [{ text: t("activeFiltersSmart", { n: smartN }), tag: "label" }], clear: afClearSmart });
   if (validationState && validationState.showOnly) chips.push({ id: "validation", parts: [{ text: t("activeFiltersValidation"), tag: "label" }], clear: afClearValidation });
+  if (typeof swbNotesOnly !== "undefined" && swbNotesOnly) chips.push({ id: "notes", parts: [{ text: t("activeFiltersNotes"), tag: "label" }], clear: () => swbSetNotesOnly(false) });
   return chips;
 }
 
@@ -646,6 +647,7 @@ function captureViewState() {
       };
     }
     if (validationState && validationState.showOnly) f.validation = true;
+    if (typeof swbNotesOnly !== "undefined" && swbNotesOnly) f.notes = true;
     if (Object.keys(f).length) filter = f;
   }
   normalizeSortState();
@@ -820,6 +822,7 @@ function applyViewState(vs) {
       minDays: Number.isFinite(f.smart.minDays) ? f.smart.minDays : null,
     };
   }
+  if (typeof swbSetNotesOnly === "function") swbSetNotesOnly(!!(f && f.notes), { rerun: false });
   if (f && f.validation) {
     validationState.showOnly = true;
     const cb = document.getElementById("validationShowOnly");

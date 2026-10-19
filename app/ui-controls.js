@@ -208,6 +208,7 @@ function updateFilterBadge() {
   if (columnSelections.filter2.size) count += 1;
   if (columnSelections.date.size) count += 1;
   if (validationState.showOnly) count += 1;
+  if (typeof swbNotesOnly !== "undefined" && swbNotesOnly) count += 1;
   if (typeof smartActiveCount === "function") count += smartActiveCount();
 
   filterBadgeEl.textContent = String(count);
@@ -300,6 +301,7 @@ function resetFilterInputs() {
   if (filterOperatorsEl) filterOperatorsEl.checked = false;
   if (filterOperators2El) filterOperators2El.checked = false;
   onlyNonEmptyEl.checked = false;
+  if (typeof swbSetNotesOnly === "function") swbSetNotesOnly(false, { rerun: false });
   if (highlightMatchCellsEl) highlightMatchCellsEl.checked = false;
   if (highlightMatchCellsDateEl) highlightMatchCellsDateEl.checked = false;
   highlightMatchedCells = false;
@@ -864,6 +866,7 @@ async function handleFile(file, fileHandle = null) {
     const data = await file.arrayBuffer();
     originalFileBytes = new Uint8Array(data); // do zapisu metodą ZIP-patch (zachowanie pliku)
     pendingEdits = {}; // świeży plik → brak naniesionych edycji
+    if (typeof swbNotesOnly !== "undefined") swbNotesOnly = false; // filtr notatek nie przechodzi na inny plik
     try {
       workbook = XLSX.read(data, { cellDates: true, cellStyles: true });
     } catch {
