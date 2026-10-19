@@ -102,7 +102,7 @@ async function run() {
       items: [...document.querySelectorAll("#cellMenu .cell-menu-item")].map((b) => b.textContent),
     }));
     report.menu = menu;
-    ok("2. prawy klik otwiera menu z kolumną i wartością", menu.visible && menu.head.includes(c0.value.slice(0, 10)) && menu.items.length === 3, menu);
+    ok("2. prawy klik otwiera menu z kolumną i wartością", menu.visible && menu.head.includes(c0.value.slice(0, 10)) && menu.items.length === 4 && /notatk|note/i.test(menu.items[3]), menu); // + „Dodaj notatkę” (cell-notes.js)
 
     // 3. Pokaż tylko takie
     await page.click("#cellMenu .cmi-show");

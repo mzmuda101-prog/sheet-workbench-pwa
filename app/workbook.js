@@ -281,18 +281,26 @@ function recalcNoteForCell(cell) {
 function showCellTooltip(cell, persistent = false) {
   if (!cellTooltipEl || !cell) return;
   const note = recalcNoteForCell(cell);
+  // Notatka komórki (cell-notes.js) — jak w Excelu: widać ją po najechaniu / tapnięciu.
+  const userNote = typeof swbNoteTextForTd === "function" ? swbNoteTextForTd(cell) : "";
   const truncated = isCellTextTruncated(cell);
   // Komórka przeliczona pokazuje notkę ZAWSZE, także gdy tekst się mieści —
   // inaczej znacznik w rogu byłby zagadką bez odpowiedzi.
-  if (!note && !truncated) return;
+  if (!note && !truncated && !userNote) return;
   const text = truncated ? getTooltipText(cell) : "";
-  if (!text && !note) return;
+  if (!text && !note && !userNote) return;
   hideCellTooltip();
   const parts = [];
   if (text) {
     const main = document.createElement("div");
     main.textContent = text;
     parts.push(main);
+  }
+  if (userNote) {
+    const noteEl = document.createElement("div");
+    noteEl.className = "cell-tooltip-usernote";
+    noteEl.textContent = userNote;
+    parts.push(noteEl);
   }
   if (note) {
     const noteEl = document.createElement("div");
@@ -304,9 +312,11 @@ function showCellTooltip(cell, persistent = false) {
   cellTooltipEl.classList.remove("hidden");
   positionCellTooltip(cell);
   if (!persistent) return;
+  // notatkę trzeba zdążyć przeczytać — dłużej przy dłuższej treści (do 8 s)
+  const holdMs = userNote ? Math.min(8000, 3000 + userNote.length * 40) : 2200;
   tooltipHideTimer = window.setTimeout(() => {
     hideCellTooltip();
-  }, 2200);
+  }, holdMs);
 }
 
 function syncHorizontalScrollbar() {
@@ -893,10 +903,12 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
     // pasek pokazywał „Ogólny”, a nowa wartość wpisana w to miejsce traciła format (np.
     // data jako liczba) aż do ponownego otwarcia pliku. Pusta komórka-zaślepka (t:"z")
     // jest dla formuł i wykrywania zakresu pusta.
-    if (prevCell && (prevCell.s || prevCell.z)) {
+    // Notatka (.c) też zostaje — Delete w Excelu nie kasuje notatek.
+    if (prevCell && (prevCell.s || prevCell.z || prevCell.c)) {
       const stub = { t: "z" };
       if (prevCell.s) stub.s = prevCell.s;
       if (prevCell.z) stub.z = prevCell.z;
+      if (prevCell.c) stub.c = prevCell.c;
       sheet[cellRef] = stub;
     } else {
       delete sheet[cellRef];
@@ -918,6 +930,7 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   const cell = {};
   if (prev && prev.s) cell.s = prev.s;
   if (prev && prev.z) cell.z = prev.z;
+  if (prev && prev.c) cell.c = prev.c; // notatka komórki (cell-notes.js)
   // Format jak w Excelu: „12%” w komórce Ogólny dostaje 0%, „8:30” — h:mm, „1 234” — #,##0.
   // Komórka z własnym formatem go zachowuje (Excel też: „12%” w formacie 0.00 daje 0,12).
   const autoFmt = parsed.numFmt && typeof cfmtNumFmtAt === "function"
@@ -967,6 +980,7 @@ function updateSheetFormulaCell(rowIndex0, colIndex0, fileF, value) {
   const cell = { f: fileF };
   if (prev && prev.s) cell.s = prev.s;
   if (prev && prev.z) cell.z = prev.z;
+  if (prev && prev.c) cell.c = prev.c;
   let payload;
   if (value === null || value === undefined) {
     cell.t = "s";
@@ -999,14 +1013,18 @@ function swbEnsureSheetRef(sheet, r, c) {
 }
 
 // Zapamiętuje pojedynczą edycję komórki w pendingEdits[sheetName][cellRef].
-// Format nadany w tej sesji (pasek „Narzędzia główne”, cell-format.js) przeżywa zmianę
-// wartości: nowa wartość dostaje go z powrotem, a wyczyszczenie zostawia sam format.
+// Format nadany w tej sesji (pasek „Narzędzia główne”, cell-format.js) i notatka
+// (cell-notes.js) przeżywają zmianę wartości: nowa wartość dostaje je z powrotem,
+// a wyczyszczenie zostawia sam format i notatkę.
 function recordPendingEdit(sheetName, cellRef, payload) {
   if (!sheetName) return;
   if (!pendingEdits[sheetName]) pendingEdits[sheetName] = {};
   const prev = pendingEdits[sheetName][cellRef];
-  if (prev && prev.fmt && (payload === null || (payload && !payload.fmt))) {
-    payload = payload === null ? { clear: true, fmt: prev.fmt } : { ...payload, fmt: prev.fmt };
+  if (prev && (prev.fmt || "note" in prev)) {
+    const keep = {};
+    if (prev.fmt && !(payload && payload.fmt)) keep.fmt = prev.fmt;
+    if ("note" in prev && !(payload && "note" in payload)) keep.note = prev.note;
+    if (Object.keys(keep).length) payload = payload === null ? { clear: true, ...keep } : { ...payload, ...keep };
   }
   pendingEdits[sheetName][cellRef] = payload;
 }

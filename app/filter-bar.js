@@ -389,6 +389,7 @@ function cellMenuItems(target) {
     { id: "copy", label: t("cellMenuCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
     paste,
     cellMenuExplainItem(target),
+    ...(typeof swbNoteMenuItems === "function" ? swbNoteMenuItems(target) : []),
   ].filter(Boolean);
 }
 

@@ -779,6 +779,372 @@ function zipWriteUtf8Xml(zip, path, xmlString) {
   zip.file(path, bytes);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// NOTATKI KOMÓREK (cell-notes.js) → xl/commentsN.xml + rysunek VML, stringowo.
+//
+// Notatka Excela to DWIE części: tekst w commentsN.xml (<comment ref="A1">) i kształt
+// w legacy VML (<v:shape> z <x:Row>/<x:Column>) — bez kształtu Excel notatki nie pokaże.
+// Edycja niesie pendingEdits[arkusz][A1].note = { text, author } | null (null = usuń).
+// Zmieniamy tylko wpisy dotkniętych komórek; reszta obu części zostaje bajt-identyczna
+// (cudze kształty w VML, np. pola wyboru, też). Nowe części dostają rel arkusza,
+// wpis w [Content_Types].xml i <legacyDrawing> w arkuszu (w kolejności ze schematu).
+// Komentarzy WĄTKOWYCH (threadedComments, Excel 365) nie dotykamy — aplikacja pokazuje
+// je tylko do odczytu, a ich legacy-kopia w comments musi zostać zgodna z wątkiem.
+const REL_TYPE_COMMENTS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments";
+const REL_TYPE_VML = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+const CT_COMMENTS = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
+const CT_VML = "application/vnd.openxmlformats-officedocument.vmlDrawing";
+const VML_NS = { v: "urn:schemas-microsoft-com:vml", o: "urn:schemas-microsoft-com:office:office", x: "urn:schemas-microsoft-com:office:excel" };
+// Elementy arkusza, które w schemacie stoją PO <legacyDrawing> (wstawiamy przed pierwszym z nich).
+const AFTER_LEGACY_DRAWING = ["legacyDrawingHF", "drawingHF", "picture", "oleObjects", "controls", "webPublishItems", "tableParts", "extLst", "AlternateContent"];
+
+function xmlAttr(tag, name) {
+  const m = String(tag).match(new RegExp(`\\s${name}="([^"]*)"`));
+  return m ? m[1] : null;
+}
+
+function parseRelsList(xml) {
+  const out = [];
+  const re = /<Relationship\b[^>]*?\/?>/g;
+  let m;
+  while ((m = re.exec(xml || ""))) {
+    out.push({ id: xmlAttr(m[0], "Id"), type: xmlAttr(m[0], "Type") || "", target: xmlAttr(m[0], "Target") || "", external: xmlAttr(m[0], "TargetMode") === "External", raw: m[0] });
+  }
+  return out;
+}
+
+// Target relacji → ścieżka w ZIP (względem katalogu części źródłowej albo od korzenia).
+function resolvePartPath(baseDir, target) {
+  const parts = target.startsWith("/") ? [] : baseDir.split("/").filter(Boolean);
+  target.replace(/^\//, "").split("/").forEach((seg) => {
+    if (seg === "..") parts.pop();
+    else if (seg && seg !== ".") parts.push(seg);
+  });
+  return parts.join("/");
+}
+
+function relativePartTarget(fromDir, path) {
+  const from = fromDir.split("/").filter(Boolean);
+  const to = path.split("/").filter(Boolean);
+  let i = 0;
+  while (i < from.length && i < to.length - 1 && from[i] === to[i]) i++;
+  return "../".repeat(from.length - i) + to.slice(i).join("/");
+}
+
+function nextFreePath(zip, pattern) {
+  for (let n = 1; n < 10000; n++) {
+    const p = pattern.replace("{n}", String(n));
+    if (!zip.file(p)) return p;
+  }
+  throw new Error("brak wolnej nazwy części");
+}
+
+function cellRowCol(ref) {
+  return { row: rowNum(ref) - 1, col: colIndex0(ref) };
+}
+
+function compareRefs(a, b) {
+  const ra = cellRowCol(a);
+  const rb = cellRowCol(b);
+  return ra.row - rb.row || ra.col - rb.col;
+}
+
+function noteTextXml(P, text) {
+  const clean = sanitizeXmlText(String(text ?? "").replace(/\r\n?/g, "\n"));
+  return `<${P}text><${P}t xml:space="preserve">${escapeXmlText(clean)}</${P}t></${P}text>`;
+}
+
+// commentsN.xml: { xml } albo { xml: null } gdy lista notatek opustoszała (część do usunięcia).
+// notes: { A1: { text, author } | null }, skip: Set refów z komentarzem wątkowym.
+function patchCommentsXml(xml, notes, skip) {
+  let doc = xml || `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<comments xmlns="${SPREADSHEETML_NS}"><authors/><commentList/></comments>`;
+  const P = (doc.match(/<((?:[\w-]+:)?)comments\b/) || [])[1] || "";
+
+  // autorzy: istniejące wpisy zostają co do bajtu, nowi dopisywani na końcu
+  const authorsRe = new RegExp(`<${P}authors\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/${P}authors>)`);
+  const am = doc.match(authorsRe);
+  const authorItems = [];
+  if (am && am[2]) {
+    const itemRe = new RegExp(`<${P}author\\b[^>]*?(?:\\/>|>([\\s\\S]*?)<\\/${P}author>)`, "g");
+    let m;
+    while ((m = itemRe.exec(am[2]))) authorItems.push({ raw: m[0], name: decodeXmlEntitiesSimple(m[1] || "") });
+  }
+  const baseAuthors = authorItems.length;
+  const authorId = (name) => {
+    const n = String(name || "");
+    let i = authorItems.findIndex((a) => a.name === n);
+    if (i < 0) {
+      authorItems.push({ raw: `<${P}author>${escapeXmlText(sanitizeXmlText(n))}</${P}author>`, name: n });
+      i = authorItems.length - 1;
+    }
+    return i;
+  };
+
+  const listRe = new RegExp(`<${P}commentList\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/${P}commentList>)`);
+  const lm = doc.match(listRe);
+  const items = new Map();
+  if (lm && lm[2]) {
+    const itemRe = new RegExp(`<${P}comment\\b([^>]*?)(?:\\/>|>([\\s\\S]*?)<\\/${P}comment>)`, "g");
+    let m;
+    while ((m = itemRe.exec(lm[2]))) {
+      const ref = xmlAttr(` ${m[1]}`, "ref");
+      if (ref) items.set(ref, { raw: m[0], attrs: m[1] });
+    }
+  }
+
+  Object.keys(notes || {}).forEach((ref) => {
+    if (skip && skip.has(ref)) return;
+    const note = notes[ref];
+    const cur = items.get(ref);
+    if (!note) { items.delete(ref); return; }
+    if (cur) {
+      // edycja: atrybuty (autor, xr:uid…) zostają, zmienia się sam tekst
+      const attrs = cur.attrs.replace(/\/\s*$/, "");
+      items.set(ref, { raw: `<${P}comment${attrs}>${noteTextXml(P, note.text)}</${P}comment>`, attrs });
+    } else {
+      items.set(ref, { raw: `<${P}comment ref="${ref}" authorId="${authorId(note.author)}" shapeId="0">${noteTextXml(P, note.text)}</${P}comment>` });
+    }
+  });
+
+  if (!items.size) return { xml: null };
+  const listBody = Array.from(items.keys()).sort(compareRefs).map((ref) => items.get(ref).raw).join("");
+  const listTag = `<${P}commentList${lm ? lm[1].replace(/\/\s*$/, "") : ""}>${listBody}</${P}commentList>`;
+  doc = lm ? doc.replace(listRe, () => listTag) : doc.replace(new RegExp(`<\\/${P}comments>`), (end) => listTag + end);
+  if (authorItems.length !== baseAuthors || !am) {
+    const authorsTag = `<${P}authors${am ? am[1].replace(/\/\s*$/, "") : ""}>${authorItems.map((a) => a.raw).join("")}</${P}authors>`;
+    doc = am ? doc.replace(authorsRe, () => authorsTag) : doc.replace(/<((?:[\w-]+:)?)comments\b[^>]*>/, (open) => open + authorsTag);
+  }
+  return { xml: doc };
+}
+
+function vmlShapeXml(pf, id, row, col) {
+  const { v, o, x } = pf;
+  const top = Math.max(0, row - 1);
+  return `<${v}:shape id="_x0000_s${id}" type="#_x0000_t202" style="position:absolute;margin-left:59.25pt;margin-top:1.5pt;width:108pt;height:59.25pt;z-index:1;visibility:hidden" fillcolor="#ffffe1" ${o}:insetmode="auto">`
+    + `<${v}:fill color2="#ffffe1"/><${v}:shadow on="t" color="black" obscured="t"/><${v}:path ${o}:connecttype="none"/>`
+    + `<${v}:textbox style="mso-direction-alt:auto"><div style="text-align:left"></div></${v}:textbox>`
+    + `<${x}:ClientData ObjectType="Note"><${x}:MoveWithCells/><${x}:SizeWithCells/>`
+    + `<${x}:Anchor>${col + 1}, 15, ${top}, 10, ${col + 3}, 15, ${top + 4}, 4</${x}:Anchor>`
+    + `<${x}:AutoFill>False</${x}:AutoFill><${x}:Row>${row}</${x}:Row><${x}:Column>${col}</${x}:Column></${x}:ClientData></${v}:shape>`;
+}
+
+// Rysunek VML notatek: kształt dla każdej notatki (dodaj brakujący), usunięte notatki
+// tracą swój kształt. Prefiksy przestrzeni nazw bierzemy z pliku (openpyxl pisze ns0/ns1/ns2).
+// Zwraca { xml, shapes } — shapes = ile kształtów zostało (0 → część do usunięcia).
+function patchVmlXml(xml, notes, skip, idmap) {
+  let doc = xml || `<xml xmlns:v="${VML_NS.v}" xmlns:o="${VML_NS.o}" xmlns:x="${VML_NS.x}">`
+    + `<o:shapelayout v:ext="edit"><o:idmap v:ext="edit" data="${idmap}"/></o:shapelayout></xml>`;
+  const rootM = doc.match(/<((?:[\w-]+:)?)xml\b[^>]*>/);
+  if (!rootM) throw new Error("VML bez korzenia <xml>");
+  const pf = {};
+  const declared = new Set();
+  doc.replace(/xmlns:([\w-]+)="([^"]*)"/g, (all, p, uri) => {
+    declared.add(p);
+    Object.keys(VML_NS).forEach((k) => { if (VML_NS[k] === uri && !pf[k]) pf[k] = p; });
+    return all;
+  });
+  const extraNs = [];
+  Object.keys(VML_NS).forEach((k) => {
+    if (pf[k]) return;
+    let p = k;
+    while (declared.has(p)) p += "x";
+    pf[k] = p;
+    declared.add(p);
+    extraNs.push(` xmlns:${p}="${VML_NS[k]}"`);
+  });
+  if (extraNs.length) doc = doc.replace(rootM[0], rootM[0].replace(/\s*\/?>$/, (end) => extraNs.join("") + end));
+
+  const { v, x } = pf;
+  const shapeRe = new RegExp(`\\s*<${v}:shape\\b[^>]*?(?:\\/>|>[\\s\\S]*?<\\/${v}:shape>)`, "g");
+  const rowRe = new RegExp(`<${x}:Row>\\s*(\\d+)\\s*<\\/${x}:Row>`);
+  const colRe = new RegExp(`<${x}:Column>\\s*(\\d+)\\s*<\\/${x}:Column>`);
+  const noteShapeKey = (s) => {
+    if (!/ObjectType="Note"/.test(s)) return null;
+    const r = s.match(rowRe);
+    const c = s.match(colRe);
+    return r && c ? `${r[1]}:${c[1]}` : null;
+  };
+
+  const want = new Map(); // "row:col" → true (ma mieć kształt) | false (bez kształtu)
+  Object.keys(notes || {}).forEach((ref) => {
+    if (skip && skip.has(ref)) return;
+    const { row, col } = cellRowCol(ref);
+    want.set(`${row}:${col}`, !!notes[ref]);
+  });
+
+  const present = new Set();
+  doc = doc.replace(shapeRe, (s) => {
+    const key = noteShapeKey(s);
+    if (key && want.get(key) === false) return "";
+    if (key) present.add(key);
+    return s;
+  });
+
+  const missing = Array.from(want.entries()).filter(([key, on]) => on && !present.has(key)).map(([key]) => key);
+  if (missing.length) {
+    if (!/id="_x0000_t202"/.test(doc)) {
+      const st = `<${v}:shapetype id="_x0000_t202" coordsize="21600,21600" ${pf.o}:spt="202" path="m,l,21600r21600,l21600,xe"><${v}:stroke joinstyle="miter"/><${v}:path gradientshapeok="t" ${pf.o}:connecttype="rect"/></${v}:shapetype>`;
+      doc = doc.replace(new RegExp(`<\\/${rootM[1]}xml>\\s*$`), (end) => st + end);
+    }
+    let maxId = 0;
+    doc.replace(/_x0000_s(\d+)/g, (all, n) => { maxId = Math.max(maxId, Number(n)); return all; });
+    const block = Number((doc.match(/\bdata="(\d+)/) || [])[1] || idmap || 1);
+    let next = Math.max(maxId + 1, block * 1024 + 1);
+    const added = missing.sort((a, b) => {
+      const [ra, ca] = a.split(":").map(Number);
+      const [rb, cb] = b.split(":").map(Number);
+      return ra - rb || ca - cb;
+    }).map((key) => {
+      const [row, col] = key.split(":").map(Number);
+      return vmlShapeXml(pf, next++, row, col);
+    }).join("");
+    doc = doc.replace(new RegExp(`<\\/${rootM[1]}xml>\\s*$`), (end) => added + end);
+  }
+
+  const shapes = (doc.match(new RegExp(`<${v}:shape\\b`, "g")) || []).length;
+  return { xml: doc, shapes };
+}
+
+// <legacyDrawing r:id="…"/> w arkuszu: wstawienie w miejscu ze schematu / usunięcie.
+function sheetRelPrefix(xml) {
+  const m = xml.match(new RegExp(`xmlns:([\\w-]+)="${OOXML_REL_NS.replace(/[.]/g, "\\.")}"`));
+  return m ? m[1] : null;
+}
+
+function insertLegacyDrawing(xml, rid) {
+  const rootM = xml.match(/<((?:[\w-]+:)?)worksheet\b[^>]*>/);
+  if (!rootM) return xml;
+  const P = rootM[1];
+  let out = xml;
+  let rp = sheetRelPrefix(out);
+  if (!rp) {
+    rp = "r";
+    while (new RegExp(`xmlns:${rp}=`).test(out)) rp += "r";
+    out = out.replace(rootM[0], rootM[0].replace(/\s*>$/, ` xmlns:${rp}="${OOXML_REL_NS}">`));
+  }
+  const tag = `<${P}legacyDrawing ${rp}:id="${rid}"/>`;
+  const afterData = Math.max(0, out.search(new RegExp(`<\\/${P}sheetData>|<${P}sheetData\\s*\\/>`)));
+  let at = -1;
+  AFTER_LEGACY_DRAWING.forEach((name) => {
+    const re = new RegExp(`<(?:[\\w-]+:)?${name}\\b`, "g");
+    re.lastIndex = afterData;
+    const m = re.exec(out);
+    if (m && (at < 0 || m.index < at)) at = m.index;
+  });
+  if (at < 0) at = out.search(new RegExp(`<\\/${P}worksheet>\\s*$`));
+  return out.slice(0, at) + tag + out.slice(at);
+}
+
+function removeLegacyDrawing(xml) {
+  return xml.replace(/<(?:[\w-]+:)?legacyDrawing\b[^>]*?\/>|<((?:[\w-]+:)?)legacyDrawing\b[^>]*>[\s\S]*?<\/\1legacyDrawing>/, "");
+}
+
+function ctEnsureDefault(ct, ext, type) {
+  if (new RegExp(`<Default\\b[^>]*Extension="${ext}"`, "i").test(ct)) return ct;
+  return ct.replace(/<Types\b[^>]*>/, (open) => `${open}<Default Extension="${ext}" ContentType="${type}"/>`);
+}
+function ctAddOverride(ct, partName, type) {
+  if (ct.includes(`PartName="${partName}"`)) return ct;
+  return ct.replace(/<\/Types>\s*$/, (end) => `<Override PartName="${partName}" ContentType="${type}"/>${end}`);
+}
+function ctRemoveOverride(ct, partName) {
+  return ct.replace(new RegExp(`<Override\\b[^>]*PartName="${partName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*\\/>`), "");
+}
+function relsAdd(xml, type, target) {
+  const ids = new Set(parseRelsList(xml).map((r) => r.id));
+  let n = 1;
+  while (ids.has(`rId${n}`)) n++;
+  const id = `rId${n}`;
+  return { id, xml: xml.replace(/<\/Relationships>\s*$/, (end) => `<Relationship Id="${id}" Type="${type}" Target="${target}"/>${end}`) };
+}
+function relsRemove(xml, id) {
+  return xml.replace(new RegExp(`<Relationship\\b[^>]*\\bId="${id}"[^>]*\\/>`), "");
+}
+
+// Nanosi notatki jednego arkusza. Zwraca nowy XML arkusza (zmienia się tylko <legacyDrawing>).
+async function applySheetNotes(zip, sheetPath, sheetXml, notes) {
+  const dir = sheetPath.slice(0, sheetPath.lastIndexOf("/"));
+  const base = sheetPath.slice(sheetPath.lastIndexOf("/") + 1);
+  const relsPath = `${dir}/_rels/${base}.rels`;
+  const relsFile = zip.file(relsPath);
+  let rels = relsFile ? await relsFile.async("string")
+    : `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>`;
+  const relList = parseRelsList(rels);
+  const ctFile = zip.file("[Content_Types].xml");
+  let ct = ctFile ? await ctFile.async("string") : null;
+  let sheet = sheetXml;
+
+  // komentarze wątkowe — tych komórek nie ruszamy
+  const skip = new Set();
+  for (const r of relList) {
+    if (r.external || !/\/threadedComment$/i.test(r.type)) continue;
+    const f = zip.file(resolvePartPath(dir, r.target));
+    if (!f) continue;
+    (await f.async("string")).replace(/<(?:[\w-]+:)?threadedComment\b[^>]*\bref="([A-Z]+\d+)"/g, (all, ref) => { skip.add(ref); return all; });
+  }
+
+  // tekst notatek
+  const cRel = relList.find((r) => !r.external && r.type === REL_TYPE_COMMENTS);
+  const cPath = cRel ? resolvePartPath(dir, cRel.target) : null;
+  const cFile = cPath ? zip.file(cPath) : null;
+  const cOut = patchCommentsXml(cFile ? await cFile.async("string") : null, notes, skip);
+  if (cOut.xml) {
+    const path = cFile ? cPath : nextFreePath(zip, "xl/comments{n}.xml");
+    zipWriteUtf8Xml(zip, path, cOut.xml);
+    if (!cFile) {
+      if (cRel) rels = relsRemove(rels, cRel.id); // rel do nieistniejącej części
+      rels = relsAdd(rels, REL_TYPE_COMMENTS, relativePartTarget(dir, path)).xml;
+      if (ct) ct = ctAddOverride(ct, `/${path}`, CT_COMMENTS);
+    }
+  } else if (cRel) {
+    if (cFile) zip.remove(cPath);
+    rels = relsRemove(rels, cRel.id);
+    if (ct && cPath) ct = ctRemoveOverride(ct, `/${cPath}`);
+  }
+
+  // kształty VML
+  const ldRid = (sheet.match(/<(?:[\w-]+:)?legacyDrawing\b[^>]*?\b(?:[\w-]+:)?id="([^"]+)"/) || [])[1] || null;
+  const vRel = ldRid ? relList.find((r) => r.id === ldRid && !r.external) : null;
+  const vPath = vRel ? resolvePartPath(dir, vRel.target) : null;
+  const vFile = vPath ? zip.file(vPath) : null;
+  const anyNote = Object.values(notes || {}).some(Boolean);
+  if (vFile || anyNote) {
+    let idmap = 1;
+    if (!vFile) {
+      // nowy rysunek dostaje własny blok identyfikatorów kształtów (o:idmap) za wszystkimi innymi
+      for (const p of Object.keys(zip.files)) {
+        if (!/\.vml$/i.test(p)) continue;
+        const xml = await zip.file(p).async("string");
+        (xml.match(/\bdata="([\d,\s]+)"/) || ["", ""])[1].split(",").forEach((n) => { if (+n >= idmap) idmap = +n + 1; });
+      }
+    }
+    const vOut = patchVmlXml(vFile ? await vFile.async("string") : null, notes, skip, idmap);
+    if (vOut.shapes > 0) {
+      const path = vFile ? vPath : nextFreePath(zip, "xl/drawings/vmlDrawing{n}.vml");
+      zipWriteUtf8Xml(zip, path, vOut.xml);
+      if (!vFile) {
+        if (ldRid) { sheet = removeLegacyDrawing(sheet); if (vRel) rels = relsRemove(rels, vRel.id); }
+        const added = relsAdd(rels, REL_TYPE_VML, relativePartTarget(dir, path));
+        rels = added.xml;
+        sheet = insertLegacyDrawing(sheet, added.id);
+        if (ct) ct = ctEnsureDefault(ct, "vml", CT_VML);
+      }
+    } else if (vFile) {
+      zip.remove(vPath);
+      rels = relsRemove(rels, vRel.id);
+      sheet = removeLegacyDrawing(sheet);
+      if (ct) ct = ctRemoveOverride(ct, `/${vPath}`);
+      const vRelsPath = `${vPath.slice(0, vPath.lastIndexOf("/"))}/_rels/${vPath.slice(vPath.lastIndexOf("/") + 1)}.rels`;
+      if (zip.file(vRelsPath)) zip.remove(vRelsPath);
+    }
+  }
+
+  if (parseRelsList(rels).length) zipWriteUtf8Xml(zip, relsPath, rels);
+  else if (relsFile) zip.remove(relsPath);
+  if (ct && ctFile) zipWriteUtf8Xml(zip, "[Content_Types].xml", ct);
+  return sheet;
+}
+
 async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
   if (typeof JSZip === "undefined") throw new Error("JSZip niedostępny");
   const zip = await JSZip.loadAsync(originalBytes);
@@ -804,10 +1170,22 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
     if (!cells || Object.keys(cells).length === 0) continue;
     const path = sheetPaths[sheetName];
     if (!path || !zip.file(path)) continue;
+    // Sama notatka nie dotyka <sheetData> (ani formuł dzielonych w tej komórce).
+    const valueCells = {};
+    const notes = {};
+    Object.keys(cells).forEach((ref) => {
+      const p = cells[ref];
+      if (p && "note" in p) notes[ref] = p.note;
+      if (p === null || (p && ("t" in p || p.fmt || p.clear))) valueCells[ref] = p;
+    });
     const xml = await zip.file(path).async("string");
-    const patched = patchSheetXml(xml, cells, (formulaMaps && formulaMaps[sheetName]) || null, dateStyler);
-    zipWriteUtf8Xml(zip, path, patched);
-    touched = true;
+    let patched = xml;
+    if (Object.keys(valueCells).length) {
+      patched = patchSheetXml(xml, valueCells, (formulaMaps && formulaMaps[sheetName]) || null, dateStyler);
+      touched = true;
+    }
+    if (Object.keys(notes).length) patched = await applySheetNotes(zip, path, patched, notes);
+    if (patched !== xml) zipWriteUtf8Xml(zip, path, patched);
   }
 
   if (dateStyler && dateStyler.changed) zipWriteUtf8Xml(zip, stylesPath, dateStyler.apply(stylesXml));
@@ -833,5 +1211,10 @@ if (typeof module !== "undefined" && module.exports) {
     createDateStyler,
     createStyleWriter,
     isDateFormatCode,
+    patchCommentsXml,
+    patchVmlXml,
+    insertLegacyDrawing,
+    applySheetNotes,
+    buildPatchedXlsx,
   };
 }

@@ -2071,6 +2071,9 @@ function buildTableRow(ctx, row, rowPos) {
   }
   tr.appendChild(rowHead);
   const matchedCols = highlightMatchedCells ? matchedCellsByRow.get(row.rowIndex0) : null;
+  // Notatki komórek (cell-notes.js) — tylko widok „wide”, gdzie kolumna = kolumna arkusza.
+  const noteCols = model.mode === "wide" && typeof swbNotesRowCols === "function" && !row.isLongViewRow
+    ? swbNotesRowCols(row.rowIndex0) : null;
   row.values.forEach((v, i) => {
     const mergeKey = `${rowPos}:${i}`;
     if (mergeLayout && mergeLayout.covered.has(mergeKey)) return;
@@ -2087,6 +2090,7 @@ function buildTableRow(ctx, row, rowPos) {
       td.classList.add("cell-selected");
     }
     if (matchedCols && matchedCols.has(i)) td.classList.add("cell-filter-match");
+    if (noteCols && noteCols.has(currentStartCol + i)) td.classList.add("cell-has-note");
     // Znacznik przeliczenia na dziś: róg komórki + treść dla podpowiedzi (hover/tap).
     // Powstaje wyłącznie w buildRows przy włączonym „Przeliczaj formuły z datą",
     // więc odznaczenie opcji (= przebudowa danych) sprząta go automatycznie.
@@ -2238,12 +2242,14 @@ function appendPreHeaderRows(model, headers) {
     head.className = "row-head";
     head.textContent = String(p.rowIndex0 + 1);
     tr.appendChild(head);
+    const noteCols = typeof swbNotesRowCols === "function" ? swbNotesRowCols(p.rowIndex0) : null;
     for (let i = 0; i < headers.length; i++) {
       const k = `${p.rowIndex0}:${i}`;
       if (covered.has(k)) continue;
       const td = document.createElement("td");
       td.className = "pre-cell";
       td.dataset.colIndex = String(i);
+      if (noteCols && noteCols.has(currentStartCol + i)) td.classList.add("cell-has-note");
       const text = p.display[i] || "";
       td.textContent = text;
       if (p.cellStyles[i]) applyCellStyle(td, p.cellStyles[i]);

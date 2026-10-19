@@ -162,8 +162,13 @@ const swbDrafts = (() => {
     Object.entries(edits || {}).forEach(([sheetName, cells]) => {
       const sheet = workbook.Sheets[sheetName];
       if (!sheet) return;
-      Object.entries(cells || {}).forEach(([ref, p]) => {
-        if (p === null || (p && p.clear)) { delete sheet[ref]; return; }
+      const applyValue = (ref, p) => {
+        if (p === null || (p && p.clear)) {
+          const prev = sheet[ref];
+          if (prev && prev.c) sheet[ref] = { t: "z", c: prev.c }; // notatka z pliku zostaje
+          else delete sheet[ref];
+          return;
+        }
         if (p && !("t" in p)) { // sam format — wartość z pliku zostaje (nakłada go cfmtOverlayRows)
           if (sheet[ref] && p.fmt && "numFmt" in p.fmt) sheet[ref].z = p.fmt.numFmt;
           return;
@@ -174,8 +179,14 @@ const swbDrafts = (() => {
         if (p.f && (p.v === null || p.v === undefined) && p.t !== "e") { cell.t = "s"; cell.v = ""; }
         if (prev && prev.s) cell.s = prev.s;
         if (prev && prev.z) cell.z = prev.z;
+        if (prev && prev.c) cell.c = prev.c;
         if (p.fmt && "numFmt" in p.fmt) cell.z = p.fmt.numFmt;
         sheet[ref] = cell;
+      };
+      Object.entries(cells || {}).forEach(([ref, p]) => {
+        applyValue(ref, p);
+        // notatka dodana/zmieniona/usunięta w aplikacji (cell-notes.js)
+        if (p && "note" in p && typeof swbNotesApplyToCell === "function") swbNotesApplyToCell(sheet, ref, p.note);
       });
     });
     // to, co pójdzie do zapisu — obiekty prosto ze szkicu (IndexedDB zachowuje daty)

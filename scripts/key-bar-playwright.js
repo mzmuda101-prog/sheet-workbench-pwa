@@ -97,6 +97,14 @@ async function run() {
   await p.evaluate(() => { quickSearchEl.blur(); document.getElementById("keyBarToggle").click(); quickSearchEl.focus(); });
   await sleep(200);
   ok("5. ponowne włączenie przywraca pasek", (await p.evaluate(() => swbKeyBar.visible)) === true, null);
+  // 6. „×” na pasku wyłącza go od ręki (fokus zostaje w polu), przełącznik w Widoku to widzi
+  await p.evaluate(() => document.querySelector(".key-bar .key-bar-off").click());
+  await sleep(200);
+  const x = await p.evaluate(() => ({ visible: swbKeyBar.visible, pref: localStorage.getItem("swb-keybar-v1"), pressed: document.getElementById("keyBarToggle").getAttribute("aria-pressed"), focus: document.activeElement === quickSearchEl, toast: [...document.querySelectorAll(".toast")].some((el) => /Widok/.test(el.textContent)) }));
+  ok("6. „×” chowa pasek, zapamiętuje wybór i podpowiada, gdzie go włączyć", !x.visible && x.pref === "0" && x.pressed === "false" && x.focus && x.toast, x);
+  await p.evaluate(() => { quickSearchEl.blur(); document.getElementById("keyBarToggle").click(); quickSearchEl.focus(); });
+  await sleep(200);
+  ok("6. włączenie w Widoku przywraca pasek po „×”", (await p.evaluate(() => swbKeyBar.visible)) === true, null);
   ok("brak błędów strony (telefon)", phone.errors.length === 0, phone.errors);
   await phone.ctx.close();
 

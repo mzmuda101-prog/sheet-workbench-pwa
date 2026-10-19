@@ -134,12 +134,62 @@ def features(path):
     wb.save(path)
 
 
+THREAD_PERSON = "{11111111-1111-1111-1111-111111111111}"
+
+
+def threaded_comments(path):
+    """Komentarz WĄTKOWY jak z Excela 365 (openpyxl ich nie pisze — dokładamy części ręcznie).
+
+    A2 ma wątek (wpis + odpowiedź) i legacy-kopię „[Threaded comment]” w comments, C5 — zwykłą
+    notatkę. Test: cell-notes-playwright.js (wątek tylko do odczytu, polskie znaki, zapis go nie rusza).
+    """
+    import zipfile
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Dane"
+    ws.append(["Nazwa", "Kwota"])
+    ws.append(["A", 1])
+    ws.append(["B", 2])
+    ws["A2"].comment = Comment("[Threaded comment]\n\nComment:\n    Wątek pierwszy", "Jan")
+    ws["C5"].comment = Comment("Pusta komórka z notatką", "Ola")
+    wb.create_sheet("Drugi")["A1"] = "x"
+    tmp = path + ".tmp"
+    wb.save(tmp)
+    ns = 'xmlns="http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments" xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+    threads = (
+        f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<ThreadedComments {ns}>'
+        f'<threadedComment ref="A2" dT="2026-10-19T10:00:00.00" personId="{THREAD_PERSON}" id="{{22222222-2222-2222-2222-222222222222}}"><text>Wątek pierwszy</text></threadedComment>'
+        f'<threadedComment ref="A2" dT="2026-10-19T11:00:00.00" personId="{THREAD_PERSON}" id="{{33333333-3333-3333-3333-333333333333}}" parentId="{{22222222-2222-2222-2222-222222222222}}"><text>Odpowiedź</text></threadedComment>'
+        "</ThreadedComments>"
+    )
+    persons = (
+        f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<personList {ns}>'
+        f'<person displayName="Jan" id="{THREAD_PERSON}" userId="jan" providerId="None"/></personList>'
+    )
+    with zipfile.ZipFile(tmp) as src, zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as dst:
+        for item in src.infolist():
+            data = src.read(item.filename).decode("utf-8")
+            if item.filename == "xl/worksheets/_rels/sheet1.xml.rels":
+                data = data.replace("</Relationships>", '<Relationship Id="rId9" Type="http://schemas.microsoft.com/office/2017/10/relationships/threadedComment" Target="../threadedComments/threadedComment1.xml"/></Relationships>')
+            elif item.filename == "xl/_rels/workbook.xml.rels":
+                data = data.replace("</Relationships>", '<Relationship Id="rId99" Type="http://schemas.microsoft.com/office/2017/10/relationships/person" Target="persons/person.xml"/></Relationships>')
+            elif item.filename == "[Content_Types].xml":
+                data = data.replace("</Types>", '<Override PartName="/xl/threadedComments/threadedComment1.xml" ContentType="application/vnd.ms-excel.threadedcomments+xml"/><Override PartName="/xl/persons/person.xml" ContentType="application/vnd.ms-excel.person+xml"/></Types>')
+            dst.writestr(item, data.encode("utf-8"))
+        dst.writestr("xl/threadedComments/threadedComment1.xml", threads.encode("utf-8"))
+        dst.writestr("xl/persons/person.xml", persons.encode("utf-8"))
+    os.remove(tmp)
+
+
 def main(argv):
     out_dir = argv[0] if argv else os.path.join(os.path.dirname(__file__), "..", "fixtures")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "openpyxl-features.xlsx")
     features(path)
     print(os.path.normpath(path))
+    # bez wypisywania: testy (xlsx-verify) czytają stdout jako JEDNĄ ścieżkę — openpyxl-features
+    threaded_comments(os.path.join(out_dir, "threaded-comments.xlsx"))
     return 0
 
 

@@ -131,6 +131,7 @@ function undoApplyStep(step) {
     undoApplying = false;
   }
   bumpSheetDataStamp();
+  if (typeof swbNotesInvalidate === "function") swbNotesInvalidate(); // komórka mogła odzyskać/stracić notatkę
   // formuły: indeks (komórka mogła odzyskać/stracić formułę) + przeliczenie zależnych
   step.changes.forEach((ch) => {
     if (typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(step.sheet, ch.cellRef);

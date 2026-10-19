@@ -62,12 +62,21 @@
     bar.setAttribute("role", "toolbar");
     row = document.createElement("div");
     row.className = "key-bar-row";
-    bar.appendChild(row);
+    // „×” na końcu paska: wyłącza go od ręki (2026-10-19) — przełącznik w Widoku był za
+    // daleko, gdy pasek akurat przeszkadza. Włączenie z powrotem: Widok → „Pasek cyfr”.
+    const off = document.createElement("button");
+    off.type = "button";
+    off.className = "key-bar-off";
+    off.tabIndex = -1;
+    off.setAttribute("aria-label", typeof t === "function" ? t("keyBarHide") : "");
+    off.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+    bar.append(row, off);
     document.body.appendChild(bar);
     // Fokus zostaje w polu: Safari (też iOS) i Chrome przenoszą fokus przy mousedown —
     // blokujemy tylko to. NIE touchstart: tamto zablokowałoby przewijanie paska palcem.
     bar.addEventListener("mousedown", (e) => e.preventDefault());
     bar.addEventListener("click", (e) => {
+      if (e.target.closest(".key-bar-off")) { setEnabled(false); toast(t("keyBarOffToast"), "info"); return; }
       const key = e.target.closest(".key-bar-key");
       if (key) insert(key.dataset.key);
     });
@@ -156,13 +165,12 @@
     toggleBtn.setAttribute("aria-pressed", String(on));
     if (typeof t === "function") toggleBtn.textContent = t(on ? "keyBarToggleOn" : "keyBarToggle");
   }
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
-      try { localStorage.setItem(PREF_KEY, enabled() ? "0" : "1"); } catch (_) { /* tryb prywatny */ }
-      syncToggle();
-      sync();
-    });
+  function setEnabled(on) {
+    try { localStorage.setItem(PREF_KEY, on ? "1" : "0"); } catch (_) { /* tryb prywatny */ }
+    syncToggle();
+    sync();
   }
+  if (toggleBtn) toggleBtn.addEventListener("click", () => setEnabled(!enabled()));
   if (phoneMq && typeof phoneMq.addEventListener === "function") phoneMq.addEventListener("change", () => { syncToggle(); sync(); });
   syncToggle();
 
@@ -171,5 +179,5 @@
   // klawiatura wjeżdża PO focusin — dopiero wtedy wiadomo, że jest otwarta
   if (vv) vv.addEventListener("resize", () => { if (field || fieldMode(document.activeElement)) sync(); });
 
-  window.swbKeyBar = { sync, syncToggle, get visible() { return !!(bar && !bar.hidden); }, get mode() { return mode; } };
+  window.swbKeyBar = { sync, syncToggle, setEnabled, get enabled() { return enabled(); }, get visible() { return !!(bar && !bar.hidden); }, get mode() { return mode; } };
 })();

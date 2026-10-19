@@ -37,6 +37,7 @@ The goal is to build a workbench *around* Excel files: local-first, safe for sou
 - Drag and drop or file picker
 - Auto-detect header rows, choose any sheet, configure starting column
 - Save modified workbooks back to `.xlsx` or export to CSV
+- Cell notes like in Excel: red corner marker, read on hover / tap, add, edit and delete from the cell menu or Shift+F2 — saved into the file (threaded Excel 365 comments are shown read-only)
 
 ### Filtering and search
 - Two independent text filters with multiple match modes (contains, starts with, equals)
@@ -125,6 +126,7 @@ leaves the device. The model only *proposes*; the app's own engine computes and 
 - Full Polish / English UI with live language switching
 - Light and dark mode
 - Responsive layout — comfortable on both desktop and tablet
+- Digit and symbol bar above the phone keyboard (one tap to turn off; back on in View → Digit bar)
 - Smart cursor hints system
 - Glassmorphic visual design with depth and motion
 
