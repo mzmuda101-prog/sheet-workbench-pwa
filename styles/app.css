@@ -8640,3 +8640,21 @@ thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }
 @media (pointer: coarse) {
   .note-modal-navbtn { width: 36px; height: 36px; }
 }
+
+/* Panel „Skróty i informacje”: znacznik notatki narysowany jak w tabeli */
+.shortcut-note-kbd {
+  position: relative;
+  width: 22px;
+  min-width: 22px;
+  height: 18px;
+  padding: 0;
+}
+.shortcut-note-kbd::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-style: solid;
+  border-width: 0 8px 8px 0;
+  border-color: transparent var(--danger) transparent transparent;
+}
