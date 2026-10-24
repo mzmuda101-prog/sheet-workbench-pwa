@@ -8658,3 +8658,68 @@ thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }
   border-width: 0 8px 8px 0;
   border-color: transparent var(--danger) transparent transparent;
 }
+
+/* =========================================================================
+   AUDYT WYGLĄDU 2026-10-24 (punkty 1–4 i 6 zaakceptowane przez Mateusza)
+   Zasada: każda zmiana zostawia tabeli CO NAJMNIEJ tyle miejsca co wcześniej.
+   Pomiar 390×844 przed: okno tabeli 567 px wysokości × 362 px szerokości.
+   ========================================================================= */
+
+/* 1. Telefon: bez „karty w karcie”. Panel tabeli był szklaną kartą z ramką, cieniem
+   i własnym odstępem, a w nim tabela — druga karta z ramką. Teraz panel jest
+   przezroczysty, a kartą jest sama tabela. Lewy odstęp 8 px zostaje tylko po to,
+   żeby wąski uchwyt panelu (22 px przy krawędzi ekranu) nie zasłaniał numerów
+   wierszy; bez uchwytu (Widok → „Pokaż uchwyt panelu” wył.) odstępu nie ma. */
+@media (max-width: 768px) {
+  .table-panel.panel,
+  html:not(.force-glass) .table-panel.panel {
+    background: none;
+    border-color: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    padding: 2px 0 0 8px;
+  }
+  :root.no-panel-handle .table-panel.panel { padding-left: 0; }
+  /* tło, które dawał panel — pusty obszar pod krótką tabelą nie jest „dziurą” w stronie */
+  .table-panel .table-wrap { background: var(--panel); }
+  .table-panel .table-toolbar { padding-bottom: 2px; }
+
+  /* 2. Pasek szukania tej samej wysokości co przyciski obok (było 56 px przy 44 px
+     sąsiadów — nierówny rząd). Przyciski w polu 38 px + 2×2 px + ramka = 44 px. */
+  .quick-search { padding: 2px 3px 2px 6px; min-height: 44px; align-items: center; }
+  .quick-search > .btn { min-height: 38px; height: 38px; }
+}
+
+/* 3. Kapsuła przewijania w bok. Na dotyku tabelę przesuwa się palcem, a na iPhonie
+   kapsuła i tak była pusta (Safari pokazuje kciuk tylko w trakcie przewijania) —
+   24 px wracają do tabeli. Na desktopie zostaje, ale cieńsza i bliżej tabeli. */
+@media (pointer: coarse) and (max-width: 768px) {
+  .table-scrollbar { display: none !important; }
+}
+@media (pointer: fine), (min-width: 769px) {
+  .table-scrollbar { height: 11px; margin-top: 5px; }
+}
+
+/* 4. Ciemny motyw: natywne pola (checkbox, radio, select, przewijanie) w ciemnej
+   wersji — wcześniej niezaznaczone pola wyboru świeciły na biało w panelu. */
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* 6. Panel boczny spokojniejszy: sekcje to płaskie bloki z cienką ramką zamiast
+   szklanych kart z rozmytym cieniem wewnątrz szklanej karty panelu. */
+.sidebar details.panel,
+html:not(.force-glass) .sidebar details.panel {
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  border: 1px solid var(--border-subtle);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.sidebar details.panel[open] { border-color: var(--border); }
+/* napisy na uchwycie zwykłymi literami, jak reszta aplikacji (było „WYSUŃ”, „SCHOWAJ PANEL”) */
+.sidebar-handle::after { text-transform: none; letter-spacing: 0.02em; }
+:root:not(.sidebar-open) .sidebar-handle::after { font-size: 10px; }
+@media (max-width: 768px) {
+  .sidebar-open .sidebar-handle::after { font-size: 13px; letter-spacing: 0.01em; }
+}
