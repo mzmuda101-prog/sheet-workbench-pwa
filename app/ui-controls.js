@@ -2908,6 +2908,7 @@ if (clearSelectionFabEl) {
   clearSelectionFabEl.addEventListener("click", () => {
     setSelectedCell("", -1);
     setFocusedCell("", -1);
+    clearPreActiveCell();
   });
 }
 

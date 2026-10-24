@@ -825,6 +825,11 @@ document.addEventListener("keydown", (e) => {
   // Odznaczanie jak w arkuszach (tylko Escape — żadnych liter, by nie kolidowały
   // z wpisywaniem do komórki). Shift+Esc = pełne odznaczenie; Esc = progresywnie:
   // najpierw zwiń zakres do aktywnej komórki, dopiero potem zdejmij fokus wiersza.
+  // komórka nad nagłówkiem (pre-row) ma osobne zaznaczenie — Esc zdejmuje i je
+  if (e.key === "Escape" && !e.defaultPrevented && typeof clearPreActiveCell === "function" && clearPreActiveCell()) {
+    e.preventDefault();
+    return;
+  }
   if (e.key === "Escape" && (selectedCellState || focusedCellState)) {
     if (e.shiftKey) {
       e.preventDefault();

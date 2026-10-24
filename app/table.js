@@ -353,6 +353,8 @@ function setFocusedCell(rowKey, colIndex0, options = {}) {
     return;
   }
   focusedCellState = { rowKey, colIndex0 };
+  // jedna aktywna komórka naraz: zwykła komórka zdejmuje zaznaczenie z wierszy nad nagłówkiem
+  if (theadEl) theadEl.querySelectorAll("td.pre-active").forEach((x) => x.classList.remove("pre-active"));
   // Nowa aktywna komórka (kotwica) = świeży start: wyczyść poprzedni zakres,
   // chyba że jawnie go rozszerzamy (Shift → options.keepSelection). Dzięki temu
   // zwykły klik / strzałka daje pojedynczą komórkę, a nie zakres od starego końca.
@@ -769,8 +771,19 @@ function syncRangeHighlightInDom() {
 // fokus lub zaznaczenie. Czyści wszystko jednym tapnięciem.
 function updateClearSelectionFab() {
   if (!clearSelectionFabEl) return;
-  const active = !!(focusedCellState || selectedCellState);
+  const active = !!(focusedCellState || selectedCellState || theadEl?.querySelector("td.pre-active"));
   clearSelectionFabEl.classList.toggle("is-visible", active);
+}
+
+// Komórka z wierszy NAD nagłówkiem (pre-row) ma własne zaznaczenie (klasa pre-active),
+// poza focusedCellState. „Odznacz”, Esc i klik w zwykłą komórkę muszą je zdejmować —
+// inaczej obwódka zostawała mimo „Odznacz” (zgłoszenie z iPhone'a 2026-10-24).
+function clearPreActiveCell() {
+  const cells = theadEl ? theadEl.querySelectorAll("td.pre-active") : [];
+  if (!cells.length) return false;
+  cells.forEach((x) => x.classList.remove("pre-active"));
+  updateClearSelectionFab();
+  return true;
 }
 
 // Nagłówki, których sumowanie nie ma sensu (identyfikatory: Nr/ID/LP/kod… oraz lata)
@@ -2356,7 +2369,10 @@ if (theadEl && !theadEl.dataset.preEditBound) {
     if (!td || td.classList.contains("cell-editing")) return;
     const wasActive = td.classList.contains("pre-active");
     theadEl.querySelectorAll("td.pre-active").forEach((x) => x.classList.remove("pre-active"));
+    // jedna aktywna komórka naraz (jak w Excelu): zdejmij fokus/zakres z tabeli pod nagłówkiem
+    if (focusedCellState || selectedCellState) { setSelectedCell("", -1); setFocusedCell("", -1); }
     td.classList.add("pre-active");
+    updateClearSelectionFab();
     // dotyk nie ma dwukliku: drugie tapnięcie w zaznaczoną komórkę = edycja
     if (wasActive && e.pointerType !== "mouse" && (e.pointerType || matchMedia("(pointer: coarse)").matches)) openPreCellEditor(td);
   });
