@@ -440,16 +440,17 @@ function smartScopeIndexes(indexes, rec, model) {
 // filtra liczymy go raz na blok i podajemy dalej te same obiekty.
 let _smartScopeCache = null;
 
-function smartScopeCriteria(criteria, rec, model) {
-  if (!_smartScopeCache) _smartScopeCache = new Map();
-  const hit = _smartScopeCache.get(rec.blockIndex);
+function smartScopeCriteria(criteria, rec, model, cache = null) {
+  if (!cache && !_smartScopeCache) _smartScopeCache = new Map();
+  const memo = cache || _smartScopeCache; // podgląd szukania ma własną (inne kryteria niż widok)
+  const hit = memo.get(rec.blockIndex);
   if (hit) return hit;
   const scoped = criteria.map((criterion) => (
     criterion.query || (criterion.emptyMode && criterion.emptyMode !== "all")
       ? { ...criterion, indexes: smartScopeIndexes(criterion.indexes, rec, model), blockScope: model.blockScope[rec.blockIndex] }
       : criterion
   ));
-  _smartScopeCache.set(rec.blockIndex, scoped);
+  memo.set(rec.blockIndex, scoped);
   return scoped;
 }
 

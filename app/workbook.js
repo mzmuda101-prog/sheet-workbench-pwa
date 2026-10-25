@@ -1847,19 +1847,22 @@ function rowIsValidationViolation(row) {
   return !st.allowed.has(normalizeValidationValue(raw, st.caseInsensitive));
 }
 
-function applyFilters() {
-  // Filtrowanie i reset sortowania (przez applyCurrentSort) przechodzą tędy —
-  // następny render ma animować odsłonięcie/przestawienie wierszy (FLIP).
-  flipNextRender = true;
+// Jedna definicja „czy wiersz przechodzi filtr” — dla Entera (applyFilters) i dla podglądu
+// szybkiego szukania (renderQsLive). Wcześniej podgląd miał własną, uboższą logikę: nie
+// znał tokenów (@notatka, @wtoku, @dni>>30), filtra 2, dat ani „Tylko z notatkami”, więc
+// np. „@notatka” przed Enterem pokazywało „brak wyników” (zgłoszenie Mateusza 2026-10-25).
+// query1/operators1 — zapytanie z pola szybkiego szukania zamiast pola filtra 1.
+// preview — bez skutków ubocznych (nie startuje przebiegu trybów auto, nie zapamiętuje trafień).
+function swbBuildRowFilter({ query1 = null, operators1 = null, preview = false } = {}) {
   const criteria = [
     {
-      query: normalizeTermForMode(searchQueryEl.value, getNormalizedSelectValue(filterModeEl)),
+      query: normalizeTermForMode(query1 != null ? query1 : searchQueryEl.value, getNormalizedSelectValue(filterModeEl)),
       mode: getNormalizedSelectValue(filterModeEl),
       headers: currentHeaders,
       indexes: resolveIndexes(currentHeaders, columnSelections.filter1),
       emptyMode: getNormalizedSelectValue(filterEmptyModeEl),
       negated: filterNegateEl.checked,
-      operatorsEnabled: !!filterOperatorsEl?.checked,
+      operatorsEnabled: operators1 != null ? !!operators1 : !!filterOperatorsEl?.checked,
     },
     {
       query: normalizeTermForMode(searchQuery2El.value, getNormalizedSelectValue(filterMode2El)),
@@ -1901,14 +1904,15 @@ function applyFilters() {
   if (smartResolved) {
     smartResolved.queries.forEach((q, i) => { criteria[i].query = q; });
   }
-  if (typeof smartBeginFilterPass === "function") smartBeginFilterPass(smartResolved ? smartResolved.state : null);
-  const smartActive = typeof smartFilterIsActive === "function" && smartFilterIsActive();
-  const smartScoped = smartActive && smartNeedsRecordScope();
-  // Podświetlanie komórek: checkbox z filtra tekstowego LUB dat (zsynchronizowane),
-  // ALBO tryby szybkiego szukania „Podświetl pasujące" (cells) / „Filtruj + podświetl" (filter-cells).
-  // Tryb auto sam z siebie włącza podświetlanie: inaczej w szerokim arkuszu nie widać,
-  // KTÓRY cykl sprawił, że wiersz przeszedł filtr.
-  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked) || quickSearchCellsMode || quickSearchFilterCellsMode || smartScoped);
+  // Stan trybów auto podany JAWNIE (nie przez globalny przebieg) — podgląd szukania liczy
+  // to samo co Enter, nie ruszając zapamiętanych trafień bieżącego widoku.
+  const smartState = smartModel ? (smartResolved ? smartResolved.state : smartFilterState) : null;
+  if (!preview && typeof smartBeginFilterPass === "function") smartBeginFilterPass(smartResolved ? smartResolved.state : null);
+  const smartActive = !!smartState && (smartNeedsRecordScope(smartState) || smartState.rowFlags.length > 0);
+  const smartScoped = smartActive && smartNeedsRecordScope(smartState);
+  const scopeCache = preview ? new Map() : null; // podgląd: własna pamięć zakresów rekordów
+  const hitRecords = preview ? new Map() : null; // podgląd: trafione rekordy (dowód trafienia)
+  const remember = (row, recs) => { if (preview) hitRecords.set(row, recs); else smartRememberMatch(row, recs); };
 
   const rowPasses = (row) => {
     if (!rowMatchesDateFilter(row, dateFilter)) return false;
@@ -1919,22 +1923,35 @@ function applyFilters() {
     if (!smartActive) return rowMatchesTextFilter(row, criteria, onlyNonEmpty);
 
     const records = buildSmartRecords(row, smartModel);
-    if (!smartRowFlagsPass(records)) return false;
+    if (!smartRowFlagsPass(records, smartState)) return false;
     if (!smartScoped) {
       if (!rowMatchesTextFilter(row, criteria, onlyNonEmpty)) return false;
-      smartRememberMatch(row, records.filter((rec) => rec.filled));
+      remember(row, records.filter((rec) => rec.filled));
       return true;
     }
     // Korelacja: tekst filtra sprawdzamy w obrębie KAŻDEGO pasującego rekordu osobno,
     // więc „Kowalski + w toku" trafia tylko tam, gdzie Kowalski faktycznie nie skończył.
-    const candidates = records.filter((rec) => smartRecordPasses(row, rec, smartModel));
+    const candidates = records.filter((rec) => smartRecordPasses(row, rec, smartModel, smartState));
     if (!candidates.length) return false;
-    const hits = candidates.filter((rec) => rowMatchesTextFilter(row, smartScopeCriteria(criteria, rec, smartModel), onlyNonEmpty));
+    const hits = candidates.filter((rec) => rowMatchesTextFilter(row, smartScopeCriteria(criteria, rec, smartModel, scopeCache), onlyNonEmpty));
     if (!hits.length) return false;
-    smartRememberMatch(row, hits);
+    remember(row, hits);
     return true;
   };
 
+  return { rowPasses, criteria, dateFilter, noteRules, notesOnly, smartModel, smartScoped, hitRecords };
+}
+
+function applyFilters() {
+  // Filtrowanie i reset sortowania (przez applyCurrentSort) przechodzą tędy —
+  // następny render ma animować odsłonięcie/przestawienie wierszy (FLIP).
+  flipNextRender = true;
+  const { rowPasses, criteria, dateFilter, notesOnly, smartScoped } = swbBuildRowFilter();
+  // Podświetlanie komórek: checkbox z filtra tekstowego LUB dat (zsynchronizowane),
+  // ALBO tryby szybkiego szukania „Podświetl pasujące" (cells) / „Filtruj + podświetl" (filter-cells).
+  // Tryb auto sam z siebie włącza podświetlanie: inaczej w szerokim arkuszu nie widać,
+  // KTÓRY cykl sprawił, że wiersz przeszedł filtr.
+  highlightMatchedCells = !!((highlightMatchCellsEl && highlightMatchCellsEl.checked) || (highlightMatchCellsDateEl && highlightMatchCellsDateEl.checked) || quickSearchCellsMode || quickSearchFilterCellsMode || smartScoped);
   matchedCellsByRow = new Map();
   const collectCells = (row) => {
     if (!highlightMatchedCells) return;

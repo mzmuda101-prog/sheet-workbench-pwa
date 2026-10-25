@@ -3806,6 +3806,22 @@ tbody td.cell-recalced::after {
   margin-top: 6px;
 }
 
+/* Podgląd szukania: trafienie w treści notatki (token @notatka) — trójkącik jak w komórce */
+.qs-live-item.is-note .qs-live-addr { position: relative; padding-right: 9px; }
+.qs-live-item.is-note .qs-live-addr::after {
+  content: ""; position: absolute; top: 1px; right: 0;
+  border-style: solid; border-width: 0 6px 6px 0;
+  border-color: transparent var(--danger) transparent transparent;
+}
+.qs-live-item.is-note .qs-live-text { font-style: italic; color: var(--ink); }
+
+/* Podpowiedzi tokenów po „@” w podglądzie szukania */
+.qs-token-item { align-items: baseline; }
+.qs-token-item .qs-token-name { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; color: var(--accent); min-width: 0; }
+.qs-token-item .qs-live-text { color: var(--muted-strong); white-space: normal; overflow: visible; } /* opis cały, w razie czego w dwóch liniach */
+.qs-token-item .qs-token-name .cell-suggest-rest { opacity: .85; }
+.qs-token-count { margin-left: auto; padding-left: 10px; flex: none; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
 /* Okno notatki */
 .note-modal .modal-content { width: min(460px, 100%); outline: none; }
 .note-modal-body {

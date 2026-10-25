@@ -894,6 +894,7 @@ async function handleFile(file, fileHandle = null) {
     });
     buildSheetTabs();
     currentWorkbookStats = collectWorkbookStats(workbook, file.name);
+    if (typeof swbFormulaPrewarm === "function") swbFormulaPrewarm(); // indeks formuł w tle — pierwsza edycja bez czekania
     currentSheetStats = null;
     currentKpiEntries = [];
     currentKpiAnchorRow = 1;
@@ -2524,6 +2525,15 @@ function qsFirstNonEmptyCol(row, indexes) {
 // `q` jest już znormalizowane (normalizeTermForMode); `count` = liczba pasujących WIERSZY.
 function qsScanSheet(sheetName, q, flags, perSheet) {
   const res = { count: 0, hits: [] };
+  // Bieżący arkusz: DOKŁADNIE to, co zostanie po Enterze (swbBuildRowFilter — tokeny @notatka /
+  // @wtoku / @dni>>30, filtr 2, daty, „Tylko z notatkami”, tryby auto z panelu).
+  if (sheetName === currentSheetName && typeof swbBuildRowFilter === "function" && currentHeaders.length) {
+    return qsScanCurrentSheet(q, flags, perSheet);
+  }
+  // Tokeny opisują bieżący arkusz (jego notatki, jego cykle) — w innych arkuszach nie szukamy
+  // ich jako zwykłego tekstu („@notatka” nie występuje w komórkach).
+  if ((typeof swbExtractNoteTokens === "function" && swbExtractNoteTokens(q).rules)
+    || (typeof extractSmartTokens === "function" && extractSmartTokens(q).found)) return res;
   const ctx = qsSheetContext(sheetName);
   if (!ctx || !ctx.headers.length) return res;
   const indexes = resolveIndexes(ctx.headers, columnSelections.filter1);
@@ -2557,6 +2567,55 @@ function qsScanSheet(sheetName, q, flags, perSheet) {
     });
   }
   return res;
+}
+
+function qsScanCurrentSheet(q, flags, perSheet) {
+  const res = { count: 0, hits: [] };
+  const f = swbBuildRowFilter({ query1: q, operators1: flags.operators, preview: true });
+  const indexes = f.criteria[0].indexes;
+  for (const row of baseRows) {
+    if (!f.rowPasses(row)) continue;
+    res.count += 1;
+    if (res.hits.length >= perSheet) continue;
+    const hit = qsEvidenceForRow(row, f, indexes, flags);
+    if (hit) res.hits.push(hit);
+  }
+  return res;
+}
+
+// Dowód trafienia w podglądzie: przy tokenie notatki — treść notatki (to jej szukasz),
+// inaczej pierwsza pasująca komórka (w trybie auto: z trafionego cyklu), na końcu pierwsza
+// niepusta komórka wiersza.
+function qsEvidenceForRow(row, f, indexes, flags) {
+  const at = (col, text, note = false) => ({ addr: XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + col }), text: String(text), note });
+  if (f.noteRules.length && typeof swbRowNoteCols === "function") {
+    const cols = swbRowNoteCols(row) || [];
+    const want = f.noteRules.find((r) => !r.negated && r.text);
+    for (const col of cols) {
+      const n = swbNoteOf(currentSheetName, XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + col }));
+      if (n && (!want || n.text.toLowerCase().includes(want.text))) return at(col, n.text.replace(/\s+/g, " "), true);
+    }
+  }
+  let cols = flags.negated ? new Set() : collectMatchingCellsForRow(row, f.criteria, f.dateFilter);
+  const recs = f.hitRecords && f.hitRecords.get(row);
+  if (recs && recs.length && f.smartModel) {
+    const allowed = new Set();
+    for (let i = 0; i < f.smartModel.prefixCount; i++) allowed.add(i);
+    recs.forEach((rec) => { const b = f.smartModel.blocks[rec.blockIndex]; for (let c = b.startIndex; c <= b.endIndex; c++) allowed.add(c); });
+    const inRec = [...cols].filter((c) => allowed.has(c) && c >= f.smartModel.prefixCount);
+    if (inRec.length) cols = new Set(inRec);
+    else {
+      // sam tryb auto (bez tekstu): pierwsza wypełniona komórka trafionego cyklu
+      const b = f.smartModel.blocks[recs[0].blockIndex];
+      for (let c = b.startIndex; c <= b.endIndex; c++) if (String(getDisplayValue(row, c) ?? "").trim()) return at(c, getDisplayValue(row, c));
+    }
+  }
+  let colIdx = cols.size ? Math.min(...cols) : -1;
+  if (colIdx < 0) colIdx = qsFirstNonEmptyCol(row, indexes);
+  if (colIdx < 0 || colIdx >= row.values.length) return null;
+  const display = getDisplayValue(row, colIdx);
+  if (String(display).trim() === "") return null;
+  return at(colIdx, display);
 }
 
 function refreshQsLivePreview() {
@@ -2632,6 +2691,13 @@ function appendTypedRestLabel(parent, text, query) {
 }
 
 // [EN] For operator queries highlight first meaningful term (&& / || / ! / {})
+function qsStripTokens(query) {
+  let q = String(query || "");
+  if (typeof swbExtractNoteTokens === "function") q = swbExtractNoteTokens(q).query;
+  if (typeof extractSmartTokens === "function") q = extractSmartTokens(q).query;
+  return q;
+}
+
 function qsLiveHighlightNeedle(query, operatorsEnabled) {
   const q = String(query || "").trim();
   if (!q || !operatorsEnabled) return q;
@@ -2694,8 +2760,107 @@ function commitQuickSearch() {
   }
 }
 
+// ── Podpowiadanie tokenów po „@” ──────────────────────────────────────────────
+// Tokeny (@notatka, @wtoku, @dni>>30…) trzeba było znać na pamięć albo ze ściągi. Słowo pod
+// kursorem zaczynające się od „@” (albo „!@”), które nie jest jeszcze pełnym tokenem, pokazuje
+// listę pasujących — z opisem i liczbą wierszy, które zostaną (ta sama logika co Enter).
+// Tylko to, co ma sens w TYM arkuszu: notatki, gdy są; tryby auto, gdy arkusz ma cykle.
+// en = nazwa podpowiadana w angielskim interfejsie (obie wersje działają zawsze).
+const QS_TOKENS = [
+  { tok: "@notatka", en: "@note", kind: "note", label: "qsTokNote" },
+  { tok: "!@notatka", en: "!@note", kind: "note", label: "qsTokNoNote" },
+  { tok: "@notatka:", en: "@note:", kind: "note", label: "qsTokNoteWord", open: true },
+  { tok: "@wtoku", en: "@open", kind: "smart", label: "smartChipOpen", needsState: true },
+  { tok: "@zakonczone", en: "@closed", kind: "smart", label: "smartChipClosed", needsState: true },
+  { tok: "@bezstartu", en: "@nostart", kind: "smart", label: "smartChipOrphan", needsState: true },
+  { tok: "@wszystkozamkniete", en: "@allclosed", kind: "smart", label: "smartChipAllClosed", needsState: true },
+  { tok: "@niezaczete", en: "@none", kind: "smart", label: "smartChipNone" },
+  { tok: "@ostatni", en: "@last", kind: "smart", label: "smartChipLast" },
+  { tok: "@pierwszy", en: "@first", kind: "smart", label: "smartChipFirst" },
+  { tok: "@dni>>30", en: "@days>>30", kind: "smart", label: "qsTokDays", needsState: true },
+];
+const qsTokName = (x) => (typeof currentLang === "string" && currentLang === "en" ? x.en : x.tok);
+const QS_TOKEN_COUNT_MAX_ROWS = 20000; // większy arkusz: bez liczników (11 przebiegów filtra na literę)
+
+// Słowo pod kursorem + pasujące tokeny; null = zwykłe szukanie (pełny token, brak „@”, brak kandydatów).
+function qsTokenContext(inputEl) {
+  if (!inputEl || !workbook || !currentHeaders.length) return null;
+  const value = inputEl.value || "";
+  const caret = Number.isFinite(inputEl.selectionStart) ? inputEl.selectionStart : value.length;
+  const m = value.slice(0, caret).match(/(^|\s)(!?@[^\s]*)$/);
+  if (!m) return null;
+  const word = m[2];
+  const after = (value.slice(caret).match(/^\S*/) || [""])[0];
+  const full = word + after;
+  if (/:/.test(full)) return null; // @notatka:… — już szukasz w treści
+  if ((typeof swbExtractNoteTokens === "function" && swbExtractNoteTokens(full).rules)
+    || (typeof extractSmartTokens === "function" && extractSmartTokens(full).found)) return null;
+  const hasNotes = typeof swbSheetNoteCount === "function" && swbSheetNoteCount() > 0;
+  const model = typeof getSmartModel === "function" ? getSmartModel() : null;
+  const low = word.toLowerCase();
+  const list = QS_TOKENS.map((x) => ({ ...x, tok: qsTokName(x) })).filter((x) => (x.kind === "note" ? hasNotes : !!model && (!x.needsState || model.hasStateColumns))
+    && (x.tok.startsWith(low) || (low[0] === "@" && x.tok[0] === "!" && x.tok.slice(1).startsWith(low))) && x.tok !== low);
+  if (!list.length) return null;
+  return { start: caret - word.length, end: caret + after.length, word, list };
+}
+
+function qsInsertToken(ctx, tc, entry) {
+  const el = ctx.inputEl;
+  const v = el.value || "";
+  const tail = v.slice(tc.end);
+  const sep = entry.open || /^\s/.test(tail) ? "" : " ";
+  el.value = v.slice(0, tc.start) + entry.tok + sep + tail;
+  const pos = tc.start + entry.tok.length + sep.length;
+  el.focus({ preventScroll: true });
+  try { el.setSelectionRange(pos, pos); } catch { /* bez zaznaczenia */ }
+  el.dispatchEvent(new Event("input", { bubbles: true })); // podgląd z nowym tokenem
+}
+
+function qsRenderTokenSuggest(ctx) {
+  const tc = qsTokenContext(ctx.inputEl);
+  if (!tc) return false;
+  const flags = qsFlagsFor(ctx.operatorsEl);
+  const canCount = baseRows.length <= QS_TOKEN_COUNT_MAX_ROWS && typeof swbBuildRowFilter === "function";
+  ctx.liveEl.replaceChildren();
+  ctx.liveEl.classList.remove("is-history");
+  const title = document.createElement("div");
+  title.className = "qs-live-group";
+  title.textContent = t("qsTokTitle");
+  ctx.liveEl.appendChild(title);
+  tc.list.forEach((entry) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "qs-live-item qs-token-item";
+    item.setAttribute("role", "option");
+    item.tabIndex = -1;
+    const tok = document.createElement("span");
+    tok.className = "qs-live-addr qs-token-name";
+    appendTypedRestLabel(tok, entry.tok, tc.word);
+    const text = document.createElement("span");
+    text.className = "qs-live-text";
+    text.textContent = t(entry.label);
+    item.append(tok, text);
+    if (canCount && !entry.open) {
+      const f = swbBuildRowFilter({ query1: entry.tok, operators1: flags.operators, preview: true });
+      let n = 0;
+      for (const row of baseRows) if (f.rowPasses(row)) n++;
+      const cnt = document.createElement("span");
+      cnt.className = "qs-token-count";
+      cnt.textContent = typeof formatRowCount === "function" ? formatRowCount(n) : String(n);
+      item.appendChild(cnt);
+    }
+    // palec/mysz na pozycji nie zabiera fokusu polu (iOS schowałby klawiaturę)
+    item.addEventListener("pointerdown", (e) => e.preventDefault());
+    item.addEventListener("click", () => qsInsertToken(ctx, qsTokenContext(ctx.inputEl) || tc, entry));
+    ctx.liveEl.appendChild(item);
+  });
+  ctx.liveEl.classList.remove("hidden");
+  return true;
+}
+
 function renderQsLive(ctx) {
   if (!ctx || !ctx.liveEl || !ctx.inputEl) return;
+  if (qsRenderTokenSuggest(ctx)) return;
   const value = ctx.inputEl.value || "";
   const flags = qsFlagsFor(ctx.operatorsEl);
   const operators = flags.operators;
@@ -2750,11 +2915,17 @@ function renderQsLive(ctx) {
       const text = document.createElement("span");
       text.className = "qs-live-text";
       // [EN] Same typed/rest greying as DV cell-suggest — needle = query (or 1st operator term)
-      const needle = (flags.negated || flags.mode === "regex") ? "" : qsLiveHighlightNeedle(value, operators);
+      // tokeny (@notatka, @wtoku…) nie są tekstem komórki — wyróżniamy resztę zapytania,
+      // a przy trafieniu w notatce słowo z „@notatka:słowo”
+      const noteWord = h.note && typeof swbExtractNoteTokens === "function" ? ((swbExtractNoteTokens(value).rules || []).find((r) => !r.negated && r.text) || {}).text || "" : "";
+      const needle = h.note ? noteWord : (flags.negated || flags.mode === "regex") ? "" : qsLiveHighlightNeedle(qsStripTokens(value), operators);
       const raw = String(h.text ?? "");
       const truncated = raw.length > 80;
-      appendTypedRestLabel(text, truncated ? raw.slice(0, 80) : raw, needle);
+      // nic do wyróżnienia (sam token, np. @notatka / @wtoku) → zwykły, pełny kontrast
+      if (needle) appendTypedRestLabel(text, truncated ? raw.slice(0, 80) : raw, needle);
+      else text.textContent = truncated ? raw.slice(0, 80) : raw;
       if (truncated) text.appendChild(document.createTextNode("…"));
+      if (h.note) item.classList.add("is-note");
       item.append(addr, text);
       item.addEventListener("click", () => qsApplyOnSheet(g.sheet, value));
       frag.appendChild(item);
@@ -2814,9 +2985,20 @@ function wireQuickSearchScope(ctx) {
     });
     ctx.inputEl.addEventListener("focus", () => {
       const len = (ctx.inputEl.value || "").trim().length;
-      if (len >= 2 || len === 0) renderQsLive(ctx); // 0 znaków = historia zapytań
+      if (len >= 2 || len === 0 || qsTokenContext(ctx.inputEl)) renderQsLive(ctx); // 0 znaków = historia zapytań
     });
     ctx.inputEl.addEventListener("keydown", (e) => {
+      // Niedokończony token („@wt”): Enter / Tab wstawia pierwszą podpowiedź zamiast szukać
+      // dosłownego „@wt”. Liczone od razu z pola (lista rysuje się z opóźnieniem 180 ms).
+      if ((e.key === "Enter" || (e.key === "Tab" && !e.shiftKey)) && !e.isComposing && !e.altKey && !e.ctrlKey && !e.metaKey) {
+        const tc = qsTokenContext(ctx.inputEl);
+        if (tc) {
+          e.preventDefault();
+          e.stopPropagation();
+          qsInsertToken(ctx, tc, tc.list[0]);
+          return;
+        }
+      }
       if (e.key === "Escape") hideQsLive(ctx);
       // Strzałki ↓/↑ z pola → nawigacja po live-podglądzie (Enter na pozycji = wybór).
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -3304,7 +3486,9 @@ if (quickSearchColumnsBtn) {
   if (!toolbar || !quickSearchEl || !toolbar.classList.contains("table-toolbar")) return;
   const reduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
   const MS = 240;
-  let lastInsideDown = 0;
+  // Dotknięcie w polu trwa od naciśnięcia do chwilę po puszczeniu (iOS gubi fokus pola przy
+  // tapnięciu w przycisk dopiero przy „click”, czyli PO puszczeniu palca).
+  let insideUntil = 0;
   // tylko to, co stoi w jednym rzędzie z polem — przy innym zawijaniu (⚙ otwarte, wąski tablet)
   // przyciski z drugiego rzędu zostają na miejscu
   const rowmates = () => {
@@ -3340,16 +3524,54 @@ if (quickSearchColumnsBtn) {
   };
   quickSearchEl.addEventListener("focus", () => set(true));
   document.addEventListener("pointerdown", (e) => {
-    if (quickSearchWrap.contains(e.target)) { lastInsideDown = performance.now(); return; }
+    if (quickSearchWrap.contains(e.target)) { insideUntil = Infinity; return; }
+    insideUntil = 0;
     set(false);
   }, true);
+  const endInside = () => { if (insideUntil === Infinity) insideUntil = performance.now() + 400; };
+  document.addEventListener("pointerup", endInside, true);
+  document.addEventListener("pointercancel", endInside, true);
   quickSearchWrap.addEventListener("focusout", (e) => {
     const to = e.relatedTarget;
     if (to && quickSearchWrap.contains(to)) return;
-    if (!to && performance.now() - lastInsideDown < 800) return; // tapnięcie w przycisk w polu (iOS)
-    // fokus poszedł dalej (Tab, skrót do tabeli, Esc) — chyba że zaraz wraca do pola
-    setTimeout(() => { if (!quickSearchWrap.contains(document.activeElement)) set(false); }, 0);
+    if (!to && performance.now() < insideUntil) return; // tapnięcie w przycisk w polu (iOS)
+    // fokus poszedł dalej (Tab, skrót do tabeli, Esc, „✓”/„Gotowe” nad klawiaturą iPhone'a) —
+    // chyba że zaraz wraca do pola. Panel podpowiedzi znika razem z poszerzeniem: po „✓”
+    // wisiałby nad tabelą i trzeba by go zamykać osobnym tapnięciem (Mateusz 2026-10-25).
+    // Chowanie klawiatury nie jest potrzebne, żeby zobaczyć listę — mieści się nad nią (qsFitLive).
+    setTimeout(() => {
+      if (quickSearchWrap.contains(document.activeElement)) return;
+      set(false);
+      const ctx = qsContexts.find((c) => c.inputEl === quickSearchEl);
+      if (ctx) hideQsLive(ctx);
+    }, 0);
   });
+})();
+
+// Panel podpowiedzi/wyników zawsze w WIDOCZNYM obszarze: na iPhonie klawiatura zasłaniała
+// dół listy (max-height 50dvh nie maleje przy klawiaturze). Liczone w układzie rectów
+// (visual viewport: 0 … vv.height) — patrz GOTCHA iOS o visual/layout viewport.
+function qsFitLive(liveEl) {
+  if (!liveEl || liveEl.classList.contains("hidden")) return;
+  const vv = window.visualViewport;
+  const visibleH = vv ? vv.height : window.innerHeight;
+  const top = liveEl.getBoundingClientRect().top;
+  const avail = Math.floor(visibleH - top - 10);
+  const cap = Math.floor(window.innerHeight * 0.5);
+  liveEl.style.maxHeight = `${Math.max(120, Math.min(cap, avail))}px`;
+}
+(function wireQsFitLive() {
+  const els = ["qsLiveResults", "qsLiveResultsPopup"].map((id) => document.getElementById(id)).filter(Boolean);
+  if (!els.length) return;
+  let raf = 0;
+  const fitAll = () => { raf = 0; els.forEach(qsFitLive); };
+  const schedule = () => { if (!raf) raf = requestAnimationFrame(fitAll); };
+  els.forEach((el) => new MutationObserver(schedule).observe(el, { childList: true, attributes: true, attributeFilter: ["class"] }));
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", schedule);
+    window.visualViewport.addEventListener("scroll", schedule);
+  }
+  window.addEventListener("resize", schedule);
 })();
 
 // Klawiatura: cały zestaw ikonek to JEDEN przystanek Tab (roving tabindex, ←/→),

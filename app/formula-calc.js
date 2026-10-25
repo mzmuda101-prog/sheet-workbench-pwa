@@ -133,15 +133,15 @@ function fcDepsOf(ast, sheet, r, c) {
   return out;
 }
 
-function fcIndexAdd(sheet, ref, cell) {
+function fcIndexAdd(sheet, ref, cell, idx = fcIndex) {
   const { r, c } = XLSX.utils.decode_cell(ref);
   const key = `${sheet}\u0000${ref}`;
   const p = fcParseFile(cell.f);
   const deps = fcDepsOf(p.ast, sheet, r, c);
-  fcIndex.entries.set(key, { sheet, ref, r, c, f: cell.f, ast: p.ast, ok: p.ok && !cell.F, deps });
+  idx.entries.set(key, { sheet, ref, r, c, f: cell.f, ast: p.ast, ok: p.ok && !cell.F, deps });
   deps.forEach((d) => {
-    if (!fcIndex.bySheet.has(d.sheet)) fcIndex.bySheet.set(d.sheet, []);
-    fcIndex.bySheet.get(d.sheet).push({ ...d, key });
+    if (!idx.bySheet.has(d.sheet)) idx.bySheet.set(d.sheet, []);
+    idx.bySheet.get(d.sheet).push({ ...d, key });
   });
 }
 
@@ -155,26 +155,71 @@ function fcIndexRemove(key) {
   });
 }
 
+// Budowa indeksu w porcjach (swbFormulaPrewarm): duży plik (28 tys. formuł) budował go
+// ~0,3–0,5 s przy PIERWSZEJ edycji — Enter po otwarciu pliku stał. Teraz po wczytaniu
+// pliku buduje się w bezczynności po kilka ms; gdy edycja przyjdzie wcześniej,
+// fcEnsureIndex dokańcza resztę od razu (nigdy gorzej niż dawniej). Do końca budowy
+// fcIndex zostaje pusty — swbFormulaCellChanged nic nie psuje, a budowa czyta stan
+// komórek z chwili, w której do nich dochodzi.
+let fcIndexBuild = null; // { wb, idx, sheets, sheetI, refs, refI, ms }
+function fcBuildStep(budgetMs) {
+  const b = fcIndexBuild;
+  const t0 = performance.now();
+  const end = t0 + budgetMs;
+  while (b.sheetI < b.sheets.length) {
+    const sn = b.sheets[b.sheetI];
+    const ws = b.wb.Sheets[sn];
+    if (!b.refs) { b.refs = ws ? Object.keys(ws) : []; b.refI = 0; }
+    while (b.refI < b.refs.length) {
+      const ref = b.refs[b.refI++];
+      if (ref.charCodeAt(0) !== 33) { const cell = ws[ref]; if (cell && cell.f) fcIndexAdd(sn, ref, cell, b.idx); }
+      if ((b.refI & 127) === 0 && performance.now() > end) { b.ms += performance.now() - t0; return false; }
+    }
+    b.sheetI++;
+    b.refs = null;
+  }
+  b.ms += performance.now() - t0;
+  return true;
+}
+function fcFinishBuild() {
+  const b = fcIndexBuild;
+  fcIndexBuild = null;
+  fcIndex = b.idx;
+  if (typeof log === "function" && fcIndex.entries.size) log(`Formuły: indeks zależności ${fcIndex.entries.size} kom. (${Math.round(b.ms)} ms)`, "info");
+}
+function fcStartBuild() {
+  fcIndexBuild = { wb: workbook, idx: { wb: workbook, entries: new Map(), bySheet: new Map() }, sheets: workbook.SheetNames.slice(), sheetI: 0, refs: null, refI: 0, ms: 0 };
+}
+
 function fcEnsureIndex() {
   if (!FC || typeof workbook === "undefined" || !workbook) return null;
   if (fcIndex && fcIndex.wb === workbook) return fcIndex;
-  const t0 = performance.now();
-  fcIndex = { wb: workbook, entries: new Map(), bySheet: new Map() };
-  workbook.SheetNames.forEach((sn) => {
-    const ws = workbook.Sheets[sn];
-    if (!ws) return;
-    Object.keys(ws).forEach((ref) => {
-      if (ref.charCodeAt(0) === 33) return;
-      const cell = ws[ref];
-      if (cell && cell.f) fcIndexAdd(sn, ref, cell);
-    });
-  });
-  if (typeof log === "function" && fcIndex.entries.size) log(`Formuły: indeks zależności ${fcIndex.entries.size} kom. (${Math.round(performance.now() - t0)} ms)`, "info");
+  if (!fcIndexBuild || fcIndexBuild.wb !== workbook) fcStartBuild();
+  fcBuildStep(Infinity);
+  fcFinishBuild();
   return fcIndex;
+}
+
+// Po wczytaniu pliku (handleFile): indeks w tle, porcjami w bezczynności.
+function swbFormulaPrewarm() {
+  if (!FC || typeof workbook === "undefined" || !workbook) return;
+  if ((fcIndex && fcIndex.wb === workbook) || (fcIndexBuild && fcIndexBuild.wb === workbook)) return;
+  fcStartBuild();
+  const wb = workbook;
+  const ric = window.requestIdleCallback || ((fn) => setTimeout(() => fn({ timeRemaining: () => 8 }), 60));
+  const tick = (dl) => {
+    if (!fcIndexBuild || fcIndexBuild.wb !== wb || workbook !== wb) return; // dokończone przez edycję albo nowy plik
+    const budget = Math.max(4, Math.min(10, dl && dl.timeRemaining ? dl.timeRemaining() : 8));
+    if (fcBuildStep(budget)) fcFinishBuild();
+    else ric(tick, { timeout: 1500 });
+  };
+  ric(tick, { timeout: 1500 });
 }
 
 // Komórka dostała/straciła formułę (wpisanie, nadpisanie wartością, Cofnij) — popraw indeks.
 function swbFormulaCellChanged(sheet, ref) {
+  // budowa w toku: komórka, którą budowa już minęła, miałaby stary wpis — dokończ teraz
+  if (fcIndexBuild && fcIndexBuild.wb === workbook) fcEnsureIndex();
   if (!fcIndex || fcIndex.wb !== workbook) return;
   const key = `${sheet}\u0000${ref}`;
   fcIndexRemove(key);
@@ -307,6 +352,12 @@ function fcFlush() {
   let renderNeeded = false;
   let changedCount = 0;
   fcRecalcing = true;
+  // wspólna pamięć zakresów dla wszystkich formuł tego przeliczenia (zrzut Mateusza
+  // 2026-10-25: Enter/Wklej w arkuszu z ~300 LICZ.JEŻELI po całych kolumnach = 2 s blokady,
+  // bo każda formuła budowała od nowa ten sam zakres komórka po komórce)
+  fcContext(currentSheetName, 0, 0);
+  const matrixCache = FC.makeMatrixCache ? FC.makeMatrixCache() : null;
+  fcBaseCtx.matrixCache = matrixCache;
   try {
     // kolejność BFS bywa nie-topologiczna (romby) — dwa przebiegi wystarczają w praktyce,
     // trzeci tylko gdy coś się jeszcze zmieniało
@@ -321,6 +372,7 @@ function fcFlush() {
         try { v = FC.evaluate(e.ast, fcContext(e.sheet, e.r, e.c)); } catch { continue; }
         if (v === FC.UNSUPPORTED) continue;
         if (fcStore(cell, v)) {
+          if (matrixCache) matrixCache.invalidate(e.sheet, e.r, e.c);
           changedThisPass = true;
           changedCount++;
           if (fcRefreshRow(e.sheet, e.r, e.c)) renderNeeded = true;
@@ -330,6 +382,7 @@ function fcFlush() {
     }
   } finally {
     fcRecalcing = false;
+    if (fcBaseCtx) fcBaseCtx.matrixCache = null; // poza przeliczeniem komórki zmienia edycja — bez pamięci
   }
   if (changedCount) {
     bumpSheetDataStamp();

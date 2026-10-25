@@ -476,16 +476,39 @@
     get rows() { return this.r2 - this.r1 + 1; }
     get cols() { return this.c2 - this.c1 + 1; }
     at(i, j) { return this.ctx.get(this.sheet, this.r1 + i, this.c1 + j); }
+    // ctx.matrixCache (makeMatrixCache) — przeliczenie wielu formuł naraz: ten sam zakres
+    // (np. cała kolumna pod LICZ.JEŻELI w 300 formułach) budujemy RAZ, nie 300 razy.
+    // Wynik jest współdzielony, więc nikt nie może go modyfikować (funkcje tylko czytają).
     toMatrix() {
+      const cache = this.ctx.matrixCache;
+      const key = cache ? `${this.sheet}\u0000${this.r1}\u0000${this.c1}\u0000${this.r2}\u0000${this.c2}` : null;
+      if (cache) { const hit = cache.get(key); if (hit) return hit; }
       const out = [];
       for (let i = 0; i < this.rows; i++) {
         const row = [];
         for (let j = 0; j < this.cols; j++) row.push(this.at(i, j));
         out.push(row);
       }
+      if (cache) cache.set(key, out, this);
       return out;
     }
-    *values() { for (let i = 0; i < this.rows; i++) for (let j = 0; j < this.cols; j++) yield this.at(i, j); }
+    *values() {
+      if (this.ctx.matrixCache) { for (const row of this.toMatrix()) yield* row; return; }
+      for (let i = 0; i < this.rows; i++) for (let j = 0; j < this.cols; j++) yield this.at(i, j);
+    }
+  }
+  // Pamięć zbudowanych zakresów na czas jednego przeliczenia. invalidate(arkusz, r, c) —
+  // komórka się zmieniła (np. wynik formuły w tym przebiegu) → zakresy z nią wypadają.
+  function makeMatrixCache() {
+    const map = new Map();
+    return {
+      get(key) { const e = map.get(key); return e ? e.m : null; },
+      set(key, m, rg) { map.set(key, { m, sheet: rg.sheet, r1: rg.r1, c1: rg.c1, r2: rg.r2, c2: rg.c2 }); },
+      invalidate(sheet, r, c) {
+        for (const [key, e] of map) if (e.sheet === sheet && r >= e.r1 && r <= e.r2 && c >= e.c1 && c <= e.c2) map.delete(key);
+      },
+      get size() { return map.size; },
+    };
   }
   const isRange = (v) => v instanceof Range;
   const isMatrix = (v) => Array.isArray(v) && Array.isArray(v[0]);
@@ -889,7 +912,56 @@
     for (let i = 0; i < m.rows; i++) for (let j = 0; j < m.cols; j++) if (m.mask[i * m.cols + j]) out.push(mat[i][j]);
     return out;
   }
-  FN.COUNTIF = (args) => { const m = criteriaMask([[args[0], args[1]]]); return isErr(m) ? m : m.mask.reduce((a, b) => a + b, 0); };
+  // Skrót przy przeliczaniu wielu formuł (ctx.matrixCache): LICZ.JEŻELI / SUMA.WARUNKÓW
+  // z JEDNYM warunkiem „równa się tekst” po tym samym zakresie (np. 148 × LICZ.JEŻELI(tabela;
+  // C5) w arkuszu analiz) — zamiast przechodzić zakres w każdej formule, raz liczymy
+  // „tekst → ile / suma”. Tylko gdy semantyka jest identyczna z makeCriterion: tekst bez
+  // operatora (albo z „=”), bez symboli wieloznacznych, nie liczba i nie PRAWDA/FAŁSZ —
+  // wtedy pasują wyłącznie komórki tekstowe równe bez względu na wielkość liter.
+  function textEqKey(crit) {
+    if (typeof crit !== "string" || /^(<=|>=|<>|<|>)/.test(crit)) return null;
+    const rhs = crit[0] === "=" ? crit.slice(1) : crit;
+    if (rhs === "" || /[*?~]/.test(rhs) || parseNumberText(rhs) !== null || /^(TRUE|PRAWDA|FALSE|FAŁSZ)$/i.test(rhs)) return null;
+    return rhs.toLowerCase();
+  }
+  const cachedMatrix = (v) => (isRange(v) && v.ctx.matrixCache ? v.toMatrix() : null);
+  const textCountMemo = new WeakMap(); // macierz z pamięci zakresów → Map(tekst → ile)
+  function textCounts(mat) {
+    let m = textCountMemo.get(mat);
+    if (!m) {
+      m = new Map();
+      for (const row of mat) for (const v of row) if (typeof v === "string") { const k = v.toLowerCase(); m.set(k, (m.get(k) || 0) + 1); }
+      textCountMemo.set(mat, m);
+    }
+    return m;
+  }
+  const textSumMemo = new WeakMap(); // macierz warunku → WeakMap(macierz sumy → Map(tekst → {sum, err}))
+  function textSums(critMat, sumMat) {
+    let bySum = textSumMemo.get(critMat);
+    if (!bySum) { bySum = new WeakMap(); textSumMemo.set(critMat, bySum); }
+    let m = bySum.get(sumMat);
+    if (!m) {
+      m = new Map();
+      for (let i = 0; i < critMat.length; i++) for (let j = 0; j < critMat[i].length; j++) {
+        const c = critMat[i][j];
+        if (typeof c !== "string") continue;
+        const k = c.toLowerCase();
+        let g = m.get(k);
+        if (!g) { g = { sum: 0, err: null }; m.set(k, g); }
+        const v = sumMat[i][j];
+        if (isErr(v)) { if (!g.err) g.err = v; } else if (typeof v === "number") g.sum += v;
+      }
+      bySum.set(sumMat, m);
+    }
+    return m;
+  }
+  FN.COUNTIF = (args) => {
+    const mat = cachedMatrix(args[0]);
+    const key = mat ? textEqKey(scalar(args[1])) : null;
+    if (key !== null) return textCounts(mat).get(key) || 0;
+    const m = criteriaMask([[args[0], args[1]]]);
+    return isErr(m) ? m : m.mask.reduce((a, b) => a + b, 0);
+  };
   FN.COUNTIFS = (args) => {
     const pairs = [];
     for (let i = 0; i < args.length; i += 2) pairs.push([args[i], args[i + 1]]);
@@ -906,6 +978,12 @@
     return e || sumNums(vals);
   };
   FN.SUMIFS = (args) => {
+    if (args.length === 3) {
+      const critMat = cachedMatrix(args[1]);
+      const sumMat = critMat ? cachedMatrix(args[0]) : null;
+      const key = sumMat && args[0].rows === args[1].rows && args[0].cols === args[1].cols ? textEqKey(scalar(args[2])) : null;
+      if (key !== null) { const g = textSums(critMat, sumMat).get(key); return g ? (g.err || g.sum) : 0; }
+    }
     const pairs = [];
     for (let i = 1; i < args.length; i += 2) pairs.push([args[i], args[i + 1]]);
     const m = criteriaMask(pairs);
@@ -1864,7 +1942,7 @@
   }
 
   const api = {
-    makeStructuredResolver, makeNameResolver, setLocale, roundExcel, excelPow,
+    makeStructuredResolver, makeNameResolver, makeMatrixCache, setLocale, roundExcel, excelPow,
     parse, serialize, localize, shift, syntaxLang, evaluate, refsOf, functionsOf, isSupported, resultLooksLikeDate,
     tokenize, colToIndex, indexToCol, quoteSheet, Range, isRange, isErr, ERR, ERR_PL, UNSUPPORTED,
     jsDateToSerial, dateSerial, generalText, PL_NAMES, EN_FROM_PL, CATALOG, makeCriterion, compare,
