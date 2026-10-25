@@ -478,6 +478,31 @@ window.MateuszCursorHint = (() => {
       }
     }
 
+    // Bezpiecznik (2026-10-25, zrzut Mateusza z iPhone'a): dymek z dotyku chował TYLKO
+    // pointerup/pointercancel na tym samym elemencie. Gdy to zdarzenie przepadło (iOS przy
+    // elemencie, który przesunął się pod palcem), dymek wisiał bez końca — tapnięcie gdzie
+    // indziej go nie zdejmowało, a hint „na trzymanie” nie ma limitu czasu. Teraz chowa go
+    // też: dotknięcie/kliknięcie poza elementem, puszczenie palca poza nim, przewinięcie
+    // i zejście karty w tło. Zerknięcie (data-hint-tap) pokazuje się na pointerup ELEMENTU,
+    // więc puszczenie nad samym elementem go nie rusza.
+    const isHintUp = () => !!activeHintEl || (cursorHint && cursorHint.classList.contains("is-visible"));
+    const outsideActive = (target) => !activeHintEl || !(target instanceof Node) || !activeHintEl.contains(target);
+    document.addEventListener("pointerdown", (event) => {
+      if (isHintUp() && outsideActive(event.target)) hideCursorHint();
+    }, true);
+    const onTouchRelease = (event) => {
+      if (event.pointerType !== "touch" || activePointerType !== "touch") return;
+      if (outsideActive(event.target)) hideCursorHint();
+    };
+    document.addEventListener("pointerup", onTouchRelease, true);
+    document.addEventListener("pointercancel", onTouchRelease, true);
+    document.addEventListener("scroll", () => {
+      if (activePointerType === "touch" && isHintUp()) hideCursorHint();
+    }, { capture: true, passive: true });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden && isHintUp()) hideCursorHint();
+    });
+
     // Podpina eventy na liście elementów. Pomija elementy już podpięte
     // (data-cursor-hint-bound="1") — bezpieczne przy wielokrotnym wywołaniu
     // np. przez MutationObserver gdy DOM się zmienia dynamicznie.

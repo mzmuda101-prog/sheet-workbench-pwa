@@ -2998,16 +2998,29 @@ const HERO_WHEEL_TO_EXPAND = 160; // to samo kółkiem/gładzikiem (wąskie okno
 function heroIsNarrow() { return !heroNarrowMQ || heroNarrowMQ.matches; }
 
 // Zmierz wysokość ROZWINIĘTEGO hero do CSS var (nie da się animować z „auto").
-// WAŻNE: hero ma `max-height: var(--hero-h)`, więc `getBoundingClientRect()` zwróciłby
-// wysokość JUŻ przyciętą do starej wartości var (i raz za małą — zostaje za mała,
-// ucinając ikony/kontrolki na wąskich ekranach, gdzie pasek zawija się na kilka rzędów).
-// Dlatego chwilowo zdejmujemy `max-height`, czytamy naturalną wysokość, przywracamy.
+// Limit max-height działa TYLKO w trakcie animacji (body.hero-animating) i po zwinięciu —
+// rozwinięty nagłówek nie ma limitu, więc treść, która urosła po pomiarze (wczytany plik,
+// pigułka arkusza, zmiana języka), nie zostaje ucięta. Przy rozwijaniu mierzymy na chwilę
+// stan rozwinięty (bez przejść, w jednej klatce — nic nie mignie), bo podczas zwinięcia treść
+// mogła się zmienić (np. inny arkusz).
 function measureHeroHeight() {
-  if (!heroEl || document.body.classList.contains("hero-collapsed")) return;
+  if (!heroEl) return;
+  const body = document.body;
+  const wasCollapsed = body.classList.contains("hero-collapsed");
+  const prevTransition = heroEl.style.transition;
   const prevMax = heroEl.style.maxHeight;
+  if (wasCollapsed) {
+    heroEl.style.transition = "none";
+    body.classList.remove("hero-collapsed");
+  }
   heroEl.style.maxHeight = "none";
   const h = Math.max(heroEl.getBoundingClientRect().height, heroEl.scrollHeight);
   heroEl.style.maxHeight = prevMax;
+  if (wasCollapsed) {
+    body.classList.add("hero-collapsed");
+    void heroEl.offsetHeight; // zatwierdź stan zwinięty, zanim wrócą przejścia
+    heroEl.style.transition = prevTransition;
+  }
   // Na SAMYM hero (nie na <html>): zmienna jest niedziedziczona (@property w app.css),
   // a zapis na korzeniu kazał przeliczać style całego dokumentu.
   if (h) heroEl.style.setProperty("--hero-h", `${Math.ceil(h)}px`);
@@ -3028,9 +3041,11 @@ function setHeroCollapsed(on) {
   if (!heroIsNarrow()) on = false; // desktop zawsze rozwinięty
   const was = document.body.classList.contains("hero-collapsed");
   if (was === !!on) return;
-  if (on) measureHeroHeight(); // zmierz PRZED zwinięciem
+  measureHeroHeight(); // wysokość rozwiniętego TERAZ (start zwijania albo cel rozwijania)
+  // najpierw limit = pełna wysokość (bez zmiany wyglądu), dopiero potem zmiana stanu → płynne przejście
+  document.body.classList.add("hero-animating"); // limit max-height + will-change (zdjęte po animacji)
+  void heroEl.offsetHeight;
   document.body.classList.toggle("hero-collapsed", !!on);
-  document.body.classList.add("hero-animating"); // włącz will-change (zdjęte po animacji)
   // Strażnik anty-oscylacji: w trakcie animacji ignoruj scroll wywołany reflowem.
   // Na końcu (lub po fallbacku, gdy brak transition) przelicz wysokość panelu tabeli.
   heroAnimating = true;
@@ -3113,12 +3128,20 @@ function setHeroPullProgress(p) {
 })();
 
 if (heroEl) {
-  measureHeroHeight();
-  // Web-fonty/ikony dochodzą po pierwszym renderze i pasek robi się wyższy → przemierz,
-  // gdy fonty gotowe i po pełnym load (inaczej --hero-h zostaje za małe i ucina kontrolki).
-  const remeasureHero = () => { if (!document.body.classList.contains("hero-collapsed")) measureHeroHeight(); };
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(remeasureHero).catch(() => {});
-  window.addEventListener("load", remeasureHero, { once: true });
+  // (bez przemiarów po fontach/load/resize: rozwinięty nagłówek nie ma limitu wysokości,
+  // a setHeroCollapsed mierzy tuż przed każdą animacją)
+  // …ale gdy rozwinięty nagłówek urośnie/zmaleje sam (wczytany plik, język), tabela pod nim
+  // musi dostać nową wysokość — inaczej strona wystaje o różnicę albo zostaje pusty pas.
+  if (typeof ResizeObserver === "function") {
+    let lastH = 0;
+    new ResizeObserver((entries) => {
+      const h = Math.round(entries[0].contentRect.height);
+      if (h === lastH) return;
+      lastH = h;
+      if (heroAnimating || document.body.classList.contains("hero-collapsed")) return; // animację goni heroSyncLoop
+      if (typeof readTableViewportHeight === "function") readTableViewportHeight();
+    }).observe(heroEl);
+  }
   if (heroGripEl) {
     // Gest: pociągnięcie uchwytu palcem (w dół rozwija, w górę zwija). Tap = toggle.
     let dragStartY = null;
@@ -3155,7 +3178,6 @@ if (heroEl) {
   });
   window.addEventListener("resize", () => {
     if (!heroIsNarrow()) { heroUserCollapsed = false; setHeroCollapsed(false); } // desktop → rozwiń + reset intencji
-    if (!document.body.classList.contains("hero-collapsed")) measureHeroHeight();
   });
 }
 

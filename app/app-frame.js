@@ -247,6 +247,8 @@ const appFrame = (() => {
     const dirty = hasFile && typeof hasUnsavedChanges !== "undefined" && !!hasUnsavedChanges;
     const n = dirty ? pendingCount() : 0;
     heroSaveBtn.classList.toggle("is-dirty", dirty);
+    // zwinięty nagłówek (telefon) chowa „Zapisz” — kropka przy uchwycie zostaje widoczna
+    document.getElementById("heroGrip")?.classList.toggle("has-unsaved", dirty);
     if (heroSaveCount) {
       heroSaveCount.hidden = !(dirty && n > 0);
       heroSaveCount.textContent = n > 99 ? "99+" : String(n);

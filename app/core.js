@@ -693,7 +693,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261025-02";
+const APP_BUILD_VERSION = "20261025-03";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1033,16 +1033,13 @@ function readTableViewportHeight() {
   if (!tablePanelEl) return;
   const rect = tablePanelEl.getBoundingClientRect();
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 720;
-  const narrow = window.matchMedia("(max-width: 768px)").matches;
-  // Desktop: odstęp pod tabelą = dolny padding .app (48 px). Stałe 24 px sprawiało, że
-  // strona wystawała o 24 px i dawała się przewinąć — a wtedy scrollIntoView komórki
-  // przesuwał CAŁĄ stronę, która chwilę później wracała (tabela skakała pod kursorem).
-  let bottomGap = 14;
-  if (!narrow) {
-    const appEl = tablePanelEl.closest(".app");
-    const pad = appEl ? parseFloat(getComputedStyle(appEl).paddingBottom) || 0 : 0;
-    bottomGap = Math.max(12, Math.ceil(pad));
-  }
+  // Odstęp pod tabelą = dolny padding .app (jedno źródło: CSS). Stała w JS rozjeżdżała się
+  // z CSS i strona wystawała: na desktopie o 24 px (scrollIntoView komórki przesuwał CAŁĄ
+  // stronę, tabela skakała), na telefonie o 18 px (32 px paddingu vs 14 px tu — cały ekran
+  // „jechał” pod palcem, 2026-10-25).
+  const appEl = tablePanelEl.closest(".app");
+  const pad = appEl ? parseFloat(getComputedStyle(appEl).paddingBottom) || 0 : 0;
+  const bottomGap = Math.max(12, Math.ceil(pad));
   const available = Math.floor(viewportHeight - rect.top - bottomGap);
   const minHeight = window.matchMedia("(max-width: 768px)").matches ? 320 : 420;
   tablePanelEl.style.setProperty("--table-panel-height", `${Math.max(minHeight, available)}px`);
