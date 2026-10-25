@@ -107,6 +107,9 @@ function swbFillClassify(src, lang) {
   if (hit) return { kind: "list", key: `L${hit.list.id}`, list: hit.list, idx: hit.idx, caseKind: swbFillCaseOf(s.trim()) };
   const quarterRe = lang === "en" ? /^(?:kw\.?|kwartał|q|qtr\.?|quarter)\s*$/i : /^(?:kw\.?|kwartał)\s*$/i;
   const quarterSufRe = lang === "en" ? /^\s+(?:kw\.?|kwartał|q|qtr|quarter)$/i : /^\s+(?:kw\.?|kwartał)$/i;
+  // Ponad 15 cyfr (IBAN, nr konta, PESEL-e sklejone z kodem) nie mieści się w liczbie JS:
+  // seria robiła z „PL61109010140000071219812874” zapis „PL6.11e+25”. Takie wartości kopiujemy.
+  if (/\d{16,}/.test(s)) return { kind: "copy", key: null };
   let m = /^([\s\S]*?)(\d+)$/.exec(s);
   if (m) {
     const n = Number(m[2]);

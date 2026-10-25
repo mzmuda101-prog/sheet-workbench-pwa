@@ -223,6 +223,7 @@ function planEditChanges() {
   if (op === "convert") {
     const to = editConvertToEl.value;
     tg.targets.forEach(({ row, col }) => {
+      if (editToolIsFormulaCell(row, col)) return;
       const raw = Array.isArray(row.values) ? row.values[col] : undefined;
       const shown = getDisplayValue(row, col);
       if (shown === "" || shown == null) return; // pustych nie ruszamy
@@ -257,6 +258,7 @@ function planEditChanges() {
     if (!choice) return { err: "editErrUnifyScan" };
     if (!choice.map.size) return { changes };
     tg.targets.forEach(({ row, col }) => {
+      if (editToolIsFormulaCell(row, col)) return;
       const raw = Array.isArray(row.values) ? row.values[col] : undefined;
       if (typeof raw !== "string") return; // tylko tekst
       const target = choice.map.get(unifyKey(raw, choice.mode));
@@ -270,6 +272,7 @@ function planEditChanges() {
   if (!tr.ok) return { err: tr.err };
 
   tg.targets.forEach(({ row, col }) => {
+    if (editToolIsFormulaCell(row, col)) return; // wynik formuły — zmiana zamieniłaby ją na stałą
     const raw = Array.isArray(row.values) ? row.values[col] : undefined;
     const isDateCell = raw instanceof Date;
     const isNumberCell = typeof raw === "number" && Number.isFinite(raw);
@@ -313,6 +316,16 @@ function planEditChanges() {
     }
   });
   return { changes };
+}
+
+// Komórka z formułą pokazuje WYNIK (row.values) — Wielkość liter/Przytnij/Zamień/Ujednolić
+// zapisywały ten wynik jako tekst i formuła znikała z pliku (np. =A2&" "&B2 → stała).
+function editToolIsFormulaCell(row, col) {
+  if (typeof workbook === "undefined" || !workbook || !currentSheetName || !row) return false;
+  const ws = workbook.Sheets[currentSheetName];
+  if (!ws || !Number.isInteger(row.rowIndex0)) return false;
+  const cell = ws[XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + col })];
+  return !!(cell && cell.f);
 }
 
 function applyEditTool() {
@@ -411,6 +424,7 @@ function scanUnifyVariants() {
   const mode = editUnifyModeEl.value === "case" ? "case" : "loose";
   const byKey = new Map();
   tg.targets.forEach(({ row, col }) => {
+    if (editToolIsFormulaCell(row, col)) return;
     const raw = Array.isArray(row.values) ? row.values[col] : undefined;
     if (typeof raw !== "string" || !raw.trim()) return;
     const key = unifyKey(raw, mode);

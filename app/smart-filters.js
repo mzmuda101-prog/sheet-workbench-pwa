@@ -698,6 +698,11 @@ function smartStatusText(model) {
 function renderSmartFilterUi() {
   const model = getSmartModel();
   const available = !!model;
+  // Przebudowa chipów niszczy przycisk z fokusem (klik/Enter na chipie) — fokus spadał na
+  // <body>, a w okienku szukania wypadał z pułapki fokusu. Wracamy na ten sam chip.
+  const focused = document.activeElement;
+  const focusKey = focused?.dataset?.smartChip || null;
+  const focusBox = focusKey ? [smartFilterChipsEl, smartQuickChipsEl].find((box) => box && box.contains(focused)) : null;
 
   if (smartFilterPanelEl) {
     smartFilterPanelEl.classList.toggle("smart-unavailable", !available);
@@ -770,6 +775,13 @@ function renderSmartFilterUi() {
     smartFilterHintEl.textContent = available && !model.hasStateColumns
       ? t("smartHintNoStateCols")
       : t("smartHintTokens");
+  }
+  if (focusBox && !focusBox.contains(document.activeElement)) {
+    const again = Array.from(focusBox.querySelectorAll("[data-smart-chip]")).find((b) => b.dataset.smartChip === focusKey);
+    if (again && !again.disabled) {
+      if (focusBox === smartQuickChipsEl) smartApplyRovingTabindex(Array.from(focusBox.querySelectorAll("button")).indexOf(again));
+      again.focus({ preventScroll: true });
+    }
   }
 }
 

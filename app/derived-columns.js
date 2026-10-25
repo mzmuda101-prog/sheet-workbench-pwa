@@ -207,10 +207,15 @@ function dcGetSheetTable(sheetName, headerRow) {
   try {
     const sheet = (typeof workbook !== "undefined" && workbook && workbook.Sheets) ? workbook.Sheets[sheetName] : null;
     if (sheet) {
-      const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null, blankrows: false });
+      // headerRow to numer wiersza ARKUSZA, a litery kolumn — kolumny arkusza. Bez zakresu od A1
+      // i z blankrows:false indeksy liczyły się od początku !ref i bez pustych wierszy: pusty
+      // wiersz nad nagłówkiem albo dane od B3 przesuwały nagłówek i kolumny wyszukiwania.
+      const ref = sheet["!ref"];
+      const end = ref ? XLSX.utils.decode_range(ref).e : { r: 0, c: 0 };
+      const aoa = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null, blankrows: true, range: { s: { r: 0, c: 0 }, e: end } });
       const hdr = aoa[headerRow - 1] || [];
       const headers = hdr.map((h, i) => (h == null || String(h).trim() === "") ? XLSX.utils.encode_col(i) : String(h).trim());
-      const rows = aoa.slice(headerRow);
+      const rows = aoa.slice(headerRow).filter((r) => r && r.some((v) => v != null && v !== ""));
       table = { headers, rows };
     }
   } catch { table = null; }

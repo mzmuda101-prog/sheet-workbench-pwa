@@ -274,8 +274,8 @@ function rpLooksLikeCounter(col) {
   if (RP_NUM_RE.test(col.name)) return false;
   if (col.unique !== col.nonEmpty || col.nums.length < 3) return false;
   if (!col.nums.every((n) => Number.isInteger(n))) return false;
-  const min = Math.min(...col.nums);
-  const max = Math.max(...col.nums);
+  const min = arrMin(col.nums);
+  const max = arrMax(col.nums);
   return max - min + 1 === col.nums.length;
 }
 

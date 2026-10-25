@@ -121,9 +121,13 @@
     const pl = opts.lang === "pl";
     const toks = [];
     let i = 0;
+    let braces = 0; // wewnątrz stałej tablicowej „\” oddziela wiersze (PL), nie zaczyna nazwy
     const s = String(src);
     while (i < s.length) {
       const ch = s[i];
+      if (ch === "{") braces++;
+      else if (ch === "}") braces = Math.max(0, braces - 1);
+      else if (ch === "\\" && braces) { toks.push({ t: "op", v: "\\", pos: i }); i++; continue; }
       if (ch === " " || ch === "\n" || ch === "\r" || ch === "\t" || ch === " ") { i++; continue; }
       const rest = s.slice(i);
       if (ch === '"') {
@@ -222,7 +226,9 @@
       const two = s.slice(i, i + 2);
       if (two === "<>" || two === "<=" || two === ">=") { toks.push({ t: "op", v: two, pos: i }); i += 2; continue; }
       if ("+-*/^&=<>%(),;{}".includes(ch)) {
-        if (ch === ";") toks.push({ t: "op", v: ",", pos: i, semi: true });
+        // „;” w zapisie angielskim/pliku = separator WIERSZY stałej tablicowej (semi); w PL to
+        // separator argumentów i kolumn, a wiersze oddziela „\\” (tak pisze serialize)
+        if (ch === ";") toks.push({ t: "op", v: ",", pos: i, semi: !pl });
         else toks.push({ t: "op", v: ch, pos: i });
         i++;
         continue;
@@ -341,12 +347,15 @@
         return { t: "paren", a: inner };
       }
       if (tok.t === "op" && tok.v === "{") {
-        // stała tablicowa {1,2;3,4} — w PL „;” to też separator kolumn… przyjmujemy , i ; jako kolumny, \ jako wiersze
+        // stała tablicowa {1,2;3,4} (EN/plik) albo {1;2\3;4} (PL): kolumny , / ;  wiersze ; / \
+        // Dawniej „;” w EN brane było za kolumnę — {1,"a";2,"b"} spłaszczało się do jednego
+        // wiersza (WYSZUKAJ.PIONOWO → #N/D!) i tak zostawało w pliku po zapisie.
         p++;
         const rows = [[]];
         for (;;) {
           const v = unary();
           rows[rows.length - 1].push(v);
+          if ((isOp(",") && toks[p].semi) || isOp("\\")) { p++; rows.push([]); continue; }
           if (isOp(",")) { p++; continue; }
           if (isOp("}")) { p++; break; }
           throw syntaxError("Niepoprawna stała tablicowa", tok.pos);
@@ -794,8 +803,11 @@
     const t = ns.reduce((a, b) => a + b, 0);
     return Number.isFinite(t) ? t / ns.length : ERR["#NUM!"];
   });
-  FN.MIN = agg((ns) => (ns.length ? Math.min(...ns) : 0));
-  FN.MAX = agg((ns) => (ns.length ? Math.max(...ns) : 0));
+  // pętla zamiast Math.min(...ns): od ~125 tys. liczb (MAX(A:A) w długim arkuszu) Chromium rzuca RangeError
+  const minOf = (ns) => { let m = Infinity; for (const x of ns) if (x < m) m = x; return m; };
+  const maxOf = (ns) => { let m = -Infinity; for (const x of ns) if (x > m) m = x; return m; };
+  FN.MIN = agg((ns) => (ns.length ? minOf(ns) : 0));
+  FN.MAX = agg((ns) => (ns.length ? maxOf(ns) : 0));
   FN.MEDIAN = agg((ns) => {
     if (!ns.length) return ERR["#NUM!"];
     const s = ns.slice().sort((a, b) => a - b);
@@ -931,10 +943,10 @@
     const vals = pickByMask(args[0], m);
     if (isErr(vals)) return vals;
     const ns = vals.filter((v) => typeof v === "number");
-    return ns.length ? pick(...ns) : 0;
+    return ns.length ? pick(ns) : 0;
   };
-  FN.MAXIFS = ifsExtreme(Math.max);
-  FN.MINIFS = ifsExtreme(Math.min);
+  FN.MAXIFS = ifsExtreme(maxOf);
+  FN.MINIFS = ifsExtreme(minOf);
 
   FN.SUMPRODUCT = (args) => {
     const mats = args.map(toMatrix);
@@ -1060,7 +1072,18 @@
     const map = { 1: "AVERAGE", 2: "COUNT", 3: "COUNTA", 4: "MAX", 5: "MIN", 6: "PRODUCT", 7: "STDEV", 8: "STDEV.P", 9: "SUM", 10: "VAR", 11: "VAR.P" };
     const fn = map[code > 100 ? code - 100 : code];
     if (!fn) return ERR["#VALUE!"];
-    return FN[fn](args.slice(1), ctx);
+    // Jak Excel: komórki z własnym SUMY.CZĘŚCIOWE w zakresie są pomijane — inaczej suma
+    // końcowa nad grupami z sumami częściowymi liczyła wszystko podwójnie (i trafiało to do <v>).
+    const isSub = typeof ctx.formula === "function"
+      ? (sh, r, c) => /\b(?:_xlfn\.)?(?:SUBTOTAL|AGGREGATE)\s*\(/i.test(ctx.formula(sh, r, c) || "")
+      : null;
+    const parts = args.slice(1).map((a) => {
+      if (!isSub || !isRange(a)) return a;
+      const fr = new Range(a.ctx, a.sheet, a.r1, a.c1, a.r2, a.c2);
+      fr.at = (i, j) => (isSub(a.sheet, a.r1 + i, a.c1 + j) ? null : Range.prototype.at.call(fr, i, j));
+      return fr;
+    });
+    return FN[fn](parts, ctx);
   };
 
   // logiczne (leniwe)
@@ -1263,7 +1286,12 @@
     if (isErr(v)) return v;
     let fmt = text(scalar(args[1], ctx), ctx);
     // Excel PL zapisuje kody formatu po polsku (rrrr = rok, gg = godziny)
-    fmt = fmt.replace(/r/gi, (m) => (m === "R" ? "Y" : "y")).replace(/g(?=[g:]|$)/gi, "h");
+    // — ale nie w tekście w cudzysłowie, w [Red]/[$-415] ani po „\\” („0 ""hrs""” zostaje, [Red] nie robi się [Yed])
+    fmt = fmt.replace(/"[^"]*"|\[[^\]]*\]|\\.|[rg]+/gi, (m, at, all) => {
+      if (!/^[rg]/i.test(m)) return m;
+      return m.replace(/r/gi, (c) => (c === "R" ? "Y" : "y"))
+        .replace(/g+$/i, (run) => (/^(?::|$)/.test(all.slice(at + m.length, at + m.length + 1)) ? run.replace(/g/gi, "h") : run.slice(0, -1).replace(/g/gi, "h") + run.slice(-1)));
+    });
     const x = typeof v === "number" ? v : parseNumberText(String(v ?? ""));
     if (x === null) return text(v, ctx);
     if (ctx.formatNumber) {
@@ -1481,8 +1509,11 @@
     let best = -1;
     for (const i of order) {
       const v = vals[i];
-      if (mode === 0 || mode === 2) {
+      if (mode === 2) {
         if (lookupMatch([v], x, 0) === 0) { best = i; break; }
+      } else if (mode === 0) {
+        // tryb 0 = dokładnie, BEZ symboli wieloznacznych (to tryb 2) — „a*” szuka tekstu „a*”
+        if (v !== null && typeRank(v) === typeRank(x) && compare(v, x) === 0) { best = i; break; }
       } else if (v !== null && typeRank(v) === typeRank(x)) {
         const c = compare(v, x);
         if (c === 0) { best = i; break; }

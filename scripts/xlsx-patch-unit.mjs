@@ -161,3 +161,30 @@ console.log("✅ xlsx-patch-unit OK (double save, emoji, emoji w edytowanej kom�
   }
   console.log("✅ xlsx-patch-unit OK (clear keeps style)");
 }
+// Pliki spoza Excela: pusty wiersz samozamykający, prefiks x: (OpenXML SDK),
+// r= nie jako pierwszy atrybut, pusty <sheetData/>. Dawniej: komórka w złym wierszu,
+// edycje przepadały po cichu albo powstawał duplikat komórki.
+{
+  const fails5 = [];
+  const W = '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  // 1) <row r="5" .../> + edycja B5
+  let out = patchSheetXml(W + '<sheetData><row r="5" ht="20" customHeight="1"/><row r="6"><c r="A6"><v>1</v></c></row></sheetData></worksheet>',
+    { B5: { t: "n", v: 7 } });
+  if (!/<row r="5" ht="20" customHeight="1"><c r="B5"[^>]*><v>7<\/v><\/c><\/row><row r="6"><c r="A6"><v>1<\/v><\/c><\/row>/.test(out)) fails5.push("self-closing row: " + out.slice(W.length));
+  // 2) prefiks x:
+  const X = '<?xml version="1.0"?><x:worksheet xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  out = patchSheetXml(X + '<x:sheetData><x:row r="1"><x:c r="A1"><x:v>1</x:v></x:c></x:row></x:sheetData></x:worksheet>',
+    { A1: { t: "n", v: 2 }, B1: { t: "n", v: 3 } });
+  if (!/<x:c r="A1"[^>]*><x:v>2<\/x:v><\/x:c><x:c r="B1"[^>]*><x:v>3<\/x:v><\/x:c><\/x:row><\/x:sheetData>/.test(out)) fails5.push("x: prefix: " + out.slice(X.length));
+  // 3) r= po innym atrybucie
+  out = patchSheetXml(W + '<sheetData><row spans="1:1" r="1"><c s="1" r="A1"><v>1</v></c></row></sheetData></worksheet>', { A1: { t: "n", v: 9 } });
+  if ((out.match(/r="A1"/g) || []).length !== 1 || !out.includes("<v>9</v>") || !out.includes('s="1"')) fails5.push("attr order: " + out.slice(W.length));
+  // 4) pusty arkusz
+  out = patchSheetXml(W + '<sheetData/></worksheet>', { C3: { t: "n", v: 4 } });
+  if (!/<sheetData><row r="3"><c r="C3"[^>]*><v>4<\/v><\/c><\/row><\/sheetData>/.test(out)) fails5.push("empty sheetData: " + out.slice(W.length));
+  if (fails5.length) {
+    console.error("❌ xlsx-patch-unit FAIL (foreign writers):", fails5.join("; "));
+    process.exit(1);
+  }
+  console.log("✅ xlsx-patch-unit OK (self-closing row, x: prefix, attr order, empty sheetData)");
+}

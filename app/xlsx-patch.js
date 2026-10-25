@@ -258,7 +258,15 @@ function insertRowWithCell(inner, ref, cellXml) {
 
 function insertNewCell(inner, ref, cellXml) {
   const rNum = rowNum(ref);
-  const rowRe = new RegExp(`<row r="${rNum}"([^>]*)>([\\s\\S]*?)<\\/row>`);
+  // Pusty wiersz bywa samozamykający (<row r="5" ht="20" customHeight="1"/> — sama
+  // wysokość). Dawny wzorzec [^>]*>…</row> brał go za otwarcie i wstawiał komórkę
+  // do NASTĘPNEGO wiersza (B5 w <row r="6">) — Excel zgłaszał uszkodzony plik.
+  const emptyRow = inner.match(new RegExp(`<row r="${rNum}"([^>]*?)\\s*\\/>`));
+  if (emptyRow) {
+    const newRow = `<row r="${rNum}"${emptyRow[1]}>${cellXml}</row>`;
+    return inner.slice(0, emptyRow.index) + newRow + inner.slice(emptyRow.index + emptyRow[0].length);
+  }
+  const rowRe = new RegExp(`<row r="${rNum}"([^>/]*)>([\\s\\S]*?)<\\/row>`);
   const m = inner.match(rowRe);
   if (m) {
     const newRowInner = insertCellInRow(m[2], ref, cellXml);
@@ -349,12 +357,46 @@ function patchSheetDataInner(inner, cells, formulaMap, dateStyler) {
 }
 
 // Nanosi edycje na arkusz — poza <sheetData> XML jest bajt-identyczny z oryginałem.
+// Wzorce łatki zakładają zapis Excela: <sheetData> bez prefiksu, r= jako pierwszy
+// atrybut <c>/<row>. Pliki z OpenXML SDK (<x:sheetData>, <x:c>) albo z innych
+// generatorów (<c s="1" r="A1">) gubiły po cichu edycje lub dublowały komórkę —
+// sprowadzamy wnętrze do tej postaci, a prefiks wraca po łataniu.
+function sheetDataPrefix(xml) {
+  const m = xml.match(/<([\w-]+):sheetData[\s/>]/);
+  return m ? m[1] : "";
+}
+
+function normalizeSheetDataInner(inner, prefix) {
+  let out = inner;
+  if (prefix) out = out.replace(new RegExp(`<(\\/?)${prefix}:`, "g"), "<$1");
+  return out.replace(/<(c|row)\b((?:\s+(?!r=)[\w:-]+="[^"]*")+)\s+r="([^"]*)"/g, '<$1 r="$3"$2');
+}
+
+function prefixSheetDataInner(inner, prefix) {
+  if (!prefix) return inner;
+  return inner.replace(/<(\/?)([A-Za-z][\w.-]*)(?=[\s/>])/g, `<$1${prefix}:$2`);
+}
+
 function patchSheetXml(xml, cells, formulaMap, dateStyler) {
-  const parts = splitSheetData(xml);
+  const prefix = sheetDataPrefix(xml);
+  const tag = prefix ? `${prefix}:sheetData` : "sheetData";
+  // pusty arkusz: <sheetData/> — bez rozwinięcia edycje przepadały
+  const src = xml.replace(new RegExp(`<${tag}(\\s[^>]*)?\\/>`), (_, a = "") => `<${tag}${a}></${tag}>`);
+  const parts = prefix ? splitPrefixedSheetData(src, tag) : splitSheetData(src);
   if (!parts) return xml;
-  const patchedInner = patchSheetDataInner(parts.inner, cells, formulaMap, dateStyler);
-  if (patchedInner === parts.inner) return xml;
-  return parts.before + patchedInner + parts.after;
+  const inner = normalizeSheetDataInner(parts.inner, prefix);
+  const patchedInner = patchSheetDataInner(inner, cells, formulaMap, dateStyler);
+  if (patchedInner === inner) return xml;
+  return parts.before + prefixSheetDataInner(patchedInner, prefix) + parts.after;
+}
+
+function splitPrefixedSheetData(xml, tag) {
+  const open = xml.indexOf(`<${tag}`);
+  if (open < 0) return null;
+  const openEnd = xml.indexOf(">", open);
+  const close = xml.indexOf(`</${tag}>`, openEnd);
+  if (openEnd < 0 || close < 0) return null;
+  return { before: xml.slice(0, openEnd + 1), inner: xml.slice(openEnd + 1, close), after: xml.slice(close) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

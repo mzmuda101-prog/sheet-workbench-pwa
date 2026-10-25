@@ -212,11 +212,13 @@ let cellMenuReturnFocus = null;
 let suppressCellClickUntil = 0;    // po przytrzymaniu palcem: połknij klik (nie otwieraj edytora)
 
 // Wartość komórki w składni szybkiego szukania. null = nie da się jej wyrazić
-// (&&, ||, { } rozbiłyby zapytanie na części).
+// (&&, ||, { } rozbiłyby zapytanie na części; „ !” parser bierze za wykluczenie słowa,
+// a cudzysłów w środku zamknąłby frazę — „Uwaga !pilne” dawało dwa warunki).
 function buildCellFilterTerm(header, value, exclude) {
   const h = String(header ?? "").replace(/\s+/g, " ").trim();
   const v = String(value ?? "").replace(/\s+/g, " ").trim();
-  if (/&&|\|\||[{}]/.test(h) || /&&|\|\||[{}]/.test(v)) return null;
+  const bad = (x) => /&&|\|\||[{}"]|(^|\s)!/.test(x);
+  if (bad(h) || bad(v)) return null;
   return `${h}:${exclude ? "!=" : "="}"${v}"`;
 }
 
@@ -226,7 +228,8 @@ function combineWithCurrentQuery(term) {
   const prev = String(searchQueryEl.value || "").trim();
   const committed = !!(lastAppliedFilters && (lastAppliedFilters.filtering || lastAppliedFilters.marking));
   if (!prev || !committed) return { query: term, replaced: false };
-  if (prev.toLowerCase().includes(term.toLowerCase())) return { query: prev, replaced: false };
+  // cały warunek już jest (jako jedna z części &&) — samo „zawiera” brało A:="x" za obecne w Data A:="x"
+  if (prev.split("&&").some((part) => part.trim().toLowerCase() === term.toLowerCase())) return { query: prev, replaced: false };
   // Odwrócone szukanie (≠) odwróciłoby też doklejony warunek — tu nie da się połączyć.
   if (filterNegateEl.checked) return { query: term, replaced: true };
   // Poprzednie zapytanie bez operatorów było dosłownym tekstem; włączając operatory
@@ -290,8 +293,9 @@ function buildMultiCellFilterQuery(target, exclude) {
   }
   if (headers.length === 1) {
     if (exclude) {
-      const term = combos.map((values) => buildCellFilterTerm(headers[0].header, values[0], true)).join(" && ");
-      return { term, andChain: true };
+      const terms = combos.map((values) => buildCellFilterTerm(headers[0].header, values[0], true));
+      if (terms.some((x) => !x)) return { error: t("cellMenuUnsupported") };
+      return { term: terms.join(" && "), andChain: true };
     }
     const flat = parts.map((terms) => terms[0]);
     return { term: flat.length === 1 ? flat[0] : `{${flat.join(" || ")}}`, andChain: true };
@@ -323,8 +327,8 @@ function applyCellFilter(exclude) {
   // Warunki, które bieżące szukanie JUŻ zawiera, nie są doklejane drugi raz
   // (np. zaznaczenie wiersza po wcześniejszym „Pokaż tylko takie" na jednej z jego komórek).
   if (target.multi && andChain && hadQuery && !/[{}]/.test(term)) {
-    const prevLower = String(searchQueryEl.value || "").toLowerCase();
-    const fresh = term.split(" && ").filter((part) => !prevLower.includes(part.toLowerCase()));
+    const prevParts = new Set(String(searchQueryEl.value || "").split("&&").map((p) => p.trim().toLowerCase()));
+    const fresh = term.split(" && ").filter((part) => !prevParts.has(part.trim().toLowerCase()));
     if (fresh.length) term = fresh.join(" && ");
   }
   const { query, replaced } = andChain ? combineWithCurrentQuery(term) : { query: term, replaced: hadQuery };
@@ -458,8 +462,10 @@ function openCellMenu(td, point, { viaKeyboard = false } = {}) {
   const mh = cellMenuEl.offsetHeight;
   if (x + mw > vw - 8) x = Math.max(8, vw - mw - 8);
   if (y + mh > vh - 8) y = Math.max(8, (point ? point.y : rect.top) - mh - 4);
-  cellMenuEl.style.left = `${Math.round(x)}px`;
-  cellMenuEl.style.top = `${Math.round(y)}px`;
+  // rect/clientX liczą się od WIDOCZNEGO obszaru, a position:fixed (iOS) od layout viewportu —
+  // przy klawiaturze albo po pinch-zoomie menu lądowało obok komórki (jak cell-suggest w ui-controls.js)
+  cellMenuEl.style.left = `${Math.round(x + (vv ? vv.offsetLeft : 0))}px`;
+  cellMenuEl.style.top = `${Math.round(y + (vv ? vv.offsetTop : 0))}px`;
 
   if (viaKeyboard) cellMenuEl.querySelector(".cell-menu-item")?.focus();
   return true;

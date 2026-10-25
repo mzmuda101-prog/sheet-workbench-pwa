@@ -1872,6 +1872,7 @@ function buildSheetFormulaMaps() {
 }
 
 async function buildOutputBytes(ext) {
+  savedBuildEpoch = dirtyEpoch; // stan, który trafia do pliku (markSavedAfterBuild)
   if (originalFileBytes && typeof buildPatchedXlsx === "function" && typeof JSZip !== "undefined") {
     try {
       return await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps());
@@ -1910,7 +1911,7 @@ async function downloadWorkbook(name, ext, opts = {}) {
   // Nie od razu: Safari (iPhone/iPad — zapis bez File System Access) potrafi przerwać
   // pobieranie, gdy adres zniknie w tym samym zadaniu co kliknięcie (jak w Documents Workbench).
   setTimeout(() => URL.revokeObjectURL(url), 30000);
-  setDirtyState(false);
+  markSavedAfterBuild();
   toast(t(opts.toastKey || "fileSaved"), opts.toastType || "success");
   log(`Zapisano plik: ${name}`, "success");
 }
@@ -1962,7 +1963,7 @@ async function saveWorkbook() {
         return;
       }
       await writeWorkbookToHandle(currentFileHandle, ext);
-      setDirtyState(false);
+      markSavedAfterBuild();
       toast(t("fileSaved"), "success");
       log(`Zapisano plik: ${handleName}`, "success");
     } catch (err) {
@@ -2077,7 +2078,7 @@ async function saveWorkbookAs() {
       await writeWorkbookToHandle(handle, ext);
       currentFileHandle = handle;
       saveInPlaceConfirmedHandle = handle; // user świadomie wybrał tę lokalizację — kolejny Ctrl/⌘+S nie pyta ponownie
-      setDirtyState(false);
+      markSavedAfterBuild();
       toast(t("fileSaved"), "success");
       log(`Zapisano plik: ${handle.name || base}`, "success");
     } catch (err) {
@@ -2176,6 +2177,7 @@ if (removeFilter2Btn) {
 }
 
 let sheetLoadSeq = 0;
+let sheetLoadedName = null; // arkusz, którego wczytanie DOBIEGŁO końca (qsApplyOnSheet)
 loadBtn.addEventListener("click", () => {
   if (!isXlsxAvailable(true)) return;
   if (!workbook) {
@@ -2277,8 +2279,10 @@ loadBtn.addEventListener("click", () => {
       // Jedno zbiorcze powiadomienie (toast() scala je z „Plik wczytany” sprzed chwili).
       toast(t("sheetLoadedRows", { sheet: sheetName, rows: formatRowCount(baseRows.length) }), "success");
       log(`Wczytano arkusz: ${sheetName}`, "success");
+      sheetLoadedName = sheetName;
     } finally {
-      setLoading(false);
+      // wczytanie wyprzedzone przez nowsze nie gasi JEGO wskaźnika ładowania
+      if (loadSeq === sheetLoadSeq) setLoading(false);
     }
   }, 50);
 });
@@ -2581,6 +2585,7 @@ function qsFlagsFor(operatorsEl) {
   return { ...getQuickSearchFlags(), operators: !!(operatorsEl && operatorsEl.checked) };
 }
 function hideQsLive(ctx) {
+  if (ctx && ctx.liveTimer) { window.clearTimeout(ctx.liveTimer); ctx.liveTimer = 0; }
   if (ctx && ctx.liveEl) { ctx.liveEl.classList.add("hidden"); ctx.liveEl.replaceChildren(); }
 }
 function hideAllQsLive() {
@@ -2656,10 +2661,13 @@ function qsApplyOnSheet(sheetName, value) {
   if (quickSearchPopupInput) quickSearchPopupInput.value = value;
   if (sheetName && sheetName !== currentSheetName) {
     sheetSelect.value = sheetName;
+    sheetLoadedName = null;
     loadBtn.click(); // odbudowa arkusza jest asynchroniczna (setLoading + setTimeout)
-    const deadline = Date.now() + 4000;
+    // currentSheetName zmienia się PRZED zbudowaniem wierszy (duży arkusz: worker) — czekamy
+    // na koniec wczytania, inaczej szukanie szło po wierszach poprzedniego arkusza i znikało.
+    const deadline = Date.now() + 15000;
     (function waitLoaded() {
-      if (currentSheetName === sheetName || Date.now() > deadline) {
+      if (sheetLoadedName === sheetName || Date.now() > deadline) {
         if (quickSearchEl) quickSearchEl.value = value;
         if (quickSearchPopupInput) quickSearchPopupInput.value = value;
         applyQuickSearch();
@@ -2802,6 +2810,7 @@ function wireQuickSearchScope(ctx) {
     ctx.inputEl.addEventListener("input", () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => renderQsLive(ctx), 180);
+      ctx.liveTimer = timer; // hideQsLive kasuje — Enter tuż po pisaniu nie otwiera listy ponownie
     });
     ctx.inputEl.addEventListener("focus", () => {
       const len = (ctx.inputEl.value || "").trim().length;

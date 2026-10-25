@@ -62,6 +62,12 @@ function fcContext(sheetName, r, c) {
         const ws = workbook.Sheets[sh];
         return ws ? fcCellValue(ws[XLSX.utils.encode_cell({ r: rr, c: cc })]) : null;
       },
+      // tekst formuły komórki (SUMY.CZĘŚCIOWE pomija komórki z własnym SUBTOTAL)
+      formula: (sh, rr, cc) => {
+        const ws = workbook.Sheets[sh];
+        const cell = ws && ws[XLSX.utils.encode_cell({ r: rr, c: cc })];
+        return cell && cell.f ? String(cell.f) : "";
+      },
       bounds: (sh) => {
         const ws = workbook.Sheets[sh];
         const ref = ws && ws["!ref"];

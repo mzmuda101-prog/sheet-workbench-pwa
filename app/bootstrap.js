@@ -610,6 +610,9 @@ if (skipToTableBtn) {
 }
 
 document.addEventListener("keydown", (e) => {
+  // Raport zakrywa tabelę (inert), ale fokus może spaść na <body> — wtedy litera,
+  // strzałki czy Ctrl+V trafiały w niewidoczną komórkę pod nakładką.
+  if (typeof rpIsOpen !== "undefined" && rpIsOpen) return;
   const meta = e.ctrlKey || e.metaKey;
   const popupOpen = typeof isQuickSearchPopupOpen === "function"
     ? isQuickSearchPopupOpen()
@@ -726,7 +729,10 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   // Enter lub znak drukowalny na zaznaczonej komórce otwiera edytor (jak w Excelu).
-  if (!meta && !e.altKey && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
+  // Polskie litery idą z AltGr (Windows: Ctrl+Alt) albo z Option (Mac: Alt) — to pisanie, nie skrót.
+  const altLetter = e.key.length === 1 && !e.metaKey
+    && (e.getModifierState?.("AltGraph") || (e.altKey && !e.ctrlKey) || (e.altKey && e.ctrlKey && /\p{L}/u.test(e.key)));
+  if (((!meta && !e.altKey) || altLetter) && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
     if (e.key === "Enter") {
       const td = findCellElement(focusedCellState);
       if (td) {

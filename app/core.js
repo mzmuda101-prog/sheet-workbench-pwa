@@ -1,5 +1,26 @@
 // Core runtime: DOM refs, shared state, and base UI helpers.
 
+// Pamięć przeglądarki zablokowana (Safari „Blokuj wszystkie pliki cookie”, część trybów
+// prywatnych): samo sięgnięcie po localStorage rzuca SecurityError, a odczyt ustawień
+// (język, motyw…) na starcie modułów wywracał cały interfejs. Wtedy podstawiamy pamięć
+// tylko na czas sesji (ustawienia nie przetrwają zamknięcia, ale aplikacja działa).
+(() => {
+  let ok = false;
+  try { window.localStorage.getItem("__wb_probe__"); ok = true; } catch (_) {}
+  if (!ok) {
+    const mem = new Map();
+    const shim = {
+      getItem: (k) => (mem.has(String(k)) ? mem.get(String(k)) : null),
+      setItem: (k, v) => { mem.set(String(k), String(v)); },
+      removeItem: (k) => { mem.delete(String(k)); },
+      clear: () => mem.clear(),
+      key: (i) => Array.from(mem.keys())[i] ?? null,
+      get length() { return mem.size; },
+    };
+    try { Object.defineProperty(window, "localStorage", { value: shim, configurable: true }); } catch (_) {}
+  }
+})();
+
 // Heurystyka „słabszego urządzenia" — używana do optymalizacji, które wolno
 // odpalać TYLKO tam, gdzie się opłacają (np. tańszy render zamrożonej kolumny
 // na dotykowych tabletach). Na mocnych urządzeniach nic się nie zmienia.
@@ -672,7 +693,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261024-02";
+const APP_BUILD_VERSION = "20261025-01";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -942,11 +963,27 @@ function setStatus(msg) {
   });
 }
 
+// Min/maks tablicy pętlą: Math.min(...arr) w Chromium rzuca RangeError od ~125 tys.
+// elementów (kolumna długiego arkusza), w Safari zależy od stosu.
+function arrMin(a) { let m = Infinity; for (let i = 0; i < a.length; i++) if (a[i] < m) m = a[i]; return m; }
+function arrMax(a) { let m = -Infinity; for (let i = 0; i < a.length; i++) if (a[i] > m) m = a[i]; return m; }
+
+// Licznik edycji: zapis trwa (budowa ZIP + zapis na dysk), a w tym czasie da się
+// dalej edytować. Bez niego „Zapisano” gasiło też zmiany wpisane PO zbudowaniu pliku
+// (brak ostrzeżenia przy zamknięciu, a drafts.js kasował szkic z tymi zmianami).
+let dirtyEpoch = 0;
+let savedBuildEpoch = 0;
 function setDirtyState(isDirty) {
+  if (isDirty) dirtyEpoch++;
   hasUnsavedChanges = !!isDirty;
   statusEl.classList.toggle("unsaved", hasUnsavedChanges);
   document.title = hasUnsavedChanges ? `* ${BASE_TITLE}` : BASE_TITLE;
   if (typeof appFrame !== "undefined") appFrame.syncSave(); // „Zapisz” w nagłówku + liczba zmian
+}
+
+// Po udanym zapisie: czysto tylko, jeśli od zbudowania pliku nic się nie zmieniło.
+function markSavedAfterBuild() {
+  setDirtyState(dirtyEpoch !== savedBuildEpoch);
 }
 
 function updateExcelLayoutButtonLabel() {

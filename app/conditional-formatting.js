@@ -14,6 +14,7 @@
 function cfDateToSerial(d) {
   return Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 86400000);
 }
+function cfUtcToSerial(ms) { return Math.round((ms - Date.UTC(1899, 11, 30)) / 86400000); }
 function cfToday() { return cfDateToSerial(new Date()); }
 function cfSerialToDate(s) { return new Date(Date.UTC(1899, 11, 30) + s * 86400000); }
 
@@ -233,20 +234,22 @@ function cfFunc(name, args) {
     case "UPPER": return s(0).toUpperCase();
     case "LOWER": return s(0).toLowerCase();
     case "TRIM": return s(0).trim().replace(/\s+/g, " ");
-    case "PROPER": return s(0).replace(/\b\w/g, (m) => m.toUpperCase());
+    // \b\w to tylko ASCII: „łódź” dawało „łóDź” — litera po nie-literze wielka, reszta mała (jak Excel)
+    case "PROPER": return s(0).toLowerCase().replace(/(^|[^\p{L}])(\p{L})/gu, (_, a, b) => a + b.toUpperCase());
     case "EXACT": return s(0) === s(1);
     case "CONCATENATE": case "CONCAT": return cfFlat(args).map(cfStr).join("");
     case "SEARCH": { const p = s(0).toLowerCase(), w = s(1).toLowerCase(); const st = args[2] === undefined ? 0 : n(2) - 1; const i = w.indexOf(p, st); return i < 0 ? CF_ERR : i + 1; }
     case "FIND": { const p = s(0), w = s(1); const st = args[2] === undefined ? 0 : n(2) - 1; const i = w.indexOf(p, st); return i < 0 ? CF_ERR : i + 1; }
     case "ABS": return Math.abs(n(0));
     case "INT": return Math.floor(n(0));
-    case "ROUND": { const f = Math.pow(10, n(1) || 0); return Math.round(n(0) * f) / f; }
+    // połówki od zera jak Excel (Math.round: −2,5 → −2); EPSILON łata 1,005 → 1,01
+    case "ROUND": { const f = Math.pow(10, n(1) || 0), x = n(0); return Math.sign(x) * Math.round(Math.abs(x) * f * (1 + Number.EPSILON)) / f; }
     case "ROUNDDOWN": { const f = Math.pow(10, n(1) || 0); return Math.trunc(n(0) * f) / f; }
     case "MOD": { const y = n(1); return y === 0 ? CF_ERR : ((n(0) % y) + y) % y; }
     case "SQRT": return Math.sqrt(n(0));
     case "POWER": return Math.pow(n(0), n(1));
-    case "MIN": { const v = cfFlat(args).map(cfNum).filter((x) => !isNaN(x)); return v.length ? Math.min(...v) : 0; }
-    case "MAX": { const v = cfFlat(args).map(cfNum).filter((x) => !isNaN(x)); return v.length ? Math.max(...v) : 0; }
+    case "MIN": { const v = cfFlat(args).map(cfNum).filter((x) => !isNaN(x)); return v.length ? arrMin(v) : 0; }
+    case "MAX": { const v = cfFlat(args).map(cfNum).filter((x) => !isNaN(x)); return v.length ? arrMax(v) : 0; }
     case "SUM": return cfFlat(args).reduce((acc, x) => acc + (isNaN(cfNum(x)) ? 0 : cfNum(x)), 0);
     case "COUNT": return cfFlat(args).filter((x) => typeof x === "number").length;
     case "COUNTA": return cfFlat(args).filter((x) => x !== null && x !== "").length;
@@ -255,9 +258,23 @@ function cfFunc(name, args) {
     case "YEAR": return cfSerialToDate(n(0)).getUTCFullYear();
     case "MONTH": return cfSerialToDate(n(0)).getUTCMonth() + 1;
     case "DAY": return cfSerialToDate(n(0)).getUTCDate();
-    case "WEEKDAY": { const wd = cfSerialToDate(n(0)).getUTCDay(); return wd === 0 ? 7 : wd; }
-    case "DATE": return cfDateToSerial(new Date(Date.UTC(n(0), n(1) - 1, n(2))));
-    case "EDATE": { const d = cfSerialToDate(n(0)); return cfDateToSerial(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n(1), d.getUTCDate()))); }
+    // jak Excel: typ 1 (domyślny) niedziela=1…sobota=7, typ 2 poniedziałek=1…7, typ 3 poniedziałek=0…6
+    // (dawniej zawsze poniedziałek=1 — reguła „=DZIEŃ.TYG(A1)=1” barwiła poniedziałki zamiast niedziel)
+    case "WEEKDAY": {
+      const wd = cfSerialToDate(n(0)).getUTCDay();
+      const type = args[1] === undefined ? 1 : n(1);
+      if (type === 2) return wd === 0 ? 7 : wd;
+      if (type === 3) return (wd + 6) % 7;
+      return wd + 1;
+    }
+    // daty z Date.UTC liczone też w UTC (cfDateToSerial czyta czas lokalny — w strefach UTC− dzień wstecz)
+    case "DATE": return cfUtcToSerial(Date.UTC(n(0), n(1) - 1, n(2)));
+    case "EDATE": {
+      const d = cfSerialToDate(n(0));
+      const y = d.getUTCFullYear(), m = d.getUTCMonth() + n(1);
+      const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); // 31.01 + 1 mies. = 28/29.02, nie 2/3.03
+      return cfUtcToSerial(Date.UTC(y, m, Math.min(d.getUTCDate(), last)));
+    }
     case "DATEDIF": {
       const a = n(0), b = n(1);
       if (isNaN(a) || isNaN(b) || b < a) return CF_ERR;
@@ -695,6 +712,11 @@ function cfClearFormulaAstCache() {
 function cfRecomputeCellFormula(sheet, formulaText, thisRow) {
   if (!sheet || !formulaText) return null;
   const row = thisRow || 0;
+  // Zwykłe adresy (B5) w tekście formuły są już bezwzględne dla tej komórki — ta sama treść
+  // w innym wierszu znaczy TEN SAM adres, więc bez przesuwania (dawniej =DZIŚ()-B5 w wierszu 9
+  // czytało B9). Przesuwamy tylko formuły z odwołaniami strukturalnymi [@Kol], rozwiązanymi
+  // dla wiersza, w którym je sparsowano.
+  const structured = formulaText.includes("[");
   let entry = _cfFormulaAstCache.get(formulaText);
   if (entry === undefined) {
     const resolved = resolveStructuredRefs(formulaText, row);
@@ -707,7 +729,7 @@ function cfRecomputeCellFormula(sheet, formulaText, thisRow) {
   }
   if (!entry) return null;
   let v;
-  try { v = cfEval(entry.ast, { sheet, dr: row - entry.baseRow, dc: 0 }); } catch { return null; }
+  try { v = cfEval(entry.ast, { sheet, dr: structured ? row - entry.baseRow : 0, dc: 0 }); } catch { return null; }
   if (cfIsErr(v) || v === undefined) return null;
   if (typeof v === "number" && !isFinite(v)) return null;
   return v;

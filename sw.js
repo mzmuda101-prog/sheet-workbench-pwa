@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20261024-02";
+const CACHE_VERSION = "20261025-01";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -21,6 +21,8 @@ const SHELL_ASSETS = [
   `./app/language.js?v=${ASSET_V}`,
   `./app/similar-names.js?v=${ASSET_V}`,
   `./app/analysis.js?v=${ASSET_V}`,
+  `./app/analysis-heavy.js?v=${ASSET_V}`, // leniwy (analysis.js) — offline od pierwszego startu
+  `./app/cursor-hint.js?v=${ASSET_V}`, // leniwy (core.js)
   `./app/smart-filters.js?v=${ASSET_V}`,
   `./app/filter-bar.js?v=${ASSET_V}`,
   `./app/qs-history.js?v=${ASSET_V}`,
@@ -105,7 +107,11 @@ function cacheNameForUrl(url) {
 // pierwszym użyciu, bo handler fetch zapisuje je do HEAVY_CACHE.
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(APP_CACHE).then((cache) => cache.addAll(SHELL_ASSETS)).catch(() => {})
+    // Bez .catch: addAll jest „wszystko albo nic” — połknięty błąd (chwila bez sieci)
+    // instalował wersję z PUSTĄ powłoką, a activate kasował poprzedni cache, więc
+    // offline aplikacja już nie wstawała. Nieudana instalacja zostawia starą wersję
+    // i przeglądarka spróbuje ponownie przy następnym wejściu.
+    caches.open(APP_CACHE).then((cache) => cache.addAll(SHELL_ASSETS))
   );
 });
 

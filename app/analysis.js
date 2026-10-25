@@ -1109,13 +1109,13 @@ function computeAggregateMetric(values, aggregation) {
   }
   const nums = values.filter((value) => Number.isFinite(value));
   if (!nums.length) return null;
-  if (aggregation === "earliest") return Math.min(...nums);
-  if (aggregation === "latest") return Math.max(...nums);
+  if (aggregation === "earliest") return arrMin(nums);
+  if (aggregation === "latest") return arrMax(nums);
   if (aggregation === "sum") return nums.reduce((sum, value) => sum + value, 0);
   if (aggregation === "avg") return nums.reduce((sum, value) => sum + value, 0) / nums.length;
   if (aggregation === "median") return computeMedian(nums);
-  if (aggregation === "min") return Math.min(...nums);
-  if (aggregation === "max") return Math.max(...nums);
+  if (aggregation === "min") return arrMin(nums);
+  if (aggregation === "max") return arrMax(nums);
   return null;
 }
 
@@ -1604,8 +1604,8 @@ function detectSuffixedCycleBlocks(headers, tableStartCol, mergedLabels) {
       const valueIndexes = repeatedBases.map((base) => entries.get(base)?.index ?? -1);
       const presentIndexes = valueIndexes.filter((idx) => idx >= 0);
       if (presentIndexes.length < minPresent) return null;
-      const startIndex = Math.min(...presentIndexes);
-      const endIndex = Math.max(...presentIndexes);
+      const startIndex = arrMin(presentIndexes);
+      const endIndex = arrMax(presentIndexes);
       return {
         label: mergedLabels.get(startIndex) || `Cykl ${order}`,
         order,
@@ -2746,7 +2746,7 @@ function renderMonthlySummary() {
       if (d instanceof Date && !isNaN(d)) ms.push(d.getTime());
     });
     if (ms.length < 2) return null;
-    return (Math.max(...ms) - Math.min(...ms)) / DAY_MS;
+    return (arrMax(ms) - arrMin(ms)) / DAY_MS;
   };
   // Parowanie pozycyjne: cykl k (k-ta wybrana data) ↔ k-ta wybrana miara. Jedna miara → dla
   // wszystkich cykli; za mało miar → ostatnia powtórzona; brak miary/licznik → null.
@@ -2807,7 +2807,7 @@ function renderMonthlySummary() {
   // Skalowanie długości słupka. Zero-based dla liczników/sum/liczb; range-based dla dat
   // (śr./min/maks daty to „poziom", nie ilość — słupek od najwcześniejszej do najpóźniejszej).
   const presentVals = rowsData.filter((r) => r.has).map((r) => r.val);
-  const minVal = presentVals.length ? Math.min(...presentVals) : 0;
+  const minVal = presentVals.length ? arrMin(presentVals) : 0;
   const maxVal = Math.max(1, ...presentVals.map((v) => Math.abs(v)));
   const scaleOverall = (val, has) => {
     if (!has) return 0;

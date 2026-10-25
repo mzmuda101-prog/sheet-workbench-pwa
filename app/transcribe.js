@@ -419,7 +419,17 @@ function trNormValue(v) {
   // Liczba zapisana tekstem („1 234,50", „1,234.50") — do jednej postaci, żeby zmiana
   // formatu kolumny w Excelu nie wyglądała jak zmiana treści.
   if (/^-?[\d\s.,]+$/.test(s) && /\d/.test(s)) {
-    const cleaned = s.replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
+    let cleaned = s.replace(/\s/g, "");
+    const lastDot = cleaned.lastIndexOf("."), lastComma = cleaned.lastIndexOf(",");
+    if (lastDot >= 0 && lastComma >= 0) {
+      // oba znaki: dziesiętny jest OSTATNI („1.234,50” i „1,234.50” → 1234.5)
+      cleaned = lastComma > lastDot ? cleaned.replace(/\./g, "").replace(",", ".") : cleaned.replace(/,/g, "");
+    } else if (lastComma >= 0) {
+      cleaned = /^-?[1-9]\d{0,2}(,\d{3}){2,}$/.test(cleaned) ? cleaned.replace(/,/g, "") : cleaned.replace(",", ".");
+    } else if (/^-?[1-9]\d{0,2}(\.\d{3})+$/.test(cleaned)) {
+      // same kropki co trzy cyfry = separator tysięcy („1.234.567”); „0.125” i „1.5” to ułamki
+      cleaned = cleaned.replace(/\./g, "");
+    }
     const n = Number(cleaned);
     if (Number.isFinite(n)) return String(Math.round(n * 1e6) / 1e6);
   }
