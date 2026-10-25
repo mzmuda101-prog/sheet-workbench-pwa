@@ -398,6 +398,7 @@ const swbNoteModal = (() => {
   let refs = null;
   let target = null; // { r, col, ref }
   let returnFocus = null;
+  let viewOnly = false; // „Pokaż notatkę” z menu — samo czytanie, przejście do edycji przyciskiem
 
   function build() {
     el = document.createElement("div");
@@ -433,6 +434,7 @@ const swbNoteModal = (() => {
           <button class="btn ghost danger note-modal-delete" type="button" data-act="delete"></button>
           <span class="note-modal-spacer"></span>
           <button class="btn ghost note-modal-cancel" type="button" data-act="cancel"></button>
+          <button class="btn note-modal-edit" type="button" data-act="edit"></button>
           <button class="btn note-modal-save" type="button" data-act="save"></button>
         </div>
       </div>`;
@@ -451,6 +453,7 @@ const swbNoteModal = (() => {
       del: el.querySelector(".note-modal-delete"),
       cancel: el.querySelector(".note-modal-cancel"),
       save: el.querySelector(".note-modal-save"),
+      edit: el.querySelector(".note-modal-edit"),
       nav: el.querySelector(".note-modal-nav"),
       pos: el.querySelector(".note-modal-pos"),
       prev: el.querySelector('[data-act="prev"]'),
@@ -462,6 +465,7 @@ const swbNoteModal = (() => {
       if (act === "cancel") close();
       else if (act === "save") save();
       else if (act === "delete") remove();
+      else if (act === "edit") toEdit();
       else if (act === "prev" || act === "next") go(act === "next" ? 1 : -1);
     });
     // Klawisze okna łapiemy na dokumencie (faza przechwytywania): Esc wciśnięty tuż po
@@ -492,13 +496,15 @@ const swbNoteModal = (() => {
     }
   }
 
-  function open(r, col, { focusBack = null } = {}) {
+  function open(r, col, { focusBack = null, view = false } = {}) {
     if (!workbook || !currentSheetName) return false;
     if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) return false;
     if (!el) build();
     const ref = XLSX.utils.encode_cell({ r, c: currentStartCol + col });
     const note = swbNoteOf(currentSheetName, ref);
-    const readOnly = !!(note && note.threaded) || (typeof swbIsEditMode === "function" && !swbIsEditMode());
+    const locked = !!(note && note.threaded) || (typeof swbIsEditMode === "function" && !swbIsEditMode());
+    viewOnly = !!view && !!note;
+    const readOnly = locked || viewOnly;
     // Podgląd bez notatki: nie ma czego pokazać — bramka edycji mówi, jak to zmienić.
     if (!note && readOnly) { if (typeof swbEditGuard === "function") swbEditGuard(); return false; }
     target = { r, col, ref };
@@ -509,7 +515,7 @@ const swbNoteModal = (() => {
     refs.text.value = note ? note.text : "";
     refs.text.readOnly = readOnly;
     refs.text.placeholder = t("notePlaceholder");
-    refs.info.hidden = !readOnly;
+    refs.info.hidden = !locked;
     refs.info.textContent = note && note.threaded ? t("noteThreadInfo") : t("noteViewModeInfo");
     // autor: przy nowej notatce do wpisania (zapamiętany), przy istniejącej tylko pokazany
     refs.authorWrap.hidden = readOnly && !note?.author;
@@ -524,6 +530,9 @@ const swbNoteModal = (() => {
     refs.cancel.textContent = t(readOnly ? "noteClose" : "noteCancel");
     refs.save.textContent = t("noteSave");
     refs.save.hidden = readOnly;
+    // samo czytanie, ale notatkę da się zmienić — „Edytuj” w tym samym oknie
+    refs.edit.textContent = t("noteEdit");
+    refs.edit.hidden = !(viewOnly && !locked);
     // „Poprzednia / Następna notatka” jak w Excelu — po notatkach widocznych w tabeli
     const list = swbNotesInView();
     const at = list.findIndex((x) => x.r === r && x.col === col);
@@ -543,7 +552,7 @@ const swbNoteModal = (() => {
     // Dotyk + istniejąca notatka: najpierw do przeczytania — klawiatura wysunięta od razu
     // zasłoniłaby pół okna. Pisanie zaczyna się od tapnięcia w pole.
     const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-    if (coarse && note) {
+    if ((coarse || viewOnly) && note) {
       refs.content.focus({ preventScroll: true });
     } else {
       refs.text.focus({ preventScroll: true });
@@ -594,7 +603,16 @@ const swbNoteModal = (() => {
     const next = swbNoteNeighbor({ r, col }, dir);
     if (!next) return;
     const td = swbFocusNoteCell(next);
-    open(next.r, next.col, { focusBack: td || returnFocus });
+    open(next.r, next.col, { focusBack: td || returnFocus, view: viewOnly });
+  }
+
+  function toEdit() {
+    if (!target) return;
+    const { r, col } = target;
+    open(r, col, { focusBack: returnFocus });
+    refs.text.focus({ preventScroll: true }); // świadomy wybór „Edytuj” — od razu do pisania, też na dotyku
+    const end = refs.text.value.length;
+    try { refs.text.setSelectionRange(end, end); } catch { /* bez zaznaczenia */ }
   }
 
   function remove() {
@@ -617,7 +635,10 @@ function swbNoteMenuItems(target) {
   const run = () => { closeCellMenu({ restoreFocus: false }); swbNoteModal.open(r, col, { focusBack: target.td }); };
   if (!note) return [{ id: "note", label: t("cellMenuNoteAdd"), run }];
   if (note.threaded) return [{ id: "note", label: t("cellMenuNoteThread"), run }];
+  // „Pokaż” = przeczytać w spokoju (dymek po tapnięciu znika sam po kilku sekundach)
+  const view = () => { closeCellMenu({ restoreFocus: false }); swbNoteModal.open(r, col, { focusBack: target.td, view: true }); };
   return [
+    { id: "note-view", label: t("cellMenuNoteView"), run: view },
     { id: "note", label: t("cellMenuNoteEdit"), run },
     {
       id: "note-del",

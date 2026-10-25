@@ -144,6 +144,40 @@ async function run() {
   await sleep(150);
   ok("5. Esc zamyka okno bez zmian", !(await modalOpen()) && (await noteAt("A4")) === "Po edycji", null);
 
+  // 5b. „Pokaż notatkę” (prośba Mateusza 2026-10-25): samo czytanie, „Edytuj” w tym samym oknie;
+  //     dymek po tapnięciu z prawie pełnym tłem (przez 62% prześwitywał tekst komórki pod spodem)
+  await menuItem(6, 10, "note-view");
+  await page.waitForSelector("#noteModal:not(.hidden)", { timeout: 3000 });
+  const view5 = await page.evaluate(() => {
+    const m = document.getElementById("noteModal");
+    const vis = (sel) => { const x = m.querySelector(sel); return !!x && !x.hidden && x.offsetParent !== null; };
+    return { text: m.querySelector(".note-modal-text").value, ro: m.querySelector(".note-modal-text").readOnly, save: vis(".note-modal-save"), edit: vis(".note-modal-edit"), del: vis(".note-modal-delete"), info: vis(".note-modal-info") };
+  });
+  ok("5b. „Pokaż notatkę”: treść tylko do odczytu, Edytuj zamiast Zapisz/Usuń", /Notatka testowa/.test(view5.text) && view5.ro && !view5.save && !view5.del && view5.edit && !view5.info, view5);
+  await page.keyboard.press("Escape");
+  await sleep(150);
+  ok("5b. Esc zamyka podgląd, notatka bez zmian", !(await modalOpen()) && /Notatka testowa/.test((await noteAt("K7")) || ""), null);
+  await menuItem(6, 10, "note-view");
+  await page.waitForSelector("#noteModal:not(.hidden)", { timeout: 3000 });
+  await page.click("#noteModal .note-modal-edit");
+  await sleep(150);
+  const edit5 = await page.evaluate(() => {
+    const m = document.getElementById("noteModal");
+    return { ro: m.querySelector(".note-modal-text").readOnly, save: !m.querySelector(".note-modal-save").hidden, edit: !m.querySelector(".note-modal-edit").hidden, focus: document.activeElement === m.querySelector(".note-modal-text") };
+  });
+  ok("5b. „Edytuj” przełącza okno w edycję z kursorem w treści", !edit5.ro && edit5.save && !edit5.edit && edit5.focus, edit5);
+  await page.keyboard.press("Escape");
+  await sleep(150);
+  const tipBg = await page.evaluate(() => {
+    const el = document.getElementById("cellTooltip");
+    el.classList.remove("hidden");
+    const c = getComputedStyle(el).backgroundColor;
+    el.classList.add("hidden");
+    const m = c.match(/[\d.]+/g) || [];
+    return { c, a: m.length >= 4 ? Number(m[3]) : 1 };
+  });
+  ok("5b. dymek notatki prawie nieprzezroczysty (≥ 0,9)", tipBg.a >= 0.9, tipBg);
+
   // 6. usunięcie notatki z pliku przez menu
   await menuItem(6, 10, "note-del");
   await sleep(200);

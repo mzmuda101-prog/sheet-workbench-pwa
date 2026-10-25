@@ -4863,7 +4863,9 @@ tbody tr.row-focused td.cell-filter-match:not(.cell-selected) {
   padding: 8px 10px;
   border-radius: var(--r-sm);
   border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
-  background: color-mix(in srgb, var(--panel) 78%, transparent);
+  /* prawie pełne tło: przy 78% panelu (a na dotyku sam --panel, 62% bez rozmycia)
+     tekst komórki spod spodu przebijał przez notatkę (uwaga Mateusza 2026-10-25) */
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   color: var(--ink);
@@ -6537,11 +6539,11 @@ body.tr-active .toast-container {
   html:not(.force-glass) .sheet-picker-fab,
   html:not(.force-glass) .scroll-top-fab,
   html:not(.force-glass) .clear-selection-fab,
-  html:not(.force-glass) .cell-tooltip,
   html:not(.force-glass) .quick-search-popup-box,
   html:not(.force-glass) .loading-box {
     background: var(--panel);
   }
+  html:not(.force-glass) .cell-tooltip { background: var(--surface); }
 }
 
 /* ===================================================
@@ -8236,6 +8238,23 @@ button.fx-label:hover, button.fx-label:focus-visible { background: var(--accent-
   }
   .quick-search { padding-block: 3px; }
   .table-toolbar > .quick-search { flex: 1 1 340px; }
+}
+
+/* ── pisanie w szukaniu: sąsiedzi z rzędu pola się zsuwają (ui-controls.js wireQsFocusWide) ──
+   max-width startuje z inline px (JS); ujemny margines zjada odstęp gap, żeby pole doszło do krawędzi */
+.table-toolbar > .qs-yield,
+.table-toolbar > .qs-yield-back {
+  transition: max-width .24s ease, padding .24s ease, margin .24s ease, border-width .24s ease, opacity .16s ease;
+}
+.table-toolbar > .qs-yield {
+  max-width: 0 !important; min-width: 0 !important;
+  padding-inline: 0 !important; border-left-width: 0 !important; border-right-width: 0 !important;
+  margin-inline-start: -8px !important; margin-inline-end: 0 !important; overflow: hidden; opacity: 0; visibility: hidden; pointer-events: none;
+  transition: max-width .24s ease, padding .24s ease, margin .24s ease, border-width .24s ease, opacity .12s ease, visibility 0s linear .24s;
+}
+.table-toolbar > .qs-yield-back { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) {
+  .table-toolbar > .qs-yield, .table-toolbar > .qs-yield-back { transition: none; }
 }
 
 /* ── rząd 2: „Narzędzia główne” + „Ostatnie” w wolnym miejscu ── */

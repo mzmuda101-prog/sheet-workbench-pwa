@@ -51,6 +51,23 @@ async function open(browser, viewport, extra = {}) {
   return { context, page, errors };
 }
 
+// Szukanie przy pisaniu bierze cały rząd (2026-10-25): stan paska.
+async function qsWideState(page) {
+  return page.evaluate(() => {
+    const bar = document.querySelector(".table-toolbar");
+    const q = document.getElementById("quickSearchWrap").getBoundingClientRect();
+    const b = bar.getBoundingClientRect();
+    const mates = Array.from(bar.children).filter((el) => el.classList.contains("qs-yield"));
+    return {
+      wide: bar.classList.contains("qs-wide"),
+      yielded: mates.map((el) => el.id || el.className).join(","),
+      visibleYielded: mates.filter((el) => el.getBoundingClientRect().width > 1).length,
+      gapRight: Math.round(b.right - q.right),
+      leftovers: Array.from(bar.children).filter((el) => el.style.maxWidth).length,
+    };
+  });
+}
+
 async function run() {
   const browser = await playwright[ENGINE].launch({ headless: true });
   const results = [];
@@ -73,6 +90,31 @@ async function run() {
   check("1. nagłówek: bieżący arkusz", s1.sheet === s1.current, JSON.stringify(s1));
   check("1. szukanie widoczne bez przełącznika", s1.qsVisible && !s1.readingToggle, JSON.stringify(s1));
   check("1. Zapisz widoczny, szary", s1.save && !s1.saveDirty, JSON.stringify(s1));
+
+  // Q. pisanie w szukaniu: pole bierze cały rząd, przyciski z rzędu się zsuwają; klik w tabelę oddaje
+  {
+    const before = await qsWideState(page);
+    await page.click("#quickSearch");
+    await sleep(400);
+    const on = await qsWideState(page);
+    check("Q1. desktop: fokus w szukaniu → pole na cały rząd", !before.wide && on.wide && /toolbarMain/.test(on.yielded) && on.visibleYielded === 0 && on.gapRight <= 24, JSON.stringify({ before, on }));
+    await page.click(".qs-flag[data-qs-flag='equals']");
+    await page.click(".qs-flag[data-qs-flag='equals']");
+    await sleep(150);
+    check("Q2. desktop: klik w ikonkę W polu nie zwija", (await qsWideState(page)).wide, "");
+    await page.click("#dataTable tbody tr[data-row-key] td[data-col-index='1']");
+    await sleep(450);
+    const off = await qsWideState(page);
+    const tbm = await page.evaluate(() => Math.round(document.getElementById("toolbarMain").getBoundingClientRect().width));
+    check("Q3. desktop: klik w tabelę → pasek wraca (bez resztek max-width)", !off.wide && !off.yielded && off.leftovers === 0 && tbm > 100, JSON.stringify({ off, tbm }));
+    await page.click("#quickSearch");
+    await sleep(300);
+    await page.keyboard.press("Tab");
+    await sleep(100);
+    for (let i = 0; i < 12 && (await page.evaluate(() => document.getElementById("quickSearchWrap").contains(document.activeElement))); i++) { await page.keyboard.press("Tab"); await sleep(60); }
+    await sleep(400);
+    check("Q4. desktop: Tab poza pole → pasek wraca", !(await qsWideState(page)).wide, "");
+  }
 
   for (const vp of [{ width: 1280, height: 900 }, { width: 1100, height: 850 }, { width: 900, height: 800 }]) {
     await page.setViewportSize(vp);
@@ -487,6 +529,19 @@ async function run() {
   check("9. telefon: nic nie wystaje w bok", phone.docW <= phone.vw, JSON.stringify(phone));
   check("9. telefon: nazwa pliku ma miejsce w nagłówku", phone.leftW >= 80 && !!phone.title, JSON.stringify(phone));
   check("9. telefon: rząd przycisków wygasa tylko tam, gdzie jest co przewinąć", phone.overflowing ? (phone.fadeR && !phone.fadeL) : (!phone.fadeR && !phone.fadeL), JSON.stringify(phone));
+  {
+    await page.tap("#quickSearch");
+    await sleep(400);
+    const on = await qsWideState(page);
+    check("Q5. telefon: tapnięcie w szukanie → Aa/🔧/▾ się zsuwają, pole do krawędzi", on.wide && /panelToggle/.test(on.yielded) && /toolbarToggle/.test(on.yielded) && on.visibleYielded === 0 && on.gapRight <= 12, JSON.stringify(on));
+    await page.tap("#quickSearchBtn");
+    await sleep(200);
+    check("Q6. telefon: lupa w polu nie zwija (iOS nie daje fokusu przyciskom)", (await qsWideState(page)).wide, "");
+    await page.tap("#dataTable tbody tr[data-row-key] td[data-col-index='1']");
+    await sleep(450);
+    const off = await qsWideState(page);
+    check("Q7. telefon: tapnięcie w tabelę → pasek wraca", !off.wide && off.leftovers === 0, JSON.stringify(off));
+  }
   check("brak błędów strony (telefon)", errors.length === 0, errors.join(" | "));
   await context.close();
 

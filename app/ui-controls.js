@@ -3271,6 +3271,65 @@ if (quickSearchColumnsBtn) {
   syncBadge();
 })();
 
+// Pisanie w szukaniu → pole bierze cały swój rząd (pomysł Mateusza 2026-10-25, podpatrzony
+// w innym programie): sąsiednie przyciski z TEGO rzędu (Aa, 🔧, ▾ na telefonie; tryb, powiększenie,
+// Widok/Więcej szerzej) i tak nie są wtedy potrzebne, a dłuższe zapytanie i podgląd wyników
+// dostają miejsce. Wraca po dotknięciu/kliknięciu poza polem albo po Tab dalej.
+// Sygnałem NIE może być sam blur pola: iOS nie daje fokusu przyciskom, więc tapnięcie w ≠ / lupę
+// / ⚙ w polu wyglądałoby jak wyjście — dlatego liczy się, GDZIE padło dotknięcie.
+(function wireQsFocusWide() {
+  const toolbar = quickSearchWrap && quickSearchWrap.parentElement;
+  if (!toolbar || !quickSearchEl || !toolbar.classList.contains("table-toolbar")) return;
+  const reduce = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : { matches: false };
+  const MS = 240;
+  let lastInsideDown = 0;
+  // tylko to, co stoi w jednym rzędzie z polem — przy innym zawijaniu (⚙ otwarte, wąski tablet)
+  // przyciski z drugiego rzędu zostają na miejscu
+  const rowmates = () => {
+    const q = quickSearchWrap.getBoundingClientRect();
+    return Array.from(toolbar.children).filter((el) => {
+      if (el === quickSearchWrap || el.hidden) return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.top < q.bottom - 4 && r.bottom > q.top + 4;
+    });
+  };
+  const set = (on) => {
+    if (on === toolbar.classList.contains("qs-wide")) return;
+    if (on) {
+      const mates = rowmates();
+      if (!mates.length) return;
+      // max-width z bieżącej szerokości → CSS zsuwa do 0 płynnie (z „none” przejścia nie ma)
+      mates.forEach((el) => { el.classList.remove("qs-yield-back"); el.style.maxWidth = `${el.offsetWidth}px`; });
+      void toolbar.offsetWidth;
+      mates.forEach((el) => el.classList.add("qs-yield"));
+      toolbar.classList.add("qs-wide");
+      return;
+    }
+    toolbar.classList.remove("qs-wide");
+    toolbar.querySelectorAll(":scope > .qs-yield").forEach((el) => {
+      el.classList.remove("qs-yield");
+      el.classList.add("qs-yield-back");
+      setTimeout(() => {
+        if (el.classList.contains("qs-yield")) return;
+        el.classList.remove("qs-yield-back");
+        el.style.maxWidth = "";
+      }, reduce.matches ? 0 : MS + 40);
+    });
+  };
+  quickSearchEl.addEventListener("focus", () => set(true));
+  document.addEventListener("pointerdown", (e) => {
+    if (quickSearchWrap.contains(e.target)) { lastInsideDown = performance.now(); return; }
+    set(false);
+  }, true);
+  quickSearchWrap.addEventListener("focusout", (e) => {
+    const to = e.relatedTarget;
+    if (to && quickSearchWrap.contains(to)) return;
+    if (!to && performance.now() - lastInsideDown < 800) return; // tapnięcie w przycisk w polu (iOS)
+    // fokus poszedł dalej (Tab, skrót do tabeli, Esc) — chyba że zaraz wraca do pola
+    setTimeout(() => { if (!quickSearchWrap.contains(document.activeElement)) set(false); }, 0);
+  });
+})();
+
 // Klawiatura: cały zestaw ikonek to JEDEN przystanek Tab (roving tabindex, ←/→),
 // jak segmenty — cztery osobne przystanki rozciągałyby obieg Tab w oknie szukania.
 document.querySelectorAll(".qs-flags").forEach((group) => {
