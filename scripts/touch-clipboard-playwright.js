@@ -208,14 +208,9 @@ async function run() {
   await page.click("#cellActionPaste");
   await sleep(400);
   const pasted = await cellText(page, 4, 2);
-  // Wklejenie ma dać to samo, co WPISANIE tej wartości ręcznie: „2026-09-01" przechodzi
-  // przez parser dat i wraca w formacie wyświetlania aplikacji. Porównujemy więc z
-  // wynikiem parsera, a nie z surowym tekstem — inaczej test pilnowałby formatu daty,
-  // a nie tego, o co chodzi.
-  const source = await page.evaluate(() => {
-    const parsed = parseInputValue("2026-09-01");
-    return parsed && parsed.value != null ? toDisplay(parsed.value) : "";
-  });
+  // „Wklej” z kopii w aplikacji = wartość + format źródła (jak w Excelu, decyzja Mateusza
+  // 2026-10-26) — wklejona data wygląda DOKŁADNIE jak w komórce, z której ją skopiowano.
+  const source = await cellText(page, 0, 0);
   const toastText = await page.evaluate(() =>
     Array.from(document.querySelectorAll(".toast")).map((n) => n.textContent).join(" | "));
   report.paste = { pasted, toastText };

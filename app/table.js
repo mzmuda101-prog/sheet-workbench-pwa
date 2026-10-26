@@ -604,12 +604,36 @@ function writeCellFromInput(model, row, col, raw) {
   return "ok";
 }
 
+// Komórka do własnego schowka: PRAWDZIWA wartość (nie tekst z ekranu — „2,35” z 2,345 albo
+// „15 paź 26” wracały przez parser jako coś innego) + komplet formatu (cfmtCaptureFormatAt).
+// null = komórka spoza pliku (wiersz widoku „long”, kolumna wyliczana) → wklejamy tekst.
+function clipCellOf(row, col) {
+  if (!row || row.isLongViewRow || !Number.isFinite(row.rowIndex0)) return null;
+  if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) return null;
+  const cell = workbook?.Sheets?.[currentSheetName]?.[XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + col })];
+  let val = null;
+  if (cell && cell.t !== "z" && cell.v != null && cell.v !== "") {
+    if (cell.t === "e") val = { type: "error", value: String(cell.w || cell.v) };
+    else if (cell.v instanceof Date) val = { type: "date", value: new Date(cell.v.getTime()) };
+    else if (cell.t === "n") val = { type: "number", value: Number(cell.v) };
+    else if (cell.t === "b") val = { type: "boolean", value: !!cell.v };
+    else val = { type: "string", value: String(cell.v) };
+  }
+  return { val, fmt: typeof cfmtCaptureFormatAt === "function" ? cfmtCaptureFormatAt(row, col) : null };
+}
+
 async function copySelectionToClipboard() {
   const rect = rangeCellsToCopy();
   if (!rect) return;
   const tsv = serializeRangeToTsv(rect);
   const count = rect.rowCount * rect.colCount;
-  internalClipboard = { tsv, rows: rect.rowCount, cols: rect.colCount, ts: Date.now() };
+  const cells = [];
+  for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
+    const line = [];
+    for (let c = rect.colMin; c <= rect.colMax; c++) line.push(clipCellOf(rect.model.rows[r], c));
+    cells.push(line);
+  }
+  internalClipboard = { tsv, rows: rect.rowCount, cols: rect.colCount, ts: Date.now(), cells };
   try {
     await navigator.clipboard.writeText(tsv);
     toast(t("cellsCopied", { count }), "success");
@@ -644,8 +668,13 @@ async function readClipboardTsv() {
   return null;
 }
 
-// Wklejanie = ZAWSZE same wartości (tekst/liczba/data przez parseInputValue): styl
-// komórki zostaje, formuły są pomijane — ta sama bezpieczna ścieżka zapisu co edycja.
+// Wklejanie jak w Excelu (decyzja Mateusza 2026-10-26: wybór „z formatowaniem” albo „same wartości”):
+// - kopia z TEJ aplikacji niesie prawdziwe wartości i format komórek (clipCellOf):
+//   opts.mode "all" (domyślnie: Ctrl/⌘+V, „Wklej”) = wartość + format źródła (liczby/daty,
+//   czcionka, wypełnienie, wyrównanie, obramowanie); "values" (Ctrl/⌘+Shift+V, „Wklej same
+//   wartości”) = prawdziwa wartość, wygląd komórki docelowej zostaje,
+// - tekst z innej aplikacji: jak dotąd przez parseInputValue (format celu zostaje).
+// Formuły źródła wklejamy jako wyniki (bez przesuwania odwołań).
 // opts.source === "app" → tylko własny bufor (menu komórki pokazuje w etykiecie, CO
 // wklei, więc musi wkleić dokładnie to; przy okazji iOS nie pyta o zgodę na schowek).
 async function pasteClipboardToSelection(opts = {}) {
@@ -674,6 +703,11 @@ async function pasteClipboardToSelection(opts = {}) {
   }
   const grid = parseTsvClipboard(got.text);
   if (!grid.length || !grid[0].length) return;
+  // Schowek systemu z tym samym tekstem, który właśnie skopiowaliśmy = nasza kopia.
+  const clip = internalClipboard && internalClipboard.cells
+    && (got.source === "app" || got.text === internalClipboard.tsv) ? internalClipboard.cells : null;
+  const withFormat = opts.mode !== "values";
+  const cellAt = (rOff, cOff) => (clip && clip[rOff] ? clip[rOff][cOff] || null : null);
 
   const startCol = isRange ? rect.colMin : focusedCellState.colIndex0;
   let changed = 0;
@@ -686,12 +720,12 @@ async function pasteClipboardToSelection(opts = {}) {
   if (isRange && grid.length === 1 && grid[0].length === 1) {
     // Jedna wartość w schowku + zaznaczony zakres → wartość trafia do KAŻDEJ komórki zakresu.
     for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
-      for (let c = rect.colMin; c <= rect.colMax; c++) bump(writeCellFromInput(model, model.rows[r], c, grid[0][0]));
+      for (let c = rect.colMin; c <= rect.colMax; c++) bump(writeClipCell(model, model.rows[r], c, cellAt(0, 0), grid[0][0], withFormat));
     }
   } else {
     grid.forEach((cells, rOff) => {
       const row = model.rows[anchorRowIdx + rOff];
-      cells.forEach((raw, cOff) => bump(writeCellFromInput(model, row, startCol + cOff, raw)));
+      cells.forEach((raw, cOff) => bump(writeClipCell(model, row, startCol + cOff, cellAt(rOff, cOff), raw, withFormat)));
     });
   }
 
@@ -706,6 +740,24 @@ async function pasteClipboardToSelection(opts = {}) {
     toast(t("editToolNoChange"), "info");
   }
   if (skippedFormula > 0) toast(t("pasteSkippedFormulas", { count: skippedFormula }), "warning");
+}
+
+// Komórka z własnej kopii: najpierw format (Cofnij łapie stan „przed” przy pierwszym dotyku),
+// potem wartość wprost — bez przepuszczania tekstu z ekranu przez parser.
+function writeClipCell(model, row, col, src, raw, withFormat) {
+  if (!src) return writeCellFromInput(model, row, col, raw);
+  if (!row || row.isLongViewRow || row.isSubheader || !Number.isFinite(row.rowIndex0)) return "skip";
+  if (col < 0 || col >= model.headers.length) return "skip";
+  if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) return "skip";
+  if (withFormat && src.fmt && typeof cfmtApplyAt === "function") cfmtApplyAt(row, col, src.fmt);
+  const val = src.val ? { ...src.val, value: src.val.value instanceof Date ? new Date(src.val.value.getTime()) : src.val.value } : null;
+  updateSheetCell(row.rowIndex0, col, val);
+  const newVal = val ? val.value : null;
+  if (Array.isArray(row.values)) row.values[col] = newVal;
+  if (Array.isArray(row.rawValues) && row.rawValues !== row.values) row.rawValues[col] = newVal;
+  if (Array.isArray(row.display)) row.display[col] = newVal == null ? "" : toDisplay(newVal);
+  if (typeof cfmtRefreshDisplay === "function") cfmtRefreshDisplay(row, col);
+  return "ok";
 }
 
 // ── Wypełnianie zakresu ─────────────────────────────────────────────────────

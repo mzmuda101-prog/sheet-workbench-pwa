@@ -711,6 +711,13 @@ document.addEventListener("keydown", (e) => {
       return;
     }
   }
+  // Ctrl/⌘+Shift+V — wklej same wartości (wygląd komórki docelowej zostaje), jak „Wklej jako
+  // zwykły tekst” w innych programach. Format niesie tylko kopia z tej aplikacji.
+  if (meta && !e.altKey && e.shiftKey && e.key.toLowerCase() === "v" && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
+    e.preventDefault();
+    pasteClipboardToSelection({ mode: "values" });
+    return;
+  }
   // Shift+Spacja — przełącznik poziomu zaznaczenia: cały wiersz ↔ sama komórka.
   // Jedyne wejście w tryb komórki bez myszy (Shift+klik wymaga wskaźnika), a przy
   // okazji zgodne z arkuszami, gdzie Shift+Space zaznacza wiersz. MUSI stać przed

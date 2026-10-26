@@ -3,8 +3,9 @@
 // Co musi być prawdą:
 //   1. bez niczego skopiowanego w apce menu NIE ma „Wklej",
 //   2. po „Kopiuj" menu innej komórki ma „Wklej „wartość”" i wkleja dokładnie ją,
-//   3. wklejenie = SAME WARTOŚCI: styl komórki docelowej zostaje, formuła ze schowka
-//      się nie wkleja,
+//   3. „Wklej same wartości”: styl komórki docelowej zostaje, formuła ze schowka się nie
+//      wkleja (od 2026-10-26 zwykłe „Wklej” niesie format źródła — paste-format-playwright.js;
+//      tu klikamy „same wartości”, a etykiety „Wklej …” dalej sprawdzamy),
 //   4. jedna wartość + zaznaczony zakres → „Wklej … do N komórek" wypełnia cały zakres,
 //   5. skopiowany blok 2×2 wkleja się od lewego górnego rogu zaznaczenia jako 2×2,
 //   6. każde wklejenie = JEDEN krok Cofnij,
@@ -100,9 +101,10 @@ async function run() {
   await menu(0, col); await clickItem("copy");
   const m1 = await menu(3, col);
   const pasteItem = m1.find((i) => i.id === "cmi-paste");
+  check("2. obok „Wklej” jest „Wklej same wartości”", m1.some((i) => i.id === "cmi-paste-values"), m1);
   check("2. po Kopiuj jest „Wklej” z wartością", pasteItem && pasteItem.text.includes(String(src).slice(0, 10)), m1);
   const p0 = await pending();
-  await clickItem("paste");
+  await clickItem("paste-values");
   check("2. wklejona dokładnie ta wartość", (await val(3, col)) === src, { got: await val(3, col), src });
   check("6. jedna edycja w pendingEdits", (await pending()) - p0 === 1, await pending());
   await page.evaluate(() => undoLast()); await sleep(150);
@@ -127,7 +129,7 @@ async function run() {
   const fill = m2.find((i) => i.id === "cmi-paste");
   check("4. „Wklej … do 3 komórek”", fill && /3/.test(fill.text), m2);
   const p1 = await pending();
-  await clickItem("paste");
+  await clickItem("paste-values");
   const filled = [await val(4, col), await val(5, col), await val(6, col)];
   check("4. cały zakres wypełniony", filled.every((v) => v === src), filled);
   await page.evaluate(() => undoLast()); await sleep(150);
@@ -143,7 +145,7 @@ async function run() {
   await page.keyboard.press("Escape");
   await sleep(600); // po prawym kliku apka celowo połyka kliknięcia komórek przez 0,5 s (anty-duch po przytrzymaniu)
   await click(10, col + 1); await click(8, col, true); // zaznaczenie od prawego dołu do lewej góry
-  await menu(9, col); await clickItem("paste");
+  await menu(9, col); await clickItem("paste-values");
   const got = [[await val(8, col), await val(8, col + 1)], [await val(9, col), await val(9, col + 1)]];
   check("5. blok wklejony od lewego górnego rogu", JSON.stringify(got) === JSON.stringify(block), { got, block });
 

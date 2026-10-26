@@ -367,6 +367,14 @@ function cellMenuPasteItem(target) {
   return { id: "paste", label, run: () => { closeCellMenu(); pasteClipboardToSelection({ source: "app" }); } };
 }
 
+// „Wklej same wartości” — tylko gdy kopia niesie format (z tej aplikacji); bez niej oba
+// wklejenia byłyby identyczne.
+function cellMenuPasteValuesItem(target) {
+  const clip = typeof internalClipboard !== "undefined" ? internalClipboard : null;
+  if (!clip || !clip.cells || !workbook || currentDisplayModel?.mode !== "wide") return null;
+  return { id: "paste-values", label: t("cellMenuPasteValues"), run: () => { closeCellMenu(); pasteClipboardToSelection({ source: "app", mode: "values" }); } };
+}
+
 // „Wyjaśnij formułę” (formula-explain.js) — tylko gdy komórka ma formułę z pliku/wpisaną
 function cellMenuExplainItem(target) {
   if (typeof swbOpenFormulaExplain !== "function" || !target.row || !Number.isFinite(target.row.rowIndex0) || currentDisplayModel?.mode !== "wide") return null;
@@ -379,12 +387,14 @@ function cellMenuExplainItem(target) {
 
 function cellMenuItems(target) {
   const paste = cellMenuPasteItem(target);
+  const pasteValues = paste ? cellMenuPasteValuesItem(target) : null;
   if (target.multi) {
     return [
       { id: "show", label: t("cellMenuMultiShow"), run: () => applyCellFilter(false) },
       { id: "hide", label: t("cellMenuMultiHide"), run: () => applyCellFilter(true) },
       { id: "copy", label: t("cellMenuMultiCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
       paste,
+    pasteValues,
     ].filter(Boolean);
   }
   const empty = !String(target.value ?? "").trim();
@@ -393,6 +403,7 @@ function cellMenuItems(target) {
     { id: "hide", label: t(empty ? "cellMenuHideEmpty" : "cellMenuHide"), run: () => applyCellFilter(true) },
     { id: "copy", label: t("cellMenuCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
     paste,
+    pasteValues,
     cellMenuExplainItem(target),
     ...(typeof swbNoteMenuItems === "function" ? swbNoteMenuItems(target) : []),
   ].filter(Boolean);

@@ -411,7 +411,9 @@ function trRawValue(row, i) {
 // po obu stronach porównania, więc jest symetryczna z definicji.
 function trNormValue(v) {
   if (v == null) return "";
-  if (v instanceof Date) return Number.isNaN(v.getTime()) ? "" : v.toISOString().slice(0, 10);
+  // data z lokalnych składowych (daty z pliku są lokalnym czasem „ściennym” — swbLocalizeFileDates);
+  // dla dat z pliku klucz wychodzi taki sam jak dawniej z toISOString na północy UTC
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? "" : `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, "0")}-${String(v.getDate()).padStart(2, "0")}`;
   if (typeof v === "number") return Number.isFinite(v) ? String(Math.round(v * 1e6) / 1e6) : "";
   if (typeof v === "boolean") return v ? "1" : "0";
   const s = String(v).replace(/ /g, " ").trim().replace(/\s+/g, " ");

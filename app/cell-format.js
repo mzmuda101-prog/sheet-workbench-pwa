@@ -429,6 +429,25 @@ function cfmtCopyNumFmt(srcRow, srcCol, dstRow, dstCol) {
   return true;
 }
 
+// Delta formatu na jednej komórce: Cofnij, zapis (pendingEdits), styl w tabeli, format liczb.
+// Bez renderu — wołający rysuje raz po całej operacji.
+function cfmtApplyAt(row, col, delta) {
+  if (typeof undoCaptureCell === "function") undoCaptureCell(row.rowIndex0, col);
+  const ref = cfmtRef(row.rowIndex0, col);
+  cfmtRecord(currentSheetName, ref, delta);
+  if (!Array.isArray(row.cellStyles)) row.cellStyles = [];
+  row.cellStyles[col] = cfmtStyleWithFmt(row.cellStyles[col], cfmtPendingFmt(currentSheetName, ref));
+  if ("numFmt" in delta || delta.reset) {
+    const sheetCell = workbook.Sheets[currentSheetName][ref];
+    if (sheetCell) {
+      const code = cfmtPendingFmt(currentSheetName, ref)?.numFmt;
+      if (code != null) sheetCell.z = code;
+      else if (delta.reset) delete sheetCell.z;
+    }
+    cfmtRefreshDisplay(row, col);
+  }
+}
+
 // Główna akcja: delta (obiekt) albo funkcja (komórka → delta | null) na zaznaczeniu.
 // Zwraca liczbę zmienionych komórek.
 function cfmtApply(deltaOrFn, { label } = {}) {
@@ -447,20 +466,7 @@ function cfmtApply(deltaOrFn, { label } = {}) {
   cells.forEach((ctx) => {
     const delta = typeof deltaOrFn === "function" ? deltaOrFn(ctx) : deltaOrFn;
     if (!delta || !Object.keys(delta).length) return;
-    if (typeof undoCaptureCell === "function") undoCaptureCell(ctx.row.rowIndex0, ctx.col);
-    const ref = cfmtRef(ctx.row.rowIndex0, ctx.col);
-    cfmtRecord(currentSheetName, ref, delta);
-    if (!Array.isArray(ctx.row.cellStyles)) ctx.row.cellStyles = [];
-    ctx.row.cellStyles[ctx.col] = cfmtStyleWithFmt(ctx.row.cellStyles[ctx.col], cfmtPendingFmt(currentSheetName, ref));
-    if ("numFmt" in delta || delta.reset) {
-      const sheetCell = workbook.Sheets[currentSheetName][ref];
-      if (sheetCell) {
-        const code = cfmtPendingFmt(currentSheetName, ref)?.numFmt;
-        if (code != null) sheetCell.z = code;
-        else if (delta.reset) delete sheetCell.z;
-      }
-      cfmtRefreshDisplay(ctx.row, ctx.col);
-    }
+    cfmtApplyAt(ctx.row, ctx.col, delta);
     changed += 1;
   });
   if (!changed) return 0;
@@ -533,15 +539,26 @@ function cfmtBorderDelta(preset, ctx, color) {
 // Malarz formatów: kopiuje KOMPLET formatu aktywnej komórki (jak widać go w tabeli).
 function cfmtCaptureFormat() {
   const a = cfmtActiveCell();
-  if (!a) return null;
-  const s = a.style || {};
+  return a ? cfmtCaptureFormatAt(a.row, a.col) : null;
+}
+
+// Komplet formatu komórki (row, col) jako delta z reset — malarz formatów i kopia w aplikacji
+// (table.js: „Wklej” niesie format źródła jak w Excelu).
+function cfmtCaptureFormatAt(row, col) {
+  if (!row || !Number.isFinite(row.rowIndex0) || !Number.isInteger(col)) return null;
+  const ref = cfmtRef(row.rowIndex0, col);
+  const fmt = cfmtPendingFmt(currentSheetName, ref);
+  const cell = workbook?.Sheets?.[currentSheetName]?.[ref] || null;
+  let numFmt = fmt && "numFmt" in fmt ? fmt.numFmt : (cell && cell.z) || cfmtFileNumFmt(ref) || "General";
+  if (typeof numFmt === "number") numFmt = "General";
+  const s = (Array.isArray(row.cellStyles) && row.cellStyles[col]) || {};
   const hexOf = (c) => (c ? String(c).replace(/^#/, "").toUpperCase() : null);
   const edge = (e) => {
     if (!e) return null;
     const style = e.style || e.Style;
     if (!style || style === "none") return null;
-    const col = typeof colorFromStyleNode === "function" ? colorFromStyleNode(e.color || e.Color) : null;
-    return { style, color: hexOf(col) };
+    const rgb = typeof colorFromStyleNode === "function" ? colorFromStyleNode(e.color || e.Color) : null;
+    return { style, color: hexOf(rgb) };
   };
   const b = s.border || {};
   return {
@@ -550,7 +567,7 @@ function cfmtCaptureFormat() {
     color: s.hasCustomFontColor ? hexOf(s.fontColor) : null,
     fill: s.hasCustomFill ? hexOf(s.fillColor) : null,
     h: s.horizontal || null, v: s.vertical || null, wrap: !!s.userWrap,
-    numFmt: a.numFmt || "General",
+    numFmt: numFmt || "General",
     border: { top: edge(b.top || b.Top), bottom: edge(b.bottom || b.Bottom), left: edge(b.left || b.Left), right: edge(b.right || b.Right) },
     ...(s.fontSizePt ? { sz: s.fontSizePt } : {}),
   };

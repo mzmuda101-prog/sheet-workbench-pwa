@@ -369,10 +369,40 @@ function swbEscapeFormatDots(code) {
 function swbSsfFormat(code, value) {
   const ssf = typeof XLSX !== "undefined" && XLSX.SSF;
   if (!ssf || code == null) return null;
+  // SSF bierze Date jako UTC, a daty w aplikacji to lokalny czas „ścienny” (swbLocalizeFileDates)
+  // — do SSF idzie liczba seryjna z lokalnych składowych, jak przy zapisie (xlsx-patch).
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    value = (Date.UTC(value.getFullYear(), value.getMonth(), value.getDate(), value.getHours(), value.getMinutes(), value.getSeconds(), value.getMilliseconds()) - Date.UTC(1899, 11, 30)) / 86400000;
+  }
   try { return ssf.format(code, value); } catch { /* druga próba niżej */ }
   const fixed = swbEscapeFormatDots(String(code));
   if (fixed === code) return null;
   try { return ssf.format(fixed, value); } catch { return null; }
+}
+
+// SheetJS (0.20.3, cellDates) CZYTA liczbę seryjną jako północ UTC (46030 → 8.01 01:00 w Polsce,
+// latem 02:00), a ZAPISUJE i liczy daty z lokalnych składowych. Reszta aplikacji (zapis
+// xlsx-patch, silnik formuł, pasek formuły, eksport) też liczy lokalnie — więc data z pliku
+// pokazywała na pasku „2026-10-15 02:00”, =B3=DATA(2026;1;8) dawało FAŁSZ, a skopiowana /
+// wypełniona / poprawiona data szła do pliku z ukrytą godziną (film Mateusza 2026-10-25).
+// Tu, raz przy wczytaniu: data z pliku = ten sam czas „ścienny” w strefie lokalnej.
+function swbLocalizeFileDates(wb) {
+  if (!wb || !wb.Sheets) return 0;
+  let fixed = 0;
+  for (const name of wb.SheetNames || Object.keys(wb.Sheets)) {
+    const sheet = wb.Sheets[name];
+    if (!sheet) continue;
+    for (const ref in sheet) {
+      if (ref.charCodeAt(0) === 33) continue;
+      const cell = sheet[ref];
+      const v = cell && cell.v;
+      if (!(v instanceof Date) || Number.isNaN(v.getTime())) continue;
+      cell.v = new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate(), v.getUTCHours(), v.getUTCMinutes(), v.getUTCSeconds(), v.getUTCMilliseconds());
+      fixed += 1;
+    }
+  }
+  return fixed;
 }
 
 // Po XLSX.read: uzupełnij tekst komórek, których SheetJS nie umiał sformatować.

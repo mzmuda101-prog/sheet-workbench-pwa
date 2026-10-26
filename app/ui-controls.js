@@ -872,6 +872,7 @@ async function handleFile(file, fileHandle = null) {
     } catch {
       workbook = XLSX.read(data, { cellDates: true });
     }
+    swbLocalizeFileDates(workbook); // daty z pliku: czas „ścienny”, nie północ UTC (przed formatowaniem tekstu)
     swbFillMissingCellText(workbook); // „dd.mm.yyyy” itp. — SSF nie umiał ich sformatować
     // Odzyskaj mapę indeksów stylów z surowego pliku (font/kolor/rozmiar jak w Excelu).
     bumpSheetDataStamp(); // nowy skoroszyt -> cache'e liczone na starych danych do kosza
