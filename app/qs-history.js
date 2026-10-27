@@ -238,7 +238,9 @@ function renderQsHistory(ctx) {
   const pinnedKeys = new Set(h.pinned.map(qsHistoryKey));
   const recent = h.recent.filter((e) => !pinnedKeys.has(qsHistoryKey(e)));
   const views = currentHeaders.length ? swbViewsLoad() : [];
-  const canSave = currentHeaders.length > 0 && swbViewHasContent(captureViewState()) && !swbCurrentViewName();
+  // „＋ Zapisz” tylko bez paska filtrów (np. samo sortowanie) — przy filtrze ten sam przycisk jest na pasku
+  const barShown = typeof activeFiltersEl !== "undefined" && activeFiltersEl && !activeFiltersEl.classList.contains("hidden");
+  const canSave = !barShown && currentHeaders.length > 0 && swbViewHasContent(captureViewState()) && !swbCurrentViewName();
   if (!h.pinned.length && !recent.length && !views.length && !canSave) { hideQsLive(ctx); return false; }
 
   const frag = document.createDocumentFragment();
