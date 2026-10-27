@@ -192,6 +192,25 @@ function renderActiveFilters() {
     frag.appendChild(el);
   });
 
+  // zapisany widok (qs-history.js): jego nazwa, gdy pasuje dokładnie; inaczej „☆ Zapisz widok”
+  if (typeof swbCurrentViewName === "function") {
+    const viewName = swbCurrentViewName();
+    if (viewName) {
+      const v = document.createElement("span");
+      v.className = "af-view";
+      v.textContent = `★ ${viewName}`;
+      v.setAttribute("aria-label", t("viewsActive", { name: viewName }));
+      frag.appendChild(v);
+    } else {
+      const save = document.createElement("button");
+      save.type = "button";
+      save.className = "af-save-view";
+      save.textContent = t("viewsSaveBtn");
+      save.addEventListener("click", () => swbSaveCurrentView());
+      frag.appendChild(save);
+    }
+  }
+
   const clearAll = document.createElement("button");
   clearAll.type = "button";
   clearAll.className = "af-clear-all";

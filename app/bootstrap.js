@@ -733,6 +733,7 @@ document.addEventListener("keydown", (e) => {
     // wiersza, więc przemalowanie robimy raz, po ustaleniu OBU stanów.
     if (!goingToCell) setSelectedCell("", -1);
     syncFocusedCellInDom({ clearMissing: false });
+    syncRangeHighlightInDom(); // litera kolumny w nagłówku: tylko na poziomie komórki
     return;
   }
   // Enter lub znak drukowalny na zaznaczonej komórce otwiera edytor (jak w Excelu).

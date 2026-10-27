@@ -238,7 +238,10 @@ function setSelectionKind(kind, options = {}) {
   const next = kind === "cell" ? "cell" : "row";
   if (selectionKind === next && !options.force) return;
   selectionKind = next;
-  if (options.repaint !== false) syncFocusedCellInDom({ clearMissing: false });
+  if (options.repaint !== false) {
+    syncFocusedCellInDom({ clearMissing: false });
+    syncRangeHighlightInDom(); // litera kolumny zależy od trybu (komórka / wiersz)
+  }
 }
 
 // Przewijanie tabeli w bok — ←/→ przy zaznaczonym wierszu. Zwraca true tylko gdy
@@ -512,6 +515,7 @@ const RANGE_EDGE_CLASSES = [
   "range-edge-bottom",
   "range-edge-left",
   "range-edge-right",
+  "range-anchor",
 ];
 
 // Czyści natywne (OS-owe) zaznaczenie tekstu — używane przy zaznaczaniu zakresu
@@ -785,6 +789,7 @@ function syncRangeHighlightInDom() {
   if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) {
     // brak zakresu → pełne podświetlenie wiersza fokusu wraca do normy
     tbodyEl.classList.remove("has-cell-range");
+    syncSelectionHeadersInDom(rect, null);
     return;
   }
   // jest zakres → stłum pas wiersza fokusu, by nie kolidował z prostokątem zaznaczenia
@@ -815,8 +820,44 @@ function syncRangeHighlightInDom() {
       if (r === rect.rowEnd) td.classList.add("range-edge-bottom");
       if (c === rect.colMin) td.classList.add("range-edge-left");
       if (c === rect.colMax) td.classList.add("range-edge-right");
+      // komórka aktywna (kotwica) — w Excelu zostaje niezabarwiona wewnątrz zakresu
+      if (c === focusedCellState.colIndex0 && tr.dataset.rowKey === focusedCellState.rowKey) td.classList.add("range-anchor");
     }
   }
+  syncSelectionHeadersInDom(rect, targets);
+}
+
+// Podświetlone nagłówki zaznaczenia: numer wiersza (td.row-head) i litera kolumny
+// (th.guide-cell) aktywnej komórki/zakresu. Pamiętamy, co zaznaczyliśmy ostatnio, i ruszamy
+// wyłącznie różnicę — bez przeszukiwania tabeli przy każdym ruchu strzałką (iPhone, długie
+// arkusze). Kolumna tylko przy zaznaczeniu na poziomie komórki: zaznaczony wiersz to cały wiersz.
+let _hdrSelEls = new Set();
+function syncSelectionHeadersInDom(rect, rangeRows) {
+  const next = new Set();
+  if (focusedCellState) {
+    if (rangeRows) {
+      for (const [, tr] of rangeRows) {
+        const head = tr.cells[0];
+        if (head && head.classList.contains("row-head")) next.add(head);
+      }
+    } else {
+      const tr = findFocusedRowElement();
+      const head = tr && tr.cells[0];
+      if (head && head.classList.contains("row-head")) next.add(head);
+    }
+    const guide = (rect || isCellSelectionMode()) && theadEl ? theadEl.querySelector("tr.guide-row") : null;
+    if (guide) {
+      const c0 = rect ? rect.colMin : focusedCellState.colIndex0;
+      const c1 = rect ? rect.colMax : c0;
+      for (let c = c0; c <= c1; c++) {
+        const th = guide.cells[c + 1]; // [0] = narożnik
+        if (th) next.add(th);
+      }
+    }
+  }
+  _hdrSelEls.forEach((el) => { if (!next.has(el)) el.classList.remove("hdr-sel"); });
+  next.forEach((el) => el.classList.add("hdr-sel"));
+  _hdrSelEls = next;
 }
 
 // Przycisk „Odznacz" (dotykowy zamiennik Esc) — widoczny, gdy jest aktywny

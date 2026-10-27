@@ -74,6 +74,102 @@ function qsHistoryApply(ctx, entry) {
   commitQuickSearch();
 }
 
+// ── Zapisane widoki (2026-10-27) ────────────────────────────────────────────────
+// Nazwany komplet: filtry (oba pola, daty, tryby auto, „tylko z danymi”…) + sortowanie, w tym
+// samym kształcie co migawka spisywania (captureViewState / applyViewState w filter-bar.js —
+// kolumny po NAZWACH, brak kolumny = widok się nie włącza, z powodem). Preferencja urządzenia
+// (localStorage), wspólna dla plików: widok pasuje do każdego arkusza z tymi kolumnami.
+// Lista na górze podpowiedzi pustego pola szukania; zapis — „☆ Zapisz widok” na pasku filtrów
+// albo „＋ Zapisz bieżący widok” na tej liście (także samo sortowanie, bez filtra).
+const SWB_VIEWS_KEY = "swb-saved-views-v1";
+const SWB_VIEWS_MAX = 30;
+
+function swbViewsLoad() {
+  try {
+    const list = JSON.parse(localStorage.getItem(SWB_VIEWS_KEY) || "[]");
+    return Array.isArray(list) ? list.filter((v) => v && v.name && v.vs) : [];
+  } catch { return []; }
+}
+
+function swbViewsSave(list) {
+  try { localStorage.setItem(SWB_VIEWS_KEY, JSON.stringify(list.slice(0, SWB_VIEWS_MAX))); } catch { /* brak miejsca / prywatne okno */ }
+}
+
+function swbViewHasContent(vs) {
+  return !!(vs && (vs.filter || (Array.isArray(vs.sort) && vs.sort.length)));
+}
+
+function swbViewKey(vs) {
+  return `${viewFilterKey(vs)}|${viewSortKey(vs)}`;
+}
+
+// Nazwa zapisanego widoku, który dokładnie odpowiada temu, co teraz widać ("" = żaden).
+function swbCurrentViewName() {
+  if (!currentHeaders.length || typeof captureViewState !== "function") return "";
+  const vs = captureViewState();
+  if (!swbViewHasContent(vs)) return "";
+  const key = swbViewKey(vs);
+  const hit = swbViewsLoad().find((v) => swbViewKey(v.vs) === key);
+  return hit ? hit.name : "";
+}
+
+function swbSaveCurrentView() {
+  if (!currentHeaders.length) return false;
+  const vs = captureViewState();
+  if (!swbViewHasContent(vs)) { toast(t("viewsNothing"), "info"); return false; }
+  const name = String(window.prompt(t("viewsNamePrompt"), afShort(describeViewState(vs), 40)) || "").trim().slice(0, 60);
+  if (!name) return false;
+  const { v, filter, sort } = vs; // liczby wierszy nie — zależą od pliku
+  const low = name.toLowerCase();
+  swbViewsSave([{ name, vs: { v, filter, sort }, at: Date.now() }, ...swbViewsLoad().filter((x) => x.name.toLowerCase() !== low)]);
+  toast(t("viewsSaved", { name }), "success");
+  if (typeof renderActiveFilters === "function") renderActiveFilters();
+  return true;
+}
+
+function swbApplySavedView(view, ctx) {
+  const res = applyViewState(view.vs);
+  if (!res.ok) { toast(t("viewsBlocked", { name: view.name, why: res.problems.join(" ") }), "warning"); return; }
+  if (ctx) hideQsLive(ctx);
+  const loc = typeof currentLang !== "undefined" && currentLang === "en" ? "en-US" : "pl-PL";
+  toast(t("viewsApplied", { name: view.name, shown: res.shown.toLocaleString(loc), total: baseRows.length.toLocaleString(loc) }), "success");
+}
+
+function swbViewRow(ctx, view) {
+  const row = document.createElement("div");
+  row.className = "qs-hist-row qs-view-row";
+  const problems = viewStateProblems(view.vs);
+  const item = document.createElement("button");
+  item.type = "button";
+  item.className = `qs-live-item qs-hist-item qs-view-item${problems.length ? " is-off" : ""}`;
+  item.setAttribute("role", "option");
+  item.tabIndex = -1;
+  const name = document.createElement("span");
+  name.className = "qs-view-name";
+  name.textContent = view.name;
+  const desc = document.createElement("span");
+  desc.className = "qs-view-desc";
+  desc.textContent = problems.length ? problems.join(" ") : describeViewState(view.vs);
+  item.append(name, desc);
+  item.title = desc.textContent;
+  item.addEventListener("click", () => swbApplySavedView(view, ctx));
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "qs-hist-btn qs-hist-del";
+  del.tabIndex = -1;
+  del.textContent = "×";
+  del.setAttribute("aria-label", t("viewsRemove", { name: view.name }));
+  del.addEventListener("click", (e) => {
+    e.stopPropagation();
+    swbViewsSave(swbViewsLoad().filter((x) => x.name !== view.name));
+    renderQsHistory(ctx);
+    if (typeof renderActiveFilters === "function") renderActiveFilters();
+    ctx.inputEl?.focus({ preventScroll: true });
+  });
+  row.append(item, del);
+  return row;
+}
+
 const QS_FLAG_GLYPH = { equals: "=", starts_with: "a…", regex: ".*" };
 
 function qsHistoryRow(ctx, entry, pinned) {
@@ -141,9 +237,31 @@ function renderQsHistory(ctx) {
   const h = qsHistoryLoad();
   const pinnedKeys = new Set(h.pinned.map(qsHistoryKey));
   const recent = h.recent.filter((e) => !pinnedKeys.has(qsHistoryKey(e)));
-  if (!h.pinned.length && !recent.length) { hideQsLive(ctx); return false; }
+  const views = currentHeaders.length ? swbViewsLoad() : [];
+  const canSave = currentHeaders.length > 0 && swbViewHasContent(captureViewState()) && !swbCurrentViewName();
+  if (!h.pinned.length && !recent.length && !views.length && !canSave) { hideQsLive(ctx); return false; }
 
   const frag = document.createDocumentFragment();
+  if (views.length || canSave) {
+    const title = document.createElement("div");
+    title.className = "qs-live-group";
+    title.textContent = t("qsViews");
+    frag.appendChild(title);
+    views.forEach((v) => frag.appendChild(swbViewRow(ctx, v)));
+    if (canSave) {
+      const save = document.createElement("button");
+      save.type = "button";
+      save.className = "qs-live-item qs-view-save";
+      save.setAttribute("role", "option");
+      save.tabIndex = -1;
+      save.textContent = t("viewsSaveCurrent");
+      save.addEventListener("click", () => {
+        hideQsLive(ctx);
+        swbSaveCurrentView();
+      });
+      frag.appendChild(save);
+    }
+  }
   const section = (label, list, pinned) => {
     if (!list.length) return;
     const title = document.createElement("div");

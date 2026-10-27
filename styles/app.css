@@ -48,6 +48,15 @@
   --accent-light: rgba(236, 245, 240, 0.85);
   --accent-2: #a8d9b8;
   --accent-border: #c5e8d5;
+  /* Zaznaczenie komórek jak w Excelu: ostra ramka w akcencie + delikatne, NIEPRZEZROCZYSTE
+     tło (zamrożona kolumna jest sticky — przez przezroczyste prześwitywałaby treść spod spodu). */
+  /* --sel-base = wygląd zwykłej komórki (półprzezroczyste --panel tabeli na --surface), ale kryjący */
+  --sel-base: color-mix(in srgb, #fff 62%, var(--surface));
+  --sel-frame: var(--accent);
+  --sel-fill: color-mix(in srgb, var(--accent) 9%, var(--sel-base));
+  --sel-range-fill: color-mix(in srgb, var(--accent) 11%, var(--sel-base));
+  --sel-head-fill: color-mix(in srgb, var(--accent) 16%, var(--sel-base));
+  --sel-head-ink: var(--accent-h);
 
   --success: #2a7a4e;
   --success-bg: #ebf7f1;
@@ -141,6 +150,12 @@
   --accent-light: rgba(25, 48, 40, 0.85);
   --accent-2: #2a5a42;
   --accent-border: #2d6048;
+  --sel-base: color-mix(in srgb, rgb(26, 35, 29) 75%, var(--surface));
+  --sel-frame: var(--accent);
+  --sel-fill: color-mix(in srgb, var(--accent) 14%, var(--sel-base));
+  --sel-range-fill: color-mix(in srgb, var(--accent) 18%, var(--sel-base));
+  --sel-head-fill: color-mix(in srgb, var(--accent) 24%, var(--sel-base));
+  --sel-head-ink: var(--accent-h);
 
   --border: rgba(60, 80, 65, 0.55);
   --border-subtle: rgba(45, 62, 50, 0.45);
@@ -4079,33 +4094,59 @@ tbody td.cell-active.cell-light-text { color: var(--ink) !important; }
 [data-theme="dark"] tbody td.cell-selected.cell-dark-text,
 [data-theme="dark"] tbody td.cell-active.cell-dark-text { color: var(--ink) !important; }
 
-/* Uchwyt wypełniania (autofill.js) — kwadracik w prawym dolnym rogu zaznaczenia.
-   Wewnątrz komórki (td ma overflow: hidden), na dotyku z większym polem chwytu. */
-tbody td.has-fill-handle { position: relative; }
+/* Uchwyt wypełniania (autofill.js) — kwadracik na prawym dolnym narożniku ramki
+   zaznaczenia, wystający lekko na zewnątrz jak w Excelu. Leży w #tableWrap (nie w <td>,
+   które ma overflow: hidden i go przycinało); autofill.js ustawia mu translate na narożnik,
+   a margines centruje pole chwytu na tym punkcie. z-index 3: nad zwykłymi komórkami,
+   POD zamrożoną kolumną (4), „szybą” przewijania (5) i przyklejonym nagłówkiem (6+) —
+   przy przewijaniu w bok chowa się pod nimi razem ze swoją komórką.
+   Na dotyku większe pole chwytu i nieco większy kwadracik. */
+.table-wrap { position: relative; }
 .fill-handle {
+  --fh-hit: 11px;
+  --fh-box: 7px;
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 9px;
-  height: 9px;
+  left: 0;
+  top: 0;
+  width: var(--fh-hit);
+  height: var(--fh-hit);
+  margin: calc(var(--fh-hit) / -2) 0 0 calc(var(--fh-hit) / -2);
   cursor: crosshair;
   touch-action: none;
-  z-index: 2;
+  z-index: 3;
 }
 .fill-handle::after {
   content: "";
   position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--fh-box);
+  height: var(--fh-box);
+  margin: calc(var(--fh-box) / -2) 0 0 calc(var(--fh-box) / -2);
+  background: var(--sel-frame);
+  /* jasny obrys odcina kwadracik od ramki i sąsiednich komórek (jak biała obwódka w Excelu) */
+  box-shadow: 0 0 0 1px var(--surface);
+}
+/* Róg w zamrożonej kolumnie: uchwyt zostaje W komórce (sticky — patrz autofill.js),
+   wciśnięty w jej narożnik, jak dawniej. */
+tbody td.has-fill-handle { position: relative; }
+.fill-handle.is-inset {
+  left: auto;
+  top: auto;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+}
+.fill-handle.is-inset::after {
+  left: auto;
+  top: auto;
   right: 1px;
   bottom: 1px;
-  width: 7px;
-  height: 7px;
-  background: var(--accent);
-  border: 1px solid var(--surface, #fff);
-  box-sizing: border-box;
+  margin: 0;
 }
 @media (pointer: coarse) {
-  .fill-handle { width: 20px; height: 20px; }
-  .fill-handle::after { width: 10px; height: 10px; border-radius: 2px; }
+  .fill-handle { --fh-hit: 24px; --fh-box: 10px; }
+  .fill-handle::after { border-radius: 2px; }
 }
 .swb-filling, .swb-filling * { cursor: crosshair !important; }
 .swb-filling #dataTable { user-select: none; -webkit-user-select: none; }
@@ -4170,20 +4211,8 @@ border-bottom-right-radius: 8px;
     inset 0 -1px 0 color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
-/* Aktywna komórka (ruchomy koniec zaznaczenia) — wyraźna pełna obwódka jak w arkuszach */
-tbody td.cell-selected.cell-selected {
-  background: color-mix(in srgb, var(--accent-light) 78%, white) !important;
-  box-shadow:
-    inset 0 0 0 2px var(--accent-h),
-    0 0 0 1px color-mix(in srgb, var(--accent-h) 40%, transparent);
-  border-radius: 5px;
-}
-[data-theme="dark"] tbody td.cell-selected.cell-selected { /* Te powtórzenie to podbicie specyficzności, by komórka była nad wierszem - taki trick ;) */
-  background: color-mix(in srgb, var(--accent) 42%, var(--panel)) !important;
-  box-shadow:
-    inset 0 0 0 2px var(--accent),
-    0 0 0 1px color-mix(in srgb, var(--accent) 50%, transparent);
-}
+/* Wygląd zaznaczonej komórki i zakresu — patrz blok „Zaznaczenie jak w Excelu” niżej
+   (po regułach trafień filtra, żeby wygrywał z nimi kolejnością przy tej samej wadze). */
 
 /* Aktywna komórka pod fokusem KLAWIATURY. Dotąd ruch strzałkami podświetlał tylko
    cały wiersz (.row-focused) — nie było widać, w której kolumnie się stoi.
@@ -4209,15 +4238,8 @@ tbody td.cell-selected.cell-selected {
 .kbd-focus :is(#dataTable, .fz-clone) tbody:not(.sel-cell) td:focus { outline: none; }
 .kbd-focus #dataTable tbody.sel-cell td:focus:not(:focus-visible) {
   outline: none;
-  box-shadow:
-    inset 0 0 0 1.7px color-mix(in srgb, var(--accent) 62%, transparent),
-    inset 0 0 5.5px color-mix(in srgb, var(--accent) 10%, transparent);
-  border-radius: 6px;
-}
-[data-theme="dark"] .kbd-focus #dataTable tbody.sel-cell td:focus:not(:focus-visible) {
-  box-shadow:
-    inset 0 0 0 1.7px color-mix(in srgb, var(--accent) 62%, transparent),
-    inset 0 0 5.5px color-mix(in srgb, var(--accent) 13%, transparent);
+  box-shadow: inset 0 0 0 2px var(--sel-frame);
+  border-radius: 0;
 }
 /* Pigułka „Operatory": ring rysujemy na niej, a nie na 12-pikselowym checkboksie. */
 .kbd-focus .qs-operators-toggle:has(input:focus:not(:focus-visible)) {
@@ -4232,50 +4254,26 @@ tbody td.cell-selected.cell-selected {
 :is(#dataTable, .fz-clone) tbody td:focus { outline: none; }
 #dataTable tbody.sel-cell td:focus-visible {
   outline: none;
-  /* Ta sama, złagodzona forma co zaznaczona komórka (patrz .cell-selected niżej):
-     1.7px przy 62% krycia + delikatna poświata. Wcześniej była tu twarda ramka 2px
-     pełnego akcentu — w trybie komórki nakładała się na zaznaczenie i robiła
-     „za dużo zielonego" przy ruchu strzałkami. */
-  box-shadow:
-    inset 0 0 0 1.7px color-mix(in srgb, var(--accent) 62%, transparent),
-    inset 0 0 5.5px color-mix(in srgb, var(--accent) 10%, transparent);
-  border-radius: 6px;
-}
-[data-theme="dark"] #dataTable tbody.sel-cell td:focus-visible {
-  box-shadow:
-    inset 0 0 0 1.7px color-mix(in srgb, var(--accent) 62%, transparent),
-    inset 0 0 5.5px color-mix(in srgb, var(--accent) 13%, transparent);
+  /* Ta sama ostra ramka co zaznaczona komórka (blok „Zaznaczenie jak w Excelu” niżej). */
+  box-shadow: inset 0 0 0 2px var(--sel-frame);
+  border-radius: 0;
 }
 
-/* Prostokąt zaznaczenia (kotwica → koniec): wyraźne wypełnienie + obwódka całego
-   zakresu. Obwódkę składamy z 4 zmiennych (po jednej na krawędź), żeby komórki
-   narożne pokazały dwie krawędzie naraz — box-shadow z jednej reguły by się nadpisywał. */
+/* Prostokąt zaznaczenia (kotwica → koniec): lekkie wypełnienie + JEDNA obwódka całego
+   zakresu (krawędzie tylko na komórkach brzegowych — klasy range-edge-* z
+   syncRangeHighlightInDom). Obwódkę składamy z 4 zmiennych (po jednej na krawędź), żeby
+   komórki narożne pokazały dwie krawędzie naraz — box-shadow z jednej reguły by się
+   nadpisywał. Kolory i waga — w bloku „Zaznaczenie jak w Excelu” niżej. */
 tbody td.cell-in-range {
-  background: color-mix(in srgb, var(--accent-light) 62%, white) !important;
   --rng-t: 0 0 0 0 transparent;
   --rng-b: 0 0 0 0 transparent;
   --rng-l: 0 0 0 0 transparent;
   --rng-r: 0 0 0 0 transparent;
-  box-shadow: var(--rng-t), var(--rng-b), var(--rng-l), var(--rng-r);
 }
-[data-theme="dark"] tbody td.cell-in-range {
-  background: color-mix(in srgb, var(--accent) 32%, var(--panel)) !important;
-}
-tbody td.range-edge-top { --rng-t: inset 0 2px 0 0 var(--accent-h); }
-tbody td.range-edge-bottom { --rng-b: inset 0 -2px 0 0 var(--accent-h); }
-tbody td.range-edge-left { --rng-l: inset 2px 0 0 0 var(--accent-h); }
-tbody td.range-edge-right { --rng-r: inset -2px 0 0 0 var(--accent-h); }
-[data-theme="dark"] tbody td.range-edge-top { --rng-t: inset 0 2px 0 0 var(--accent); }
-[data-theme="dark"] tbody td.range-edge-bottom { --rng-b: inset 0 -2px 0 0 var(--accent); }
-[data-theme="dark"] tbody td.range-edge-left { --rng-l: inset 2px 0 0 0 var(--accent); }
-[data-theme="dark"] tbody td.range-edge-right { --rng-r: inset -2px 0 0 0 var(--accent); }
-
-/* Zaokrąglone narożniki prostokąta zaznaczenia (komórki z dwiema krawędziami).
-   box-shadow inset podąża za border-radius, więc obwódka też się zaokrągla. */
-tbody td.range-edge-top.range-edge-left { border-top-left-radius: 6px; }
-tbody td.range-edge-top.range-edge-right { border-top-right-radius: 6px; }
-tbody td.range-edge-bottom.range-edge-left { border-bottom-left-radius: 6px; }
-tbody td.range-edge-bottom.range-edge-right { border-bottom-right-radius: 6px; }
+tbody td.range-edge-top { --rng-t: inset 0 2px 0 0 var(--sel-frame); }
+tbody td.range-edge-bottom { --rng-b: inset 0 -2px 0 0 var(--sel-frame); }
+tbody td.range-edge-left { --rng-l: inset 2px 0 0 0 var(--sel-frame); }
+tbody td.range-edge-right { --rng-r: inset -2px 0 0 0 var(--sel-frame); }
 
 /* Gdy jest aktywny zakres, stłum pas wiersza fokusu POZA prostokątem zaznaczenia,
    żeby poziome podświetlenie wiersza nie kolidowało z obwódką zakresu (jak w Arkuszach). */
@@ -4646,11 +4644,6 @@ tbody tr.row-focused td{
   transition: box-shadow 0.1s ease, border-radius 0.1s ease;
   /* ... reszta twoich styli dla wiersza ... */
 }
-tbody td.cell-selected,
-tbody td.cell-active {
-  transition: box-shadow 0.1s ease, border-radius 0.1s ease;
-  /* ... reszta twoich styli dla wiersza ... */
-}
 
 
 /* BEZ content-visibility na wierszach tabeli (usunięte 2026-09-25). Zawieranie
@@ -4757,36 +4750,56 @@ tbody td.cell-filter-match {
     inset 0 0 6px color-mix(in srgb, var(--warning) 20%, transparent);
 }
 
-/* Wyróżnienie JEDNEJ komórki zaznaczonej - ma pierwszeństwo nad cell-filter-match i row-focused.
-   .cell-active (aktywna komórka w trybie komórkowym) celowo WSPÓŁDZIELI tę regułę zamiast
-   powtarzać wartości — inaczej rozjeżdża się przy każdym liftingu zaznaczenia. */
-tbody td.cell-selected:not(.cell-filter-match),
-tbody td.cell-active:not(.cell-filter-match) {
-  background: var(--accent-light) !important;
-  box-shadow:
-    inset 0 0 0 1.7px color-mix(in srgb, var(--accent) 62%, transparent),
-    inset 0 0 5.5px color-mix(in srgb, var(--accent) 10%, transparent) !important;
-  border-radius: 6px;
-  transition: box-shadow 0.12s ease, background 0.12s ease;
+/* ── Zaznaczenie jak w Excelu ──
+   Pojedyncza komórka: ostra ramka 2 px w akcencie, bez zaokrąglenia i poświaty, delikatne
+   tło. Zakres: jedna obwódka wokół całego prostokąta (zmienne --rng-* wyżej), lekko
+   zabarwione wnętrze, a komórka aktywna (kotwica, .range-anchor) zostaje NIEzabarwiona —
+   po tym w Excelu widać, skąd zaczęło się zaznaczanie i dokąd trafi wpisany tekst.
+   Zaznaczenie ma pierwszeństwo nad trafieniem filtra (bursztyn) i pasem wiersza:
+   reguły stoją PO nich, a !important na tle/cieniu bije ich !important kolejnością.
+   .cell-active (aktywna komórka w trybie komórkowym) celowo WSPÓŁDZIELI regułę
+   z .cell-selected zamiast powtarzać wartości — inaczej rozjeżdża się przy każdej zmianie.
+   Bez transition: zaznaczenie przeskakuje od razu (jak w arkuszu), a przy szybkim
+   chodzeniu strzałkami nie ciągnie za sobą gasnącej ramki. */
+tbody tr td.cell-selected,
+tbody tr td.cell-active {
+  background: var(--sel-fill) !important;
+  box-shadow: inset 0 0 0 2px var(--sel-frame) !important;
+  border-radius: 0 !important;
+  transition: none;
 }
-[data-theme="dark"] tbody td.cell-selected:not(.cell-filter-match),
-[data-theme="dark"] tbody td.cell-active:not(.cell-filter-match) {
-  background: color-mix(in srgb, var(--accent) 23%, transparent) !important;
-  box-shadow:
-    inset 0 0 0 1.7px color-mix(in srgb, var(--accent) 62%, transparent),
-    inset 0 0 5.5px color-mix(in srgb, var(--accent) 13%, transparent) !important;
+tbody tr td.cell-in-range {
+  background: var(--sel-range-fill) !important;
+  box-shadow: var(--rng-t), var(--rng-b), var(--rng-l), var(--rng-r) !important;
+  border-radius: 0 !important;
+  transition: none;
+}
+tbody tr td.cell-in-range.range-anchor { background: var(--sel-base) !important; }
+/* Nagłówki zaznaczenia (jak w Excelu): numer wiersza i litera kolumny aktywnej komórki
+   lub zakresu — zabarwione tło + kreska w akcencie od strony siatki. Zieleń = zaznaczenie;
+   bursztyn (--warning) zostaje wyłącznie dla trafień filtra. Klasę .hdr-sel stawia
+   syncSelectionHeadersInDom (table.js) różnicowo, tylko na zmienionych nagłówkach. */
+tbody tr td.row-head.hdr-sel {
+  background: var(--sel-head-fill) !important;
+  color: var(--sel-head-ink);
+  box-shadow: inset -2px 0 0 var(--sel-frame) !important;
+}
+thead tr.guide-row th.guide-cell.hdr-sel {
+  background: var(--sel-head-fill);
+  color: var(--sel-head-ink);
+  box-shadow: inset 0 -2px 0 var(--sel-frame);
 }
 
 /* Łączenie się zaznaczenia wiersza po kliknięciu z podświetleniem pasujących komórek */
 /* Tutaj stosujemy bardzo subtelne łączenie, by efekt nie był agresywny jak przy cell-selected, a raczej jak hover */
-tbody tr.row-focused td.cell-filter-match:not(.cell-selected) {
+tbody tr.row-focused td.cell-filter-match:not(.cell-selected):not(.cell-in-range) {
   background: color-mix(in srgb, var(--accent-light) 40%, transparent) !important;
   box-shadow:
     inset 0 0 0 1.6px color-mix(in srgb, var(--warning) 38%, transparent),
     inset 0 0 6px color-mix(in srgb, var(--warning) 15%, transparent) !important;
   border-radius: 6px;
 }
-[data-theme="dark"] tbody tr.row-focused td.cell-filter-match:not(.cell-selected) {
+[data-theme="dark"] tbody tr.row-focused td.cell-filter-match:not(.cell-selected):not(.cell-in-range) {
   background: color-mix(in srgb, var(--accent-light) 65%, transparent) !important;
   box-shadow:
     inset 0 0 0 1.6px color-mix(in srgb, var(--warning) 56%, transparent),
@@ -8777,4 +8790,42 @@ html:not(.force-glass) .sidebar details.panel {
 :root:not(.sidebar-open) .sidebar-handle::after { font-size: 10px; }
 @media (max-width: 768px) {
   .sidebar-open .sidebar-handle::after { font-size: 13px; letter-spacing: 0.01em; }
+}
+
+/* ===================== Zapisane widoki (qs-history.js) ===================== */
+.qs-view-item { flex-direction: column; align-items: flex-start; gap: 1px; }
+.qs-view-name { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.qs-view-desc { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.qs-view-item.is-off .qs-view-name { color: var(--muted); }
+.qs-view-save { color: var(--accent); font-weight: 600; }
+.af-view {
+  flex-shrink: 0;
+  max-width: min(260px, 60vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 10px;
+  border-radius: var(--r-full);
+  background: var(--accent-light);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.af-save-view {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+}
+.af-save-view:hover { background: var(--accent-light); }
+.af-save-view:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+@media (pointer: coarse) {
+  .af-view { padding: 5px 11px; font-size: 12.5px; }
+  .af-save-view { min-height: 32px; font-size: 12.5px; }
 }

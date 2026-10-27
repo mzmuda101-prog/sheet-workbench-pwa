@@ -693,7 +693,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261027-01";
+const APP_BUILD_VERSION = "20261028-01";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1065,6 +1065,8 @@ function applyFreezeHeaders() {
 function applyFreezeFirstColumn() {
   if (!tableWrapEl) return;
   tableWrapEl.classList.toggle("freeze-first-col", !!(freezeFirstColEl && freezeFirstColEl.checked));
+  // uchwyt wypełniania w zamrożonej kolumnie siedzi w komórce, poza nią — w #tableWrap (autofill.js)
+  if (typeof swbFillHandleSync === "function") swbFillHandleSync();
 }
 
 

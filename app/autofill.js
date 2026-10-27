@@ -375,6 +375,14 @@ function swbFillCopy(direction) {
 // w dół lub w prawo = seria (jak w Excelu), z Ctrl/Alt przy puszczeniu = odwrotnie
 // (kopia zamiast serii, a dla jednej liczby seria +1). Dwuklik = w dół do końca danych
 // w sąsiedniej kolumnie. Działa myszą i palcem (touch-action: none na samym uchwycie).
+//
+// Gdzie stoi: NIE w komórce. <td> ma overflow: hidden (wielokropek długiego tekstu), więc
+// przycinał kwadracik do wnętrza ramki zaznaczenia. Uchwyt leży w #tableWrap (position:
+// relative — przewija się razem z treścią) na narożniku ramki i wystaje na zewnątrz jak
+// w Excelu. Pozycję liczymy w rAF (raz na klatkę, po naturalnym layoucie) i odświeżamy,
+// gdy tabela zmieni rozmiar (szerokość kolumny, wysokość wiersza, zoom). Wyjątek: róg
+// w ZAMROŻONEJ kolumnie (sticky) — tam uchwyt zostaje w komórce (klasa is-inset), bo
+// w #tableWrap odjeżdżałby od niej przy przewijaniu w bok.
 
 const swbFillHandle = (() => {
   if (typeof document === "undefined" || typeof tbodyEl === "undefined" || !tbodyEl) return { sync() {} };
@@ -383,6 +391,8 @@ const swbFillHandle = (() => {
   el.setAttribute("aria-hidden", "true");
   el.dataset.hint = typeof t === "function" ? t("fillHandleHint") : "";
   let drag = null;
+  let host = null;      // komórka-róg, przy której stoi uchwyt
+  let placeFrame = 0;
 
   function sourceRect() {
     const rect = typeof rangeCellsToCopy === "function" ? rangeCellsToCopy() : null;
@@ -404,8 +414,29 @@ const swbFillHandle = (() => {
   }
 
   function detach() {
-    const host = el.parentElement;
-    if (host) { host.classList.remove("has-fill-handle"); el.remove(); }
+    if (host) { host.classList.remove("has-fill-handle"); host = null; }
+    if (el.parentElement) el.remove();
+  }
+
+  const inFrozenCol = (td) => tableWrapEl.classList.contains("freeze-first-col") && td.cellIndex <= 1;
+
+  // Środek kwadracika = narożnik ramki (środek jej 2-pikselowej kreski), nie zewnętrzny róg
+  // komórki: clientWidth/Height pomijają obramowanie dolne komórki.
+  function place() {
+    placeFrame = 0;
+    if (!host || el.parentElement !== tableWrapEl) return;
+    if (!host.isConnected) { detach(); return; }
+    const wrap = tableWrapEl.getBoundingClientRect();
+    const b = host.getBoundingClientRect();
+    const x = b.left + host.clientLeft + host.clientWidth - 1 - wrap.left - tableWrapEl.clientLeft + tableWrapEl.scrollLeft;
+    const y = b.top + host.clientTop + host.clientHeight - 1 - wrap.top - tableWrapEl.clientTop + tableWrapEl.scrollTop;
+    el.style.transform = `translate(${x}px, ${y}px)`;
+  }
+  function schedulePlace() {
+    if (!placeFrame) placeFrame = requestAnimationFrame(place);
+  }
+  if (typeof ResizeObserver === "function" && typeof tableEl !== "undefined" && tableEl) {
+    new ResizeObserver(() => { if (host && !drag) schedulePlace(); }).observe(tableEl);
   }
 
   function sync() {
@@ -413,10 +444,17 @@ const swbFillHandle = (() => {
     const rect = allowed() ? sourceRect() : null;
     const td = rect && typeof cfmtIsRealCol === "function" && cfmtIsRealCol(rect.colMax) ? cornerTd(rect) : null;
     if (!td) { detach(); return; }
-    if (el.parentElement === td) return;
-    detach();
-    td.classList.add("has-fill-handle");
-    td.appendChild(el);
+    if (host !== td) {
+      if (host) host.classList.remove("has-fill-handle");
+      host = td;
+      td.classList.add("has-fill-handle");
+    }
+    const inset = inFrozenCol(td);
+    el.classList.toggle("is-inset", inset);
+    const parent = inset ? td : tableWrapEl;
+    if (el.parentElement !== parent) parent.appendChild(el);
+    if (inset) el.style.transform = "";
+    else schedulePlace();
   }
 
   function cellAt(x, y) {

@@ -186,8 +186,8 @@ async function run() {
   const col = async (c, from, to) => { const out = []; for (let r = from; r <= to; r++) out.push(await text(r, c)); return out; };
   const center = async (sel) => { const b = await page.locator(sel).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
   const dragHandle = async (toR, toC, { alt = false } = {}) => {
-    await page.waitForSelector("#dataTable .fill-handle", { timeout: 3000 });
-    const h = await center("#dataTable .fill-handle");
+    await page.waitForSelector("#tableWrap .fill-handle", { timeout: 3000 });
+    const h = await center("#tableWrap .fill-handle");
     const t = await center(td(toR, toC));
     await page.mouse.move(h.x, h.y);
     await page.mouse.down();
@@ -201,7 +201,8 @@ async function run() {
   const pick = async (r, c) => { await page.click(td(r, c)); await sleep(120); };
 
   await pick(1, 1);
-  const handleHost = await page.evaluate(() => { const h = document.querySelector("#dataTable .fill-handle"); return h ? h.closest("td")?.dataset.colIndex + "@" + h.closest("tr")?.dataset.rowKey : null; });
+  // uchwyt leży w #tableWrap (nie w komórce — td go przycinało); róg wskazuje td.has-fill-handle
+  const handleHost = await page.evaluate(() => { const h = document.querySelector("#tableWrap .fill-handle"); const td = h && document.querySelector("#dataTable td.has-fill-handle"); return td ? td.dataset.colIndex + "@" + td.closest("tr")?.dataset.rowKey : null; });
   ok("5. uchwyt stoi w prawym dolnym rogu aktywnej komórki", handleHost === "1@wide:1", handleHost);
   await dragHandle(5, 1);
   ok("5. data przeciągnięta uchwytem → kolejne dni, format daty", JSON.stringify(await col(1, 2, 5)) === JSON.stringify(["13.03.2025", "14.03.2025", "15.03.2025", "16.03.2025"]), await col(1, 2, 5));
@@ -231,8 +232,8 @@ async function run() {
   ok("5. dwie liczby 2, 4 → trend 6, 8, 10", JSON.stringify(await col(4, 3, 5)) === JSON.stringify(["6", "8", "10"]), await col(4, 3, 5));
 
   await pick(1, 10);
-  await page.waitForSelector("#dataTable .fill-handle", { timeout: 3000 });
-  await page.dblclick("#dataTable .fill-handle");
+  await page.waitForSelector("#tableWrap .fill-handle", { timeout: 3000 });
+  await page.dblclick("#tableWrap .fill-handle");
   await sleep(300);
   ok("5. dwuklik uchwytu: „Kw1” w dół do końca kolumny Nr (kwartały wracają do 1)",
     JSON.stringify(await col(10, 2, 10)) === JSON.stringify(["Kw2", "Kw3", "Kw4", "Kw1", "Kw2", "Kw3", "Kw4", "Kw1", "Kw2"]), await col(10, 2, 10));
