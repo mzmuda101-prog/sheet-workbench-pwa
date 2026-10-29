@@ -41,7 +41,16 @@ function attachOverflowFade(el) {
   el.addEventListener("scroll", sync, { passive: true });
   scheduleOverflowNudge(el);
   if (typeof ResizeObserver === "function") new ResizeObserver(sync).observe(el);
-  if (typeof MutationObserver === "function") new MutationObserver(sync).observe(el, { childList: true, subtree: true, characterData: true });
+  // Zmiana treści rzędu → odczyt szerokości raz na klatkę (w rAF), nie w mikrozadaniu
+  // zaraz po mutacji: tam scrollWidth wymuszał synchroniczny układ CAŁEJ strony (z tabelą)
+  // w środku pracy, która za chwilę i tak znów go unieważni — kilka razy na jedną akcję.
+  let syncQueued = false;
+  const syncSoon = () => {
+    if (syncQueued) return;
+    syncQueued = true;
+    requestAnimationFrame(() => { syncQueued = false; sync(); });
+  };
+  if (typeof MutationObserver === "function") new MutationObserver(syncSoon).observe(el, { childList: true, subtree: true, characterData: true });
   el._swbFadeSync = sync;
   sync();
 }

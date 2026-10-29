@@ -97,18 +97,108 @@ function fcContext(sheetName, r, c) {
 let fcIndex = null;
 const fcAstCache = new Map();
 
-function fcParseFile(f) {
+function fcParseFile(f, r, c) {
   let e = fcAstCache.get(f);
   if (e === undefined) {
-    try {
-      const ast = FC.parse(f, { lang: "en" });
-      const fns = [...FC.functionsOf(ast)];
-      e = { ast, ok: fns.every((n) => FC.isSupported(n)) };
-    } catch { e = { ast: null, ok: false }; }
+    e = r == null ? undefined : fcFromShape(f, r, c);
+    if (e === undefined) {
+      try {
+        const ast = FC.parse(f, { lang: "en" });
+        const fns = [...FC.functionsOf(ast)];
+        e = { ast, ok: fns.every((n) => FC.isSupported(n)) };
+      } catch { e = { ast: null, ok: false }; }
+      if (r != null) fcShapeRemember(f, r, c, e);
+    }
     if (fcAstCache.size > 50000) fcAstCache.clear();
     fcAstCache.set(f, e);
   }
   return e;
+}
+
+// ── wspólne „kształty” formuł ───────────────────────────────────────────────
+// Plik z 28 tys. formuł ma ich zwykle kilkadziesiąt RÓŻNYCH: „=B2*C2” w wierszu 2 i „=B3*C3”
+// w wierszu 3 to ta sama formuła przesunięta o wiersz. Klucz kształtu = tekst, w którym
+// względne części adresów są zapisane jako odległość od komórki formuły (jak R1C1 w Excelu).
+// Ten sam kształt → raz parsowane drzewo, kolejne komórki dostają FC.shift (to samo, co
+// robi wypełnianie formułą). Bezpiecznik: przy PIERWSZYM parsowaniu kształtu adresy znalezione
+// tu skanerem muszą się zgadzać co do sztuki z adresami w drzewie parsera (w tym zakresy
+// kolumn/wierszy, których skaner nie przesuwa) — inaczej kształt jest wyłączony i każda
+// komórka parsuje się jak dawniej. Wynik zawsze identyczny z FC.parse.
+const fcShapes = new Map(); // klucz → { r, c, e } | null (kształt niebezpieczny)
+const FC_REF_AT = /(\$?)([A-Za-z]{1,3})(\$?)(\d{1,7})(?![A-Za-z0-9_(.!\[À-ɏ])/y;
+const FC_WORD_CH = /[A-Za-z0-9_.\\$À-ɏ]/;
+
+function fcColIdx(letters) {
+  let n = 0;
+  for (let i = 0; i < letters.length; i++) n = n * 26 + (letters.charCodeAt(i) & 0x1f);
+  return n - 1;
+}
+
+// → { key, refs: [[r, c, ar, ac], …] } albo null (nie da się bezpiecznie opisać kształtu)
+function fcShapeOf(f, r, c) {
+  const s = String(f);
+  let key = "";
+  let last = 0;
+  const refs = [];
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '"' || ch === "'") { // literał tekstowy / nazwa arkusza w apostrofach — bez zmian
+      const j = s.indexOf(ch, i + 1);
+      if (j < 0) return null;
+      i = j;
+      continue;
+    }
+    if (i > 0 && FC_WORD_CH.test(s[i - 1])) continue;
+    FC_REF_AT.lastIndex = i;
+    const m = FC_REF_AT.exec(s);
+    if (!m) continue;
+    const rr = +m[4] - 1;
+    const cc = fcColIdx(m[2]);
+    const ar = !!m[3];
+    const ac = !!m[1];
+    refs.push([rr, cc, ar, ac]);
+    key += s.slice(last, i) + "\u0001" + (ac ? "$" + cc : cc - c) + "," + (ar ? "$" + rr : rr - r) + "\u0002";
+    last = i + m[0].length;
+    i = last - 1;
+  }
+  return { key: key + s.slice(last), refs };
+}
+
+function fcShapeRefsMatch(ast, refs) {
+  const fromAst = [];
+  let bad = false;
+  const walk = (n) => {
+    if (!n || typeof n !== "object" || bad) return;
+    if (n.t === "ref") fromAst.push(`${n.r},${n.c},${!!n.ar},${!!n.ac}`);
+    else if (n.t === "range") {
+      if (n.cols || n.rows) { bad = true; return; }
+      fromAst.push(`${n.r1},${n.c1},${!!n.ar1},${!!n.ac1}`, `${n.r2},${n.c2},${!!n.ar2},${!!n.ac2}`);
+    } else if (n.t === "call") n.args.forEach(walk);
+    else if (n.t === "bin") { walk(n.a); walk(n.b); }
+    else if (n.t === "un" || n.t === "pct" || n.t === "paren") walk(n.a);
+    else if (n.t === "array") n.rows.forEach((row) => row.forEach(walk));
+  };
+  walk(ast);
+  if (bad || fromAst.length !== refs.length) return false;
+  const a = fromAst.sort();
+  const b = refs.map(([rr, cc, ar, ac]) => `${rr},${cc},${ar},${ac}`).sort();
+  return a.every((x, i) => x === b[i]);
+}
+
+function fcFromShape(f, r, c) {
+  const sh = fcShapeOf(f, r, c);
+  if (!sh || !sh.refs.length) return undefined;
+  const base = fcShapes.get(sh.key);
+  if (!base) return undefined;
+  return { ast: FC.shift(base.e.ast, r - base.r, c - base.c), ok: base.e.ok };
+}
+
+function fcShapeRemember(f, r, c, e) {
+  if (!e.ast) return;
+  const sh = fcShapeOf(f, r, c);
+  if (!sh || !sh.refs.length || fcShapes.has(sh.key)) return;
+  if (fcShapes.size > 5000) fcShapes.clear();
+  fcShapes.set(sh.key, fcShapeRefsMatch(e.ast, sh.refs) ? { r, c, e } : null);
 }
 
 function fcDepsOf(ast, sheet, r, c) {
@@ -136,7 +226,7 @@ function fcDepsOf(ast, sheet, r, c) {
 function fcIndexAdd(sheet, ref, cell, idx = fcIndex) {
   const { r, c } = XLSX.utils.decode_cell(ref);
   const key = `${sheet}\u0000${ref}`;
-  const p = fcParseFile(cell.f);
+  const p = fcParseFile(cell.f, r, c);
   const deps = fcDepsOf(p.ast, sheet, r, c);
   idx.entries.set(key, { sheet, ref, r, c, f: cell.f, ast: p.ast, ok: p.ok && !cell.F, deps });
   deps.forEach((d) => {
