@@ -693,7 +693,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261029-01";
+const APP_BUILD_VERSION = "20261029-02";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -944,12 +944,19 @@ function setLoading(isLoading, text, options = {}) {
 }
 
 let _statusAnimRaf = 0;
-function setStatus(msg) {
+let _statusPulseKey = null;
+// opts.pulseKey: część komunikatu, której zmiana zasługuje na puls (licznik wierszy) —
+// sam dopisek „wiersz N” przy chodzeniu strzałkami tylko podmienia tekst. Puls animuje
+// kolor (malowanie), więc przy każdej strzałce dokładał ~17 klatek malowania.
+function setStatus(msg, opts) {
   // Animuj tylko gdy treść faktycznie się zmienia (np. licznik wierszy po filtrze) —
   // powtórne wywołania z tym samym tekstem (częste przy re-renderach) nie mają migać.
   const changed = statusEl.textContent !== msg;
   statusEl.textContent = msg;
-  if (!changed) return;
+  const key = opts && opts.pulseKey !== undefined ? opts.pulseKey : msg;
+  const pulse = changed && key !== _statusPulseKey;
+  _statusPulseKey = key;
+  if (!pulse) return;
   // Restart animacji BEZ `void statusEl.offsetWidth`. Ten odczyt wymuszał
   // synchroniczne przeliczenie układu CAŁEJ strony — a przy tabeli na tysiące
   // komórek i kilku wywołaniach w trakcie wczytywania zebrało się z tego 374 ms

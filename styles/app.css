@@ -4327,8 +4327,12 @@ border-bottom-right-radius: 8px;
    na czym się stoi. `:not(:focus-visible)` sprawia, że ta warstwa sama się wyłącza
    tam, gdzie :focus-visible zadziałał (Chromium/Firefox) — więc nie dubluje obwódek.
    `.kbd-focus` na <html> ustawia trackInputModality() w core.js: jest po użyciu
-   klawiatury, znika po dotknięciu/kliknięciu, więc mysz i palec nadal bez ramek. */
-.kbd-focus :focus:not(:focus-visible) {
+   klawiatury, znika po dotknięciu/kliknięciu, więc mysz i palec nadal bez ramek.
+   Lista elementów zamiast samego `:focus`: z selektorem uniwersalnym przełączenie klasy
+   na <html> (klawiatura → mysz) przeliczało styl KAŻDEGO elementu strony, z tabelą
+   ~2300 — kliknięcie po pisaniu było o ~20 % wolniejsze (CPU ×4). :where() = ta sama
+   specyficzność co dawniej; lista = wszystko, co w apce może dostać fokus. */
+.kbd-focus :where(a, button, input, select, textarea, summary, iframe, audio, video, [tabindex], [contenteditable]):focus:not(:focus-visible) {
   outline: 2px solid var(--accent-h);
   outline-offset: 2px;
   border-radius: 4px;

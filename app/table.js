@@ -141,13 +141,14 @@ function updateTableStatus(model) {
   const modeLabel = model.mode === "long" ? t("statusLongMode") : "";
   const focusedSuffix = buildFocusedRowStatusSuffix(model);
   const shown = Math.min(rows.length, limit);
-  setStatus(t("statusTableRows", {
+  const parts = {
     rows: formatRowCount(rows.length),
     // „pokazano N” tylko gdy limit faktycznie coś ukrywa — inaczej to powtórzenie liczby
     limitNote: shown < rows.length ? t("statusRowsLimited", { shown: shown.toLocaleString(currentLang === "en" ? "en-US" : "pl-PL") }) : "",
     mode: modeLabel,
-    focused: focusedSuffix,
-  }));
+  };
+  // puls tylko przy zmianie licznika, nie przy samym przejściu kursora do innego wiersza
+  setStatus(t("statusTableRows", { ...parts, focused: focusedSuffix }), { pulseKey: t("statusTableRows", { ...parts, focused: "" }) });
 }
 
 function findCellElement(cellState) {
