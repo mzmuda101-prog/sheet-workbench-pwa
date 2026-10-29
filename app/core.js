@@ -345,6 +345,162 @@ function computeFlipRowCap() {
   return cap;
 }
 
+// ── FLIP przez „duszki” (2026-10-29) ────────────────────────────────────────────
+// Chromium animuje transform/opacity na <tr> na WĄTKU GŁÓWNYM: co klatkę przeliczał styl
+// każdego animowanego wiersza z jego komórkami (~465 elementów) — ok. 0,5 s pracy na jedno
+// sortowanie przy CPU ×4, animacja cięła się na słabszym sprzęcie, a kolejny klik czekał.
+// Teraz poruszające się wiersze płyną jako KOPIE w warstwie nad tabelą (zwykłe <div>-y
+// z małą tabelą w środku: te same klasy, szerokości kolumn i wysokość), a prawdziwe wiersze
+// stoją już na miejscu, przezroczyste. Animacja to wyłącznie transform/opacity kopii, więc
+// liczy ją kompozytor (zmierzone: wątek główny 451 → 18 ms na 30 wierszy). Zapas mocy idzie
+// w wygląd: wiersz lecący daleko „unosi się” — cień narasta i gaśnie (też sama opacity).
+// Koniec animacji = kopie znikają w tej samej klatce, w której wiersze wracają (piksel
+// w piksel — strażnik scripts/flip-ghost-playwright.js). Każdy klik, klawisz, kółko,
+// dotyk albo przebudowa tabeli kończy animację od razu (nic nie zostaje „w powietrzu”).
+let _flipGhost = null;
+
+function flipGhostFinish() {
+  const g = _flipGhost;
+  if (!g) return;
+  _flipGhost = null;
+  clearTimeout(g.timer);
+  g.mo.disconnect();
+  g.stopEvents.forEach((type) => document.removeEventListener(type, flipGhostFinish, true));
+  document.removeEventListener("visibilitychange", flipGhostFinish);
+  g.anims.forEach((a) => { try { a.cancel(); } catch (_) {} });
+  g.rows.forEach((tr) => tr.classList.remove("flip-hidden"));
+  g.layer.remove();
+}
+
+function flipGhostClone(tr) {
+  const c = tr.cloneNode(true);
+  c.removeAttribute("id");
+  c.removeAttribute("tabindex");
+  c.querySelectorAll("[id]").forEach((el) => el.removeAttribute("id"));
+  c.querySelectorAll("[tabindex]").forEach((el) => el.removeAttribute("tabindex"));
+  c.classList.remove("flip-hidden");
+  c.style.transform = "";
+  c.style.transition = "";
+  c.style.opacity = "";
+  return c;
+}
+
+function flipGhostAnimate(movers, entering, delayFor, enterOffset) {
+  if (typeof Element.prototype.animate !== "function" || !tableWrapEl || !tableEl) return false;
+  // nowy silnik wierszy dorysowuje DOM w trakcie przewijania, scalenia i otwarty edytor
+  // nie dają się wiernie skopiować jednym wierszem — tam zostaje stary FLIP
+  if (tbodyEl.classList.contains("is-virtual") || tbodyEl.querySelector("input.cell-editor, td[colspan], td[rowspan]")) return false;
+  // odczyty (układ jest świeży po pomiarze FLIP) — zapisów jeszcze nie było
+  const wrapRect = tableWrapEl.getBoundingClientRect();
+  const tableRect = tableEl.getBoundingClientRect();
+  const originX = tableRect.left - wrapRect.left + tableWrapEl.scrollLeft - tableWrapEl.clientLeft;
+  const originY = tableWrapEl.scrollTop - wrapRect.top - tableWrapEl.clientTop;
+  const lastRow = tbodyEl.rows[tbodyEl.rows.length - 1];
+  const colgroup = tableEl.querySelector("colgroup");
+  // Kopia tylko dla wierszy, które w trakcie ruchu da się zobaczyć: start i koniec poza widokiem
+  // po TEJ SAMEJ stronie = nic nie widać, wiersz po prostu stoi na miejscu (mniej warstw GPU
+  // w pierwszej klatce). Wiersz przelatujący PRZEZ widok (z góry na dół) dostaje kopię.
+  const visible = (a, b, h) => Math.max(a, b) + h > wrapRect.top && Math.min(a, b) < wrapRect.bottom;
+  const entries = [];
+  movers.forEach((m) => { const h = m.tr.getBoundingClientRect().height; if (visible(m.top, m.top + m.dy, h)) entries.push({ ...m, h, kind: "move" }); });
+  entering.forEach((e) => { const h = e.tr.getBoundingClientRect().height; if (visible(e.top, e.top, h)) entries.push({ ...e, h, kind: "enter" }); });
+  if (!entries.length) return false;
+  // „Uniesienie” (cień) dostają wiersze, które lecą daleko — co najmniej dwie wysokości, maks.
+  // 10 najdalszych: widać, co przeskoczyło najwięcej, a drobne przesunięcia nie migają cieniem.
+  const lifted = new Set(entries
+    .filter((e) => e.kind === "move" && Math.abs(e.dy) >= e.h * 2)
+    .sort((a, b) => Math.abs(b.dy) - Math.abs(a.dy))
+    .slice(0, 10)
+    .map((e) => e.tr));
+
+  const layer = document.createElement("div");
+  layer.className = "flip-ghosts";
+  layer.setAttribute("aria-hidden", "true");
+  const tableClass = `${tableEl.className} flip-ghost-table`.trim();
+  const ghosts = entries.map((e) => {
+    const ghost = document.createElement("div");
+    ghost.className = `flip-ghost flip-ghost-${e.kind}`;
+    ghost.style.left = `${originX}px`;
+    ghost.style.top = `${e.top + originY}px`;
+    ghost.style.width = `${tableRect.width}px`;
+    ghost.style.height = `${e.h}px`;
+    let shadow = null;
+    if (lifted.has(e.tr)) {
+      shadow = document.createElement("div");
+      shadow.className = "flip-ghost-shadow";
+      ghost.appendChild(shadow);
+    }
+    const t = document.createElement("table");
+    t.className = tableClass;
+    t.style.width = `${tableRect.width}px`;
+    if (colgroup) t.appendChild(colgroup.cloneNode(true));
+    const body = document.createElement("tbody");
+    body.className = tbodyEl.className;
+    const row = flipGhostClone(e.tr);
+    row.style.height = `${e.h}px`;
+    body.appendChild(row);
+    // „tbody tr:last-child td” zdejmuje dolną kreskę — kopia nie może być „ostatnia”,
+    // jeśli prawdziwy wiersz nie jest ostatni (wypełniacz nie zajmuje miejsca)
+    if (e.tr !== lastRow) {
+      const pad = document.createElement("tr");
+      pad.className = "flip-ghost-pad";
+      body.appendChild(pad);
+    }
+    t.appendChild(body);
+    ghost.appendChild(t);
+    layer.appendChild(ghost);
+    return { e, ghost, shadow };
+  });
+
+  // zapisy: warstwa + ukrycie prawdziwych wierszy w tej samej klatce
+  tableWrapEl.appendChild(layer);
+  entries.forEach((e) => e.tr.classList.add("flip-hidden"));
+
+  const ease = "cubic-bezier(0.22, 1, 0.36, 1)";
+  const anims = [];
+  let longest = 0;
+  ghosts.forEach(({ e, ghost, shadow }) => {
+    const delay = delayFor.get(e.tr) || 0;
+    if (e.kind === "move") {
+      const duration = 380;
+      anims.push(ghost.animate(
+        [{ transform: `translateY(${e.dy}px)` }, { transform: "none" }],
+        { duration, delay, easing: ease, fill: "backwards" },
+      ));
+      // uniesienie: cień szybko narasta, a gaśnie, zanim wiersz osiądzie
+      if (shadow) anims.push(shadow.animate(
+        [{ opacity: 0 }, { opacity: 1, offset: 0.3 }, { opacity: 0 }],
+        { duration, delay, easing: "ease-out", fill: "both" },
+      ));
+      longest = Math.max(longest, delay + duration);
+    } else {
+      const duration = 340;
+      anims.push(ghost.animate(
+        [{ opacity: 0, transform: `translateY(${enterOffset}px)` }, { opacity: 1, transform: "none" }],
+        { duration, delay, easing: ease, fill: "backwards" },
+      ));
+      longest = Math.max(longest, delay + duration);
+    }
+  });
+
+  const stopEvents = ["pointerdown", "keydown", "wheel", "touchstart"];
+  const g = {
+    layer,
+    rows: entries.map((e) => e.tr),
+    anims,
+    stopEvents,
+    // przebudowa tabeli w trakcie (filtr, edycja, nowy plik) — kopie byłyby nieaktualne
+    mo: new MutationObserver(flipGhostFinish),
+    // bezpiecznik: iOS potrafi uśpić stronę w trakcie animacji (patrz withSceneTransition)
+    timer: setTimeout(flipGhostFinish, longest + 120),
+  };
+  g.mo.observe(tbodyEl, { childList: true });
+  stopEvents.forEach((type) => document.addEventListener(type, flipGhostFinish, { capture: true, passive: true }));
+  document.addEventListener("visibilitychange", flipGhostFinish);
+  _flipGhost = g;
+  return true;
+}
+
 // Sygnał „następny render ma delikatnie rozjaśnić trafione wiersze" — tryb
 // „zaznacz" w szybkim szukaniu nie przestawia wierszy (FLIP nic by nie pokazał),
 // więc zamiast tego trafienia łagodnie się rozświetlają (czyste opacity, raz).
@@ -356,6 +512,7 @@ let animateMatchPulseNextRender = false;
 // delikatnym fade+slide. Pomiary i zapisy stylów rozdzielone na dwa przebiegi,
 // żeby nie thrashować layoutu.
 function flipRows(mutate) {
+  flipGhostFinish(); // poprzednia animacja (szybkie drugie sortowanie) — wiersze na miejsce
   if (prefersReducedMotion || !tbodyEl) { mutate(); return; }
   const oldRows = tbodyEl.querySelectorAll("tr[data-row-key]");
   // Sufit bezpieczeństwa: przy absurdalnie wielkim DOM pomijamy FLIP (czysty render).
@@ -415,18 +572,13 @@ function flipRows(mutate) {
     if (movers.length + entering.length >= cap) break;
     if (prev == null) {
       if (!inBand(top)) continue; // nowy/wjeżdżający z daleka, ale ląduje poza widokiem
-      tr.style.transition = "none";
-      tr.style.opacity = "0";
-      tr.style.transform = `translateY(${ENTER_OFFSET}px)`;
       entering.push({ tr, top });
       continue;
     }
     const dy = prev - top;
     if (Math.abs(dy) < 1) continue;
     if (!inBand(top) && !inBand(prev)) continue; // ruch w całości poza widokiem → snap
-    tr.style.transition = "none";
-    tr.style.transform = `translateY(${dy}px)`;
-    movers.push({ tr, top });
+    movers.push({ tr, top, dy });
   }
   if (!movers.length && !entering.length) return;
 
@@ -443,6 +595,11 @@ function flipRows(mutate) {
     .sort((a, b) => a.top - b.top)
     .forEach((entry, i) => delayFor.set(entry.tr, Math.min(i * staggerStep, maxStagger)));
 
+  if (flipGhostAnimate(movers, entering, delayFor, ENTER_OFFSET)) return;
+
+  // Zapas (kopia wiersza niemożliwa / brak Web Animations): stary FLIP na samych <tr>.
+  movers.forEach(({ tr, dy }) => { tr.style.transition = "none"; tr.style.transform = `translateY(${dy}px)`; });
+  entering.forEach(({ tr }) => { tr.style.transition = "none"; tr.style.opacity = "0"; tr.style.transform = `translateY(${ENTER_OFFSET}px)`; });
   _flipDirtyRows = [...movers, ...entering].map((entry) => entry.tr);
 
   requestAnimationFrame(() =>
@@ -693,7 +850,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261029-02";
+const APP_BUILD_VERSION = "20261029-03";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

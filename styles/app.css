@@ -3735,6 +3735,44 @@ thead th {
   table-layout: fixed;
 }
 
+/* Animacja sortowania/filtra (flipGhostAnimate w core.js): wiersze w ruchu to kopie w tej
+   warstwie, liczone wyłącznie przez kompozytor (transform/opacity). Ta sama warstwa co
+   szyba: nad komórkami (4), pod przyklejonym nagłówkiem (6+). Prawdziwe wiersze stoją już
+   na miejscu przezroczyste — opacity, nie visibility (ta zdjęłaby fokus komórki). */
+.flip-ghosts {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+.flip-ghost {
+  position: absolute;
+}
+.flip-ghost-table {
+  position: absolute;
+  left: 0;
+  top: 0;
+  table-layout: fixed;
+  margin: 0;
+  /* tło tabeli (--panel) jest półprzezroczyste i leży już pod spodem — drugie by rozjaśniało */
+  background: transparent;
+}
+.flip-ghost-pad { display: none; }
+.flip-ghost-shadow {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+  opacity: 0;
+  box-shadow: 0 6px 16px rgba(20, 30, 20, 0.14), 0 1px 3px rgba(20, 30, 20, 0.10);
+}
+[data-theme="dark"] .flip-ghost-shadow {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+tbody tr.flip-hidden { opacity: 0 !important; }
+
 thead tr.header-row th {
   background: var(--surface);
   overflow: hidden;
@@ -3848,7 +3886,7 @@ tbody td {
 }
 
 /* [EN] Optional text wrapping toggle (Widok → „Zawijaj tekst") */
-:is(#dataTable, .fz-clone).wrap-cells tbody td {
+:is(#dataTable, .fz-clone, .flip-ghost-table).wrap-cells tbody td {
   white-space: normal;
   word-break: break-word;
 }
@@ -3888,10 +3926,12 @@ tbody td.cell-recalced::after {
    ::before, bo ::after zajmuje znacznik przeliczenia; gdy są oba, przeliczenie ustępuje w lewo.
    position:relative przegrywa ze sticky zamrożonej kolumny (wyższa specyficzność) — i dobrze,
    sticky też trzyma absolutne dziecko. */
-#dataTable td.cell-has-note {
+#dataTable td.cell-has-note,
+.flip-ghost-table td.cell-has-note {
   position: relative;
 }
-#dataTable td.cell-has-note::before {
+#dataTable td.cell-has-note::before,
+.flip-ghost-table td.cell-has-note::before {
   content: "";
   position: absolute;
   top: 0;
@@ -3903,7 +3943,8 @@ tbody td.cell-recalced::after {
   border-color: transparent var(--danger) transparent transparent;
   pointer-events: none;
 }
-#dataTable td.cell-has-note.cell-recalced::after { right: 9px; }
+#dataTable td.cell-has-note.cell-recalced::after,
+.flip-ghost-table td.cell-has-note.cell-recalced::after { right: 9px; }
 
 /* Treść notatki w podpowiedzi komórki — pierwszy plan (to po nią user najechał). */
 .cell-tooltip-usernote {
@@ -8245,7 +8286,7 @@ body.rp-active { overflow: hidden; }
 /* Malarz formatów: kursor „kopiuj” nad tabelą, dopóki nie wskażesz celu */
 :root.swb-painting #dataTable tbody td:not(.row-head) { cursor: copy; }
 /* Zawijanie nadane ręcznie na pasku formatu */
-:is(#dataTable, .fz-clone) tbody td.cell-wrap { white-space: normal; word-break: break-word; }
+:is(#dataTable, .fz-clone, .flip-ghost-table) tbody td.cell-wrap { white-space: normal; word-break: break-word; }
 
 /* wyskakujące: kolory i obramowania */
 .fmt-pop { width: 248px; padding: 6px; }
