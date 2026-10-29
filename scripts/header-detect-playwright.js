@@ -41,7 +41,7 @@ async function run() {
   await page.waitForFunction(() => typeof XLSX !== "undefined" && typeof detectHeaderRowSimple === "function");
 
   // 1. układy syntetyczne
-  const synth = await page.evaluate(() => {
+  const synth = await page.evaluate(async () => {
     const det = (aoa) => detectHeaderRowSimple(XLSX.utils.aoa_to_sheet(aoa));
     const names = ["Anna Kowalska", "Jan Nowak", "Piotr Wiśniewski", "Maria Wójcik", "Tomasz Lewandowski", "Katarzyna Zielińska"];
     const allText = [["Imię i nazwisko", "Dział", "Miasto"], ...names.map((n, i) => [n, ["HR", "IT", "Biuro"][i % 3], ["Kraków", "Gdańsk"][i % 2]])];
@@ -57,7 +57,7 @@ async function run() {
       return row;
     })];
     const title3 = [["Lista zakresów — stan na dziś"], [], ["Nr", "Zakres", "Osoba", "Od"], ...names.map((n, i) => [i + 1, "Zakres " + i, n, new Date(2026, 1, i + 1)])];
-    const sampleWb = XLSX.read(buildSampleWorkbookArrayBuffer(), { cellDates: true });
+    const sampleWb = XLSX.read(await buildSampleWorkbookArrayBuffer(), { cellDates: true });
     const sample = detectHeaderRowSimple(sampleWb.Sheets[sampleWb.SheetNames[0]]);
     return { allText: det(allText), titleKpi: det(titleKpi), groups: det(groups), twoTables: det(twoTables), title3: det(title3), sample };
   });

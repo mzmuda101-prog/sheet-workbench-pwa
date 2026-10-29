@@ -967,20 +967,24 @@ function openDefaultSheet() {
   loadBtn.click();
 }
 
-// Przykładowy arkusz procesowy/SLA generowany lokalnie w pamięci (SheetJS CE).
-// [EN] Note: CE ignores cell .s styles on write (Pro feature) — sample opens fine,
-// but header/status colors are no longer embedded since the CVE-driven lib swap.
-// Pokazuje: powtarzalne bloki (od/do/Długość ×3) → Wide-to-Long, analizę czasu,
-// agregacje, filtry dat oraz KPI (wiersze podsumowania nad nagłówkiem).
+// Przykładowy arkusz procesowy/SLA składany lokalnie w pamięci — wprost jako części
+// OOXML w paczce JSZip. SheetJS CE przy zapisie gubi style, listy rozwijane, formatowanie
+// warunkowe, zablokowane okienka i formuły z wartością, a przykład ma pokazywać WSZYSTKO,
+// co apka czyta z prawdziwego Excela (2026-10-29: przykład dogoniony do funkcji apki).
+// Pokazuje: powtarzalne bloki (od/do/Długość ×4) → Wide-to-Long, analizę czasu,
+// agregacje, filtry dat, KPI nad nagłówkiem (formuły), Długość jako formułę „do − od”,
+// prawdziwe daty z formatem dd.mm.rrrr, notatki komórek, listę rozwijaną w „Status”,
+// formatowanie warunkowe (kolor statusu, długie cykle, skala kolorów), zablokowane
+// okienka (wiersz nagłówka + Nr./Zakres), autofiltr i drugi arkusz „Podsumowanie”
+// z formułami odwołującymi się do pierwszego (LICZ.WARUNKI, SUMA.JEŻELI, DZIŚ…).
 // 120 wierszy (?sample=N zmienia) — generacja jest natychmiastowa, nic nie jest wysyłane.
-function buildSampleWorkbookArrayBuffer() {
+async function buildSampleWorkbookArrayBuffer() {
   // Przykładowy plik celowo naśladuje układ prawdziwych arkuszy obiegowych:
   //   • wiersz tytułu + wiersz KPI (żeby autodetekcja nagłówka miała co pomijać),
   //   • wiersz grupujący ze scalonymi etykietami „1 Cykl", „2 Cykl"… nad blokami,
   //   • powtarzalny blok 4 kolumn: Imię i Nazwisko / od / do / Długość.
-  // Dzięki temu na przykładzie widać WSZYSTKO, co apka potrafi na takich plikach:
-  // wykrywanie bloków, Wide-to-Long, analizę czasu trwania i tryby auto
-  // (w toku / zakończone / bez startu / ostatni cykl).
+  // Dzięki temu na przykładzie widać wykrywanie bloków, Wide-to-Long, analizę czasu
+  // trwania i tryby auto (w toku / zakończone / bez startu / ostatni cykl).
   const people = [
     "Anna Kowalska", "Jan Nowak", "Piotr Wiśniewski", "Maria Wójcik", "Tomasz Lewandowski",
     "Katarzyna Zielińska", "Michał Szymański", "Agnieszka Dąbrowska",
@@ -998,14 +1002,17 @@ function buildSampleWorkbookArrayBuffer() {
       return 0;
     }
   })();
+  const SHEET = "Obieg zakresów";
+  const SUMMARY = "Podsumowanie";
+  const NOTE_AUTHOR = "Koordynator";
   const CYCLES = 4;
   const BLOCK = ["Imię i Nazwisko", "od", "do", "Długość"];
   const today = new Date();
   const addDays = (date, n) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + n);
   const daysBetween = (a, b) => Math.round((b - a) / 86400000);
-  // Daty zapisujemy jako stringi ISO (YYYY-MM-DD): ten build xlsx-js-style gubi
-  // gołe obiekty Date przy zapisie, a parseDateFlexible aplikacji i tak parsuje ISO.
-  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  // Data → numer seryjny Excela z dnia kalendarzowego (bez godziny i strefy).
+  const serial = (d) => Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(1899, 11, 30)) / 86400000);
+  const colName = (c) => XLSX.utils.encode_col(c);
 
   // Nagłówek: prefiks (Nr./Zakres/Status) + CYCLES × blok. Powtórzenia dostają sufiks
   // cyfrowy (od2, do2…), bo tak wyglądają realne pliki i tak je rozpoznaje parser nagłówków.
@@ -1015,12 +1022,8 @@ function buildSampleWorkbookArrayBuffer() {
   for (let c = 0; c < CYCLES; c++) {
     BLOCK.forEach((name) => headerRow.push(c === 0 ? name : `${name}${c + 1}`));
   }
-
-  // Wiersz z etykietami cykli — scalony nad każdym blokiem (jak w prawdziwych arkuszach).
-  const cycleRow = new Array(prefixHeaders.length).fill("");
-  for (let c = 0; c < CYCLES; c++) {
-    cycleRow.push(`${c + 1} Cykl`, "", "", "");
-  }
+  const blockCol = (c, k) => prefixHeaders.length + c * BLOCK.length + k; // k: 0 osoba, 1 od, 2 do, 3 długość
+  const lastCol = headerRow.length - 1;
 
   // Scenariusze stanów — każdy wiersz ma być czytelnym przykładem czegoś innego.
   //   closed: ile cykli domkniętych, open: czy ostatni wisi otwarty,
@@ -1053,12 +1056,24 @@ function buildSampleWorkbookArrayBuffer() {
   const SAMPLE_DEFAULT_ROWS = 120;
   const planRows = Array.from({ length: sampleRowsParam || SAMPLE_DEFAULT_ROWS }, (_, i) => plan[i % plan.length]);
 
-  const rows = [];
+  // Komórka: { s: tekst } | { n: liczba } | { f: formuła, n|s: zapisana wartość } + st (styl).
+  // Indeksy stylów (st) odpowiadają <cellXfs> w STYLES niżej.
+  const ST = { title: 1, kpiLabel: 2, kpiValue: 3, header: 4, cycle: 5, date: 6, int: 7, bold: 8, pct: 9, dec: 10, totInt: 11, totDec: 12, totPct: 13, dateBold: 14, totLabel: 15 };
+  const HEADER_ROW = 5;           // wiersz nagłówka (Excel, od 1)
+  const FIRST = HEADER_ROW + 1;   // pierwszy wiersz danych
+  const LAST = FIRST + planRows.length - 1;
+  const notes = {};               // A1 → { text, author } (cell-notes.js / xlsx-patch.js)
+  const note = (ref, text) => { notes[ref] = { text, author: NOTE_AUTHOR }; };
+
+  const dataRows = [];
   let closedTotal = 0, openTotal = 0, untouchedTotal = 0;
+  const perPerson = new Map(people.map((p) => [p, { all: 0, closed: 0, days: 0 }]));
+  let firstOrphanRow = 0, longestOpen = { row: 0, days: -1 };
 
   planRows.forEach((spec, i) => {
+    const r = FIRST + i;
     const zakres = `Zakres ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
-    const cells = [i + 1, zakres, ""];
+    const cells = [{ n: i + 1 }, { s: zakres }, null];
     const closedCount = Math.min(spec.closed, spec.open ? CYCLES - 1 : CYCLES);
     // Cykle zamknięte układamy chronologicznie wstecz od dziś, żeby „ostatni cykl"
     // faktycznie był tym najświeższym.
@@ -1069,85 +1084,227 @@ function buildSampleWorkbookArrayBuffer() {
       const isOpen = spec.open && c === closedCount;
       const isOrphan = spec.orphan && c === closedCount + (spec.open ? 1 : 0);
       const person = people[(i + c) % people.length];
+      const od = colName(blockCol(c, 1)) + r;
+      const doo = colName(blockCol(c, 2)) + r;
+      // Długość jak w prawdziwych arkuszach: formuła przeciągnięta przez wszystkie wiersze,
+      // pusta, dopóki cykl nie ma obu dat. Wartość zapisana obok formuły (jak robi Excel).
+      const lenF = `IF(AND(${od}<>"",${doo}<>""),${doo}-${od},"")`;
 
       if (isClosed) {
         const from = cursor;
         const to = addDays(from, 9 + ((i + c) % 6) * 7);
         cursor = addDays(to, 3 + ((i + c) % 4));
-        cells.push(person, iso(from), iso(to), daysBetween(from, to));
+        const days = daysBetween(from, to);
+        cells.push({ s: person }, { n: serial(from), st: ST.date }, { n: serial(to), st: ST.date }, { f: lenF, n: days, st: ST.int });
         closedTotal += 1;
+        const pp = perPerson.get(person);
+        pp.all += 1; pp.closed += 1; pp.days += days;
       } else if (isOpen) {
         const from = addDays(today, -(spec.openAgeDays || 30));
-        cells.push(person, iso(from), "", "");
+        cells.push({ s: person }, { n: serial(from), st: ST.date }, null, { f: lenF, s: "", st: ST.int });
         openTotal += 1;
+        perPerson.get(person).all += 1;
+        if ((spec.openAgeDays || 30) > longestOpen.days) longestOpen = { row: r, col: blockCol(c, 1), days: spec.openAgeDays || 30 };
       } else if (isOrphan) {
         // Celowa dziura w danych: jest data zwrotu, nie ma wydania.
-        cells.push(person, "", iso(addDays(today, -(15 + i))), "");
+        cells.push({ s: person }, null, { n: serial(addDays(today, -(15 + i))), st: ST.date }, { f: lenF, s: "", st: ST.int });
+        perPerson.get(person).all += 1;
+        if (!firstOrphanRow) firstOrphanRow = r;
       } else {
-        cells.push("", "", "", "");
+        cells.push(null, null, null, { f: lenF, s: "", st: ST.int });
       }
     }
 
     const status = spec.open ? "W trakcie" : (closedCount ? "Zamknięte" : "Nie zaczęte");
     if (!closedCount && !spec.open) untouchedTotal += 1;
-    cells[2] = status;
-    rows.push(cells);
+    cells[2] = { s: status };
+    dataRows.push(cells);
   });
 
-  const aoa = [
-    ["Raport: Obieg zakresów 2026"],
-    ["Zakresów łącznie", rows.length, "", "Cykli zamkniętych", closedTotal, "", "Cykli w toku", openTotal, "", "Nie zaczętych", untouchedTotal],
+  // Notatki (Excel: Recenzja → Notatki) — trójkącik w rogu komórki, dymek, @notatka w szukaniu.
+  const lenRange = (c) => `${colName(blockCol(c, 3))}${FIRST}:${colName(blockCol(c, 3))}${LAST}`;
+  note(`${colName(blockCol(0, 3))}${HEADER_ROW}`, "Liczone formułą: „do” minus „od” (w dniach). Puste, dopóki cykl nie ma obu dat.");
+  note(`C${HEADER_ROW}`, "Wybór z listy: Zamknięte / W trakcie / Nie zaczęte. Kolor nadaje formatowanie warunkowe.");
+  if (longestOpen.row) note(`${colName(longestOpen.col)}${longestOpen.row}`, `Wydany ${longestOpen.days} dni temu i dalej nie wrócił — przypomnieć.`);
+  if (firstOrphanRow) note(`C${firstOrphanRow}`, "Jest data zwrotu, brakuje daty wydania — uzupełnić z papierowej karty.");
+
+  const kpiRow = [
+    { s: "Zakresów łącznie", st: ST.kpiLabel }, { f: `COUNTA(A${FIRST}:A${LAST})`, n: dataRows.length, st: ST.kpiValue }, null,
+    { s: "Cykli zamkniętych", st: ST.kpiLabel }, { f: `COUNT(${[0, 1, 2, 3].map(lenRange).join(",")})`, n: closedTotal, st: ST.kpiValue }, null,
+    { s: "Cykli w toku", st: ST.kpiLabel }, { f: `COUNTIF(C${FIRST}:C${LAST},"W trakcie")`, n: openTotal, st: ST.kpiValue }, null,
+    { s: "Nie zaczętych", st: ST.kpiLabel }, { f: `COUNTIF(C${FIRST}:C${LAST},"Nie zaczęte")`, n: untouchedTotal, st: ST.kpiValue }, null,
+    { s: "Stan na", st: ST.kpiLabel }, { f: "TODAY()", n: serial(today), st: ST.dateBold },
+  ];
+  // Wiersz z etykietami cykli — scalony nad każdym blokiem (jak w prawdziwych arkuszach).
+  const cycleRow = prefixHeaders.map(() => null);
+  for (let c = 0; c < CYCLES; c++) cycleRow.push({ s: `${c + 1} Cykl`, st: ST.cycle }, { st: ST.cycle }, { st: ST.cycle }, { st: ST.cycle });
+  const mainRows = [
+    [{ s: "Raport: Obieg zakresów 2026", st: ST.title }],
+    kpiRow,
     [],
     cycleRow,
-    headerRow,
-    ...rows,
+    headerRow.map((h) => ({ s: h, st: ST.header })),
+    ...dataRows,
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+  // Arkusz „Podsumowanie”: formuły z odwołaniami do pierwszego arkusza (jak w zestawieniach).
+  const ref = (c) => `'${SHEET}'!$${colName(c)}$${FIRST}:$${colName(c)}$${LAST}`;
+  const sumOver = (fn) => [0, 1, 2, 3].map(fn).join("+");
+  const TOTAL = 2 + people.length; // wiersz „Razem”
+  const summaryRows = [
+    ["Osoba", "Cykle (wszystkie)", "Zamknięte", "Dni łącznie", "Śr. długość (dni)", "Udział w zamkniętych"].map((s) => ({ s, st: ST.header })),
+    ...people.map((p, k) => {
+      const r = k + 2;
+      const v = perPerson.get(p);
+      return [
+        { s: p },
+        { f: sumOver((c) => `COUNTIF(${ref(blockCol(c, 0))},A${r})`), n: v.all, st: ST.int },
+        { f: sumOver((c) => `COUNTIFS(${ref(blockCol(c, 0))},A${r},${ref(blockCol(c, 3))},">0")`), n: v.closed, st: ST.int },
+        { f: sumOver((c) => `SUMIF(${ref(blockCol(c, 0))},A${r},${ref(blockCol(c, 3))})`), n: v.days, st: ST.int },
+        v.closed ? { f: `IFERROR(D${r}/C${r},"")`, n: v.days / v.closed, st: ST.dec } : { f: `IFERROR(D${r}/C${r},"")`, s: "", st: ST.dec },
+        { f: `IFERROR(C${r}/C$${TOTAL},0)`, n: closedTotal ? v.closed / closedTotal : 0, st: ST.pct },
+      ];
+    }),
+  ];
+  const tot = people.reduce((a, p) => { const v = perPerson.get(p); a.all += v.all; a.closed += v.closed; a.days += v.days; return a; }, { all: 0, closed: 0, days: 0 });
+  summaryRows.push([
+    { s: "Razem", st: ST.totLabel },
+    { f: `SUM(B2:B${TOTAL - 1})`, n: tot.all, st: ST.totInt },
+    { f: `SUM(C2:C${TOTAL - 1})`, n: tot.closed, st: ST.totInt },
+    { f: `SUM(D2:D${TOTAL - 1})`, n: tot.days, st: ST.totInt },
+    tot.closed ? { f: `IFERROR(D${TOTAL}/C${TOTAL},"")`, n: tot.days / tot.closed, st: ST.totDec } : { f: `IFERROR(D${TOTAL}/C${TOTAL},"")`, s: "", st: ST.totDec },
+    { f: `SUM(F2:F${TOTAL - 1})`, n: tot.closed ? 1 : 0, st: ST.totPct },
+  ]);
+  summaryRows.push([]);
+  summaryRows.push([{ s: "Stan na", st: ST.bold }, { f: "TODAY()", n: serial(today), st: ST.dateBold }]);
+  summaryRows.push([{ s: "Zakresów w toku", st: ST.bold }, { f: `COUNTIF('${SHEET}'!$C$${FIRST}:$C$${LAST},"W trakcie")`, n: openTotal, st: ST.int }]);
+  const summaryNotes = { [`F1`]: { text: "Ile zamkniętych cykli z całego obiegu przypada na tę osobę.", author: NOTE_AUTHOR } };
 
-  // Scalenia etykiet cykli — dzięki nim wykrywanie bloków ma czytelne nazwy („1 Cykl").
-  const cycleRowIdx = 3;
-  const headerAoaRow = 4;
-  ws["!merges"] = [];
-  for (let c = 0; c < CYCLES; c++) {
-    const startCol = prefixHeaders.length + (c * BLOCK.length);
-    ws["!merges"].push({ s: { r: cycleRowIdx, c: startCol }, e: { r: cycleRowIdx, c: startCol + BLOCK.length - 1 } });
-  }
+  // ── Zapis komórek do XML (shared strings jak w Excelu) ──
+  const strings = [];
+  const stringIndex = new Map();
+  const sst = (s) => {
+    if (!stringIndex.has(s)) { stringIndex.set(s, strings.length); strings.push(s); }
+    return stringIndex.get(s);
+  };
+  const cellXml = (r, c, cell) => {
+    if (!cell) return "";
+    const a = `r="${colName(c)}${r}"${cell.st ? ` s="${cell.st}"` : ""}`;
+    if (cell.f != null) {
+      const fx = `<f>${escapeXmlText(cell.f)}</f>`;
+      return cell.n != null ? `<c ${a}>${fx}<v>${cell.n}</v></c>` : `<c ${a} t="str">${fx}<v>${escapeXmlText(cell.s || "")}</v></c>`;
+    }
+    if (cell.n != null) return `<c ${a}><v>${cell.n}</v></c>`;
+    if (cell.s != null) return `<c ${a} t="s"><v>${sst(cell.s)}</v></c>`;
+    return `<c ${a}/>`;
+  };
+  const sheetDataXml = (rows) => `<sheetData>${rows.map((cells, i) => {
+    const body = cells.map((cell, c) => cellXml(i + 1, c, cell)).join("");
+    return body ? `<row r="${i + 1}">${body}</row>` : "";
+  }).join("")}</sheetData>`;
+  const colsXml = (widths) => `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join("")}</cols>`;
 
-  // Drobny pokaz stylów czytanych z pliku: zielony pasek nagłówka z białym pogrubieniem,
-  // etykiety cykli na jasnym tle i kolory czcionek w kolumnie „Status".
-  for (let c = 0; c < headerRow.length; c++) {
-    const ref = XLSX.utils.encode_cell({ r: headerAoaRow, c });
-    if (ws[ref]) ws[ref].s = {
-      font: { bold: true, color: { rgb: "FFFFFFFF" } },
-      fill: { patternType: "solid", fgColor: { rgb: "FF2F6F5C" } },
-      alignment: { horizontal: "center" },
-    };
-    const cycleRef = XLSX.utils.encode_cell({ r: cycleRowIdx, c });
-    if (ws[cycleRef] && c >= prefixHeaders.length) ws[cycleRef].s = {
-      font: { bold: true, color: { rgb: "FF2F6F5C" } },
-      fill: { patternType: "solid", fgColor: { rgb: "FFE7F1EC" } },
-      alignment: { horizontal: "center" },
-    };
-  }
-  const STATUS_COLOR = { "Zamknięte": "FF1E7B45", "W trakcie": "FFB7791F", "Nie zaczęte": "FFC00000" };
-  rows.forEach((row, i) => {
-    const color = STATUS_COLOR[row[2]];
-    if (!color) return;
-    const ref = XLSX.utils.encode_cell({ r: headerAoaRow + 1 + i, c: 2 }); // kolumna C = Status
-    if (ws[ref]) ws[ref].s = { font: { bold: true, color: { rgb: color } } };
+  // Formatowanie warunkowe: kolor statusu (dxf 0–2), długi cykl > 35 dni (dxf 3).
+  const statusRange = `C${FIRST}:C${LAST}`;
+  const cfStatus = [["Zamknięte", 0], ["W trakcie", 1], ["Nie zaczęte", 2]].map(([v, dxf], k) =>
+    `<cfRule type="cellIs" dxfId="${dxf}" priority="${k + 1}" operator="equal"><formula>"${v}"</formula></cfRule>`).join("");
+  const longSqref = [0, 1, 2, 3].map(lenRange).join(" ");
+  const mainXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="${SPREADSHEETML_NS}" xmlns:r="${OOXML_REL_NS}"><sheetPr><tabColor rgb="FF2F6F5C"/></sheetPr><dimension ref="A1:${colName(lastCol)}${LAST}"/>`
+    + `<sheetViews><sheetView tabSelected="1" workbookViewId="0"><pane xSplit="2" ySplit="${HEADER_ROW}" topLeftCell="C${FIRST}" activePane="bottomRight" state="frozen"/><selection pane="topRight"/><selection pane="bottomLeft"/><selection pane="bottomRight" activeCell="C${FIRST}" sqref="C${FIRST}"/></sheetView></sheetViews>`
+    + `<sheetFormatPr defaultRowHeight="15"/>${colsXml([6, 13, 12, ...Array.from({ length: CYCLES }, () => [20, 11, 11, 9]).flat()])}`
+    + sheetDataXml(mainRows)
+    + `<autoFilter ref="A${HEADER_ROW}:${colName(lastCol)}${LAST}"/>`
+    + `<mergeCells count="${CYCLES}">${Array.from({ length: CYCLES }, (_, c) => `<mergeCell ref="${colName(blockCol(c, 0))}4:${colName(blockCol(c, 3))}4"/>`).join("")}</mergeCells>`
+    + `<conditionalFormatting sqref="${statusRange}">${cfStatus}</conditionalFormatting>`
+    + `<conditionalFormatting sqref="${longSqref}"><cfRule type="cellIs" dxfId="3" priority="4" operator="greaterThan"><formula>35</formula></cfRule></conditionalFormatting>`
+    + `<dataValidations count="1"><dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" sqref="${statusRange}"><formula1>"Zamknięte,W trakcie,Nie zaczęte"</formula1></dataValidation></dataValidations>`
+    + `<pageMargins left="0.5" right="0.5" top="0.75" bottom="0.75" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="landscape"/><legacyDrawing r:id="rId2"/></worksheet>`;
+  const summaryXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="${SPREADSHEETML_NS}" xmlns:r="${OOXML_REL_NS}"><dimension ref="A1:F${summaryRows.length}"/>`
+    + `<sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A2" sqref="A2"/></sheetView></sheetViews>`
+    + `<sheetFormatPr defaultRowHeight="15"/>${colsXml([22, 16, 12, 12, 16, 20])}`
+    + sheetDataXml(summaryRows)
+    + `<conditionalFormatting sqref="E2:E${TOTAL - 1}"><cfRule type="colorScale" priority="1"><colorScale><cfvo type="min"/><cfvo type="percentile" val="50"/><cfvo type="max"/><color rgb="FF63BE7B"/><color rgb="FFFFEB84"/><color rgb="FFF8696B"/></colorScale></cfRule></conditionalFormatting>`
+    + `<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/><legacyDrawing r:id="rId2"/></worksheet>`;
+
+  const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="${SPREADSHEETML_NS}">`
+    + `<numFmts count="3"><numFmt numFmtId="164" formatCode="dd\\.mm\\.yyyy"/><numFmt numFmtId="165" formatCode="0.0%"/><numFmt numFmtId="166" formatCode="0.0"/></numFmts>`
+    + `<fonts count="6"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>`
+    + `<font><b/><sz val="14"/><color rgb="FF1F3B63"/><name val="Calibri"/><family val="2"/></font><font><sz val="11"/><color rgb="FF595959"/><name val="Calibri"/><family val="2"/></font>`
+    + `<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><color rgb="FF2F6F5C"/><name val="Calibri"/><family val="2"/></font></fonts>`
+    + `<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>`
+    + `<fill><patternFill patternType="solid"><fgColor rgb="FF2F6F5C"/><bgColor indexed="64"/></patternFill></fill>`
+    + `<fill><patternFill patternType="solid"><fgColor rgb="FFE7F1EC"/><bgColor indexed="64"/></patternFill></fill>`
+    + `<fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill></fills>`
+    + `<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top style="thin"><color rgb="FFBFBFBF"/></top><bottom/><diagonal/></border></borders>`
+    + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
+    + `<cellXfs count="16">`
+    + `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>`                                                         // 0
+    + `<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>`                                          // 1 tytuł
+    + `<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>`                                          // 2 etykieta KPI
+    + `<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>`                                          // 3 wartość KPI
+    + `<xf numFmtId="0" fontId="4" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>` // 4 nagłówek
+    + `<xf numFmtId="0" fontId="5" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="center"/></xf>` // 5 etykieta cyklu
+    + `<xf numFmtId="164" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`                                // 6 data
+    + `<xf numFmtId="1" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`                                  // 7 liczba całkowita
+    + `<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>`                                          // 8 pogrubienie
+    + `<xf numFmtId="165" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`                                // 9 procent
+    + `<xf numFmtId="166" fontId="0" fillId="0" borderId="0" xfId="0" applyNumberFormat="1"/>`                                // 10 jedno miejsce po przecinku
+    + `<xf numFmtId="1" fontId="1" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>`   // 11 suma
+    + `<xf numFmtId="166" fontId="1" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>` // 12
+    + `<xf numFmtId="165" fontId="1" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>` // 13
+    + `<xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>`                  // 14 data pogrubiona
+    + `<xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>`            // 15 etykieta sumy
+    + `</cellXfs><cellStyles count="1"><cellStyle name="Normalny" xfId="0" builtinId="0"/></cellStyles>`
+    + `<dxfs count="4"><dxf><font><b/><color rgb="FF1E7B45"/></font></dxf><dxf><font><b/><color rgb="FFB7791F"/></font></dxf><dxf><font><b/><color rgb="FFC00000"/></font></dxf>`
+    + `<dxf><font><color rgb="FF9C0006"/></font><fill><patternFill><bgColor rgb="FFFFE4E1"/></patternFill></fill></dxf></dxfs></styleSheet>`;
+
+  const WORKBOOK = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="${SPREADSHEETML_NS}" xmlns:r="${OOXML_REL_NS}"><workbookPr/><bookViews><workbookView activeTab="0"/></bookViews>`
+    + `<sheets><sheet name="${escapeXmlText(SHEET)}" sheetId="1" r:id="rId1"/><sheet name="${escapeXmlText(SUMMARY)}" sheetId="2" r:id="rId2"/></sheets>`
+    + `<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${escapeXmlText(SHEET)}'!$A$${HEADER_ROW}:$${colName(lastCol)}$${LAST}</definedName></definedNames>`
+    + `<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`;
+  const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const rels = (list) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${list.map(([id, type, target]) => `<Relationship Id="${id}" Type="${type}" Target="${target}"/>`).join("")}</Relationships>`;
+  const CT = "application/vnd.openxmlformats-officedocument.spreadsheetml";
+  const CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>`
+    + `<Override PartName="/xl/workbook.xml" ContentType="${CT}.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="${CT}.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="${CT}.worksheet+xml"/>`
+    + `<Override PartName="/xl/styles.xml" ContentType="${CT}.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="${CT}.sharedStrings+xml"/>`
+    + `<Override PartName="/xl/comments1.xml" ContentType="${CT}.comments+xml"/><Override PartName="/xl/comments2.xml" ContentType="${CT}.comments+xml"/></Types>`;
+  const sheetRels = (n) => rels([["rId1", `${REL}/comments`, `../comments${n}.xml`], ["rId2", `${REL}/vmlDrawing`, `../drawings/vmlDrawing${n}.vml`]]);
+
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", CONTENT_TYPES);
+  zip.file("_rels/.rels", rels([["rId1", `${REL}/officeDocument`, "xl/workbook.xml"]]));
+  zip.file("xl/workbook.xml", WORKBOOK);
+  zip.file("xl/_rels/workbook.xml.rels", rels([
+    ["rId1", `${REL}/worksheet`, "worksheets/sheet1.xml"], ["rId2", `${REL}/worksheet`, "worksheets/sheet2.xml"],
+    ["rId3", `${REL}/styles`, "styles.xml"], ["rId4", `${REL}/sharedStrings`, "sharedStrings.xml"],
+  ]));
+  zip.file("xl/worksheets/sheet1.xml", mainXml);
+  zip.file("xl/worksheets/sheet2.xml", summaryXml);
+  zip.file("xl/styles.xml", STYLES);
+  // sharedStrings dopiero po sheetDataXml obu arkuszy (to on zbiera teksty)
+  zip.file("xl/sharedStrings.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<sst xmlns="${SPREADSHEETML_NS}" count="${strings.length}" uniqueCount="${strings.length}">${strings.map((s) => `<si><t xml:space="preserve">${escapeXmlText(s)}</t></si>`).join("")}</sst>`);
+  // Notatki tym samym kodem, którym apka zapisuje je do pliku (xlsx-patch.js): tekst + kształt VML.
+  [[notes, 1], [summaryNotes, 2]].forEach(([list, n]) => {
+    zip.file(`xl/worksheets/_rels/sheet${n}.xml.rels`, sheetRels(n));
+    zip.file(`xl/comments${n}.xml`, patchCommentsXml(null, list).xml);
+    zip.file(`xl/drawings/vmlDrawing${n}.vml`, patchVmlXml(null, list, null, n).xml);
   });
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Obieg zakresów");
-  return XLSX.write(wb, { bookType: "xlsx", type: "array", cellStyles: true });
+  return zip.generateAsync({ type: "arraybuffer", compression: "DEFLATE" });
 }
 
 async function loadSampleFile() {
   if (!(await ensureXlsxLibs(true))) return; // dogrywa xlsx/jszip przy pierwszym użyciu
   let buffer;
   try {
-    buffer = buildSampleWorkbookArrayBuffer();
+    buffer = await buildSampleWorkbookArrayBuffer();
   } catch (err) {
     toast(t("sampleLoadFailed"), "error");
     log("Blad przy generowaniu przykladowego pliku.", "error");

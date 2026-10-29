@@ -31,6 +31,9 @@ async function openPage(context) {
   return page;
 }
 async function loadFile(page) {
+  // ten sam plik drugi raz z rzędu nie wywołuje „change” — bez czyszczenia zostawał otwarty
+  // przykład i test edytował jego kolumnę Status (od 2026-10-29 lista rozwijana, odrzuca wpis)
+  await page.evaluate(() => { fileInput.value = ""; });
   await page.setInputFiles("#fileInput", FILE);
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0 && !!workbook, null, { timeout: 15000 });
   await sleep(300);
