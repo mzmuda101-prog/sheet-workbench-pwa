@@ -10,6 +10,7 @@
 //   6. zwykły render zapisuje próbkę pomiaru.
 //
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
+// test-impact: bez śledzenia CSS (mierzy koszt stylów — śledzenie reguł by go zawyżało)
 
 const { chromium } = require("playwright");
 

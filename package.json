@@ -84,7 +84,8 @@
     "gen:fixtures": ".venv/bin/python scripts/py/gen_fixtures.py",
     "py:setup": "python3 -m venv .venv && .venv/bin/pip install -q -r scripts/py/requirements.txt",
     "build": "node scripts/build-release.mjs",
-    "release": "node scripts/bump-version.js"
+    "release": "node scripts/bump-version.js",
+    "test:all": "node scripts/run-tests.mjs --all"
   },
   "repository": {
     "type": "git",

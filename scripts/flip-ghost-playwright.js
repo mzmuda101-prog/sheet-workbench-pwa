@@ -45,9 +45,14 @@ async function openApp(browser, { mobile = false, reducedMotion = "no-preference
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 30000 });
   await page.evaluate(() => loadBtn.click());
   await page.waitForFunction(() => document.querySelectorAll("#dataTable tbody tr").length > 20, null, { timeout: 30000 });
-  await sleep(1500);
+  // tabela gotowa: bez nakładki wczytywania i bez trwających animacji (wjazd tabeli, panel) —
+  // zamiast stałych 1,5 s + 0,5 s przy każdym z 9 otwarć pliku
+  const calm = () => page.waitForFunction(() => !document.body.classList.contains("is-loading")
+    && document.getAnimations().every((a) => a.playState !== "running" || (a.effect && a.effect.getTiming().iterations === Infinity)), null, { timeout: 15000 })
+    .then(() => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))));
+  await calm();
   await page.evaluate(() => { try { setSidebarOpen(false); } catch (_) {} });
-  await sleep(500);
+  await calm();
   return { ctx, page, errors };
 }
 

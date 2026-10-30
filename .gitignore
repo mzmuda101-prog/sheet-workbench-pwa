@@ -38,3 +38,4 @@ output
 # Python do narzędzi testowych (openpyxl) — npm run py:setup
 .venv
 __pycache__
+.test-cache/
