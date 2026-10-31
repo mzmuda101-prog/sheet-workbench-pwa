@@ -435,9 +435,16 @@ const swbFillHandle = (() => {
     return findCellElement({ rowKey: getRowSelectionKey(row), colIndex0: rect.colMax });
   }
 
-  function allowed() {
+  // Kółko zaznaczania (palec) jest też w Podglądzie — zaznaczanie to nie edycja, a Excel na
+  // telefonie pozwala zaznaczać zawsze. Kwadracik wypełniania (mysz) — tylko w Edycji.
+  const touchMQ = typeof matchMedia === "function" ? matchMedia("(pointer: coarse)") : null;
+  function allowed(pointerType) {
     if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") return false;
-    if (typeof swbIsEditMode === "function" && !swbIsEditMode()) return false;
+    const edit = typeof swbIsEditMode !== "function" || swbIsEditMode();
+    if (!edit) {
+      if (pointerType ? pointerType !== "touch" : !(touchMQ && touchMQ.matches)) return false;
+      if (typeof isCellSelectionMode === "function" && !isCellSelectionMode()) return false;
+    }
     if (typeof activeCellEditor !== "undefined" && activeCellEditor) return false;
     return true;
   }
@@ -542,7 +549,7 @@ const swbFillHandle = (() => {
 
   el.addEventListener("pointerdown", (e) => {
     lastPointerType = e.pointerType || "";
-    if (e.button !== 0 || !allowed()) return;
+    if (e.button !== 0 || !allowed(e.pointerType)) return;
     const rect = sourceRect();
     if (!rect) return;
     e.preventDefault();

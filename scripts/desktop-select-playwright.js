@@ -97,6 +97,24 @@ async function run() {
   check("5. niezapisane zmiany: „• ” przed nazwą pliku", /^• Przyklad-obieg-zakresow\.xlsx/.test(t1), t1);
   await p.evaluate(() => undoRedo("undo"));
 
+  // 6. numer wiersza / litera kolumny / narożnik (mysz, jak w Excelu)
+  await p.click('#dataTable tbody tr[data-row-key]:nth-child(3) td.row-head', { position: { x: 8, y: 8 } });
+  await sleep(200);
+  const r6 = await p.evaluate(() => { const r = getSelectionRectangle(); return r && { rows: r.rowCount, cols: r.colCount, all: currentDisplayModel.headers.length }; });
+  check("6. klik numeru wiersza = cały wiersz", r6 && r6.rows === 1 && r6.cols === r6.all, r6);
+  await p.click('#dataTable tbody tr[data-row-key]:nth-child(5) td.row-head', { modifiers: ["Shift"], position: { x: 8, y: 8 } });
+  await sleep(200);
+  const r6b = await p.evaluate(() => { const r = getSelectionRectangle(); return r && r.rowCount; });
+  check("6. Shift+klik numeru wiersza rozciąga do 3 wierszy", r6b === 3, r6b);
+  await p.click('#dataTable thead tr.guide-row th.guide-cell:nth-child(4)', { position: { x: 10, y: 8 } });
+  await sleep(200);
+  const c6 = await p.evaluate(() => { const r = getSelectionRectangle(); return r && { cols: r.colCount, colMin: r.colMin, rows: r.rowCount, all: swbSelView().rows.length }; });
+  check("6. klik litery kolumny = cała kolumna (C)", c6 && c6.cols === 1 && c6.colMin === 2 && c6.rows === c6.all, c6);
+  await p.click("#dataTable thead tr.guide-row th.corner-cell");
+  await sleep(200);
+  const a6 = await p.evaluate(() => { const r = getSelectionRectangle(); return r && { cols: r.colCount, all: currentDisplayModel.headers.length }; });
+  check("6. klik narożnika = wszystko", a6 && a6.cols === a6.all, a6);
+
   // 1. Podgląd: klik = wiersz
   await p.evaluate(() => sheetEditUi.setMode("view"));
   await p.click(CELL(3, 2));

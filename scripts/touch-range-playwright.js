@@ -129,6 +129,8 @@ async function run() {
   check("2. …i niczego nie wypełnia", !s2.filled && JSON.stringify(before) === JSON.stringify(after) && JSON.stringify(beforeD) === JSON.stringify(afterD), { before, after, beforeD, afterD });
 
   // zaznaczenie w górę / w lewo od kotwicy też działa
+  // stuknięcie W zakres otwiera menu (jak w Excelu) — najpierw zwijamy zakres
+  await p.evaluate(() => { closeCellMenu({ restoreFocus: false }); setSelectedCell("", -1); setFocusedCell("", -1); });
   await tapCell(p, CELL(4, 2));
   await dragHandle(p, CELL(2, 1), "touch");
   const s2b = await p.evaluate(() => { const r = getSelectionRectangle(); return r && { rowStart: r.rowStart, rows: r.rowCount, colMin: r.colMin, cols: r.colCount }; });
@@ -154,6 +156,56 @@ async function run() {
   check("3. „Wypełnij serią” wypełnia zakres od pierwszej komórki", filled.every((v) => v === src), { src, filled });
   check("3. zaznaczenie zostaje po wypełnieniu", keep === 3, keep);
   await p.evaluate(() => { if (typeof swbUndo === "function") swbUndo(); });
+
+  // ── 9. stuknięcia jak w Excelu na telefonie ──
+  await p.evaluate(() => { document.querySelectorAll(".toast").forEach((x) => x.remove()); closeCellMenu({ restoreFocus: false }); setSelectedCell("", -1); setFocusedCell("", -1); });
+  await tapCell(p, CELL(3, 1));
+  await sleep(600); // wolne drugie stuknięcie (nie dwutap)
+  pt = await center(p, CELL(3, 1));
+  await p.touchscreen.tap(pt.x, pt.y);
+  await sleep(300);
+  const m9 = await p.evaluate(() => ({ open: !document.getElementById("cellMenu").classList.contains("hidden"), items: [...document.querySelectorAll("#cellMenu .cell-menu-item")].map((b) => b.className.match(/cmi-[\w-]+/)?.[0]), editor: !!document.querySelector("#dataTable input.cell-editor") }));
+  check("9. drugie (wolne) stuknięcie w zaznaczoną komórkę = menu z „Edytuj” na górze", m9.open && m9.items[0] === "cmi-edit" && !m9.editor, m9);
+  await p.evaluate(() => closeCellMenu({ restoreFocus: false }));
+  await sleep(500);
+  await p.touchscreen.tap(pt.x, pt.y);
+  await sleep(120);
+  await p.touchscreen.tap(pt.x, pt.y);
+  await sleep(300);
+  check("9. podwójne stuknięcie = edycja", await p.evaluate(() => !!document.querySelector("#dataTable input.cell-editor")), null);
+  await p.evaluate(() => { if (activeCellEditor) activeCellEditor.close(); });
+  // stuknięcie w zakres = menu zakresu, zaznaczenie zostaje
+  await p.evaluate(() => { setSelectionKind("cell"); setFocusedCell(getRowSelectionKey(viewRows[1]), 1); setSelectedCell(getRowSelectionKey(viewRows[3]), 2); });
+  await sleep(600);
+  pt = await center(p, CELL(3, 2));
+  await p.touchscreen.tap(pt.x, pt.y);
+  await sleep(300);
+  const m9b = await p.evaluate(() => { const r = getSelectionRectangle(); return { open: !document.getElementById("cellMenu").classList.contains("hidden"), n: r && r.rowCount * r.colCount, head: document.querySelector("#cellMenu .cell-menu-val")?.textContent }; });
+  check("9. stuknięcie w zaznaczony zakres = menu zakresu, zakres zostaje", m9b.open && m9b.n === 6, m9b);
+  await p.evaluate(() => closeCellMenu({ restoreFocus: false }));
+  // numer wiersza = cały wiersz, litera kolumny = cała kolumna
+  await sleep(500);
+  pt = await center(p, '#dataTable tbody tr[data-row-key]:nth-child(2) td.row-head');
+  await p.touchscreen.tap(pt.x, pt.y);
+  await sleep(300);
+  const r9 = await p.evaluate(() => { const r = getSelectionRectangle(); return r && { rows: r.rowCount, cols: r.colCount, all: currentDisplayModel.headers.length }; });
+  check("9. stuknięcie numeru wiersza = cały wiersz", r9 && r9.rows === 1 && r9.cols === r9.all, r9);
+  pt = await center(p, '#dataTable thead tr.guide-row th.guide-cell:nth-child(3)');
+  await p.touchscreen.tap(pt.x, pt.y);
+  await sleep(300);
+  const c9 = await p.evaluate(() => { const r = getSelectionRectangle(); return r && { rows: r.rowCount, cols: r.colCount, colMin: r.colMin, all: swbSelView().rows.length }; });
+  check("9. stuknięcie litery kolumny = cała kolumna (B)", c9 && c9.cols === 1 && c9.colMin === 1 && c9.rows === c9.all, c9);
+  // Podgląd: palec dalej zaznacza komórkę i ma kółko do rozciągania
+  await p.evaluate(() => { sheetEditUi.setMode("view"); setSelectedCell("", -1); setFocusedCell("", -1); });
+  await sleep(500);
+  await tapCell(p, CELL(2, 1));
+  const v9 = await p.evaluate(() => ({ kind: selectionKind, knob: !!document.querySelector("#tableWrap .fill-handle, td .fill-handle") }));
+  check("9. Podgląd: stuknięcie = komórka + kółko zaznaczania", v9.kind === "cell" && v9.knob, v9);
+  const before9 = await colValues(p, 1, 4);
+  await dragHandle(p, CELL(4, 2), "touch");
+  const rr9 = await p.evaluate(() => { const r = getSelectionRectangle(); return r && r.rowCount * r.colCount; });
+  check("9. Podgląd: rozciąganie działa i nic nie zmienia", rr9 === 6 && JSON.stringify(before9) === JSON.stringify(await colValues(p, 1, 4)), rr9);
+  await p.evaluate(() => sheetEditUi.setMode("edit"));
 
   // ── 6. toasty: scalanie + kryjące tło; FAB kryjący ──
   await p.evaluate(() => { document.querySelectorAll(".toast").forEach((t) => t.remove()); toast("A (1 kom.)", "info"); toast("B (1 kom.)", "info"); toast("C (2 kom.)", "info"); toast("Uwaga", "warning"); });

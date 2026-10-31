@@ -3527,7 +3527,9 @@ function getTooltipCell(target) {
   if (!target || target.closest(".col-resizer")) return null;
   const cell = target.closest("td, th");
   if (!cell || cell.classList.contains("corner-cell")) return null;
-  if (cell.classList.contains("row-head") && cell.closest("tbody")) return null; // numery wierszy — zwykle krótkie
+  // numery wierszy i litery kolumn to przyciski zaznaczania (cały wiersz/kolumna) — dymek „C”
+  // po stuknięciu litery tylko zasłaniał pasek formuły
+  if (cell.classList.contains("row-head") || cell.classList.contains("guide-cell")) return null;
   return cell;
 }
 
@@ -4115,6 +4117,7 @@ let lastPointerInEditedCell = 0;
 // pointerType (starsze WebKity), a media query (pointer: coarse) mówi o urządzeniu, nie
 // o geście — iPad z myszką/rysikiem to też „coarse”.
 let lastTbodyPointerType = "";
+let lastCellTap = { key: "", at: 0 }; // podwójne stuknięcie palcem = edycja (onGridCellClick)
 tableEl.addEventListener("pointerdown", (e) => { lastTbodyPointerType = e.pointerType || ""; }, true);
 document.addEventListener("pointerdown", (e) => {
   if (!activeCellEditor || !activeCellEditor.td) return;
@@ -4161,29 +4164,90 @@ function onGridCellClick(e) {
     giveGridDomFocus();
     return;
   }
-  // DOTYK: zapamiętaj, czy komórka BYŁA już zaznaczona PRZED tym tapnięciem —
-  // liczymy przed setFocusedCell, które zaraz nadpisze stan. Pierwszy tap tylko
-  // zaznacza; drugi tap w tę samą komórkę = wejście w edycję (jak w mobilnych
-  // arkuszach) — bez klawiatury i bez kapryśnego dwutapu.
-  const tapToEdit = cellTapCoarseMQ && cellTapCoarseMQ.matches && !activeCellEditor &&
-    focusedCellState && focusedCellState.rowKey === rowKey && focusedCellState.colIndex0 === colIndex0;
+  // PALEC — jak w Excelu na telefonie (przewodnik Microsoftu, 2026-10-31):
+  //   • stuknięcie W ZAZNACZONĄ komórkę albo w zaznaczony zakres = menu działań
+  //     (Wytnij, Kopiuj, Wklej, Wypełnij…), zaznaczenie zostaje;
+  //   • podwójne stuknięcie = edycja (u nas także pozycja „Edytuj” w tym menu);
+  //   • przytrzymanie dalej otwiera to samo menu (filter-bar.js) — nasz dodatek.
+  // Dawniej drugie stuknięcie od razu edytowało, a menu było tylko pod przytrzymaniem.
+  if (lastTbodyPointerType === "touch" && !activeCellEditor) {
+    const now = Date.now();
+    const tapKey = `${rowKey}:${colIndex0}`;
+    const dbl = lastCellTap.key === tapKey && now - lastCellTap.at < 420;
+    lastCellTap = { key: tapKey, at: now };
+    const rect = getSelectionRectangle();
+    const inRange = !!(rect && (rect.rowCount > 1 || rect.colCount > 1) && rect.rowKeys.has(rowKey)
+      && colIndex0 >= rect.colMin && colIndex0 <= rect.colMax);
+    const sameCell = !inRange && focusedCellState && focusedCellState.rowKey === rowKey && focusedCellState.colIndex0 === colIndex0;
+    if (dbl && (sameCell || inRange)) {
+      if (typeof closeCellMenu === "function") closeCellMenu({ restoreFocus: false });
+      if (inRange) { setSelectionKind("cell", { repaint: false }); setFocusedCell(rowKey, colIndex0, { scroll: false }); }
+      openCellEditor(td);
+      return;
+    }
+    if ((sameCell || inRange) && typeof openCellMenu === "function") {
+      // menu POD komórką (albo nad nią), nie pod palcem — inaczej drugie stuknięcie
+      // dwutapu trafiało w menu zamiast w komórkę (tak też robi Excel)
+      openCellMenu(td, null);
+      return;
+    }
+  }
   // Zwykły klik w PODGLĄDZIE wraca na poziom wiersza — patrz model gestów w core.js
   // (przeglądanie rekordów). W trybie EDYCJA klik/stuknięcie zaznacza KOMÓRKĘ: pole nazwy,
   // pasek formuły, formatowanie i uchwyt w rogu dotyczą jednej komórki, a podświetlony wiersz
   // nie mówił, której (zrzut z iPhone'a i film z desktopu 2026-10-31: „C6”/„D9” w polu nazwy,
   // uchwyt w rogu, ramki brak). Wiersz nad nagłówkiem nie jest rekordem — tam zawsze komórka.
-  const cellTap = (typeof swbIsEditMode === "function" && swbIsEditMode()) || rowKey.startsWith("pre:");
+  // Palec zawsze zaznacza komórkę (Excel na telefonie nie ma „trybu wiersza”; cały wiersz =
+  // stuknięcie jego numeru). „Klik = wiersz” zostaje dla myszy w Podglądzie.
+  const cellTap = (typeof swbIsEditMode === "function" && swbIsEditMode()) || rowKey.startsWith("pre:")
+    || lastTbodyPointerType === "touch";
   setSelectionKind(cellTap ? "cell" : "row", { repaint: false });
   setFocusedCell(rowKey, colIndex0, { scroll: false });
   giveGridDomFocus();
-  // Desktop (mysz) zostaje przy dblclick. openCellEditor sam pilnuje trybu „wide"
-  // i wierszy specjalnych oraz jest idempotentny (guard na activeCellEditor), więc
-  // nie kłóci się z dblclick (dwutap: 1. tap zaznacza, 2. tap już tu otwiera edytor,
-  // późniejszy dblclick trafia w guard).
-  if (tapToEdit) openCellEditor(td);
+  // Mysz: edycja dwuklikiem (tbody dblclick). Palec: podwójne stuknięcie — wyżej.
 }
 tbodyEl.addEventListener("click", onGridCellClick);
 if (theadEl) theadEl.addEventListener("click", onGridCellClick);
+
+// ── Zaznaczanie z nagłówków (jak w Excelu, mysz i palec) ─────────────────────────
+// Numer wiersza = cały wiersz, litera kolumny = cała kolumna (od pierwszego do ostatniego
+// wiersza widoku, razem z wierszami nad nagłówkiem), narożnik = wszystko. Shift rozciąga
+// od bieżącej kotwicy. Wiersz/kolumna to zwykły zakres komórek — działa na nim menu,
+// kopiowanie, formatowanie, statystyki.
+function swbSelectWholeRows(key1, key2) {
+  const view = swbSelView();
+  const last = (view?.headers?.length || 1) - 1;
+  setSelectionKind("cell", { repaint: false });
+  setFocusedCell(key1, 0, { scroll: false });
+  setSelectedCell(key2, last, { scroll: false });
+}
+function swbSelectWholeCols(c1, c2) {
+  const view = swbSelView();
+  if (!view || !view.rows.length) return;
+  setSelectionKind("cell", { repaint: false });
+  setFocusedCell(getRowSelectionKey(view.rows[0]), c1, { scroll: false });
+  setSelectedCell(getRowSelectionKey(view.rows[view.rows.length - 1]), c2, { scroll: false });
+}
+tableEl.addEventListener("click", (e) => {
+  if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") return;
+  if (e.target.closest(".col-resizer, .row-resizer, input")) return;
+  if (Date.now() < (typeof suppressCellClickUntil === "number" ? suppressCellClickUntil : 0)) return;
+  const rowHead = e.target.closest("tr[data-row-key] > td.row-head");
+  const guide = !rowHead && e.target.closest("thead tr.guide-row th.guide-cell");
+  const corner = !rowHead && !guide && e.target.closest("thead tr.guide-row th.corner-cell");
+  if (!rowHead && !guide && !corner) return;
+  if (activeCellEditor && typeof flushCellEditor === "function") flushCellEditor();
+  if (rowHead) {
+    const key = rowHead.parentElement.dataset.rowKey;
+    swbSelectWholeRows(e.shiftKey && focusedCellState ? focusedCellState.rowKey : key, key);
+  } else if (guide) {
+    const col = guide.cellIndex - 1; // [0] = narożnik
+    swbSelectWholeCols(e.shiftKey && focusedCellState ? focusedCellState.colIndex0 : col, col);
+  } else {
+    swbSelectWholeCols(0, currentDisplayModel.headers.length - 1);
+  }
+  giveGridDomFocus();
+});
 
 // ── Zaznaczanie zakresu PRZECIĄGNIĘCIEM MYSZĄ (jak w Excelu) ─────────────────────
 // Dawniej zakres dawał tylko Shift+klik / Shift+strzałki, więc jedynym „ciągnięciem” po

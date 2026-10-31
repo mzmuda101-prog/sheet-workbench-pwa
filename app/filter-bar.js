@@ -461,7 +461,18 @@ function cellMenuItems(target) {
     ].filter(Boolean);
   }
   const empty = !String(target.value ?? "").trim();
+  // Palec: „Edytuj” na górze — podwójne stuknięcie bywa nieodkrywalne (Excel ma tu też
+  // pasek formuły; u nas jest, ale schowany przy zwiniętym nagłówku).
+  const coarse = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+  const editItem = editable && coarse && target.td
+    ? { id: "edit", label: t("cellMenuEdit"), run: () => {
+      closeCellMenu({ restoreFocus: false });
+      const td = findCellElement({ rowKey: getRowSelectionKey(target.row), colIndex0: target.col }) || target.td;
+      if (td && typeof openCellEditor === "function") openCellEditor(td);
+    } }
+    : null;
   return [
+    editItem,
     cut,
     { id: "copy", label: t("cellMenuCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
     paste,
