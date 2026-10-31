@@ -74,6 +74,16 @@ of cell text:
 - Repeated block detector — identifies cycling column patterns (`od`, `do`, `od 2`, `do 2`, etc.)
 - KPI extractor for dashboard-style or summary-heavy sheets
 
+### Data anonymization
+- Hide personal data in a selection, chosen columns, the current sheet or the whole file — fully on the device
+- Detection by rules and dictionaries: names (also "A. Kowalski", "Kowalski Adam", names learned from the file's own name columns), PESEL, NIP, REGON, IBAN / account numbers, ID card, passport, land register (KW) — all checked by their checksums — plus e-mail, phone, address, postal code, plate, VIN, IP; columns are classified from headers and content
+- Per type and per column: pseudonym ("Person 001"), realistic fake data (valid checksums, same gender, same form of the name), mask, generalize, tag, remove, keyed hash, date shift
+- Consistent across the whole file: the same person gets the same replacement everywhere; an optional consistency key gives the same replacements across files and runs
+- Manual control: untick single values, "never touch" exceptions, "always hide" words, custom regular expressions, replace every non-empty cell in scope
+- Result as a new copy (original untouched) or in the open file (one Undo step for all sheets)
+- Cleans traces outside cells: file properties and path, notes and authors, print headers/footers, cached formula results, chart and pivot caches, hyperlinks, dropdown lists, formula constants, leftover shared strings
+- Built-in leak test: after saving, every part of the file is searched for the original values and the report lists anything that is left
+
 ### Transcribe mode
 - Full-screen, one-row-at-a-time view for copying data onto a **physical** paper form by hand
 - Pick which fields appear and reorder them to match the boxes on your sheet — saved per file and sheet

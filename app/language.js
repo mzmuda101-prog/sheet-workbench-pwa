@@ -4187,6 +4187,7 @@ function applyLanguage(lang) {
   if (typeof syncRowsAboveHeaderToggle === "function") syncRowsAboveHeaderToggle();
   if (typeof swbKeyBar !== "undefined" && swbKeyBar.syncToggle) swbKeyBar.syncToggle();
   if (typeof swbNotesSyncFilterUi === "function") swbNotesSyncFilterUi();
+  if (typeof swbAnonSyncLanguage === "function") swbAnonSyncLanguage();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));
   renderSortRules();

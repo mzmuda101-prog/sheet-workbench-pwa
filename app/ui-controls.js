@@ -2097,14 +2097,18 @@ function buildSheetFormulaMaps() {
 
 async function buildOutputBytes(ext) {
   savedBuildEpoch = dirtyEpoch; // stan, który trafia do pliku (markSavedAfterBuild)
+  let bytes = null;
   if (originalFileBytes && typeof buildPatchedXlsx === "function" && typeof JSZip !== "undefined") {
     try {
-      return await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps());
+      bytes = await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps());
     } catch (err) {
       log("ZIP-patch nie powiódł się — zapis przez xlsx-js-style (możliwa utrata tabel/wykresów).", "warning");
     }
   }
-  return XLSX.write(workbook, { bookType: ext, type: "array", cellStyles: true });
+  if (!bytes) bytes = XLSX.write(workbook, { bookType: ext, type: "array", cellStyles: true });
+  // po anonimizacji „w otwartym pliku” każdy zapis czyści też ślady poza komórkami (anonymize-ui.js)
+  if (typeof swbAnon !== "undefined" && swbAnonPendingCleanup) bytes = await swbAnon.cleanOnSave(bytes);
+  return bytes;
 }
 
 // Zapis wprost do uchwytu pliku (nadpisanie w miejscu) bez pobierania.

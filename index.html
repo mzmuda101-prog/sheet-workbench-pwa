@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20261031-logo" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20261031-14" />
+    <link rel="stylesheet" href="styles/app.css?v=20261031-15" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -827,6 +827,23 @@
                 <button class="btn ghost full" id="previewEditToolBtn" type="button" data-hint data-hint-pl="Pokazuje, ile komórek i jak się zmieni — bez zmieniania czegokolwiek." data-hint-en="Shows how many cells would change and how — without changing anything." data-hint-delay="1.1">Podgląd</button>
                 <div id="editPreview" class="edit-preview hidden" aria-live="polite"></div>
                 <button class="btn full" id="applyEditToolBtn" type="button" data-hint data-hint-pl="Zastosuj operację. „Znajdź i zamień” obejmuje tekst, daty i liczby (liczbę wpisz jako wartość surową); „wzorzec” i „wielkość liter” — tylko tekst. Potem zapisz zmiany przyciskiem Zapisz / Zapisz jako." data-hint-en="Apply the operation. “Find & replace” covers text, dates and numbers (type a number as its raw value); “pattern” and “letter case” — text only. Then save with Save / Save as." data-hint-delay="1.1" data-hint-touch="on">Zastosuj</button>
+              </div>
+            </details>
+            <details class="panel" id="panel-anonymize">
+              <summary>
+                <svg class="panel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+                  <path d="M3 3l18 18" />
+                </svg>
+                <span class="panel-title">Anonimizacja</span>
+                <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </summary>
+              <div class="panel-body stack">
+                <p class="panel-hint" id="anonPanelHint">Ukryj dane osobowe w zaznaczeniu, kolumnach, arkuszu albo całym pliku: imiona i nazwiska, PESEL, NIP, konta, telefony, e-maile, adresy… Wszystko dzieje się na tym urządzeniu.</p>
+                <button class="btn full" id="anonOpenBtn" type="button" data-hint data-hint-pl="Skanuje wybrany zakres, pokazuje znalezione dane osobowe i pozwala wybrać, jak je ukryć: pseudonim, fałszywe dane, maska, uogólnienie, usunięcie. Wynik: nowa kopia pliku albo zmiana w otwartym pliku." data-hint-en="Scans the chosen scope, shows the personal data it found and lets you pick how to hide it: pseudonym, fake data, mask, generalization, removal. Result: a new copy of the file or a change in the open file." data-hint-delay="1.1" data-hint-touch="on">Anonimizuj dane…</button>
               </div>
             </details>
             <details class="panel" id="panel-derived-columns">
@@ -1927,50 +1944,53 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20261031-14"></script>
-    <script defer src="app/render-budget.js?v=20261031-14"></script>
-    <script defer src="app/language.js?v=20261031-14"></script>
-    <script defer src="app/similar-names.js?v=20261031-14"></script>
-    <script defer src="app/analysis.js?v=20261031-14"></script>
-    <script defer src="app/smart-filters.js?v=20261031-14"></script>
-    <script defer src="app/workbook.js?v=20261031-14"></script>
-    <script defer src="app/xlsx-patch.js?v=20261031-14"></script>
-    <script defer src="app/table.js?v=20261031-14"></script>
-    <script defer src="app/virt-rows.js?v=20261031-14"></script>
-    <script defer src="app/conditional-formatting.js?v=20261031-14"></script>
-    <script defer src="app/formula-engine.js?v=20261031-14"></script>
-    <script defer src="app/formula-calc.js?v=20261031-14"></script>
-    <script defer src="app/formula-explain.js?v=20261031-14"></script>
-    <script defer src="app/data-validation.js?v=20261031-14"></script>
-    <script defer src="app/derived-columns.js?v=20261031-14"></script>
-    <script defer src="app/formulas.js?v=20261031-14"></script>
-    <script defer src="app/edit-tools.js?v=20261031-14"></script>
-    <script defer src="app/cell-format.js?v=20261031-14"></script>
-    <script defer src="app/ui-controls.js?v=20261031-14"></script>
-    <script defer src="app/filter-bar.js?v=20261031-14"></script>
-    <script defer src="app/qs-history.js?v=20261031-14"></script>
-    <script defer src="app/undo.js?v=20261031-14"></script>
-    <script defer src="app/cell-notes.js?v=20261031-14"></script>
-    <script defer src="app/drafts.js?v=20261031-14"></script>
-    <script defer src="app/transcribe.js?v=20261031-14"></script>
-    <script defer src="app/local-ai.js?v=20261031-14"></script>
-    <script defer src="app/nl-query.js?v=20261031-14"></script>
-    <script defer src="app/report.js?v=20261031-14"></script>
-    <script defer src="app/freeze-pane.js?v=20261031-14"></script>
-    <script defer src="app/app-frame.js?v=20261031-14"></script>
-    <script defer src="app/sheet-edit-ui.js?v=20261031-14"></script>
-    <script defer src="app/frame-compact.js?v=20261031-14"></script>
-    <script defer src="app/key-bar.js?v=20261031-14"></script>
-    <script defer src="app/cell-spill.js?v=20261031-14"></script>
-    <script defer src="app/autofill.js?v=20261031-14"></script>
-    <script defer src="app/move-cells.js?v=20261031-14"></script>
-    <script defer src="app/header-edit.js?v=20261031-14"></script>
-    <script defer src="app/formula-ui.js?v=20261031-14"></script>
+    <script defer src="app/core.js?v=20261031-15"></script>
+    <script defer src="app/render-budget.js?v=20261031-15"></script>
+    <script defer src="app/language.js?v=20261031-15"></script>
+    <script defer src="app/similar-names.js?v=20261031-15"></script>
+    <script defer src="app/analysis.js?v=20261031-15"></script>
+    <script defer src="app/smart-filters.js?v=20261031-15"></script>
+    <script defer src="app/workbook.js?v=20261031-15"></script>
+    <script defer src="app/xlsx-patch.js?v=20261031-15"></script>
+    <script defer src="app/table.js?v=20261031-15"></script>
+    <script defer src="app/virt-rows.js?v=20261031-15"></script>
+    <script defer src="app/conditional-formatting.js?v=20261031-15"></script>
+    <script defer src="app/formula-engine.js?v=20261031-15"></script>
+    <script defer src="app/formula-calc.js?v=20261031-15"></script>
+    <script defer src="app/formula-explain.js?v=20261031-15"></script>
+    <script defer src="app/data-validation.js?v=20261031-15"></script>
+    <script defer src="app/derived-columns.js?v=20261031-15"></script>
+    <script defer src="app/formulas.js?v=20261031-15"></script>
+    <script defer src="app/edit-tools.js?v=20261031-15"></script>
+    <script defer src="app/cell-format.js?v=20261031-15"></script>
+    <script defer src="app/ui-controls.js?v=20261031-15"></script>
+    <script defer src="app/filter-bar.js?v=20261031-15"></script>
+    <script defer src="app/qs-history.js?v=20261031-15"></script>
+    <script defer src="app/undo.js?v=20261031-15"></script>
+    <script defer src="app/cell-notes.js?v=20261031-15"></script>
+    <script defer src="app/anonymize-core.js?v=20261031-15"></script>
+    <script defer src="app/anonymize-zip.js?v=20261031-15"></script>
+    <script defer src="app/anonymize-ui.js?v=20261031-15"></script>
+    <script defer src="app/drafts.js?v=20261031-15"></script>
+    <script defer src="app/transcribe.js?v=20261031-15"></script>
+    <script defer src="app/local-ai.js?v=20261031-15"></script>
+    <script defer src="app/nl-query.js?v=20261031-15"></script>
+    <script defer src="app/report.js?v=20261031-15"></script>
+    <script defer src="app/freeze-pane.js?v=20261031-15"></script>
+    <script defer src="app/app-frame.js?v=20261031-15"></script>
+    <script defer src="app/sheet-edit-ui.js?v=20261031-15"></script>
+    <script defer src="app/frame-compact.js?v=20261031-15"></script>
+    <script defer src="app/key-bar.js?v=20261031-15"></script>
+    <script defer src="app/cell-spill.js?v=20261031-15"></script>
+    <script defer src="app/autofill.js?v=20261031-15"></script>
+    <script defer src="app/move-cells.js?v=20261031-15"></script>
+    <script defer src="app/header-edit.js?v=20261031-15"></script>
+    <script defer src="app/formula-ui.js?v=20261031-15"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20261031-14"></script>
-    <script defer src="app/launch-files.js?v=20261031-14"></script>
-    <script defer src="app/bootstrap.js?v=20261031-14"></script>
+    <script defer src="app/debug-loaders.js?v=20261031-15"></script>
+    <script defer src="app/launch-files.js?v=20261031-15"></script>
+    <script defer src="app/bootstrap.js?v=20261031-15"></script>
   </body>
 </html>

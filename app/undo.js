@@ -101,6 +101,17 @@ function undoCloseStep() {
 
 // Przywraca stan zapisany w kroku; zwraca krok odwrotny (do drugiego stosu).
 function undoApplyStep(step) {
+  // Krok zbiorczy (anonimizacja całego pliku): kilka arkuszy jako jedno Cofnij.
+  if (step.group) {
+    const inv = [];
+    for (let i = step.group.length - 1; i >= 0; i--) { const r = undoApplyStep(step.group[i]); if (r) inv.unshift(r); }
+    const inverse = { workbook: step.workbook, sheet: step.sheet, group: inv, changes: inv.flatMap((s) => s.changes) };
+    if ("anonCleanup" in step) {
+      inverse.anonCleanup = typeof swbAnonPendingCleanup !== "undefined" ? swbAnonPendingCleanup : null;
+      if (typeof swbAnonPendingCleanup !== "undefined") swbAnonPendingCleanup = step.anonCleanup;
+    }
+    return inverse;
+  }
   const sheet = workbook?.Sheets?.[step.sheet];
   if (!sheet) return null;
   const rowMap = step.sheet === currentSheetName ? undoRowMap() : null;
@@ -109,7 +120,9 @@ function undoApplyStep(step) {
   try {
     for (let i = step.changes.length - 1; i >= 0; i--) {
       const ch = step.changes[i];
-      inverse.changes.unshift({ ...ch, snap: undoSnapshot(step.sheet, ch.cellRef, ch.rowIndex0, ch.col, rowMap) });
+      // absCol: krok nagrany na arkuszu innym niż widoczny — kolumna względem bieżącego widoku
+      const col = Number.isInteger(ch.absCol) && step.sheet === currentSheetName ? ch.absCol - currentStartCol : ch.col;
+      inverse.changes.unshift({ ...ch, snap: undoSnapshot(step.sheet, ch.cellRef, ch.rowIndex0, col, rowMap) });
       if (ch.snap.cell) sheet[ch.cellRef] = { ...ch.snap.cell };
       else delete sheet[ch.cellRef];
       if (!pendingEdits[step.sheet]) pendingEdits[step.sheet] = {};
@@ -121,10 +134,10 @@ function undoApplyStep(step) {
         // na innym arkuszu), odtwarzamy z komórki.
         const rv = ch.snap.rowVals;
         const v = rv ? rv.v : (ch.snap.cell ? ch.snap.cell.v : null);
-        if (Array.isArray(row.values)) row.values[ch.col] = v;
-        if (Array.isArray(row.rawValues)) row.rawValues[ch.col] = rv ? rv.r : v;
-        if (Array.isArray(row.display)) row.display[ch.col] = rv ? rv.d : (v == null ? "" : toDisplay(v));
-        if (rv && Array.isArray(row.cellStyles)) row.cellStyles[ch.col] = rv.s;
+        if (Array.isArray(row.values)) row.values[col] = v;
+        if (Array.isArray(row.rawValues)) row.rawValues[col] = rv ? rv.r : v;
+        if (Array.isArray(row.display)) row.display[col] = rv ? rv.d : (v == null ? "" : toDisplay(v));
+        if (rv && Array.isArray(row.cellStyles)) row.cellStyles[col] = rv.s;
       }
     }
   } finally {
