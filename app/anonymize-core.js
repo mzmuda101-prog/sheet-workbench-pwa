@@ -205,6 +205,31 @@ const SwbAnon = (() => {
     return n.split("-").every((part) => (strong ? SURNAME_SUFFIX_STRONG : SURNAME_SUFFIX).test(part) && part.length >= 3);
   };
 
+  // Imię w dowolnym przypadku: andrzeja→andrzej, pawła→paweł (wstawne e), anny/annie/annę/anną→anna.
+  const NOT_FIRST_INFL = new Set(["maja", "maju", "róży"]); // „3 maja”
+  function firstInfl(w) {
+    const n = norm(w);
+    if (NOT_FIRST_INFL.has(n)) return false;
+    if (isFirst(n)) return true;
+    const cands = [];
+    for (const suf of ["owi", "iem", "em", "ie", "a", "u", "y", "i", "ę", "ą", "o"]) {
+      if (!n.endsWith(suf) || n.length - suf.length < 2) continue;
+      const stem = n.slice(0, -suf.length);
+      cands.push(stem, `${stem}a`, stem.replace(/(\p{L})$/u, "e$1"));
+      if (suf === "ie") cands.push(stem.replace(/n$/, "na"), `${stem}a`);
+    }
+    return cands.some((c) => FIRST.has(c) || LEARNED.first.has(c));
+  }
+  // Nazwisko w odmianie: -skiego/-skiemu/-skim/-ską/-skiej, -wicza/-wiczem, -czyka…, albo poznane z pliku.
+  const SURNAME_INFL = /(?:sk|ck|dzk)(?:i|a|iego|iemu|im|ą|iej|ich)$|wicz(?:a|owi|em|u|ów)?$|czyk(?:a|owi|iem|u)?$|czuk(?:a|owi|iem|u)?$/i;
+  function surnameInfl(w) {
+    const n = norm(w);
+    if (n.length < 4 || NOT_NAMES.has(n)) return false;
+    if (SURNAME_INFL.test(n) || knownSurname(n)) return true;
+    for (const suf of ["owi", "iem", "em", "a", "u", "ą", "ej"]) if (n.endsWith(suf) && knownSurname(n.slice(0, -suf.length))) return true;
+    return false;
+  }
+
   // Ciąg słów z wielkiej litery; osoba = imię ze słownika + sąsiednie nazwisko (najpierw
   // następne słowo — „Jan Kowalski”, potem poprzednie — „Kowalski Jan”). Słowo przed imieniem
   // na początku zdania („Dzwonił Jan Kowalski”) nie wchodzi do trafienia.
@@ -233,6 +258,19 @@ const SwbAnon = (() => {
       const ok = isFirst(m[2]) ? dot : dot ? surnameLike(m[2], true) || knownSurname(m[2]) : LEARNED.sur.has(norm(m[2]));
       if (!ok) continue;
       out.push({ type: "person", start: m.index, end: m.index + m[0].length, value: m[0], conf: "medium" });
+    }
+    // Odmienione i pisane małą literą: „dodać andrzeja słowikowskiego”, „u anny kowalskiej”,
+    // „z pawłem nowickim”. Para słów: imię (po odjęciu końcówki przypadka) + nazwisko z mocną
+    // końcówką w odmianie albo nazwisko poznane z pliku. Pojedyncze imię — nie (za dużo zwykłych słów).
+    const words2 = [...text.matchAll(/(?<![\p{L}])\p{L}{3,}(?:-\p{L}{3,})?(?![\p{L}])/gu)].map((m) => ({ w: m[0], start: m.index, end: m.index + m[0].length }));
+    for (let i = 0; i + 1 < words2.length; i++) {
+      const a = words2[i], b = words2[i + 1];
+      if (!/^\s+$/.test(text.slice(a.end, b.start))) continue;
+      if (/^\p{Lu}/u.test(a.w) && /^\p{Lu}/u.test(b.w) && isFirst(a.w)) continue; // zwykła forma — wyżej
+      const ok = (firstInfl(a.w) && surnameInfl(b.w)) || (surnameInfl(a.w) && firstInfl(b.w));
+      if (!ok) continue;
+      out.push({ type: "person", start: a.start, end: b.end, value: text.slice(a.start, b.end), conf: "medium" });
+      i++;
     }
     for (const m of text.matchAll(RE_TITLE)) {
       const start = m.index + m[0].indexOf(m[1]);
@@ -336,9 +374,10 @@ const SwbAnon = (() => {
     const surn = words.filter((w) => !isFirst(w) && !/^\p{Lu}\.$/u.test(w) && surnameLike(w, false)).length;
     if (firsts && (surn || words.length >= 2)) return 1;
     if (initials && surn) return 0.9;
-    if (words.length === 1 && (firsts || SURNAME_SET.has(norm(words[0])))) return 0.8;
+    if (words.length === 1 && (firsts || knownSurname(words[0]))) return 0.8; // także nazwiska poznane z pliku
     if (words.length === 1 && surnameLike(words[0], true)) return 0.6;
-    if (surn && words.length <= 3) return 0.5;
+    // słaba końcówka (-ny, -ak, -ek…) tylko przy co najmniej dwóch słowach: „Mikrofony” to nie nazwisko
+    if (surn && words.length >= 2 && words.length <= 3) return 0.5;
     return 0;
   }
 

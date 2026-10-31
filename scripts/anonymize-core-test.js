@@ -127,5 +127,16 @@ const fk = s3.replaceText("person", "Jan Kowalski", "fake");
 s3.remember("Jan Kowalski", fk); s3.freezeKnown();
 eq(s3.rewriteString(`Jan Kowalski (C1)`), `${fk} (C1)`, "fałszywa osoba nie jest zamieniana drugi raz");
 
+// etykiety w kolumnie z osobami nie są osobami (zgłoszenie 2026-11-01: „Porządkowi”, „Mikrofony”, „STARSI”)
+["Porządkowi", "Nagłośnienie", "Mikrofony", "STARSI", "SŁUDZY", "Data", "Otwieranie"].forEach((w) => eq(A.personCellScore(w), 0, `etykieta „${w}” to nie osoba`));
+["Jan Kowalski", "B. Bielak", "Kowalski", "Faustyna Grabowska", "J Murlak"].forEach((w) => ok(A.personCellScore(w) > 0, `„${w}” wygląda na osobę`));
+
+// odmienione, małą literą (notatka w „bazy”, 2026-11-01)
+ok(types("pamiętać dodać andrzeja słowikowskiego do audytorium").includes("person:andrzeja słowikowskiego"), "imię+nazwisko w dopełniaczu, małe litery");
+ok(types("rozmawiałem z pawłem nowickim wczoraj").includes("person:pawłem nowickim"), "narzędnik, wstawne e");
+ok(types("Przekaż Annie Kowalskiej klucze").some((x) => x.startsWith("person:Annie Kowalskiej")), "celownik, wielkie litery");
+eq(types("dla polskiego zespołu w trakcie").length, 0, "zwykłe słowa z końcówką -skiego nie są osobą");
+eq(types("3 maja polskiego święta").length, 0, "„maja” to nie imię");
+
 console.log(`${fails ? "❌" : "✅"} anonymize-core: ${passes} ok, ${fails} błędów`);
 process.exit(fails ? 1 : 0);

@@ -44,7 +44,7 @@ function buildFixture() {
   PEOPLE.forEach((p, i) => rows.push([i + 1, p[0], p[1], p[2], p[3], p[4], p[5], 1000 * (i + 1)]));
   const ws = XLSX.utils.aoa_to_sheet(rows);
   ws.B2.c = [{ a: "Ewa Mazur", t: "Sprawdzić u Jan Kowalski" }]; // notatka z autorem
-  const ws2 = XLSX.utils.aoa_to_sheet([["Pracownik", "Zlecenia", "Z arkusza"], ["J. Kowalski", 3, ""], ["A. Nowak", 5, ""], ["Kamil Testowy", 1, ""]]);
+  const ws2 = XLSX.utils.aoa_to_sheet([["Pracownik", "Zlecenia", "Z arkusza"], ["J. Kowalski", 3, ""], ["A. Nowak", 5, ""], ["Kamil Testowy", 1, ""], ["Porządkowi", 0, ""], ["STARSI", 0, ""]]);
   ws2.C2 = { t: "s", v: "Jan Kowalski", f: "Klienci!B2" }; // wynik formuły zapamiętany w pliku
   ws2.C3 = { t: "s", v: "Anna Nowak", f: "Klienci!B3" };
   const wb = XLSX.utils.book_new();
@@ -133,6 +133,18 @@ async function run() {
   ok("kolumna Pracownik = osoby", sc.cols.includes("Podsumowanie|Pracownik|person"), sc.cols);
   ok("kolumna Kwota nietknięta", !sc.cols.some((c) => /\|Kwota\|.+/.test(c)), sc.cols);
 
+  const lows = await page.evaluate(() => [...swbAnon.state.plan.values.values()].filter((v) => v.conf === "low").map((v) => v.value).sort().join("|"));
+  ok("etykiety na liście jako „?” (odznaczone)", lows === "Porządkowi|STARSI", lows);
+  // zaznaczenie „?” dołącza wartość, odznaczenie znów ją zostawia
+  const toggled = await page.evaluate(() => {
+    const v = [...swbAnon.state.plan.values.values()].find((x) => x.value === "STARSI");
+    swbAnon.state.included.add(v.key);
+    const on = swbAnon.buildPlan().changes.some((c) => c.before === "STARSI");
+    swbAnon.state.included.delete(v.key);
+    const off = swbAnon.buildPlan().changes.some((c) => c.before === "STARSI");
+    return { on, off };
+  });
+  ok("„?” można dołączyć ręcznie", toggled.on && !toggled.off, toggled);
   // ── 4. odznaczenie wartości + wyjątek ──
   await page.evaluate(() => {
     const key = [...swbAnon.state.plan.values.values()].find((v) => v.value === "Kamil Testowy").key;
@@ -153,6 +165,7 @@ async function run() {
   ok("w kopii brak oryginałów (każda część ZIP)", leaks.length === 0, leaks.slice(0, 8));
   ok("telefony zniknęły", leaksIn(texts, ["600 123 456", "501 222 333", "512-345-678"]).length === 0, leaksIn(texts, ["600 123 456", "501 222 333"]));
   ok("wyjątek (odznaczona wartość) został", leaksIn(texts, ["Kamil Testowy"]).length > 0, "brak Kamil Testowy");
+  ok("etykiety w kolumnie osób zostały", leaksIn(texts, ["Porządkowi", "STARSI"]).length === 2, leaksIn(texts, ["Porządkowi", "STARSI"]));
   ok("raport wymienia wyczyszczone ślady", /właściwości pliku|metadata|wyniki formuł/.test(copy.reportText), copy.reportText.slice(0, 200));
 
   const wb2 = XLSX.read(Buffer.from(copy.bytes), { type: "buffer" });

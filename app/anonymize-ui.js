@@ -73,7 +73,9 @@ const swbAnon = (() => {
       reportInPlace: "Zmiany są w otwartym pliku. Zapisz plik (Zapisz / Zapisz jako) — przy zapisie apka wyczyści też ślady poza komórkami. Cofnij: Ctrl/⌘+Z.",
       leakOk: "Test szczelności: w żadnej części pliku nie ma już oryginalnych danych ({parts} sprawdzonych części).",
       leakFound: "Test szczelności: oryginalne dane zostały jeszcze w {n} miejscach (lista niżej). Często to komórki poza wybranym zakresem — wybierz „Cały plik”, żeby je też objąć.",
-      leakFoundFile: "Test szczelności: te same teksty co zanonimizowane dane zostały jeszcze w {n} miejscach (lista niżej). Sprawdź, czy to dane osobowe, czy np. nagłówek albo nazwa zakresu — wtedy to fałszywy alarm.",
+      leakFoundFile: "Test szczelności: zanonimizowane wartości zostały jeszcze w {n} miejscach z danymi (lista niżej, z adresami komórek).",
+      structTitle: "Do sprawdzenia: {n} nazw i nagłówków w strukturze pliku (nie wliczone do testu)",
+      structNote: "Nazwy zakresów, arkuszy, tabel i ich kolumn oraz nagłówki apka zostawia — zależą od nich listy, tabele i formuły. Jeśli któraś z nich to imię i nazwisko, zmień ją ręcznie w Excelu.",
       lkCells: "Arkusz „{s}” — komórki:", lkSheetOther: "Arkusz „{s}” — poza komórkami (lista wyboru, nagłówek wydruku, hiperłącze…):",
       lkSheetName: "Nazwy arkuszy:", lkDefinedName: "Nazwy zakresów (Formuły → Menedżer nazw):", lkDefinedValue: "Treść nazw zakresów:",
       lkTableName: "Nazwy tabel:", lkTableColumn: "Tabela „{t}” — nazwy kolumn:", lkAppTitles: "Właściwości pliku — lista nazw arkuszy i zakresów:",
@@ -83,6 +85,7 @@ const swbAnon = (() => {
       plCore: "Właściwości pliku", plChart: "Wykres", plDrawing: "Rysunek / pole tekstowe", plPivot: "Tabela przestawna", plNotes: "Notatki i komentarze",
       linksOk: "Powiązania: {rules} list wyboru, {cells} komórek sprawdzonych — każda wartość nadal jest na swojej liście.",
       linksBroken: "Powiązania: {n} komórek ma wartość spoza swojej listy wyboru po anonimizacji:",
+      lowHint: "„?” ({n}) — są w kolumnie z osobami, ale nie wyglądają na imię i nazwisko (np. etykieta „Porządkowi”). Zostają bez zmian; zaznacz, jeśli to jednak osoba.",
       personFormulaHint: "Plik ma formuły. Jeśli któraś składa imię i nazwisko w innej formie (np. „Nazwisko Imię”, „I. Nazwisko”), wybierz dla osób „Fałszywe dane” — z pseudonimu „Osoba 001” formuła zrobi „001 Osoba”.",
       linksFix: "Zwykle lista źródłowa (np. arkusz z bazą) była poza zakresem anonimizacji. Wybierz „Cały plik” — wtedy lista i komórki zmienią się tą samą zamianą.",
       linksNote: "Te same wartości dostają wszędzie tę samą zamianę, więc listy z „bazy”, WYSZUKAJ/X.WYSZUKAJ po nazwisku, nazwy zakresów i tabele dalej się zgadzają. Formuły przeliczą się z nowych danych.",
@@ -167,7 +170,9 @@ const swbAnon = (() => {
       reportInPlace: "The changes are in the open file. Save it (Save / Save as) — saving also cleans traces outside cells. Undo: Ctrl/⌘+Z.",
       leakOk: "Leak test: no original data left in any part of the file ({parts} parts checked).",
       leakFound: "Leak test: original data is still in {n} places (listed below). Often these are cells outside the chosen scope — choose “Whole file” to cover them.",
-      leakFoundFile: "Leak test: the same texts as the anonymized data are still in {n} places (listed below). Check whether it's personal data or e.g. a header or range name — then it's a false alarm.",
+      leakFoundFile: "Leak test: anonymized values are still in {n} places with data (listed below, with cell addresses).",
+      structTitle: "To review: {n} names and headers in the file structure (not counted in the test)",
+      structNote: "Range, sheet, table and column names and headers are kept — lists, tables and formulas depend on them. If one of them is a person's name, change it by hand in Excel.",
       lkCells: "Sheet “{s}” — cells:", lkSheetOther: "Sheet “{s}” — outside cells (dropdown list, print header, hyperlink…):",
       lkSheetName: "Sheet names:", lkDefinedName: "Range names (Formulas → Name Manager):", lkDefinedValue: "Range name contents:",
       lkTableName: "Table names:", lkTableColumn: "Table “{t}” — column names:", lkAppTitles: "File properties — list of sheet and range names:",
@@ -177,6 +182,7 @@ const swbAnon = (() => {
       plCore: "File properties", plChart: "Chart", plDrawing: "Drawing / text box", plPivot: "Pivot table", plNotes: "Notes and comments",
       linksOk: "Links: {rules} dropdown lists, {cells} cells checked — every value is still on its list.",
       linksBroken: "Links: {n} cells have a value outside their dropdown list after anonymization:",
+      lowHint: "“?” ({n}) — in a column of people, but they don't look like a name (e.g. a label “Ushers”). They stay unchanged; tick one if it is a person after all.",
       personFormulaHint: "The file has formulas. If one builds the name in another form (e.g. “Last First”, “F. Last”), choose “Fake data” for people — from the pseudonym “Person 001” a formula makes “001 Person”.",
       linksFix: "Usually the source list (e.g. a database sheet) was outside the anonymized scope. Choose “Whole file” — then the list and the cells change with the same replacement.",
       linksNote: "The same values get the same replacement everywhere, so lists from a “database” sheet, VLOOKUP/XLOOKUP by name, range names and tables still match. Formulas recalculate from the new data.",
@@ -217,7 +223,7 @@ const swbAnon = (() => {
   // ── stan okna ──
   const st = {
     scope: "sheet", filteredOnly: false, everything: false, columns: new Set(), key: "",
-    methods: { ...SwbAnon.DEFAULT_METHODS }, colModes: {}, excluded: new Set(),
+    methods: { ...SwbAnon.DEFAULT_METHODS }, colModes: {}, excluded: new Set(), included: new Set(),
     rules: { terms: "", exceptions: "", patterns: "" },
     output: "copy", traces: { ...SWB_ANON_ZIP_DEFAULTS }, search: "",
     scan: null, seed: null, plan: null, showAllCols: false,
@@ -385,11 +391,13 @@ const swbAnon = (() => {
       methods: st.methods, labels: labels(),
       rules: { terms: lines(st.rules.terms), patterns: lines(st.rules.patterns), exceptions: lines(st.rules.exceptions) },
     });
-    // 1. osoby: najpierw poznaj pełne imiona (żeby „A. Kamiński” trafił do „Adam Kamiński”)
+    // 1. osoby: najpierw poznaj pełne imiona (żeby „A. Kamiński” trafił do „Adam Kamiński”).
+    // Tylko z komórek, które wyglądają na osobę — etykieta „Porządkowi” w kolumnie nazwisk
+    // nie może zostać „nazwiskiem” (szukanym potem w całym pliku).
     scanR.cols.forEach((col) => {
       const mode = colMode(col);
       col.cells.forEach((x) => {
-        if (mode === "person" && !x.above && typeof x.v === "string") session.learnPerson(x.v);
+        if (mode === "person" && !x.above && typeof x.v === "string" && SwbAnon.personCellScore(x.v) > 0) session.learnPerson(x.v);
         x.hits.forEach((h) => { if (h.type === "person") session.learnPerson(h.value); });
       });
     });
@@ -404,10 +412,12 @@ const swbAnon = (() => {
     const changes = [];
     const values = new Map(); // valueKey → {type, value, count, conf}
     const typeCounts = {};
+    // conf "low" = w kolumnie osób, ale nie wygląda na osobę (etykieta) — domyślnie odznaczone
     const note = (type, value, conf) => {
       const k = valueKey(type, value);
       const e = values.get(k);
       if (e) e.count++; else values.set(k, { key: k, type, value, count: 1, conf });
+      if (conf === "low" && !st.included.has(k)) return false;
       typeCounts[type] = (typeCounts[type] || 0) + 1;
       return !st.excluded.has(k);
     };
@@ -416,10 +426,16 @@ const swbAnon = (() => {
       col.planned = 0;
       if (mode === "skip") continue;
       for (const x of col.cells) {
-        const wholeType = !x.above && mode !== "auto" ? mode : null;
+        let wholeType = !x.above && mode !== "auto" ? mode : null;
+        // kolumna osób rozpoznana automatycznie: komórka, która nie wygląda na imię/nazwisko
+        // („Porządkowi”, „STARSI”, „Data”) czeka na decyzję użytkownika; „Gr3 P. Król” ma osobę
+        // w środku — zamieniamy tylko ją (kod grupy zostaje)
+        const auto = !st.colModes[colKey(col)] && !st.everything;
+        let low = wholeType === "person" && auto && typeof x.v === "string" && SwbAnon.personCellScore(x.v) === 0;
+        if (low && hitsOf(col, x).some((h) => h.type === "person")) { wholeType = null; low = false; }
         if (wholeType) {
           if (typeof x.v === "string" && !x.v.trim()) continue;
-          if (!note(wholeType, x.v, "high")) continue;
+          if (!note(wholeType, x.v, low ? "low" : "high")) continue;
           const method = st.methods[wholeType] || "redact";
           if (method === "keep") continue;
           const after = session.replaceWholeCell(wholeType, x.v, method);
@@ -712,6 +728,7 @@ const swbAnon = (() => {
     st.scan = res;
     st.colModes = {};
     st.excluded = new Set();
+    st.included = new Set();
     st.plan = buildPlan();
     render();
     const first = R.results.querySelector(".anon-sec");
@@ -804,11 +821,20 @@ const swbAnon = (() => {
         list.replaceChildren();
         const q = SwbAnon.norm(st.search);
         const items = [...plan.values.values()].filter((v) => !q || SwbAnon.norm(v.value instanceof Date ? v.value.toISOString() : v.value).includes(q) || SwbAnon.norm(tx(`t_${v.type}`)).includes(q))
-          .sort((a, b) => b.count - a.count);
+          .sort((a, b) => (a.conf === "low") - (b.conf === "low") || b.count - a.count);
+        const lows = items.filter((v) => v.conf === "low").length;
+        if (lows) list.appendChild(el("div", "anon-low-hint", tx("lowHint", { n: fmtN(lows) })));
+        // najpierw do decyzji („?”), potem reszta
+        items.sort((a, b) => (b.conf === "low") - (a.conf === "low") || b.count - a.count);
         items.slice(0, 200).forEach((v) => {
           const lab = el("label", "anon-value");
-          const inp = el("input"); inp.type = "checkbox"; inp.checked = !st.excluded.has(v.key);
-          inp.addEventListener("change", () => { if (inp.checked) st.excluded.delete(v.key); else st.excluded.add(v.key); refreshPlanKeepValues(); });
+          const isOn = (x) => !st.excluded.has(x.key) && (x.conf !== "low" || st.included.has(x.key));
+          const inp = el("input"); inp.type = "checkbox"; inp.checked = isOn(v);
+          inp.addEventListener("change", () => {
+            if (inp.checked) { st.excluded.delete(v.key); if (v.conf === "low") st.included.add(v.key); } else { st.excluded.add(v.key); st.included.delete(v.key); }
+            refreshPlanKeepValues();
+          });
+          if (v.conf === "low") lab.classList.add("is-low");
           const txt = el("span", "anon-value-text", v.value instanceof Date ? toDisplay(v.value) : String(v.value));
           lab.append(inp, el("span", `anon-tag t-${v.type}`, tx(`t_${v.type}`)), txt, el("span", "anon-count", `${fmtN(v.count)}×`));
           if (v.conf === "medium") lab.classList.add("is-medium");
@@ -818,8 +844,8 @@ const swbAnon = (() => {
         list._items = items;
       };
       search.addEventListener("input", () => { st.search = search.value; drawValues(); });
-      allB.addEventListener("click", () => { (list._items || []).forEach((v) => st.excluded.delete(v.key)); refreshPlanKeepValues(); drawValues(); });
-      noneB.addEventListener("click", () => { (list._items || []).forEach((v) => st.excluded.add(v.key)); refreshPlanKeepValues(); drawValues(); });
+      allB.addEventListener("click", () => { (list._items || []).forEach((v) => { st.excluded.delete(v.key); if (v.conf === "low") st.included.add(v.key); }); refreshPlanKeepValues(); drawValues(); });
+      noneB.addEventListener("click", () => { (list._items || []).forEach((v) => { st.excluded.add(v.key); st.included.delete(v.key); }); refreshPlanKeepValues(); drawValues(); });
       drawValues();
       sec.append(bar, list);
       R.results.appendChild(sec);
@@ -909,10 +935,10 @@ const swbAnon = (() => {
 
   // Wycieki: pełne wartości i dokładne miejsca — żeby dało się ocenić, czy to dane osobowe,
   // czy np. nazwa zakresu albo nagłówek (fałszywy alarm).
-  function renderLeaks(leaks) {
+  function renderLeaks(leaks, structural) {
     const box = el("div", "anon-leaks-box");
     const places = leaks.reduce((n, e) => n + e.items.length, 0);
-    box.appendChild(el("p", "anon-warn", tx(st.lastScope === "file" ? "leakFoundFile" : "leakFound", { n: fmtN(places) })));
+    if (!structural) box.appendChild(el("p", "anon-warn", tx(st.lastScope === "file" ? "leakFoundFile" : "leakFound", { n: fmtN(places) })));
     const q = (v) => `„${v}”`;
     leaks.forEach((e) => {
       const block = el("div", "anon-leak");
@@ -939,7 +965,7 @@ const swbAnon = (() => {
       });
       if (e.items.length > 40) ul.appendChild(el("li", null, tx("more", { n: fmtN(e.items.length - 40) })));
       block.appendChild(ul);
-      const hint = { sheetName: "lkHintNames", definedName: "lkHintNames", tableName: "lkHintNames", tableColumn: "lkHintNames", appTitles: "lkHintNames" }[e.kind]
+      const hint = structural ? null : { sheetName: "lkHintNames", definedName: "lkHintNames", tableName: "lkHintNames", tableColumn: "lkHintNames", appTitles: "lkHintNames" }[e.kind]
         || (e.kind === "cells" && e.items.every((it) => it.refs.every((r) => r.header)) ? "lkHintHeaders" : null);
       if (hint) block.appendChild(el("p", "field-note", tx(hint)));
       box.appendChild(block);
@@ -1035,6 +1061,15 @@ const swbAnon = (() => {
       if (cl.length) sec.appendChild(el("p", "field-note", tx("cleaned", { list: cl.join(", ") })));
       if (!report.leaks.length) sec.appendChild(el("p", "anon-ok", tx("leakOk", { parts: fmtN(report.partsChecked || 0) })));
       else sec.appendChild(renderLeaks(report.leaks));
+      if (report.structural && report.structural.length) {
+        // nazwy i nagłówki: nie wliczane do testu, zwinięte — do przejrzenia
+        const det = el("details", "anon-struct");
+        const n = report.structural.reduce((k, e) => k + e.items.length, 0);
+        det.appendChild(el("summary", null, tx("structTitle", { n: fmtN(n) })));
+        det.appendChild(el("p", "field-note", tx("structNote")));
+        det.appendChild(renderLeaks(report.structural, true));
+        sec.appendChild(det);
+      }
       report.warnings.forEach((w) => sec.appendChild(el("p", "field-note", tx(`warn${w[0].toUpperCase()}${w.slice(1)}`))));
     }
     if (links) sec.appendChild(renderLinks(links));

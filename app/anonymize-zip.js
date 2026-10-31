@@ -313,7 +313,11 @@ async function swbAnonCleanZip(bytes, session, opts = {}, ctx = {}) {
   // ── 6. test szczelności: oryginały w KAŻDEJ części tekstowej, z dokładnym miejscem ──
   const leakRes = swbAnonLeakRegex(session.leakTerms);
   report.partsChecked = Object.keys(zip.files).filter((p) => !zip.files[p].dir && /\.(xml|rels|vml)$/i.test(p)).length;
-  report.leaks = await swbAnonLocateLeaks(zip, leakRes, sheetPaths, ctx);
+  // „Struktura” (nazwy zakresów, arkuszy, tabel i ich kolumn, nagłówki) to nie dane w komórkach —
+  // pokazujemy ją osobno do sprawdzenia, a test szczelności liczy tylko resztę.
+  const located = await swbAnonLocateLeaks(zip, leakRes, sheetPaths, ctx);
+  report.leaks = located.filter((e) => !e.structural);
+  report.structural = located.filter((e) => e.structural);
   if (Object.keys(zip.files).some((p) => /^xl\/media\//i.test(p))) report.warnings.push("images");
   if (Object.keys(zip.files).some((p) => /^xl\/revisions\//i.test(p))) report.warnings.push("revisions");
   if (Object.keys(zip.files).some((p) => /^xl\/externalLinks\//i.test(p))) report.warnings.push("externalLinks");
@@ -422,6 +426,15 @@ async function swbAnonLocateLeaks(zip, res, sheetPaths, ctx = {}) {
   const headerCells = ctx.headerCells || new Set();
   const protectedCells = ctx.protectedCells || new Set();
   const covered = new Set([sst.path, ...Object.values(sheetPaths)]);
+  // nazwy w strukturze pliku: odwołanie do nazwy zakresu w liście wyboru (=porządkowi) to nie dane
+  const structNames = new Set();
+  const wbXml = (await swbAnonText(zip, "xl/workbook.xml")) || "";
+  [...wbXml.matchAll(/<(?:definedName|sheet)\b[^>]*\bname="([^"]*)"/g)].forEach((m) => structNames.add(swbAnonDecode(m[1]).toLowerCase()));
+  for (const p of Object.keys(zip.files)) {
+    if (!/^xl\/tables\/[^/]+\.xml$/i.test(p)) continue;
+    const tx = await swbAnonText(zip, p);
+    [...tx.matchAll(/<(?:tableColumn|table)\b[^>]*\b(?:name|displayName)="([^"]*)"/g)].forEach((m) => structNames.add(swbAnonDecode(m[1]).toLowerCase()));
+  }
   const addItems = (entry, terms, refInfo) => {
     terms.forEach((term) => {
       let it = entry.items.find((x) => x.term.toLowerCase() === term.toLowerCase());
@@ -441,10 +454,23 @@ async function swbAnonLocateLeaks(zip, res, sheetPaths, ctx = {}) {
       const key = `${sheetName}!${ref}`;
       addItems(cellsEntry, found, { ref, header: headerCells.has(key) || protectedCells.has(key), formula: /<f\b/.test(inner) });
     });
+    // nagłówki osobno (struktura), dane osobno
+    const hdr = { kind: "cells", sheet: sheetName, structural: true, items: [] };
+    cellsEntry.items = cellsEntry.items.filter((it) => {
+      const data = it.refs.filter((r) => !r.header);
+      const heads = it.refs.filter((r) => r.header);
+      if (heads.length) hdr.items.push({ term: it.term, refs: heads });
+      it.refs = data;
+      return data.length > 0;
+    });
     if (cellsEntry.items.length) out.push(cellsEntry);
+    if (hdr.items.length) out.push(hdr);
     const rest = swbAnonDecode(xml.replace(/<sheetData\b[\s\S]*?<\/sheetData>/, ""));
     const other = swbAnonLeaksIn(rest, res);
-    if (other.length) { const e = { kind: "sheetOther", sheet: sheetName, items: [] }; addItems(e, other); out.push(e); }
+    const otherStruct = other.filter((t) => structNames.has(t.toLowerCase()));
+    const otherData = other.filter((t) => !structNames.has(t.toLowerCase()));
+    if (otherData.length) { const e = { kind: "sheetOther", sheet: sheetName, items: [] }; addItems(e, otherData); out.push(e); }
+    if (otherStruct.length) { const e = { kind: "sheetOther", sheet: sheetName, structural: true, items: [] }; addItems(e, otherStruct); out.push(e); }
   }
   for (const p of Object.keys(zip.files).sort()) {
     if (zip.files[p].dir || covered.has(p) || !/\.(xml|rels|vml)$/i.test(p)) continue;
@@ -456,24 +482,25 @@ async function swbAnonLocateLeaks(zip, res, sheetPaths, ctx = {}) {
         ["part", [...raw.matchAll(/<definedName\b[^>]*>([^<]*)<\/definedName>/g)].map((m) => swbAnonDecode(m[1]))],
       ];
       kinds.forEach(([kind, list]) => {
-        const e = { kind, label: kind === "part" ? "definedNameValue" : null, items: [] };
-        list.forEach((txt) => addItems(e, swbAnonLeaksIn(txt, res)));
+        const e = { kind, label: kind === "part" ? "definedNameValue" : null, structural: kind !== "part", items: [] };
+        // treść nazwy: Tabela3[mikrofony] — kolumna tabeli, nie dane
+        list.forEach((txt) => addItems(e, swbAnonLeaksIn(txt, res).filter((t) => kind !== "part" || !structNames.has(t.toLowerCase()))));
         if (e.items.length) out.push(e);
       });
       continue;
     }
     if (/^xl\/tables\//i.test(p)) {
       const tname = swbAnonDecode((raw.match(/<table\b[^>]*\bdisplayName="([^"]*)"/) || [])[1] || p);
-      const e1 = { kind: "tableName", label: tname, items: [] };
+      const e1 = { kind: "tableName", label: tname, structural: true, items: [] };
       addItems(e1, swbAnonLeaksIn(tname, res));
-      const e2 = { kind: "tableColumn", label: tname, items: [] };
+      const e2 = { kind: "tableColumn", label: tname, structural: true, items: [] };
       [...raw.matchAll(/<tableColumn\b[^>]*\bname="([^"]*)"/g)].forEach((m) => addItems(e2, swbAnonLeaksIn(swbAnonDecode(m[1]), res)));
       [e1, e2].forEach((e) => { if (e.items.length) out.push(e); });
       continue;
     }
     const found = swbAnonLeaksIn(swbAnonDecode(raw), res);
     if (!found.length) continue;
-    const e = { kind: p === "docProps/app.xml" ? "appTitles" : "part", label: p, items: [] };
+    const e = { kind: p === "docProps/app.xml" ? "appTitles" : "part", label: p, structural: p === "docProps/app.xml", items: [] };
     addItems(e, found);
     out.push(e);
   }
