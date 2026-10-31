@@ -9147,7 +9147,7 @@ html:not(.force-glass) .sidebar details.panel {
 /* Tekst wylewa się na puste komórki obok, jak w Excelu (cell-spill.js). clip-path przycina
    do pustych sąsiadów (--spill-l/--spill-r) i robi z komórki osobną warstwę malowaną po
    tłach sąsiadów — tekst leży na ich wypełnieniu/zaznaczeniu, jak w Excelu. */
-#dataTable td.cell-spill {
+:is(#dataTable, .flip-ghost-table):not(.wrap-cells) td.cell-spill {
   overflow: visible;
   text-overflow: clip;
   /* nad pozycjonowanymi sąsiadami (aktywna komórka z uchwytem, notatka) — inaczej ich
@@ -9158,14 +9158,14 @@ html:not(.force-glass) .sidebar details.panel {
 }
 /* do prawej / wyśrodkowane: flex przy za długim tekście wystaje na stronę POCZĄTKU
    (do prawej → widać koniec tekstu) albo równo na obie (środek), czego zwykły tekst nie umie */
-#dataTable td.cell-spill > .spill-t {
+:is(#dataTable, .flip-ghost-table):not(.wrap-cells) td.cell-spill > .spill-t {
   display: flex;
   white-space: nowrap;
   pointer-events: none; /* wylany tekst nie zabiera kliknięć pustym komórkom obok */
   margin-left: calc(0px - var(--spill-l, 0px));
 }
-#dataTable td.spill-right > .spill-t { justify-content: flex-end; }
-#dataTable td.spill-center > .spill-t {
+:is(#dataTable, .flip-ghost-table):not(.wrap-cells) td.spill-right > .spill-t { justify-content: flex-end; }
+:is(#dataTable, .flip-ghost-table):not(.wrap-cells) td.spill-center > .spill-t {
   justify-content: center;
   /* symetrycznie — środek zostaje na swojej komórce; zajęty bok obcina clip-path */
   margin-left: calc(0px - max(var(--spill-l, 0px), var(--spill-r, 0px)));

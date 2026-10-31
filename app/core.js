@@ -390,6 +390,7 @@ function flipGhostAnimate(movers, entering, delayFor, enterOffset) {
   // nowy silnik wierszy dorysowuje DOM w trakcie przewijania, scalenia i otwarty edytor
   // nie dają się wiernie skopiować jednym wierszem — tam zostaje stary FLIP
   if (tbodyEl.classList.contains("is-virtual") || tbodyEl.querySelector("input.cell-editor, td[colspan], td[rowspan]")) return false;
+  if (typeof swbSpill !== "undefined") swbSpill.flush(); // kopie muszą mieć już przeliczony wylany tekst
   // odczyty (układ jest świeży po pomiarze FLIP) — zapisów jeszcze nie było
   const wrapRect = tableWrapEl.getBoundingClientRect();
   const tableRect = tableEl.getBoundingClientRect();
@@ -745,7 +746,7 @@ let cellStyleShowBorders = true;
 // Formatowanie warunkowe (CF): reguły + dxf parsowane z surowego .xlsx przy wczytaniu,
 // ewaluowane leniwie per arkusz (cache). Pokazują kolory/tła zmienione przez CF w Excelu.
 let cellStyleShowConditionalFormatting = true;
-let cellStyleShowSubheaders = true; // jasnozielone podświetlenie wykrytych podnagłówków
+let cellStyleShowSubheaders = false; // szary pasek wykrytych wierszy sekcji (domyślnie wyłączony)
 let recalcDateFormulas = true; // przeliczaj podgląd formuł zależnych od TODAY()/NOW()
 let cellStyleSmartWidths = true; // true = dopasuj do większości (p90, przycina skrajnie długie); false = zmieść wszystko
 let currentDxfs = [];        // [{fontColor, fillColor}] z xl/styles.xml <dxfs>
@@ -850,7 +851,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261031-13";
+const APP_BUILD_VERSION = "20261031-14";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -930,7 +931,7 @@ function scheduleCursorHintInit() {
 
 const THEME_KEY = "excel-workbench-theme";
 const MAX_ROWS_KEY = "excel-workbench-max-rows";
-const EXCEL_LAYOUT_KEY = "excel-workbench-excel-layout";
+const EXCEL_LAYOUT_KEY = "excel-workbench-excel-layout-v2";
 const CELL_STYLE_PREFS_KEY = "excel-workbench-cell-style-prefs";
 const ROW_HEIGHT_KEY = "excel-workbench-row-height-all";
 const COL_WIDTH_KEY = "excel-workbench-col-width-all";
@@ -1247,6 +1248,7 @@ function applyFreezeHeaders() {
 }
 
 function applyFreezeFirstColumn() {
+  if (typeof swbSpill !== "undefined") swbSpill.schedule(); // zamrożona 1. kolumna się nie wylewa
   if (!tableWrapEl) return;
   tableWrapEl.classList.toggle("freeze-first-col", !!(freezeFirstColEl && freezeFirstColEl.checked));
   // uchwyt wypełniania w zamrożonej kolumnie siedzi w komórce, poza nią — w #tableWrap (autofill.js)

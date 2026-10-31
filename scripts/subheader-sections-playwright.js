@@ -94,6 +94,10 @@ async function run() {
   await p.waitForFunction(() => document.querySelectorAll("#dataTable tbody tr[data-row-key]").length >= 13, null, { timeout: 20000 });
   await p.waitForFunction(() => !document.documentElement.classList.contains("vt-scene"), null, { timeout: 10000 });
   await sleep(300);
+  // wyróżnianie sekcji jest domyślnie WYŁĄCZONE (2026-10-31) — test włącza je jak użytkownik w Widoku
+  check("6. (domyślnie) bez szarego paska sekcji", await p.evaluate(() => !showSubheadersEl.checked && !document.querySelector("tr.row-subheader")), null);
+  await p.evaluate(() => { showSubheadersEl.checked = true; showSubheadersEl.dispatchEvent(new Event("change", { bubbles: true })); });
+  await sleep(400);
   const s6 = await p.evaluate(() => {
     sheetEditUi.setMode("edit");
     const tr = document.querySelector('#dataTable tbody tr[data-row-index="7"]');

@@ -20,7 +20,7 @@
 
 const swbSpill = (() => {
   if (typeof document === "undefined" || typeof tableEl === "undefined" || !tableEl) {
-    return { schedule() {}, invalidate() {}, refreshRow() {}, visibleWidth() { return 0; } };
+    return { schedule() {}, invalidate() {}, refreshRow() {}, visibleWidth() { return 0; }, flush() {} };
   }
   const NO_SPILL_ALIGN = new Set(["fill", "justify", "distributed"]);
   const ERROR_RE = /^#(?:N\/[AD]|DZIEL\/0!|DIV\/0!|ARG!|VALUE!|ADR!|REF!|NAZWA\?|NAME\?|LICZBA!|NUM!|ZERO!|NULL!|SPILL!|CALC!|ROZLANIE!|OBL!)$/;
@@ -177,5 +177,13 @@ const swbSpill = (() => {
     }).observe(tableEl);
   }
 
-  return { schedule, invalidate, refreshRow, visibleWidth };
+  // Zaległe przeliczenie TERAZ (nie w następnej klatce) — animacja sortowania kopiuje wiersze
+  // od razu po przebudowie i bez tego kopie miałyby stary stan (przeskok na końcu animacji).
+  function flush() {
+    if (!raf) return;
+    cancelAnimationFrame(raf);
+    runAll();
+  }
+
+  return { schedule, invalidate, refreshRow, visibleWidth, flush };
 })();

@@ -117,7 +117,9 @@ function applyColWidthAllPreference() {
 
 function loadExcelLayoutPreference() {
   if (!excelLayoutToggleEl) return;
-  setExcelLayoutEnabled(localStorage.getItem(EXCEL_LAYOUT_KEY) === "1");
+  // Wymiary z Excela (szerokości kolumn, wysokości wierszy z pliku) domyślnie WŁĄCZONE (2026-10-31).
+  // Nowy klucz: stary zapisywał „0” u każdego, kto kiedyś kliknął — nowa domyślna by do niego nie dotarła.
+  setExcelLayoutEnabled(localStorage.getItem(EXCEL_LAYOUT_KEY) !== "0");
 }
 
 function saveExcelLayoutPreference() {
@@ -162,6 +164,7 @@ function rebuildCurrentSheetData() {
 function applyWrapCells() {
   if (!tableEl) return;
   tableEl.classList.toggle("wrap-cells", !!(wrapCellsEl && wrapCellsEl.checked));
+  if (typeof swbSpill !== "undefined") swbSpill.schedule(); // zawijanie wyłącza wylewanie tekstu
 }
 
 function saveCellStylePreferences() {
@@ -171,7 +174,9 @@ function saveCellStylePreferences() {
     fonts: cellStyleShowFonts,
     borders: cellStyleShowBorders,
     conditionalFormatting: cellStyleShowConditionalFormatting,
-    subheaders: cellStyleShowSubheaders,
+    // klucz v2 (2026-10-31): wyróżnianie sekcji domyślnie WYŁĄCZONE — stary zapis „subheaders”
+    // miał prawie każdy (zapisywał się przy zmianie dowolnej opcji), więc go pomijamy
+    subheaders2: cellStyleShowSubheaders,
     smartWidths: cellStyleSmartWidths,
     recalcDates: recalcDateFormulas,
     wrap: !!(wrapCellsEl && wrapCellsEl.checked),
@@ -188,7 +193,7 @@ function loadCellStylePreferences() {
   set(showCellFontsEl, prefs.fonts);
   set(showCellBordersEl, prefs.borders);
   set(showConditionalFormattingEl, prefs.conditionalFormatting);
-  set(showSubheadersEl, prefs.subheaders);
+  if (showSubheadersEl) showSubheadersEl.checked = prefs.subheaders2 === true; // wyróżnianie sekcji domyślnie WYŁ.
   set(smartColWidthsEl, prefs.smartWidths);
   set(recalcDatesEl, prefs.recalcDates);
   if (wrapCellsEl) wrapCellsEl.checked = prefs.wrap === true; // zawijanie domyślnie WYŁĄCZONE
