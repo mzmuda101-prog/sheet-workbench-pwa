@@ -4295,11 +4295,38 @@ tbody td.has-fill-handle { position: relative; }
   .fill-handle { --fh-hit: 36px; --fh-box: 13px; }
   .fill-handle::after { border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), 0 1px 3px rgba(0, 0, 0, .25); }
 }
+/* drugie kółko zaznaczania (lewy górny róg, tylko dotyk) — w zamrożonej kolumnie wciśnięte w róg komórki */
+.fill-handle.sel-start.is-inset { left: 0; top: 0; right: auto; bottom: auto; }
+.fill-handle.sel-start.is-inset::after { left: 1px; top: 1px; right: auto; bottom: auto; margin: 0; }
 .swb-filling, .swb-filling * { cursor: crosshair !important; }
 /* zaznaczanie zakresu przeciągnięciem myszą (ui-controls.js dragSel) — bez zaznaczania tekstu */
 .swb-selecting #dataTable { user-select: none; -webkit-user-select: none; }
 /* Wycięty blok (Wytnij, table.js) — przerywana ramka jak w Excelu, do wklejenia albo Esc */
 #dataTable tr[data-row-key] > td.cell-cut { outline: 2px dashed var(--sel-frame); outline-offset: -3px; }
+/* Przenoszenie przeciągnięciem (move-cells.js): ramka nad blokiem (chwytana palcem/myszą,
+   bez przewijania pod nią) i podgląd miejsca docelowego */
+.move-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  box-sizing: border-box;
+  border: 2px dashed var(--sel-frame);
+  background: color-mix(in srgb, var(--sel-frame) 12%, transparent);
+  touch-action: none;
+  cursor: move;
+}
+.move-ghost {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  box-sizing: border-box;
+  border: 2px solid var(--sel-frame);
+  background: color-mix(in srgb, var(--sel-frame) 18%, transparent);
+  pointer-events: none;
+}
+.swb-moving .move-box { animation: none; }
 .swb-selecting, .swb-selecting * { cursor: cell !important; }
 .swb-filling #dataTable { user-select: none; -webkit-user-select: none; }
 

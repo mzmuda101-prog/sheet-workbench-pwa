@@ -728,23 +728,32 @@ function syncCutMarksInDom() {
   });
 }
 
-async function cutSelectionToClipboard() {
-  if (typeof swbEditGuard === "function" && !swbEditGuard()) return false;
-  if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") { toast(t("editWideOnly"), "info"); return false; }
+// Zaznaczenie jako blok ARKUSZA { r1, r2, c1, c2 } (wiersze pliku, kolumny widoku) — albo null
+// z wyjaśnieniem. Wspólne dla Wytnij i przenoszenia przeciąganiem (move-cells.js).
+function swbSelectionSheetBlock() {
+  if (typeof swbEditGuard === "function" && !swbEditGuard()) return null;
+  if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") { toast(t("editWideOnly"), "info"); return null; }
   const rect = rangeCellsToCopy();
-  if (!rect) return false;
+  if (!rect) return null;
   const idx = [];
   for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
     const row = rect.model.rows[r];
-    if (!row || row.isLongViewRow || row.isSubheader || !Number.isFinite(row.rowIndex0)) { toast(t("cutBlockedRow"), "info"); return false; }
+    if (!row || row.isLongViewRow || row.isSubheader || !Number.isFinite(row.rowIndex0)) { toast(t("cutBlockedRow"), "info"); return null; }
     idx.push(row.rowIndex0);
   }
-  if (idx.some((v, i) => v !== idx[0] + i)) { toast(t("cutNeedsContiguous"), "info"); return false; }
+  if (idx.some((v, i) => v !== idx[0] + i)) { toast(t("cutNeedsContiguous"), "info"); return null; }
   for (let c = rect.colMin; c <= rect.colMax; c++) {
-    if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(c)) { toast(t("editDerivedCol"), "info"); return false; }
+    if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(c)) { toast(t("editDerivedCol"), "info"); return null; }
   }
+  return { r1: idx[0], r2: idx[idx.length - 1], c1: rect.colMin, c2: rect.colMax, rect };
+}
+
+async function cutSelectionToClipboard() {
+  const block = swbSelectionSheetBlock();
+  if (!block) return false;
+  const rect = block.rect;
   await copySelectionToClipboard({ quiet: true });
-  swbCutSource = { wb: workbook, sheet: currentSheetName, startCol: currentStartCol, r1: idx[0], r2: idx[idx.length - 1], c1: rect.colMin, c2: rect.colMax, clip: internalClipboard };
+  swbCutSource = { wb: workbook, sheet: currentSheetName, startCol: currentStartCol, r1: block.r1, r2: block.r2, c1: block.c1, c2: block.c2, clip: internalClipboard };
   syncCutMarksInDom();
   toast(t("cellsCut", { count: rect.rowCount * rect.colCount }), "info");
   return true;
@@ -759,6 +768,53 @@ function swbRowForIndex0(r) {
   return hit || { rowIndex0: r, values: [], display: [], cellStyles: [], isStub: true };
 }
 
+// ── Skok do krawędzi danych (Ctrl/⌘+strzałka w Excelu; „pstryknięcie” uchwytem na telefonie) ──
+// Excel: gdy bieżąca i następna komórka są pełne — do ostatniej pełnej przed pustą; w przeciwnym
+// razie — do najbliższej pełnej; gdy dalej nic nie ma — na brzeg arkusza (tu: widoku).
+function swbCellFilled(row, col) {
+  if (!row || !Array.isArray(row.values)) return false;
+  const v = row.values[col];
+  return v != null && v !== "";
+}
+function swbDataEdge(view, rowIdx, col, dir) {
+  const rows = view.rows;
+  const lastRow = rows.length - 1;
+  const lastCol = view.headers.length - 1;
+  const vertical = dir === "down" || dir === "up";
+  const step = dir === "down" || dir === "right" ? 1 : -1;
+  const filled = (r, c) => swbCellFilled(rows[r], c);
+  let r = rowIdx;
+  let c = col;
+  const next = () => (vertical ? [r + step, c] : [r, c + step]);
+  const inside = ([nr, nc]) => nr >= 0 && nr <= lastRow && nc >= 0 && nc <= lastCol;
+  if (!inside(next())) return { r, c };
+  if (filled(r, c) && filled(...next())) {
+    while (inside(next()) && filled(...next())) [r, c] = next();
+    return { r, c };
+  }
+  [r, c] = next();
+  while (!filled(r, c) && inside(next())) [r, c] = next();
+  return { r, c };
+}
+// Ruch fokusu (extend=false) albo końca zaznaczenia (extend=true) do krawędzi danych.
+function swbJumpToEdge(dir, extend) {
+  if (!focusedCellState) return false;
+  const view = swbSelView();
+  if (!view || !view.rows.length) return false;
+  const from = extend && selectedCellState ? selectedCellState : focusedCellState;
+  const idx = swbSelIndexOfKey(view, from.rowKey);
+  if (idx < 0) return false;
+  const { r, c } = swbDataEdge(view, idx, from.colIndex0, dir);
+  const key = getRowSelectionKey(view.rows[r]);
+  if (extend) {
+    setSelectionKind("cell", { repaint: false });
+    setSelectedCell(key, c, { scroll: true });
+  } else {
+    setFocusedCell(key, c, { scroll: true });
+  }
+  return true;
+}
+
 // Wklejenie wyciętego bloku: lewy górny róg = aktywna komórka (albo róg zaznaczenia).
 function swbPasteCut() {
   const s = swbCutSource;
@@ -768,15 +824,26 @@ function swbPasteCut() {
   const anchorIdx = isRange ? rect.rowStart : swbSelIndexOfKey(model, focusedCellState.rowKey);
   const anchorRow = model.rows[anchorIdx];
   if (!anchorRow || !Number.isFinite(anchorRow.rowIndex0) || anchorRow.isLongViewRow) return false;
-  const h = s.r2 - s.r1 + 1;
-  const w = s.c2 - s.c1 + 1;
   const dr = anchorRow.rowIndex0 - s.r1;
   const dc = (isRange ? rect.colMin : focusedCellState.colIndex0) - s.c1;
   if (dr === 0 && dc === 0) { swbCancelCut(); return true; }
+  swbCutSource = null; // przed przerysowaniem — inaczej przerywana ramka wróciłaby na źródło
+  if (!swbMoveBlock(s, dr, dc)) { swbCutSource = s; syncCutMarksInDom(); return true; }
+  internalClipboard = null; // jak w Excelu: wycięte wkleja się raz
+  return true;
+}
+
+// PRZENIESIENIE bloku arkusza s = { r1, r2, c1, c2 } o (dr, dc): wartości/formuły + format do
+// celu, źródło puste, formuły zależne przepięte (wyrocznia Excela — patrz Wytnij wyżej).
+// Jeden krok Cofnij. Zwraca false, gdy blok się nie mieści.
+function swbMoveBlock(s, dr, dc) {
+  const model = swbSelView();
+  const h = s.r2 - s.r1 + 1;
+  const w = s.c2 - s.c1 + 1;
   for (let c = s.c1 + dc; c < s.c1 + dc + w; c++) {
-    if (c < 0 || c >= model.headers.length || (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(c))) { toast(t("cutNoRoom"), "warning"); return true; }
+    if (c < 0 || c >= model.headers.length || (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(c))) { toast(t("cutNoRoom"), "warning"); return false; }
   }
-  if (s.r1 + dr < 0) { toast(t("cutNoRoom"), "warning"); return true; }
+  if (s.r1 + dr < 0) { toast(t("cutNoRoom"), "warning"); return false; }
   const sheet = workbook.Sheets[currentSheetName];
   const lang = typeof currentLang === "string" ? currentLang : "pl";
   const FE = typeof FormulaEngine !== "undefined" ? FormulaEngine : null;
@@ -838,8 +905,6 @@ function swbPasteCut() {
   }
   // 5. formuły zależne idą za blokiem
   deps.forEach((d) => swbFormulaCommitAt(d.r, d.c, d.text, { silent: true }));
-  swbCutSource = null;
-  internalClipboard = null; // jak w Excelu: wycięte wkleja się raz
   setDirtyState(true);
   renderActiveTable();
   if (typeof scheduleViewRefresh === "function") scheduleViewRefresh({ analyses: true, filterBadge: true });
@@ -1000,6 +1065,7 @@ function syncRangeHighlightInDom() {
   // uchwyt wypełniania idzie za zaznaczeniem (autofill.js)
   if (typeof swbFillHandleSync === "function") swbFillHandleSync();
   if (swbCutSource) syncCutMarksInDom(); // przerywana ramka wyciętego bloku przeżywa render
+  if (typeof swbMoveCells !== "undefined" && swbMoveCells.active) swbMoveCells.place();
   tableEl
     .querySelectorAll("tr[data-row-key] > td.cell-in-range")
     .forEach((c) => c.classList.remove(...RANGE_EDGE_CLASSES));

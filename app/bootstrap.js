@@ -661,6 +661,14 @@ document.addEventListener("keydown", (e) => {
     }
   }
 
+  // Ctrl/⌘+strzałka — skok do krawędzi danych; z Shiftem — rozciągnięcie zaznaczenia do niej
+  // (jak w Excelu; ta sama funkcja co „pstryknięcie” kółkiem na telefonie, table.js swbJumpToEdge).
+  const EDGE_DIR = { ArrowDown: "down", ArrowUp: "up", ArrowLeft: "left", ArrowRight: "right" };
+  if (meta && !e.altKey && EDGE_DIR[e.key] && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
+    e.preventDefault();
+    swbJumpToEdge(EDGE_DIR[e.key], e.shiftKey);
+    return;
+  }
   if (!meta && !e.altKey && !shouldIgnoreTableArrowNavigation()) {
     let handled = false;
     // UWAGA: `e.shiftKey` jest prawdziwe także dla samego klawisza Shift, więc bez tej

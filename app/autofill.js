@@ -421,6 +421,12 @@ const swbFillHandle = (() => {
   let drag = null;
   let host = null;      // komórka-róg, przy której stoi uchwyt
   let placeFrame = 0;
+  // Drugie kółko (lewy górny róg zaznaczenia) — tylko palec, jak w Excelu na telefonie:
+  // przeciągnięcie go zmienia POCZĄTEK zaznaczenia (kotwicą staje się przeciwny róg).
+  const elStart = document.createElement("span");
+  elStart.className = "fill-handle sel-start";
+  elStart.setAttribute("aria-hidden", "true");
+  let hostStart = null;
   let lastPointerType = "";
 
   function sourceRect() {
@@ -452,6 +458,11 @@ const swbFillHandle = (() => {
   function detach() {
     if (host) { host.classList.remove("has-fill-handle"); host = null; }
     if (el.parentElement) el.remove();
+    detachStart();
+  }
+  function detachStart() {
+    if (hostStart) { hostStart.classList.remove("has-fill-handle"); hostStart = null; }
+    if (elStart.parentElement) elStart.remove();
   }
 
   const inFrozenCol = (td) => tableWrapEl.classList.contains("freeze-first-col") && td.cellIndex <= 1;
@@ -460,6 +471,13 @@ const swbFillHandle = (() => {
   // komórki: clientWidth/Height pomijają obramowanie dolne komórki.
   function place() {
     placeFrame = 0;
+    if (hostStart && elStart.parentElement === tableWrapEl && hostStart.isConnected) {
+      const wrap = tableWrapEl.getBoundingClientRect();
+      const b = hostStart.getBoundingClientRect();
+      const x = b.left + hostStart.clientLeft + 1 - wrap.left - tableWrapEl.clientLeft + tableWrapEl.scrollLeft;
+      const y = b.top + hostStart.clientTop + 1 - wrap.top - tableWrapEl.clientTop + tableWrapEl.scrollTop;
+      elStart.style.transform = `translate(${x}px, ${y}px)`;
+    }
     if (!host || el.parentElement !== tableWrapEl) return;
     if (!host.isConnected) { detach(); return; }
     const wrap = tableWrapEl.getBoundingClientRect();
@@ -490,7 +508,23 @@ const swbFillHandle = (() => {
     const parent = inset ? td : tableWrapEl;
     if (el.parentElement !== parent) parent.appendChild(el);
     if (inset) el.style.transform = "";
-    else schedulePlace();
+    // drugie kółko: tylko dotyk i tylko gdy jest zakres (dla jednej komórki oba rogi to ta sama komórka)
+    const tdStart = touchMQ && touchMQ.matches && (rect.rowCount > 1 || rect.colCount > 1)
+      ? findCellElement({ rowKey: getRowSelectionKey(rect.model.rows[rect.rowStart]), colIndex0: rect.colMin }) : null;
+    if (!tdStart) detachStart();
+    else {
+      if (hostStart !== tdStart) {
+        if (hostStart) hostStart.classList.remove("has-fill-handle");
+        hostStart = tdStart;
+        tdStart.classList.add("has-fill-handle");
+      }
+      const insetStart = inFrozenCol(tdStart);
+      elStart.classList.toggle("is-inset", insetStart);
+      const pStart = insetStart ? tdStart : tableWrapEl;
+      if (elStart.parentElement !== pStart) pStart.appendChild(elStart);
+      if (insetStart) elStart.style.transform = "";
+    }
+    if (!inset || (hostStart && !elStart.classList.contains("is-inset"))) schedulePlace();
   }
 
   function cellAt(x, y) {
@@ -547,6 +581,20 @@ const swbFillHandle = (() => {
     drag.raf = requestAnimationFrame(autoScroll);
   }
 
+  elStart.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "touch" || !allowed("touch")) return;
+    const rect = sourceRect();
+    if (!rect) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // kotwica = przeciwny (prawy dolny) róg, ruchomy koniec zaczyna w lewym górnym
+    const model = rect.model;
+    setSelectionKind("cell");
+    setFocusedCell(getRowSelectionKey(model.rows[rect.rowEnd]), rect.colMax, { scroll: false });
+    setSelectedCell(getRowSelectionKey(model.rows[rect.rowStart]), rect.colMin, { scroll: false });
+    swbTouchFillOrigin = null;
+    startDrag(e, rect, true);
+  });
   el.addEventListener("pointerdown", (e) => {
     lastPointerType = e.pointerType || "";
     if (e.button !== 0 || !allowed(e.pointerType)) return;
@@ -566,7 +614,10 @@ const swbFillHandle = (() => {
       setFocusedCell(getRowSelectionKey(model.rows[rect.rowStart]), rect.colMin, { scroll: false });
       setSelectedCell(getRowSelectionKey(model.rows[rect.rowEnd]), rect.colMax, { scroll: false });
     }
-    drag = { rect: { ...rect }, extend, dir: null, end: null, last: { x: e.clientX, y: e.clientY }, id: e.pointerId, raf: 0 };
+    startDrag(e, rect, extend);
+  });
+  function startDrag(e, rect, extend) {
+    drag = { rect: { ...rect }, extend, dir: null, end: null, last: { x: e.clientX, y: e.clientY }, start: { x: e.clientX, y: e.clientY, t: performance.now() }, id: e.pointerId, raf: 0 };
     // Nasłuch na oknie, nie na uchwycie: przy przewijaniu (nowy silnik tabeli) wiersz
     // z uchwytem może zniknąć z DOM, a razem z nim zdarzenia wysyłane do uchwytu.
     window.addEventListener("pointermove", onMove, true);
@@ -574,7 +625,7 @@ const swbFillHandle = (() => {
     window.addEventListener("pointercancel", onCancel, true);
     document.documentElement.classList.add("swb-filling");
     drag.raf = requestAnimationFrame(autoScroll);
-  });
+  }
   function onMove(e) {
     if (!drag || e.pointerId !== drag.id) return;
     e.preventDefault();
@@ -594,8 +645,24 @@ const swbFillHandle = (() => {
     document.documentElement.classList.remove("swb-filling");
     const model = d.rect.model;
     if (d.extend) {
+      // „Pstryknięcie” (szybki, krótki ruch) = zaznacz do końca danych w tę stronę — jak
+      // w Excelu na telefonie („flick the selection handle down or to the right”).
+      const dx = (e ? e.clientX : d.last.x) - d.start.x;
+      const dy = (e ? e.clientY : d.last.y) - d.start.y;
+      const fast = performance.now() - d.start.t < 250 && Math.hypot(dx, dy) >= 30;
+      if (!cancelled && fast && typeof swbJumpToEdge === "function") {
+        const dir = Math.abs(dy) >= Math.abs(dx) ? (dy > 0 ? "down" : "up") : (dx > 0 ? "right" : "left");
+        // od rogu sprzed gestu — w trakcie krótkiego ruchu autoprzewijanie przy krawędzi
+        // zdążało przesunąć koniec w bok (D6:F11 zamiast D6:D9)
+        const rows = d.rect.model.rows;
+        const vertical = dir === "down" || dir === "up";
+        const endRow = vertical ? (dir === "down" ? d.rect.rowEnd : d.rect.rowStart) : d.rect.rowEnd;
+        const endCol = vertical ? d.rect.colMax : (dir === "right" ? d.rect.colMax : d.rect.colMin);
+        if (rows[endRow]) setSelectedCell(getRowSelectionKey(rows[endRow]), endCol, { scroll: false });
+        swbJumpToEdge(dir, true);
+      }
       sync();
-      if (!cancelled && d.end) swbTouchRangeHintOnce();
+      if (!cancelled && (d.end || fast)) swbTouchRangeHintOnce();
       return;
     }
     if (cancelled || !d.dir || !swbFillCanEdit()) {

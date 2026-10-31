@@ -82,7 +82,7 @@ async function dragHandle(p, toSel, pointerType) {
     target.dispatchEvent(mk("pointerdown", from));
     for (let i = 1; i <= 8; i++) {
       window.dispatchEvent(mk("pointermove", { x: from.x + (to.x - from.x) * i / 8, y: from.y + (to.y - from.y) * i / 8 }));
-      await new Promise((r) => setTimeout(r, 25));
+      await new Promise((r) => setTimeout(r, 60)); // tempo palca przy celowym przeciąganiu (szybsze = „pstryknięcie”)
     }
     window.dispatchEvent(mk("pointerup", to));
   }, [a, b, pointerType]);

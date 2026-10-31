@@ -448,9 +448,13 @@ function cellMenuItems(target) {
   const filterItem = (item) => (preOnly ? null : item);
   const editable = !!workbook && currentDisplayModel?.mode === "wide" && (typeof swbIsEditMode !== "function" || swbIsEditMode());
   const cut = editable ? { id: "cut", label: t("cellMenuCut"), run: () => { closeCellMenu(); cutSelectionToClipboard(); } } : null;
+  // przeniesienie przeciągnięciem (move-cells.js) — odpowiednik „przytrzymaj i przeciągnij” z Excela
+  const move = editable && typeof swbMoveCells !== "undefined"
+    ? { id: "move", label: t("cellMenuMove"), run: () => { closeCellMenu({ restoreFocus: false }); swbMoveCells.start(); } } : null;
   if (target.multi) {
     return [
       cut,
+      move,
       { id: "copy", label: t("cellMenuMultiCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
       paste,
       pasteValues,
@@ -474,6 +478,7 @@ function cellMenuItems(target) {
   return [
     editItem,
     cut,
+    move,
     { id: "copy", label: t("cellMenuCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
     paste,
     pasteValues,

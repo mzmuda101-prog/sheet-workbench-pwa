@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20261031-05";
+const CACHE_VERSION = "20261031-06";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -48,6 +48,7 @@ const SHELL_ASSETS = [
   `./app/cell-notes.js?v=${ASSET_V}`,
   `./app/autofill.js?v=${ASSET_V}`,
   `./app/header-edit.js?v=${ASSET_V}`,
+  `./app/move-cells.js?v=${ASSET_V}`,
   `./app/ui-controls.js?v=${ASSET_V}`,
   `./app/transcribe.js?v=${ASSET_V}`,
   `./app/local-ai.js?v=${ASSET_V}`,
