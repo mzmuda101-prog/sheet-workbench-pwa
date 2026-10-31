@@ -484,7 +484,6 @@ var sheetEditUi = (() => {
     const text = fxInput.value;
     if (text === fxBaseline) { setFxDirty(false); afterCommitMove(move); return true; }
     if (!swbEditGuard()) { revertFx(); return false; }
-    if (a.row.isSubheader) { toast(t("editBlockedRow"), "info"); revertFx(); return false; }
     const parsed = typeof parseCellInput === "function" ? parseCellInput(text, a.row.rowIndex0, a.col) : null;
     if (parsed && parsed.type === "formula" && typeof swbFormulaCommit !== "function") {
       toast(t("formulaEditBlocked"), "warning");

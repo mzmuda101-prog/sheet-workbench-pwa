@@ -265,7 +265,7 @@ let swbFillDamage = null; // { formulas, cleared }
 
 // Jedna komórka celu. Zwraca "ok" | "formula" (formuły nie dało się wpisać) | "skip".
 function swbFillWriteCell(model, srcRow, srcCol, dstRow, dstCol, item) {
-  if (!dstRow || dstRow.isLongViewRow || dstRow.isSubheader || !Number.isFinite(dstRow.rowIndex0)) return "skip";
+  if (!dstRow || dstRow.isLongViewRow || !Number.isFinite(dstRow.rowIndex0)) return "skip";
   if (dstCol < 0 || dstCol >= model.headers.length) return "skip";
   if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(dstCol)) return "skip";
   if (srcRow === dstRow && srcCol === dstCol) return "skip";

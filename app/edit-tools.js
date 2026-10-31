@@ -179,7 +179,7 @@ function collectEditTargets() {
     if (!rect) return { err: "editErrNoSelection" };
     for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
       const row = rect.model.rows[r];
-      if (!row || row.isLongViewRow || row.isSubheader) continue;
+      if (!row || row.isLongViewRow) continue; // zaznaczenie = wybór użytkownika, także podnagłówka
       for (let c = rect.colMin; c <= rect.colMax; c++) targets.push({ row, col: c });
     }
     return { targets };

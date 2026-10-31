@@ -326,7 +326,8 @@ async function auditFileInner(browser, file, res) {
       await apply();
       const after = await snapshot(tc);
       const rowKeysAll = await page.evaluate(() => baseRows.map((r) => `wide:${r.rowIndex0}`));
-      const rowsSub = await page.evaluate(() => baseRows.map((r) => !!(r.isSubheader || r.isLongViewRow)));
+      // zaznaczenie = wybór użytkownika: podnagłówek (domysł) też się zmienia, pochodny nie (2026-10-31)
+      const rowsSub = await page.evaluate(() => baseRows.map((r) => !!r.isLongViewRow));
       const bad = [];
       after.forEach((v, i) => {
         const inSel = keys.includes(rowKeysAll[i]);

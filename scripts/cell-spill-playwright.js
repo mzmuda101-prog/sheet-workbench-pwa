@@ -10,7 +10,9 @@
 //   4. do prawej → w lewo (widać koniec tekstu), wyśrodkowany → w obie strony;
 //   5. zawijanie (format komórki) wyłącza wylewanie;
 //   6. wpisanie czegoś w pustą komórkę obok obcina tekst; wyczyszczenie znów go wylewa;
-//   7. podpowiedź „ucięty tekst” nie pokazuje się, gdy tekst mieści się dzięki wylaniu.
+//   7. podpowiedź „ucięty tekst” nie pokazuje się, gdy tekst mieści się dzięki wylaniu;
+//   8. tabela z samym tekstem (grafik): żaden wiersz nie jest „podnagłówkiem” — wszystko edytowalne;
+//      tabela z liczbami: wiersz z samym tekstem dalej jest podnagłówkiem, ale też da się go edytować.
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
 
 const playwright = require("playwright");
@@ -51,7 +53,7 @@ async function run() {
       [null, null, L, null, null, null],          // r6: do prawej (format niżej)
       ["y", null, L, null, null, null],           // r7: wyśrodkowany, A zajęta
       [L, null, null, null, null, null],          // r8: zawijanie
-      [L, null, null, null, null, 5],             // r9: do edycji w B (liczba w F: nie „podtytuł”)
+      [L, null, null, null, null, "z"],           // r9: do edycji w B (sam tekst — jak w grafiku)
       ["krótki", null, null, null, null, null],   // r10: krótki — bez wylewania
     ];
     const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -76,6 +78,15 @@ async function run() {
   });
   await sleep(500);
 
+  const sub = await p.evaluate(() => viewRows.filter((r) => r.isSubheader).map((r) => r.rowIndex0 + 1));
+  check("8. tabela z samym tekstem: brak „podnagłówków” (szarych, zablokowanych wierszy)", sub.length === 0, sub);
+  const subNum = await p.evaluate(() => {
+    const mk = (vals) => ({ values: vals });
+    const rows = [mk(["Dział A", "opis", null]), mk(["Jan", 12, 3]), mk(["Ewa", 7, 1]), mk(["Ola", 4, 2]), mk(["Dział B", "opis", null]), mk(["Piotr", 9, 5])];
+    markSubheaderRows(rows);
+    return rows.map((r) => !!r.isSubheader);
+  });
+  check("8. tabela z liczbami: „Dział A”/„Dział B” dalej są podnagłówkami", JSON.stringify(subNum) === JSON.stringify([true, false, false, false, true, false]), subNum);
   const info = () => p.evaluate(() => {
     const out = {};
     const colW = [...document.querySelectorAll("#dataTable thead tr.guide-row th.guide-cell")].map((th) => th.getBoundingClientRect().width);
@@ -132,6 +143,19 @@ async function run() {
   await sleep(400);
   s = await info();
   check("6. Cofnij (Q wraca) → znów obcięte", s.rows[9][0] === null, s.rows[9][0]);
+
+  // 8. edycja w wierszu-podnagłówku (domysł) — nie jest blokowana, jak w Excelu
+  const subEdit = await p.evaluate(() => {
+    const row = viewRows.find((r) => r.rowIndex0 === 9);
+    row.isSubheader = true; // wymuszony domysł
+    document.querySelectorAll(".toast").forEach((x) => x.remove());
+    const td = document.querySelector('#dataTable tbody tr[data-row-index="9"] td[data-col-index="2"]');
+    openCellEditor(td);
+    const opened = !!td.querySelector("input.cell-editor");
+    if (opened) { const inp = td.querySelector("input.cell-editor"); inp.value = "ok"; inp.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); }
+    return { opened, v: workbook.Sheets[currentSheetName].C10?.v, toast: [...document.querySelectorAll(".toast")].map((x) => x.textContent).join("|") };
+  });
+  check("8. podnagłówek da się edytować (bez komunikatu o blokadzie)", subEdit.opened && subEdit.v === "ok" && !/nie można edytować/.test(subEdit.toast), subEdit);
 
   // tryb Zawijaj tekst (Widok) wyłącza wszystko
   await p.evaluate(() => { tableEl.classList.add("wrap-cells"); swbSpill.invalidate(); });

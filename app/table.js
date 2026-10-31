@@ -636,7 +636,7 @@ let internalClipboard = null; // { tsv, rows, cols, ts }
 // Zwraca: "ok" | "formula" (formuł ze schowka nie wklejamy) | "skip" (poza tabelą
 // albo wiersz nieedytowalny).
 function writeCellFromInput(model, row, col, raw) {
-  if (!row || row.isLongViewRow || row.isSubheader) return "skip";
+  if (!row || row.isLongViewRow) return "skip"; // podnagłówek (domysł) da się edytować jak w Excelu
   if (col < 0 || col >= model.headers.length) return "skip";
   if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) return "skip"; // kolumna wyliczana
   const parsed = parseCellInput(raw, row.rowIndex0, col);
@@ -738,7 +738,7 @@ function swbSelectionSheetBlock() {
   const idx = [];
   for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
     const row = rect.model.rows[r];
-    if (!row || row.isLongViewRow || row.isSubheader || !Number.isFinite(row.rowIndex0)) { toast(t("cutBlockedRow"), "info"); return null; }
+    if (!row || row.isLongViewRow || !Number.isFinite(row.rowIndex0)) { toast(t("cutBlockedRow"), "info"); return null; }
     idx.push(row.rowIndex0);
   }
   if (idx.some((v, i) => v !== idx[0] + i)) { toast(t("cutNeedsContiguous"), "info"); return null; }
@@ -1032,7 +1032,7 @@ async function pasteClipboardToSelection(opts = {}) {
 // potem wartość wprost — bez przepuszczania tekstu z ekranu przez parser.
 function writeClipCell(model, row, col, src, raw, withFormat) {
   if (!src) return writeCellFromInput(model, row, col, raw);
-  if (!row || row.isLongViewRow || row.isSubheader || !Number.isFinite(row.rowIndex0)) return "skip";
+  if (!row || row.isLongViewRow || !Number.isFinite(row.rowIndex0)) return "skip";
   if (col < 0 || col >= model.headers.length) return "skip";
   if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) return "skip";
   if (withFormat && src.fmt && typeof cfmtApplyAt === "function") cfmtApplyAt(row, col, src.fmt);

@@ -8,33 +8,46 @@ function hexToRgba(hex, alpha = 0.35) {
 }
 
 // [EN] Mark rows that look like subheaders (e.g. second header row or important info) in first N data rows
+// Podnagłówek to wiersz, który ODSTAJE od reszty: sam tekst wśród wierszy z liczbami/datami
+// („Dział A” nad kwotami). W tabeli z samym tekstem (grafik, lista nazwisk, opisy) KAŻDY
+// wiersz tak wygląda — dawniej pierwsze 10 dostawało znacznik, szare tło i blokadę edycji
+// (2026-10-31). Teraz: gdy takich wierszy jest dużo, to zwykłe dane, nie podnagłówki.
 function markSubheaderRows(rows, maxCheck = 10) {
-  const toCheck = Math.min(maxCheck, rows.length);
-  for (let i = 0; i < toCheck; i++) {
-    const row = rows[i];
+  const looksLikeSubheader = (row) => {
+    if (!row || !Array.isArray(row.values) || row.values.length === 0) return false;
     let nonEmpty = 0;
     let textLike = 0;
     let numericLike = 0;
     row.values.forEach((v) => {
       if (v != null && String(v).trim() !== "") {
         nonEmpty += 1;
-        if (typeof v === "string") textLike += 1;
-        else if (typeof v === "number" || v instanceof Date) numericLike += 1;
-        else if (!(v instanceof Date) && typeof v !== "number") textLike += 1;
+        if (typeof v === "number" || v instanceof Date) numericLike += 1;
+        else textLike += 1;
       }
     });
     const n = row.values.length;
-    if (n === 0) continue;
-    const textRatio = nonEmpty ? textLike / nonEmpty : 0;
-    const numericRatio = nonEmpty ? numericLike / nonEmpty : 0;
-    if (
-      nonEmpty >= 2
-      && textRatio >= 0.8
-      && numericRatio === 0
-      && nonEmpty <= Math.max(6, Math.ceil(n * 0.75))
-    ) {
-      row.isSubheader = true;
-    }
+    return nonEmpty >= 2
+      && textLike / nonEmpty >= 0.8
+      && numericLike === 0
+      && nonEmpty <= Math.max(6, Math.ceil(n * 0.75));
+  };
+  // tabela „tekstowa” = większość niepustych wierszy bez żadnej liczby/daty
+  const sampleN = Math.min(rows.length, 60);
+  let filled = 0;
+  let noNumbers = 0;
+  for (let i = 0; i < sampleN; i++) {
+    const vals = rows[i] && Array.isArray(rows[i].values) ? rows[i].values : [];
+    const present = vals.filter((v) => v != null && String(v).trim() !== "");
+    if (!present.length) continue;
+    filled += 1;
+    if (!present.some((v) => typeof v === "number" || v instanceof Date)) noNumbers += 1;
+  }
+  const textTable = filled >= 3 && noNumbers / filled >= 0.6;
+  const toCheck = Math.min(maxCheck, rows.length);
+  for (let i = 0; i < toCheck; i++) {
+    const row = rows[i];
+    if (!textTable && looksLikeSubheader(row)) row.isSubheader = true;
+    else if (row && row.isSubheader) row.isSubheader = false;
   }
   return rows;
 }
@@ -4908,7 +4921,8 @@ function openCellEditor(td, options = {}) {
   if (!rowKey || !Number.isFinite(colIndex0)) return;
   const row = getRowByKey(rowKey);
   if (!row) return;
-  if (row.isLongViewRow || row.isSubheader) {
+  // podnagłówek to tylko domysł (szare tło, pomijany w analizach) — edycji nie blokuje, jak w Excelu
+  if (row.isLongViewRow) {
     toast(t("editBlockedRow"), "info");
     return;
   }

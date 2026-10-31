@@ -580,7 +580,6 @@ function cfmtClearContents() {
   const { cells } = cfmtSelectionCells();
   let changed = 0;
   cells.forEach(({ row, col }) => {
-    if (row.isSubheader) return;
     const v = Array.isArray(row.values) ? row.values[col] : null;
     const ref = cfmtRef(row.rowIndex0, col);
     const has = (v != null && v !== "") || !!workbook.Sheets[currentSheetName]?.[ref]?.f;
