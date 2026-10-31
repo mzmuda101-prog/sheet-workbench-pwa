@@ -270,7 +270,9 @@ async function run() {
     tableWrapEl.scrollTop = 0;
     await __vg.frames(3);
     const tr = findFocusedRowElement();
-    return { stateAfterRender: mid, domRowFocused: !!(tr && tr.classList.contains("row-focused")), idx: tr ? __vg.indexOfKey(tr.dataset.rowKey) : -1 };
+    // fokus widać jako podświetlony wiersz (Podgląd) albo ramkę komórki (Edycja, od 2026-10-31)
+    const shown = !!(tr && (tr.classList.contains("row-focused") || tr.querySelector("td.cell-active")));
+    return { stateAfterRender: mid, domRowFocused: shown, idx: tr ? __vg.indexOfKey(tr.dataset.rowKey) : -1 };
   });
   check("5. fokus przeżywa przewinięcie i przebudowę", survive.stateAfterRender === 3 && survive.domRowFocused && survive.idx === 3, JSON.stringify(survive));
 

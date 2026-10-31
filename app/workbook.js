@@ -945,6 +945,8 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   // Kolumna wyliczana (wirtualna, dopisana na końcu) nie istnieje w pliku — zapis trafiłby
   // do prawdziwej kolumny za danymi.
   if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(colIndex0)) return;
+  // komórka w wierszu nagłówka = nazwa kolumny (header-edit.js zsynchronizuje po zapisie)
+  if (typeof swbHeaderRowTouched === "function") swbHeaderRowTouched(currentSheetName, rowIndex0);
   const absoluteCol = currentStartCol + colIndex0;
   const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
   if (!parsed || parsed.value === null) {
@@ -1026,6 +1028,8 @@ function updateSheetFormulaCell(rowIndex0, colIndex0, fileF, value) {
   const sheet = workbook.Sheets[currentSheetName];
   if (!sheet) return;
   if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(colIndex0)) return;
+  // komórka w wierszu nagłówka = nazwa kolumny (header-edit.js zsynchronizuje po zapisie)
+  if (typeof swbHeaderRowTouched === "function") swbHeaderRowTouched(currentSheetName, rowIndex0);
   const absoluteCol = currentStartCol + colIndex0;
   const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
   if (typeof undoCaptureCell === "function") undoCaptureCell(rowIndex0, colIndex0);

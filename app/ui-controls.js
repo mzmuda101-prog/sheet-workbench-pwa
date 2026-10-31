@@ -911,6 +911,7 @@ async function handleFile(file, fileHandle = null) {
     multiSortState = [];
     sortState = { col: "", dir: "asc" };
     currentFileName = file.name;
+    syncDocumentTitle();
     currentFileHandle = fileHandle; // uchwyt FSA (z showOpenFilePicker) lub null dla <input>/drop
     currentStartCol = 0;
     currentMerges = [];
@@ -3534,9 +3535,13 @@ function getTooltipCell(target) {
 // showCellTooltip robi reflow i zabija momentum (H3).
 if (!window.matchMedia || window.matchMedia("(pointer: fine)").matches) {
   tableEl.addEventListener("pointerenter", (e) => {
+    // Wciśnięty przycisk = zaznaczanie/przeciąganie uchwytu. Dymek („Przeliczone na dziś…”)
+    // wyskakiwał wtedy nad zaznaczeniem i je zasłaniał (film 2026-10-31).
+    if (e.buttons) { hideCellTooltip(); return; }
     const cell = getTooltipCell(e.target);
     if (cell) showCellTooltip(cell);
   }, true);
+  tableEl.addEventListener("pointerdown", (e) => { if (e.pointerType === "mouse") hideCellTooltip(); }, true);
 
   tableEl.addEventListener("pointerleave", (e) => {
     const cell = getTooltipCell(e.target);
@@ -4087,8 +4092,8 @@ resetWidthsBtn.addEventListener("click", () => {
 });
 
 // Shift+klik buduje zakres komórek — wtedy zablokuj natywne (OS-owe) zaznaczanie
-// tekstu, by nie „łapało" treści komórek. Zwykły drag bez Shift zaznacza tekst
-// normalnie (np. żeby skopiować zawartość komórki).
+// tekstu, by nie „łapało" treści komórek. Przeciągnięcie po kilku komórkach zaznacza
+// ZAKRES (dragSel wyżej); w obrębie jednej komórki dalej zaznacza tekst.
 tableEl.addEventListener("mousedown", (e) => {
   if (e.shiftKey && gridCellFromEvent(e)) e.preventDefault();
 });
@@ -4126,6 +4131,8 @@ function gridCellFromEvent(e) {
 }
 
 function onGridCellClick(e) {
+  // koniec przeciągania myszą po komórkach (zaznaczony zakres) — to nie jest kliknięcie
+  if (Date.now() - dragSelEndedAt < 350) return;
   const td = gridCellFromEvent(e);
   if (!td) return;
   // Tap w edytowaną komórkę (także w jej margines) — zostajemy w edycji i oddajemy
@@ -4160,14 +4167,12 @@ function onGridCellClick(e) {
   // arkuszach) — bez klawiatury i bez kapryśnego dwutapu.
   const tapToEdit = cellTapCoarseMQ && cellTapCoarseMQ.matches && !activeCellEditor &&
     focusedCellState && focusedCellState.rowKey === rowKey && focusedCellState.colIndex0 === colIndex0;
-  // Zwykły klik wraca na poziom wiersza — patrz model gestów w core.js. Wyjątek: PALEC
-  // w trybie Edycja. Tam pole nazwy, pasek formuły, formatowanie i uchwyt w rogu dotyczą
-  // jednej komórki, a podświetlony wiersz nie mówił, której (zrzut z iPhone'a 2026-10-31:
-  // „C6” w polu nazwy, uchwyt w rogu C6, ramki brak). Shift+klik i klawiatura nie istnieją
-  // na telefonie, więc tryb komórki musi dawać sam gest.
-  // Wiersz nad nagłówkiem nie jest rekordem — tam zawsze poziom komórki.
-  const cellTap = (lastTbodyPointerType === "touch" && typeof swbIsEditMode === "function" && swbIsEditMode())
-    || rowKey.startsWith("pre:");
+  // Zwykły klik w PODGLĄDZIE wraca na poziom wiersza — patrz model gestów w core.js
+  // (przeglądanie rekordów). W trybie EDYCJA klik/stuknięcie zaznacza KOMÓRKĘ: pole nazwy,
+  // pasek formuły, formatowanie i uchwyt w rogu dotyczą jednej komórki, a podświetlony wiersz
+  // nie mówił, której (zrzut z iPhone'a i film z desktopu 2026-10-31: „C6”/„D9” w polu nazwy,
+  // uchwyt w rogu, ramki brak). Wiersz nad nagłówkiem nie jest rekordem — tam zawsze komórka.
+  const cellTap = (typeof swbIsEditMode === "function" && swbIsEditMode()) || rowKey.startsWith("pre:");
   setSelectionKind(cellTap ? "cell" : "row", { repaint: false });
   setFocusedCell(rowKey, colIndex0, { scroll: false });
   giveGridDomFocus();
@@ -4179,6 +4184,77 @@ function onGridCellClick(e) {
 }
 tbodyEl.addEventListener("click", onGridCellClick);
 if (theadEl) theadEl.addEventListener("click", onGridCellClick);
+
+// ── Zaznaczanie zakresu PRZECIĄGNIĘCIEM MYSZĄ (jak w Excelu) ─────────────────────
+// Dawniej zakres dawał tylko Shift+klik / Shift+strzałki, więc jedynym „ciągnięciem” po
+// siatce był kwadracik wypełniania — film 2026-10-31: użytkownik chciał zaznaczyć D9:D11,
+// złapał uchwyt i pusta D9 wyczyściła datę w D10, a potem formuły w kolumnie E.
+// Wciśnięcie w komórce i przejazd do INNEJ komórki = zakres od komórki startu do kursora
+// (w obrębie jednej komórki dalej działa zwykłe zaznaczanie tekstu). Krawędzie okna tabeli
+// przewijają ją, jak przy uchwycie. Palec ma własny gest (kółko w rogu, autofill.js).
+let dragSel = null;          // { rowKey, col, active, last: {x,y}, raf }
+let dragSelEndedAt = 0;
+function gridCellAtPoint(x, y) {
+  const el = document.elementFromPoint(x, y);
+  const td = el && el.closest ? el.closest("#dataTable tr[data-row-key] > td[data-col-index]") : null;
+  if (!td || td.classList.contains("row-head")) return null;
+  const col = parseInt(td.dataset.colIndex, 10);
+  return Number.isFinite(col) ? { rowKey: td.parentElement.dataset.rowKey, col } : null;
+}
+function dragSelAutoScroll() {
+  if (!dragSel || !dragSel.active || !tableWrapEl) return;
+  const box = tableWrapEl.getBoundingClientRect();
+  const { x, y } = dragSel.last;
+  let dx = 0;
+  let dy = 0;
+  if (y > box.bottom - 24) dy = 16;
+  else if (y < box.top + 24) dy = -16;
+  if (x > box.right - 24) dx = 16;
+  else if (x < box.left + 24) dx = -16;
+  if (dx || dy) {
+    tableWrapEl.scrollBy(dx, dy);
+    const hit = gridCellAtPoint(Math.min(Math.max(x, box.left + 4), box.right - 4), Math.min(Math.max(y, box.top + 4), box.bottom - 4));
+    if (hit) setSelectedCell(hit.rowKey, hit.col, { scroll: false });
+  }
+  dragSel.raf = requestAnimationFrame(dragSelAutoScroll);
+}
+function endDragSel() {
+  if (!dragSel) return;
+  const d = dragSel;
+  dragSel = null;
+  cancelAnimationFrame(d.raf);
+  if (!d.active) return;
+  dragSelEndedAt = Date.now();
+  document.documentElement.classList.remove("swb-selecting");
+  giveGridDomFocus();
+}
+tableEl.addEventListener("pointerdown", (e) => {
+  if (e.pointerType !== "mouse" || e.button !== 0 || e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest("input, .col-resizer, .row-resizer, .fill-handle")) return;
+  const td = gridCellFromEvent(e);
+  if (!td || (activeCellEditor && activeCellEditor.td === td)) return;
+  dragSel = { rowKey: td.parentElement.dataset.rowKey, col: parseInt(td.dataset.colIndex, 10), active: false, last: { x: e.clientX, y: e.clientY }, raf: 0 };
+});
+window.addEventListener("pointermove", (e) => {
+  if (!dragSel || e.pointerType !== "mouse") return;
+  if (!(e.buttons & 1)) { endDragSel(); return; }
+  dragSel.last = { x: e.clientX, y: e.clientY };
+  const hit = gridCellAtPoint(e.clientX, e.clientY);
+  if (!dragSel.active) {
+    if (!hit || (hit.rowKey === dragSel.rowKey && hit.col === dragSel.col)) return;
+    if (typeof flushCellEditor === "function") flushCellEditor();
+    dragSel.active = true;
+    setSelectionKind("cell", { repaint: false });
+    setFocusedCell(dragSel.rowKey, dragSel.col, { scroll: false });
+    document.documentElement.classList.add("swb-selecting");
+    clearTextSelection();
+    dragSel.raf = requestAnimationFrame(dragSelAutoScroll);
+  }
+  e.preventDefault();
+  if (hit) setSelectedCell(hit.rowKey, hit.col, { scroll: false });
+});
+window.addEventListener("pointerup", endDragSel);
+window.addEventListener("pointercancel", endDragSel);
 
 // --- Edycja komórki (inline input) ---------------------------------------
 // Edycja działa tylko w trybie "wide": wiersze long-view są syntetyczne i nie

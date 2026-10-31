@@ -280,6 +280,9 @@ async function run() {
     afterSkip.tag === "TD" && !!afterSkip.state, JSON.stringify(afterSkip));
 
   // ── 12. Model gestów: tryb wynika z tego, JAK zaznaczyłeś ───────────────────
+  // „Klik = cały wiersz” to model PODGLĄDU (przeglądanie rekordów). W trybie Edycja klik
+  // zaznacza komórkę (2026-10-31, desktop-select-playwright.js) — sprawdzamy tu Podgląd.
+  await page.evaluate(() => sheetEditUi.setMode("view"));
   const gest = async (fn) => page.evaluate(fn);
   const state = () => page.evaluate(() => ({
     kind: selectionKind,
@@ -392,6 +395,7 @@ async function run() {
 
   // (k) REGRESJA: zwykła Spacja nadal otwiera edytor (nic nie zabraliśmy)
   await page.evaluate(() => { setSelectionKind("row"); });
+  await page.evaluate(() => sheetEditUi.setMode("edit")); // edytor otwiera się tylko w Edycji
   await page.evaluate(() => {
     const cell = document.querySelector('#dataTable tbody td[tabindex="0"]');
     if (cell) cell.focus();
@@ -649,13 +653,11 @@ async function run() {
   if (TOUCH) await page.tap('#dataTable tbody tr[data-row-key] td[data-col-index="2"]');
   else await page.click('#dataTable tbody tr[data-row-key] td[data-col-index="2"]');
   await sleep(250);
-  if (TOUCH) {
-    // palec w trybie Edycja zaznacza KOMÓRKĘ (2026-10-31, touch-range-playwright.js) —
-    // ta sekcja sprawdza wygląd trybu wiersza, więc ustawiamy go jawnie
-    const poTapie = await page.evaluate(() => selectionKind);
-    check("tap palcem w Edycji zaznacza komórkę", poTapie === "cell", poTapie);
-    await page.evaluate(() => setSelectionKind("row"));
-  }
+  // klik/palec w trybie Edycja zaznacza KOMÓRKĘ (2026-10-31) — ta sekcja sprawdza wygląd
+  // trybu wiersza, więc ustawiamy go jawnie
+  const poKliku17 = await page.evaluate(() => selectionKind);
+  check("klik/tap w Edycji zaznacza komórkę", poKliku17 === "cell", poKliku17);
+  await page.evaluate(() => setSelectionKind("row"));
   await page.keyboard.press("ArrowDown");
   await sleep(300);
   const wWierszu = await wyglad();

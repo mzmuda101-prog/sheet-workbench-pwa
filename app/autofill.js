@@ -257,6 +257,12 @@ function swbFillTypeOf(v) {
   return "string";
 }
 
+// Co wypełnianie zniszczyło po drodze — liczone w swbFillWriteCell, zgłaszane po całej
+// operacji (swbFillRange). Film 2026-10-31: przeciągnięcie pustej komórki po kolumnie
+// z datami i formułami „Długość” po cichu wyczyściło dane — w Excelu też, ale tam od razu
+// widać, a tu użytkownik dowiadywał się po fakcie. Teraz mówimy wprost i podpowiadamy Cofnij.
+let swbFillDamage = null; // { formulas, cleared }
+
 // Jedna komórka celu. Zwraca "ok" | "formula" (formuły nie dało się wpisać) | "skip".
 function swbFillWriteCell(model, srcRow, srcCol, dstRow, dstCol, item) {
   if (!dstRow || dstRow.isLongViewRow || dstRow.isSubheader || !Number.isFinite(dstRow.rowIndex0)) return "skip";
@@ -275,11 +281,16 @@ function swbFillWriteCell(model, srcRow, srcCol, dstRow, dstCol, item) {
   }
   const value = item.copy ? (Array.isArray(srcRow.values) ? srcRow.values[srcCol] : null) : item.value;
   const parsed = value == null || value === "" ? null : { value, type: item.copy ? swbFillTypeOf(value) : item.type };
+  const dstRef = XLSX.utils.encode_cell({ r: dstRow.rowIndex0, c: currentStartCol + dstCol });
+  const dstHadFormula = !!workbook.Sheets[currentSheetName]?.[dstRef]?.f;
+  const cur = Array.isArray(dstRow.values) ? dstRow.values[dstCol] : null;
   if (!parsed) {
     // pusta komórka źródła czyści cel — ale pusty cel zostawiamy w spokoju (bez „zmiany”)
-    const cur = Array.isArray(dstRow.values) ? dstRow.values[dstCol] : null;
-    const dstRef = XLSX.utils.encode_cell({ r: dstRow.rowIndex0, c: currentStartCol + dstCol });
-    if ((cur == null || cur === "") && !workbook.Sheets[currentSheetName]?.[dstRef]?.f) return "skip";
+    if ((cur == null || cur === "") && !dstHadFormula) return "skip";
+  }
+  if (swbFillDamage) {
+    if (dstHadFormula) swbFillDamage.formulas += 1;
+    else if (!parsed && cur != null && cur !== "") swbFillDamage.cleared += 1;
   }
   updateSheetCell(dstRow.rowIndex0, dstCol, parsed);
   if (Array.isArray(dstRow.values)) dstRow.values[dstCol] = parsed ? parsed.value : null;
@@ -292,6 +303,7 @@ function swbFillWriteCell(model, srcRow, srcCol, dstRow, dstCol, item) {
 // Wypełnienie prostokąta: src = { rowStart, rowEnd, colMin, colMax } (pozycje w widoku),
 // dir = "down" | "right", toEnd = ostatni wiersz / kolumna celu. mode: "series" | "copy".
 function swbFillRange(model, src, dir, toEnd, { mode = "series", invert = false, quiet = false } = {}) {
+  swbFillDamage = { formulas: 0, cleared: 0 };
   let changed = 0;
   let skippedFormula = 0;
   const bump = (res) => { if (res === "ok") changed += 1; else if (res === "formula") skippedFormula += 1; };
@@ -333,6 +345,14 @@ function swbFillRange(model, src, dir, toEnd, { mode = "series", invert = false,
     toast(t("editToolNoChange"), "info");
   }
   if (skippedFormula > 0) toast(t("fillSkippedFormulas", { count: skippedFormula }), "warning");
+  const damage = swbFillDamage;
+  swbFillDamage = null;
+  if (changed > 0 && (damage.formulas || damage.cleared)) {
+    const parts = [];
+    if (damage.formulas) parts.push(t("fillOverwroteFormulas", { count: damage.formulas }));
+    if (damage.cleared) parts.push(t("fillClearedCells", { count: damage.cleared }));
+    toast(t("fillDamageWarn", { what: parts.join(", ") }), "warning");
+  }
   return changed;
 }
 

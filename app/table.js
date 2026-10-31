@@ -672,9 +672,10 @@ function clipCellOf(row, col) {
   return { val, fmt: typeof cfmtCaptureFormatAt === "function" ? cfmtCaptureFormatAt(row, col) : null };
 }
 
-async function copySelectionToClipboard() {
+async function copySelectionToClipboard({ quiet = false } = {}) {
   const rect = rangeCellsToCopy();
   if (!rect) return;
+  swbCancelCut(); // nowa kopia kończy poprzednie wycinanie (jak w Excelu)
   const tsv = serializeRangeToTsv(rect);
   const count = rect.rowCount * rect.colCount;
   const cells = [];
@@ -686,12 +687,176 @@ async function copySelectionToClipboard() {
   internalClipboard = { tsv, rows: rect.rowCount, cols: rect.colCount, ts: Date.now(), cells };
   try {
     await navigator.clipboard.writeText(tsv);
-    toast(t("cellsCopied", { count }), "success");
+    if (!quiet) toast(t("cellsCopied", { count }), "success");
   } catch {
     // Zapis do schowka systemu odpadł (brak zgody / kontekst bez HTTPS), ale własny
     // bufor już mamy — wklejenie W TEJ APCE zadziała, i tylko to obiecujemy.
-    toast(t("cellsCopiedApp", { count }), "success");
+    if (!quiet) toast(t("cellsCopiedApp", { count }), "success");
   }
+}
+
+// ── Wytnij (Ctrl/⌘+X, menu komórki) — jak w Excelu ─────────────────────────────
+// Wyrocznia Excela (2026-10-31): wytnij A1 (pogrubione „5”) → wklej w B3: B3 = 5, pogrubione,
+// A1 pusta (bez formatu), a formuła C1 „=A1*2” staje się „=B3*2”. Czyli PRZENIESIENIE:
+// wartość/formuła + format jadą do celu, źródło znika, odwołania do bloku idą za nim.
+// Do chwili wklejenia nic się nie zmienia (przerywana ramka na źródle); Esc albo nowa kopia
+// anulują. Blok musi być prostokątem w ARKUSZU — po filtrze sąsiednie wiersze widoku nie
+// muszą być sąsiednimi wierszami pliku, a przenoszenie „dziurawego” bloku byłoby zgadywaniem.
+let swbCutSource = null; // { wb, sheet, startCol, r1, r2, c1, c2, clip }
+
+function swbCutValid() {
+  const s = swbCutSource;
+  return !!(s && s.wb === workbook && s.sheet === currentSheetName && s.startCol === currentStartCol && s.clip === internalClipboard);
+}
+function swbCancelCut() {
+  if (!swbCutSource) return false;
+  swbCutSource = null;
+  syncCutMarksInDom();
+  return true;
+}
+function syncCutMarksInDom() {
+  tableEl.querySelectorAll("td.cell-cut").forEach((td) => td.classList.remove("cell-cut"));
+  if (!swbCutValid()) return;
+  const s = swbCutSource;
+  tableEl.querySelectorAll("tr[data-row-key]").forEach((tr) => {
+    const r = parseInt(String(tr.dataset.rowKey).split(":")[1], 10);
+    if (!(r >= s.r1 && r <= s.r2) || tr.dataset.rowKey.startsWith("long:")) return;
+    for (let c = s.c1; c <= s.c2; c++) {
+      const td = tr.querySelector(`td[data-col-index="${c}"]`);
+      if (td) td.classList.add("cell-cut");
+    }
+  });
+}
+
+async function cutSelectionToClipboard() {
+  if (typeof swbEditGuard === "function" && !swbEditGuard()) return false;
+  if (!workbook || !currentDisplayModel || currentDisplayModel.mode !== "wide") { toast(t("editWideOnly"), "info"); return false; }
+  const rect = rangeCellsToCopy();
+  if (!rect) return false;
+  const idx = [];
+  for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
+    const row = rect.model.rows[r];
+    if (!row || row.isLongViewRow || row.isSubheader || !Number.isFinite(row.rowIndex0)) { toast(t("cutBlockedRow"), "info"); return false; }
+    idx.push(row.rowIndex0);
+  }
+  if (idx.some((v, i) => v !== idx[0] + i)) { toast(t("cutNeedsContiguous"), "info"); return false; }
+  for (let c = rect.colMin; c <= rect.colMax; c++) {
+    if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(c)) { toast(t("editDerivedCol"), "info"); return false; }
+  }
+  await copySelectionToClipboard({ quiet: true });
+  swbCutSource = { wb: workbook, sheet: currentSheetName, startCol: currentStartCol, r1: idx[0], r2: idx[idx.length - 1], c1: rect.colMin, c2: rect.colMax, clip: internalClipboard };
+  syncCutMarksInDom();
+  toast(t("cellsCut", { count: rect.rowCount * rect.colCount }), "info");
+  return true;
+}
+
+// Wiersz po indeksie w arkuszu: dane (także odfiltrowane) i wiersze nad nagłówkiem; gdy
+// wiersza nie ma w modelu (np. za danymi) — zaślepka, render i tak zbuduje go od nowa.
+function swbRowForIndex0(r) {
+  const view = swbSelView();
+  for (let i = 0; i < (view?.preCount || 0); i++) if (view.rows[i].rowIndex0 === r) return view.rows[i];
+  const hit = Array.isArray(baseRows) ? baseRows.find((row) => row && !row.isLongViewRow && row.rowIndex0 === r) : null;
+  return hit || { rowIndex0: r, values: [], display: [], cellStyles: [], isStub: true };
+}
+
+// Wklejenie wyciętego bloku: lewy górny róg = aktywna komórka (albo róg zaznaczenia).
+function swbPasteCut() {
+  const s = swbCutSource;
+  const model = swbSelView();
+  const rect = getSelectionRectangle();
+  const isRange = !!(rect && (rect.rowCount > 1 || rect.colCount > 1));
+  const anchorIdx = isRange ? rect.rowStart : swbSelIndexOfKey(model, focusedCellState.rowKey);
+  const anchorRow = model.rows[anchorIdx];
+  if (!anchorRow || !Number.isFinite(anchorRow.rowIndex0) || anchorRow.isLongViewRow) return false;
+  const h = s.r2 - s.r1 + 1;
+  const w = s.c2 - s.c1 + 1;
+  const dr = anchorRow.rowIndex0 - s.r1;
+  const dc = (isRange ? rect.colMin : focusedCellState.colIndex0) - s.c1;
+  if (dr === 0 && dc === 0) { swbCancelCut(); return true; }
+  for (let c = s.c1 + dc; c < s.c1 + dc + w; c++) {
+    if (c < 0 || c >= model.headers.length || (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(c))) { toast(t("cutNoRoom"), "warning"); return true; }
+  }
+  if (s.r1 + dr < 0) { toast(t("cutNoRoom"), "warning"); return true; }
+  const sheet = workbook.Sheets[currentSheetName];
+  const lang = typeof currentLang === "string" ? currentLang : "pl";
+  const FE = typeof FormulaEngine !== "undefined" ? FormulaEngine : null;
+  const box = { r1: s.r1, r2: s.r2, c1: currentStartCol + s.c1, c2: currentStartCol + s.c2 };
+  const sameSheet = (name) => name == null || name === currentSheetName;
+  const moveFormula = (f) => {
+    if (!FE) return null;
+    try { return "=" + FE.serialize(FE.moveRefs(FE.parse(f, { lang: "en" }), box, dr, dc, sameSheet).ast, { lang }); } catch { return null; }
+  };
+  // 1. migawka źródła (bieżący stan, nie z chwili wycięcia)
+  const snaps = [];
+  for (let r = s.r1; r <= s.r2; r++) {
+    const row = swbRowForIndex0(r);
+    for (let c = s.c1; c <= s.c2; c++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c: currentStartCol + c })];
+      snaps.push({ r, c, clip: row.isStub ? { val: null, fmt: null } : clipCellOf(row, c), f: cell && cell.f ? cell.f : null });
+    }
+  }
+  // 2. formuły w tym arkuszu, które wskazują na blok (poza samym blokiem) — przepinamy po zapisie
+  const deps = [];
+  let otherSheets = 0;
+  for (const name of workbook.SheetNames || []) {
+    const sh = workbook.Sheets[name];
+    if (!sh) continue;
+    for (const ref in sh) {
+      if (ref.charCodeAt(0) === 33 || !sh[ref] || !sh[ref].f) continue;
+      const { r, c } = XLSX.utils.decode_cell(ref);
+      if (name === currentSheetName && r >= s.r1 && r <= s.r2 && c >= box.c1 && c <= box.c2) continue;
+      let moved = null;
+      try {
+        const res = FE.moveRefs(FE.parse(sh[ref].f, { lang: "en" }), box, dr, dc, (n) => (n == null ? name === currentSheetName : n === currentSheetName));
+        if (res.changed) moved = "=" + FE.serialize(res.ast, { lang });
+      } catch { moved = null; }
+      if (!moved) continue;
+      if (name !== currentSheetName || c - currentStartCol < 0 || c - currentStartCol >= model.headers.length) { otherSheets += 1; continue; }
+      deps.push({ r, c: c - currentStartCol, text: moved });
+    }
+  }
+  const inDest = (r, c) => r >= s.r1 + dr && r <= s.r2 + dr && c >= s.c1 + dc && c <= s.c2 + dc;
+  // 3. źródło: pusto i bez formatu (poza częścią, którą zaraz przykryje cel)
+  for (const sn of snaps) {
+    if (inDest(sn.r, sn.c)) continue;
+    const row = swbRowForIndex0(sn.r);
+    updateSheetCell(sn.r, sn.c, null);
+    if (typeof cfmtApplyAt === "function") cfmtApplyAt(row, sn.c, { reset: true });
+  }
+  // 4. cel: format, potem wartość albo przesunięta formuła
+  for (const sn of snaps) {
+    const r = sn.r + dr;
+    const c = sn.c + dc;
+    const row = swbRowForIndex0(r);
+    if (sn.f) {
+      if (sn.clip && sn.clip.fmt && typeof cfmtApplyAt === "function") cfmtApplyAt(row, c, sn.clip.fmt);
+      const text = moveFormula(sn.f);
+      if (!text || swbFormulaCommitAt(r, c, text, { silent: true }) !== "ok") writeClipCell(model, row, c, sn.clip, "", true);
+    } else {
+      writeClipCell(model, row, c, sn.clip || { val: null, fmt: null }, "", true);
+    }
+  }
+  // 5. formuły zależne idą za blokiem
+  deps.forEach((d) => swbFormulaCommitAt(d.r, d.c, d.text, { silent: true }));
+  swbCutSource = null;
+  internalClipboard = null; // jak w Excelu: wycięte wkleja się raz
+  setDirtyState(true);
+  renderActiveTable();
+  if (typeof scheduleViewRefresh === "function") scheduleViewRefresh({ analyses: true, filterBadge: true });
+  // zaznaczony zostaje przeniesiony blok
+  const view = swbSelView();
+  const topKey = getRowSelectionKey(swbRowForIndex0(s.r1 + dr));
+  const botKey = getRowSelectionKey(swbRowForIndex0(s.r2 + dr));
+  if (swbSelIndexOfKey(view, topKey) >= 0 && swbSelIndexOfKey(view, botKey) >= 0) {
+    setSelectionKind("cell", { repaint: false });
+    setFocusedCell(topKey, s.c1 + dc, { scroll: false });
+    if (h > 1 || w > 1) setSelectedCell(botKey, s.c2 + dc, { scroll: false });
+  }
+  toast(t("cellsMoved", { count: h * w }), "success");
+  if (deps.length) toast(t("cutFormulasFollowed", { count: deps.length }), "info");
+  if (otherSheets) toast(t("cutOtherSheetsWarn", { count: otherSheets }), "warning");
+  log(`Przeniesiono ${h * w} kom. o (${dr}, ${dc}); przepięte formuły: ${deps.length}`, "success");
+  return true;
 }
 
 function parseTsvClipboard(text) {
@@ -751,6 +916,12 @@ async function pasteClipboardToSelection(opts = {}) {
     toast(t("clipboardUnavailable"), "warning");
     return;
   }
+  // Wycięty blok (i schowek dalej niesie właśnie jego) → przeniesienie, nie kopia
+  if (swbCutValid() && opts.mode !== "values" && (got.source === "app" || got.text === internalClipboard.tsv)) {
+    swbPasteCut();
+    return;
+  }
+  if (swbCutSource) swbCancelCut(); // w schowku jest już coś innego
   const grid = parseTsvClipboard(got.text);
   if (!grid.length || !grid[0].length) return;
   // Schowek systemu z tym samym tekstem, który właśnie skopiowaliśmy = nasza kopia.
@@ -828,6 +999,7 @@ function fillSelection(direction) {
 function syncRangeHighlightInDom() {
   // uchwyt wypełniania idzie za zaznaczeniem (autofill.js)
   if (typeof swbFillHandleSync === "function") swbFillHandleSync();
+  if (swbCutSource) syncCutMarksInDom(); // przerywana ramka wyciętego bloku przeżywa render
   tableEl
     .querySelectorAll("tr[data-row-key] > td.cell-in-range")
     .forEach((c) => c.classList.remove(...RANGE_EDGE_CLASSES));
@@ -2534,6 +2706,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     const th = document.createElement("th");
     th.setAttribute("scope", "col");
     th.dataset.sortHeader = h; // sort przez delegację na theadEl (bez N listenerów przy każdym renderze)
+    th.dataset.colIndex = String(i); // menu nagłówka / zmiana nazwy (header-edit.js)
     th.textContent = h;
     th.dataset.fullText = h; // [EN] Header text without sort arrow — for truncated tooltip
     if (currentHeaderStyles[i]) applyCellStyle(th, currentHeaderStyles[i]);
@@ -2815,7 +2988,7 @@ async function buildRowsAsync(sheet, headerRow, wb) {
 if (theadEl && !theadEl.dataset.sortClickBound) {
   theadEl.dataset.sortClickBound = "1";
   theadEl.addEventListener("click", (e) => {
-    if (e.target.closest(".col-resizer")) return;
+    if (e.target.closest(".col-resizer, input")) return; // pole zmiany nazwy ≠ sortowanie
     const th = e.target.closest("th[data-sort-header]");
     if (!th) return;
     const h = th.dataset.sortHeader;

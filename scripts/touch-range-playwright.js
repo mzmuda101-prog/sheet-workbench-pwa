@@ -203,11 +203,11 @@ async function run() {
   ]);
   check("5. daty jak polski Excel", JSON.stringify(d5) === JSON.stringify(["29 paź 26", "29 październik 2026", "czwartek", "czw 29.10", "29 Oct 26", "maj 2026"]), d5);
 
-  // 1/4. mysz: zwykły klik zostaje przy wierszu, uchwyt wypełnia
+  // 1/4. mysz w Edycji: klik = komórka (od 2026-10-31, jak palec), uchwyt dalej wypełnia
   await p.click(CELL(1, 2));
   await sleep(200);
   const k = await p.evaluate(() => selectionKind);
-  check("1. mysz: zwykły klik dalej zaznacza wiersz", k === "row", k);
+  check("1. mysz w Edycji: klik zaznacza komórkę", k === "cell", k);
   const d0 = await colValues(p, 2, 3);
   await dragHandle(p, CELL(3, 2), "mouse");
   const d1 = await colValues(p, 2, 3);

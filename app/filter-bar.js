@@ -229,6 +229,15 @@ const cellMenuEl = document.getElementById("cellMenu");
 let cellMenuTarget = null;         // { header, value, td }
 let cellMenuReturnFocus = null;
 let suppressCellClickUntil = 0;    // po przytrzymaniu palcem: połknij klik (nie otwieraj edytora)
+// Menu otwarte PRZYTRZYMANIEM leży pod palcem — puszczenie palca daje kliknięcie, które trafiało
+// w pozycję menu pod nim (np. „Pokaż wiersze…” albo „Sortuj rosnąco” bez decyzji użytkownika).
+// Połykamy tylko TEN jeden klik; każde nowe stuknięcie zaczyna się od touchstart i zeruje flagę.
+let swallowLongPressMenuClick = false;
+function swbMenuOpenedByLongPress() {
+  swallowLongPressMenuClick = true;
+  setTimeout(() => { swallowLongPressMenuClick = false; }, 1500);
+}
+document.addEventListener("touchstart", () => { swallowLongPressMenuClick = false; }, { capture: true, passive: true });
 
 // Wartość komórki w składni szybkiego szukania. null = nie da się jej wyrazić
 // (&&, ||, { } rozbiłyby zapytanie na części; „ !” parser bierze za wykluczenie słowa,
@@ -404,6 +413,14 @@ function cellMenuExplainItem(target) {
   return { id: "explain", label: t("cellMenuExplain"), run: () => { closeCellMenu(); swbOpenFormulaExplain({ formula, r, c }); } };
 }
 
+// „Wyczyść zawartość” (= Delete, format zostaje — jak w Excelu); na telefonie bez klawiatury
+// to jedyna droga, żeby opróżnić kilka komórek naraz.
+function cellMenuClearItem() {
+  if (!workbook || currentDisplayModel?.mode !== "wide") return null;
+  if (typeof swbIsEditMode === "function" && !swbIsEditMode()) return null;
+  return { id: "clear", label: t("cellMenuClear"), run: () => { closeCellMenu(); cfmtClearContents(); } };
+}
+
 // Wypełnianie zaznaczenia — na dotyku to JEDYNA droga (róg pod palcem tylko rozciąga
 // zaznaczenie, autofill.js), a na myszy skrót obok Ctrl+D/R i uchwytu.
 function cellMenuFillItems(target) {
@@ -417,6 +434,9 @@ function cellMenuFillItems(target) {
   ];
 }
 
+// Kolejność jak w menu Excela: najpierw schowek (Wytnij, Kopiuj, Wklej…), potem czyszczenie
+// i wypełnianie, a filtrowanie i reszta niżej (zgłoszenie 2026-10-31: „jak w Excelu — rozciągasz
+// zaznaczenie, a potem prawy klik / przytrzymanie: kopiuj, wklej…”).
 function cellMenuItems(target) {
   const paste = cellMenuPasteItem(target);
   const pasteValues = paste ? cellMenuPasteValuesItem(target) : null;
@@ -426,23 +446,29 @@ function cellMenuItems(target) {
     ? [...target.rect.rowKeys].every((k) => k.startsWith("pre:"))
     : !!target.row?.isPreRow;
   const filterItem = (item) => (preOnly ? null : item);
+  const editable = !!workbook && currentDisplayModel?.mode === "wide" && (typeof swbIsEditMode !== "function" || swbIsEditMode());
+  const cut = editable ? { id: "cut", label: t("cellMenuCut"), run: () => { closeCellMenu(); cutSelectionToClipboard(); } } : null;
   if (target.multi) {
     return [
-      filterItem({ id: "show", label: t("cellMenuMultiShow"), run: () => applyCellFilter(false) }),
-      filterItem({ id: "hide", label: t("cellMenuMultiHide"), run: () => applyCellFilter(true) }),
+      cut,
       { id: "copy", label: t("cellMenuMultiCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
       paste,
-    pasteValues,
+      pasteValues,
+      cellMenuClearItem(),
       ...cellMenuFillItems(target),
+      filterItem({ id: "show", label: t("cellMenuMultiShow"), run: () => applyCellFilter(false) }),
+      filterItem({ id: "hide", label: t("cellMenuMultiHide"), run: () => applyCellFilter(true) }),
     ].filter(Boolean);
   }
   const empty = !String(target.value ?? "").trim();
   return [
-    filterItem({ id: "show", label: t(empty ? "cellMenuShowEmpty" : "cellMenuShowOnly"), run: () => applyCellFilter(false) }),
-    filterItem({ id: "hide", label: t(empty ? "cellMenuHideEmpty" : "cellMenuHide"), run: () => applyCellFilter(true) }),
+    cut,
     { id: "copy", label: t("cellMenuCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
     paste,
     pasteValues,
+    cellMenuClearItem(),
+    filterItem({ id: "show", label: t(empty ? "cellMenuShowEmpty" : "cellMenuShowOnly"), run: () => applyCellFilter(false) }),
+    filterItem({ id: "hide", label: t(empty ? "cellMenuHideEmpty" : "cellMenuHide"), run: () => applyCellFilter(true) }),
     cellMenuExplainItem(target),
     ...(typeof swbNoteMenuItems === "function" ? swbNoteMenuItems(target) : []),
   ].filter(Boolean);
@@ -569,6 +595,7 @@ if (cellMenuEl && tbodyEl) {
       lpTimer = 0;
       if (openCellMenu(td, { x: lpX, y: lpY })) {
         suppressCellClickUntil = Date.now() + 800;
+        swbMenuOpenedByLongPress();
         if (navigator.vibrate) { try { navigator.vibrate(10); } catch { /* bez haptyki */ } }
       }
     }, 520);
@@ -583,6 +610,12 @@ if (cellMenuEl && tbodyEl) {
 
   // Klik, który kończy przytrzymanie, nie może trafić do siatki (drugi tap = edytor).
   window.addEventListener("click", (e) => {
+    if (swallowLongPressMenuClick && cellMenuEl.contains(e.target)) {
+      swallowLongPressMenuClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     if (Date.now() > suppressCellClickUntil) return;
     if (cellMenuEl.contains(e.target)) return;
     if (tableEl.contains(e.target)) { e.stopPropagation(); e.preventDefault(); }

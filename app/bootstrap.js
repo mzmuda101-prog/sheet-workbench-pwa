@@ -710,6 +710,11 @@ document.addEventListener("keydown", (e) => {
       pasteClipboardToSelection();
       return;
     }
+    if (e.key.toLowerCase() === "x") {
+      e.preventDefault();
+      cutSelectionToClipboard();
+      return;
+    }
   }
   // Ctrl/⌘+Shift+V — wklej same wartości (wygląd komórki docelowej zostaje), jak „Wklej jako
   // zwykły tekst” w innych programach. Format niesie tylko kopia z tej aplikacji.
@@ -841,6 +846,11 @@ document.addEventListener("keydown", (e) => {
   // najpierw zwiń zakres do aktywnej komórki, dopiero potem zdejmij fokus wiersza.
   // komórka nad nagłówkiem (pre-row) ma osobne zaznaczenie — Esc zdejmuje i je
   if (e.key === "Escape" && !e.defaultPrevented && typeof clearPreActiveCell === "function" && clearPreActiveCell()) {
+    e.preventDefault();
+    return;
+  }
+  // Esc najpierw kończy wycinanie (przerywana ramka), jak w Excelu — zaznaczenie zostaje
+  if (e.key === "Escape" && !e.defaultPrevented && typeof swbCancelCut === "function" && swbCancelCut()) {
     e.preventDefault();
     return;
   }

@@ -459,6 +459,36 @@
     return walk(ast);
   }
 
+  // Przeniesienie bloku komórek (Wytnij → Wklej): odwołania wskazujące W CAŁOŚCI na blok
+  // box = {r1,c1,r2,c2} idą za nim o (dr, dc) — także bezwzględne ($A$1), bo to ta sama
+  // komórka w nowym miejscu. Zakres częściowo w bloku zostaje bez zmian. Wyrocznia Excela
+  // (2026-10-31): C1 „=A1*2”, wytnij A1 → wklej B3 ⇒ C1 „=B3*2”. sameSheet(n.sheet) mówi,
+  // czy odwołanie dotyczy arkusza, z którego przeniesiono blok. Zwraca { ast, changed }.
+  function moveRefs(ast, box, dr, dc, sameSheet) {
+    let changed = false;
+    const inBox = (r, c) => r >= box.r1 && r <= box.r2 && c >= box.c1 && c <= box.c2;
+    const walk = (n) => {
+      if (!n || typeof n !== "object") return n;
+      if (n.t === "ref") {
+        if (!sameSheet(n.sheet) || !inBox(n.r, n.c)) return n;
+        changed = true;
+        return { ...n, r: n.r + dr, c: n.c + dc };
+      }
+      if (n.t === "range") {
+        if (n.rows || n.cols || !sameSheet(n.sheet) || !inBox(n.r1, n.c1) || !inBox(n.r2, n.c2)) return n;
+        changed = true;
+        return { ...n, r1: n.r1 + dr, r2: n.r2 + dr, c1: n.c1 + dc, c2: n.c2 + dc };
+      }
+      if (n.t === "call") return { ...n, args: n.args.map(walk) };
+      if (n.t === "bin") return { ...n, a: walk(n.a), b: walk(n.b) };
+      if (n.t === "un" || n.t === "pct" || n.t === "paren") return { ...n, a: walk(n.a) };
+      if (n.t === "array") return { ...n, rows: n.rows.map((r) => r.map(walk)) };
+      return n;
+    };
+    const out = walk(ast);
+    return { ast: out, changed };
+  }
+
   // ── wartości ───────────────────────────────────────────────────────────────
   // Zakres jako obiekt (nie tablica) — funkcje typu LICZ.JEŻELI/INDEKS/WIERSZ potrzebują
   // wiedzieć, SKĄD pochodzą komórki; do tablicy materializujemy dopiero przy działaniu.
@@ -1943,7 +1973,7 @@
 
   const api = {
     makeStructuredResolver, makeNameResolver, makeMatrixCache, setLocale, roundExcel, excelPow,
-    parse, serialize, localize, shift, syntaxLang, evaluate, refsOf, functionsOf, isSupported, resultLooksLikeDate,
+    parse, serialize, localize, shift, moveRefs, syntaxLang, evaluate, refsOf, functionsOf, isSupported, resultLooksLikeDate,
     tokenize, colToIndex, indexToCol, quoteSheet, Range, isRange, isErr, ERR, ERR_PL, UNSUPPORTED,
     jsDateToSerial, dateSerial, generalText, PL_NAMES, EN_FROM_PL, CATALOG, makeCriterion, compare,
   };

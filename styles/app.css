@@ -4296,6 +4296,11 @@ tbody td.has-fill-handle { position: relative; }
   .fill-handle::after { border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), 0 1px 3px rgba(0, 0, 0, .25); }
 }
 .swb-filling, .swb-filling * { cursor: crosshair !important; }
+/* zaznaczanie zakresu przeciągnięciem myszą (ui-controls.js dragSel) — bez zaznaczania tekstu */
+.swb-selecting #dataTable { user-select: none; -webkit-user-select: none; }
+/* Wycięty blok (Wytnij, table.js) — przerywana ramka jak w Excelu, do wklejenia albo Esc */
+#dataTable tr[data-row-key] > td.cell-cut { outline: 2px dashed var(--sel-frame); outline-offset: -3px; }
+.swb-selecting, .swb-selecting * { cursor: cell !important; }
 .swb-filling #dataTable { user-select: none; -webkit-user-select: none; }
 
 /* Kolor z formatu liczbowego ([Red]/[Czerwony], [Blue]…) — wygrywa z kolorem czcionki,
@@ -8756,6 +8761,34 @@ thead tr.pre-row + tr.header-row th { border-top: 1px solid var(--border); }
 /* komórka nad nagłówkiem: zaznaczona (klik) i w edycji (dwuklik / drugie tapnięcie) */
 thead tr.pre-row > td.pre-cell { cursor: cell; }
 thead tr.pre-row > td.pre-cell:focus { outline: none; }
+/* Zmiana nazwy kolumny (header-edit.js): pole w komórce nagłówka, menu z wyjaśnieniem blokady */
+thead tr.header-row th.hdr-editing { position: relative; overflow: visible; }
+thead tr.header-row th .hdr-editor {
+  position: absolute;
+  inset: 2px;
+  width: calc(100% - 4px);
+  min-width: 0;
+  padding: 0 8px;
+  border: 2px solid var(--sel-frame);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  user-select: text;
+  -webkit-user-select: text;
+}
+thead tr.header-row th .hdr-editor:focus,
+thead tr.header-row th .hdr-editor:focus-visible { outline: none; border-color: var(--sel-frame); box-shadow: none; }
+.cell-menu-item[aria-disabled="true"] { color: var(--muted); }
+.cell-menu-note {
+  max-width: 280px;
+  padding: 0 14px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--muted);
+}
 thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }
 
 /* Pasek cyfr i operatorów nad klawiaturą telefonu (key-bar.js). Pozycję (transform)

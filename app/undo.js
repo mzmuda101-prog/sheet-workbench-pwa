@@ -131,6 +131,8 @@ function undoApplyStep(step) {
     undoApplying = false;
   }
   bumpSheetDataStamp();
+  // Cofnięta zmiana nazwy kolumny: nazwy kolumn (i sort/filtry/szukanie) wracają razem z komórką
+  if (typeof swbHeaderRowTouched === "function") step.changes.forEach((ch) => swbHeaderRowTouched(step.sheet, ch.rowIndex0));
   if (typeof swbNotesInvalidate === "function") swbNotesInvalidate(); // komórka mogła odzyskać/stracić notatkę
   // formuły: indeks (komórka mogła odzyskać/stracić formułę) + przeliczenie zależnych
   step.changes.forEach((ch) => {

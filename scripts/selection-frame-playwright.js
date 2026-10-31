@@ -95,11 +95,14 @@ async function run() {
       handle: h,
     };
   }, sel);
+  // poziom komórki: w trybie Edycja daje go już sam klik (2026-10-31); Shift+Spacja tylko,
+  // gdyby klik zostawił poziom wiersza (Podgląd) — inaczej przełączyłaby z powrotem na wiersz
+  const toCell = async () => { if (await page.evaluate(() => selectionKind) !== "cell") await page.keyboard.press("Shift+Space"); };
   const shadowCount = (s) => (s && s !== "none" ? s.split(/,(?![^(]*\))/).length : 0);
 
   // 1–3. pojedyncza komórka w trybie komórkowym (klik + Shift+Spacja)
   await page.click(td(3, 2));
-  await page.keyboard.press("Shift+Space");
+  await toCell();
   await settle();
   let p = await probe(td(3, 2));
   check("1. aktywna komórka ma klasę cell-active", /\bcell-active\b/.test(p.classes), p.classes);
@@ -149,11 +152,19 @@ async function run() {
   check("4. nagłówki zakresu: 3 numery wierszy, 3 litery kolumn", p.rowHeads.length === 3 && JSON.stringify(p.guides) === '["C","D","E"]', { rows: p.rowHeads, guides: p.guides });
   check("4. uchwyt na narożniku zakresu (E6), wystaje", !!p.handle && p.handle.host === "4@wide:5" && Math.abs(p.handle.dx) <= 3 && Math.abs(p.handle.dy) <= 3 && p.handle.sticksOut && p.handle.hitSelf, p.handle);
 
-  // zwykły klik = tryb wiersza: zakres znika, litera kolumny gaśnie, numer wiersza zostaje
+  // zwykły klik w trybie Edycja = komórka (jak w Excelu, 2026-10-31): zakres znika,
+  // świecą litera B i numer wiersza wide:7, komórka ma ramkę
   await page.click(td(7, 1));
   await settle();
   p = await probe(td(7, 1));
-  check("5. po zwykłym kliku: brak zakresu, brak litery, numer wiersza wide:7", p.inRange === 0 && p.guides.length === 0 && JSON.stringify(p.rowHeads) === '["wide:7"]', p);
+  check("5. po zwykłym kliku: brak zakresu, litera B, numer wiersza wide:7, ramka komórki", p.inRange === 0 && JSON.stringify(p.guides) === '["B"]' && JSON.stringify(p.rowHeads) === '["wide:7"]' && /\bcell-active\b/.test(p.classes), p);
+  // …a w Podglądzie klik dalej zaznacza wiersz: bez litery kolumny
+  await page.evaluate(() => sheetEditUi.setMode("view"));
+  await page.click(td(8, 1));
+  await settle();
+  p = await probe(td(8, 1));
+  check("5. Podgląd: klik = wiersz (brak litery), numer wiersza wide:8", p.inRange === 0 && p.guides.length === 0 && JSON.stringify(p.rowHeads) === '["wide:8"]', p);
+  await page.evaluate(() => sheetEditUi.setMode("edit"));
 
   // 6. zamrożona 1. kolumna — róg w niej: uchwyt zostaje w komórce
   await page.evaluate(() => {
@@ -163,13 +174,13 @@ async function run() {
   });
   await sleep(300);
   await page.click(td(4, 0));
-  await page.keyboard.press("Shift+Space");
+  await toCell();
   await settle();
   p = await probe(td(4, 0));
   check("6. zamrożona kolumna: uchwyt w komórce (is-inset), widoczny", !!p.handle && p.handle.inset && p.handle.inTd && p.handle.host === "0@wide:4" && p.handle.hitSelf, p.handle);
   check("6. zamrożona kolumna: ramka komórki bez zaokrąglenia, tło kryjące", p.radius === "0px" && !/rgba\([^)]*,\s*0?\.\d+\)/.test(p.bg), { r: p.radius, bg: p.bg });
   await page.click(td(4, 2));
-  await page.keyboard.press("Shift+Space");
+  await toCell();
   await settle();
   p = await probe(td(4, 2));
   check("6. kolumna niezamrożona: uchwyt wraca do #tableWrap", !!p.handle && p.handle.inWrap && !p.handle.inset, p.handle);

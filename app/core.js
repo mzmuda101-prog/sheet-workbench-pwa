@@ -850,7 +850,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261031-02";
+const APP_BUILD_VERSION = "20261031-04";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1136,6 +1136,22 @@ function setStatus(msg, opts) {
 function arrMin(a) { let m = Infinity; for (let i = 0; i < a.length; i++) if (a[i] < m) m = a[i]; return m; }
 function arrMax(a) { let m = -Infinity; for (let i = 0; i < a.length; i++) if (a[i] > m) m = a[i]; return m; }
 
+// Tytuł okna/karty: nazwa pliku (z kropką, gdy są niezapisane zmiany), a bez pliku — nazwa
+// aplikacji. Zainstalowana aplikacja (okno PWA) sama dokleja swoją nazwę przed tytułem,
+// gdy się od niej różni — „* Sheet Workbench” dawało „Sheet Workbench - * Sheet Workbench”
+// (film 2026-10-31). Dlatego w oknie PWA bez nazwy aplikacji, w karcie przeglądarki — z nią.
+const swbStandaloneMQ = typeof matchMedia === "function"
+  ? matchMedia("(display-mode: standalone), (display-mode: window-controls-overlay), (display-mode: minimal-ui)") : null;
+function syncDocumentTitle() {
+  if (typeof document === "undefined") return;
+  if (document.body && document.body.classList.contains("rp-printing")) return; // raport ustawia własny
+  const name = typeof currentFileName === "string" && currentFileName ? currentFileName : "";
+  if (!name) { document.title = BASE_TITLE; return; }
+  const mark = hasUnsavedChanges ? "• " : "";
+  const standalone = !!(swbStandaloneMQ && swbStandaloneMQ.matches);
+  document.title = standalone ? `${mark}${name}` : `${mark}${name} — ${BASE_TITLE}`;
+}
+
 // Licznik edycji: zapis trwa (budowa ZIP + zapis na dysk), a w tym czasie da się
 // dalej edytować. Bez niego „Zapisano” gasiło też zmiany wpisane PO zbudowaniu pliku
 // (brak ostrzeżenia przy zamknięciu, a drafts.js kasował szkic z tymi zmianami).
@@ -1145,7 +1161,7 @@ function setDirtyState(isDirty) {
   if (isDirty) dirtyEpoch++;
   hasUnsavedChanges = !!isDirty;
   statusEl.classList.toggle("unsaved", hasUnsavedChanges);
-  document.title = hasUnsavedChanges ? `* ${BASE_TITLE}` : BASE_TITLE;
+  syncDocumentTitle();
   if (typeof appFrame !== "undefined") appFrame.syncSave(); // „Zapisz” w nagłówku + liczba zmian
 }
 
