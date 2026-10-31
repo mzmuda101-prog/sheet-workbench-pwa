@@ -9192,3 +9192,14 @@ tbody tr.row-matched td.cell-has-fill {
 tbody.has-cell-range tr.row-focused td.cell-has-fill:not(.cell-in-range) {
   background: var(--cell-fill, transparent) !important;
 }
+
+/* Kolory czcionek z pliku w CIEMNYM motywie (2026-10-31). Plik zakłada białe tło arkusza —
+   granat, ciemna zieleń czy bordo na naszym ciemnym tle były prawie niewidoczne. Na komórkach
+   BEZ wypełnienia podnosimy jasność koloru (OKLCH: ten sam odcień i nasycenie, L ≥ 0,74), jak
+   tryb ciemny w Office. Komórki z wypełnieniem zostają wierne (para tło+tekst z pliku), jasny
+   motyw też — tam tło jest jasne jak w Excelu. Bez obsługi względnych kolorów — oryginał. */
+@supports (color: oklch(from red l c h)) {
+  [data-theme="dark"] :is(tbody, thead tr.pre-row) td.cell-fc:not(.cell-has-fill):not([class*="nf-"]) { /* kolor z formatu liczby ([Czerwony]) ma własny wariant ciemny */
+    color: oklch(from var(--fc) max(l, 0.74) c h) !important;
+  }
+}

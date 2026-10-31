@@ -2082,6 +2082,9 @@ function applyCellStyle(td, style) {
     const fillShown = cellStyleShowFills && style.hasCustomFill;
     if (!style.fontColorIsDefaultLike || fillShown) {
       td.style.color = style.fontColor;
+      // ciemny motyw rozjaśnia ten kolor na tle BEZ wypełnienia (styles: .cell-fc)
+      td.classList.add("cell-fc");
+      td.style.setProperty("--fc", style.fontColor);
       // Oznaczamy jasny i ciemny-neutralny tekst — pod zaznaczeniem wiersza (które zakrywa tło)
       // CSS zamieni go na czytelny var(--ink): jasny→ciemny w motywie jasnym, ciemny→jasny w ciemnym.
       if (isLightColor(style.fontColor)) td.classList.add("cell-light-text");
@@ -2534,7 +2537,7 @@ function buildTableRow(ctx, row, rowPos) {
     if (cfMapForRender) {
       const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
       if (cf) {
-        if (cf.fontColor) { td.style.color = cf.fontColor; if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); else if (isDarkNeutralColor(cf.fontColor)) td.classList.add("cell-dark-text"); }
+        if (cf.fontColor) { td.style.color = cf.fontColor; td.classList.add("cell-fc"); td.style.setProperty("--fc", cf.fontColor); if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); else if (isDarkNeutralColor(cf.fontColor)) td.classList.add("cell-dark-text"); }
         if (cf.fillColor) {
           td.classList.add("cell-has-fill");
           const cbg = hexToRgba(cf.fillColor, 1); // pełne krycie, jak w Excelu (2026-10-31)

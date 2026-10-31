@@ -9,7 +9,8 @@
 //   2. paleta motywu z PLIKU, nie sztywna Office 2013 (akcent 1 = #156082, nie #4472C4);
 //   3. automatyczny tekst na wypełnieniu czytelny (czarny na jasnym, biały na ciemnym);
 //   4. zaznaczenie kładzie się NA kolor (półprzezroczyste), kolor komórki dalej widać;
-//   5. panel-nakładka ma pełne tło (nie prześwituje tabela) i długa nazwa pliku nie rozpycha sekcji.
+//   5. panel-nakładka ma pełne tło (nie prześwituje tabela) i długa nazwa pliku nie rozpycha sekcji;
+//   6. ciemny motyw rozjaśnia ciemne kolory czcionek z pliku (tło bez wypełnienia), jasny — wierny.
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
 
 const path = require("path");
@@ -78,6 +79,22 @@ async function run() {
     return { img: cs.backgroundImage, bg: cs.backgroundColor, inRange: td.classList.contains("cell-in-range") || td.classList.contains("cell-active") };
   });
   check("4. zaznaczenie na kolorze: półprzezroczysta warstwa + kolor komórki pod spodem", sel.inRange && /gradient/.test(sel.img), sel);
+
+  // 6. ciemny motyw: ciemne kolory czcionek z pliku rozjaśnione na tle bez wypełnienia
+  const dark = await p.evaluate(async () => {
+    setTheme("dark", false);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const td = (n, c) => document.querySelector(`#dataTable tbody tr[data-row-index="${n - 1}"] td[data-col-index="${c}"]`);
+    // jasność postrzegana: oklch(L …) wprost, rgb(…) przez wzór luminancji
+    const lumOf = (el) => { const c = getComputedStyle(el).color; const o = /^oklch\(([\d.]+)/.exec(c); if (o) return +o[1]; const [r, g, b] = c.match(/[\d.]+/g).map(Number); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+    const out = { navy: lumOf(td(9, 1)), green: lumOf(td(4, 1)), filledKept: getComputedStyle(td(2, 0)).color };
+    setTheme("light", false);
+    await new Promise((r) => requestAnimationFrame(r));
+    out.navyLight = getComputedStyle(td(9, 1)).color;
+    return out;
+  });
+  check("6. ciemny motyw: granat i ciemna zieleń z pliku czytelne (rozjaśnione)", dark.navy > 0.45 && dark.green > 0.45, dark);
+  check("6. jasny motyw: kolor czcionki wierny plikowi (#0E2841)", /14, 40, 65/.test(dark.navyLight), dark.navyLight);
 
   // 5. panel na telefonie/tablecie: pełne tło + długa nazwa pliku
   await p.setViewportSize({ width: 1180, height: 820 });
