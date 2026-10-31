@@ -20,6 +20,17 @@
     "#5B9BD5", "#70AD47", "#0563C1", "#954F72",
   ];
 
+  // paleta motywu z pliku (jak swbThemeColors w table.js) — ustawiana na starcie buildRowsCore
+  let themePalette = THEME_COLORS;
+  function paletteFromWorkbook(wb) {
+    const scheme = wb && wb.Themes && wb.Themes.themeElements && wb.Themes.themeElements.clrScheme;
+    if (!Array.isArray(scheme) || scheme.length < 10) return THEME_COLORS;
+    const byName = {};
+    scheme.forEach((c) => { if (c && c.name) byName[c.name] = normalizeHexColor(c.rgb); });
+    return ["lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink"]
+      .map((n, i) => byName[n] || THEME_COLORS[i]);
+  }
+
   function normalizeHexColor(input) {
     if (!input) return null;
     const raw = String(input).replace(/^#/, "").trim();
@@ -78,8 +89,8 @@
         return tint ? applyColorTint(INDEXED_COLORS[idx], tint) : INDEXED_COLORS[idx];
       }
       const themeIdx = node.theme ?? node.Theme;
-      if (Number.isInteger(themeIdx) && THEME_COLORS[themeIdx]) {
-        return applyColorTint(THEME_COLORS[themeIdx], tint);
+      if (Number.isInteger(themeIdx) && themePalette[themeIdx]) {
+        return applyColorTint(themePalette[themeIdx], tint);
       }
     }
     return normalizeHexColor(node.auto) || null;
@@ -348,6 +359,7 @@
   }
 
   function buildRowsCore(sheet, headerRow, wb, options) {
+    themePalette = paletteFromWorkbook(wb);
     const opts = options || {};
     const displayMode = opts.displayMode || "values";
     const lang = opts.lang || "pl";

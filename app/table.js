@@ -1619,6 +1619,7 @@ function updateSortControls() {
   resetSortBtn.classList.toggle("hidden", !active);
   resetSortBtn.setAttribute("aria-hidden", active ? "false" : "true");
   renderSortRules();
+  if (typeof renderActiveFilters === "function") renderActiveFilters(); // chip „sortowanie: … ×”
 }
 
 function toPixelWidth(meta) {
@@ -1668,6 +1669,26 @@ const THEME_COLORS = [
 ];
 
 // Tint motywu wg OOXML: modyfikuje LUMINANCJĘ w HSL (nie per-kanał).
+// Paleta motywu Z PLIKU (xl/theme/theme1.xml → SheetJS wb.Themes). Sztywna THEME_COLORS to
+// Office 2013–2022; Excel od 2023 ma inną (akcent 1 #156082 zamiast #4472C4), więc kolory
+// motywu z nowszych plików wychodziły inne niż w Excelu. Kolejność indeksów Excela:
+// 0 lt1, 1 dk1, 2 lt2, 3 dk2 (jasne/ciemne zamienione względem XML), 4–9 akcenty, 10–11 linki.
+const _themePaletteCache = new WeakMap();
+function swbThemeColors(wb) {
+  if (!wb || typeof wb !== "object") return THEME_COLORS;
+  if (_themePaletteCache.has(wb)) return _themePaletteCache.get(wb);
+  const scheme = wb.Themes && wb.Themes.themeElements && wb.Themes.themeElements.clrScheme;
+  let out = THEME_COLORS;
+  if (Array.isArray(scheme) && scheme.length >= 10) {
+    const byName = {};
+    scheme.forEach((c) => { if (c && c.name) byName[c.name] = normalizeHexColor(c.rgb); });
+    const order = ["lt1", "dk1", "lt2", "dk2", "accent1", "accent2", "accent3", "accent4", "accent5", "accent6", "hlink", "folHlink"];
+    out = order.map((n, i) => byName[n] || THEME_COLORS[i]);
+  }
+  _themePaletteCache.set(wb, out);
+  return out;
+}
+
 function applyColorTint(hex, tint) {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(hex || "");
   if (!m || !tint) return hex;
@@ -1752,8 +1773,9 @@ function colorFromStyleNode(node, resolveTheme = false) {
       return tint ? applyColorTint(INDEXED_COLORS[idx], tint) : INDEXED_COLORS[idx];
     }
     const themeIdx = node.theme ?? node.Theme;
-    if (Number.isInteger(themeIdx) && THEME_COLORS[themeIdx]) {
-      return applyColorTint(THEME_COLORS[themeIdx], tint);
+    const palette = swbThemeColors(typeof workbook !== "undefined" ? workbook : null);
+    if (Number.isInteger(themeIdx) && palette[themeIdx]) {
+      return applyColorTint(palette[themeIdx], tint);
     }
   }
   const auto = normalizeHexColor(node.auto);
@@ -2040,15 +2062,18 @@ function applyEdgeBorder(td, edge) {
 
 function applyCellStyle(td, style) {
   if (!style) return;
+  let fillShownColor = null;
   if (cellStyleShowFills && style.hasCustomFill && style.fillColor) {
     td.classList.add("cell-has-fill");
-    // Gdy komórka ma jawny kolor tekstu (i pokazujemy kolory), renderuj tło pełnym
-    // kryciem — to wierna para fg+bg z Excela (np. biały tekst na pełnym kolorze).
-    // Pozostałe wypełnienia zostają subtelne (0.28), żeby nie przytłaczać widoku.
-    // Kolor wybrany ręcznie na pasku formatu (userFill) — pełny, bo o taki prosił user.
-    const strongFill = (cellStyleShowFontColors && style.hasCustomFontColor) || !!style.userFill;
-    const bg = hexToRgba(style.fillColor, strongFill ? 1 : 0.28);
-    if (bg) td.style.background = bg;
+    // Kolor wypełnienia jak w Excelu — PEŁNE krycie (2026-10-31). Dawniej 28% (chyba że był
+    // też kolor tekstu): granat wychodził bladoniebieski, żółty prawie znikał na kremowym tle,
+    // a pliki, w których kolor coś znaczy (statusy, grafiki), traciły sens.
+    const bg = hexToRgba(style.fillColor, 1);
+    if (bg) {
+      td.style.background = bg;
+      td.style.setProperty("--cell-fill", bg); // zaznaczenie kładzie się NA kolor (styles: cell-has-fill)
+      fillShownColor = style.fillColor;
+    }
   }
   if (cellStyleShowFontColors && style.hasCustomFontColor && style.fontColor) {
     // Czerń/biel trzymamy tylko PO TO, by pasowały do własnego tła komórki. Jeśli tło
@@ -2063,6 +2088,9 @@ function applyCellStyle(td, style) {
       else if (isDarkNeutralColor(style.fontColor)) td.classList.add("cell-dark-text");
     }
   }
+  // Tekst „Automatyczny” na wypełnieniu: Excel daje czarny. U nas kolor tekstu idzie z motywu
+  // (w ciemnym jasny) — na jasnym wypełnieniu byłby nieczytelny, więc dobieramy po jasności tła.
+  if (fillShownColor && !td.style.color) td.style.color = isLightColor(fillShownColor) ? "#000000" : "#FFFFFF";
   if (cellStyleShowFonts && style.fontFamily) td.style.fontFamily = style.fontFamily;
   if (cellStyleShowFonts && style.fontScale && Math.abs(style.fontScale - 1) > 0.01) {
     td.style.setProperty("--cell-font-scale", String(Math.round(style.fontScale * 1000) / 1000));
@@ -2507,7 +2535,11 @@ function buildTableRow(ctx, row, rowPos) {
       const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
       if (cf) {
         if (cf.fontColor) { td.style.color = cf.fontColor; if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); else if (isDarkNeutralColor(cf.fontColor)) td.classList.add("cell-dark-text"); }
-        if (cf.fillColor) { td.classList.add("cell-has-fill"); const cbg = hexToRgba(cf.fillColor, cf.fontColor ? 1 : 0.28); if (cbg) td.style.background = cbg; }
+        if (cf.fillColor) {
+          td.classList.add("cell-has-fill");
+          const cbg = hexToRgba(cf.fillColor, 1); // pełne krycie, jak w Excelu (2026-10-31)
+          if (cbg) { td.style.background = cbg; td.style.setProperty("--cell-fill", cbg); if (!cf.fontColor) td.style.color = isLightColor(cf.fillColor) ? "#000000" : "#FFFFFF"; }
+        }
       }
     }
     tr.appendChild(td);

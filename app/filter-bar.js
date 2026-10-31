@@ -153,8 +153,12 @@ function renderActiveFilters() {
   if (!activeFiltersEl) return;
   const snap = lastAppliedFilters;
   const chips = (snap && currentHeaders.length) ? afCollectChips() : [];
-  // Nic nie filtruje ani nie wyróżnia → pasek znika (zero miejsca na ekranie).
-  if (!chips.length || !snap || (!snap.filtering && !snap.marking)) {
+  const filtering = !!(chips.length && snap && (snap.filtering || snap.marking));
+  // sortowanie też jest „stanem widoku” — widać je tu i zdejmuje się je jednym ×
+  const sortText = Array.isArray(multiSortState) && multiSortState.length && currentHeaders.length
+    ? describeViewSort({ sort: multiSortState }) : "";
+  // Nic nie filtruje, nie wyróżnia ani nie sortuje → pasek znika (zero miejsca na ekranie).
+  if (!filtering && !sortText) {
     activeFiltersEl.classList.add("hidden");
     activeFiltersEl.replaceChildren();
     return;
@@ -162,14 +166,34 @@ function renderActiveFilters() {
   activeFiltersEl.setAttribute("aria-label", t("activeFiltersAria"));
   const frag = document.createDocumentFragment();
 
-  const count = document.createElement("span");
-  count.className = "af-count";
-  const loc = typeof currentLang !== "undefined" && currentLang === "en" ? "en-US" : "pl-PL";
-  const fmt = (n) => Number(n).toLocaleString(loc);
-  count.textContent = snap.filtering
-    ? t("activeFiltersShown", { shown: fmt(snap.matched), total: fmt(snap.total) })
-    : t("activeFiltersMarked", { count: fmt(snap.matched), total: fmt(snap.total) });
-  frag.appendChild(count);
+  if (filtering) {
+    const count = document.createElement("span");
+    count.className = "af-count";
+    const loc = typeof currentLang !== "undefined" && currentLang === "en" ? "en-US" : "pl-PL";
+    const fmt = (n) => Number(n).toLocaleString(loc);
+    count.textContent = snap.filtering
+      ? t("activeFiltersShown", { shown: fmt(snap.matched), total: fmt(snap.total) })
+      : t("activeFiltersMarked", { count: fmt(snap.matched), total: fmt(snap.total) });
+    frag.appendChild(count);
+  }
+  if (sortText) {
+    const el = document.createElement("span");
+    el.className = "af-chip af-sort";
+    el.dataset.filter = "sort";
+    const part = document.createElement("span");
+    part.className = "af-part af-label";
+    part.textContent = t("vsSortLabel", { sort: sortText });
+    el.appendChild(part);
+    const x = document.createElement("button");
+    x.type = "button";
+    x.className = "af-remove";
+    x.textContent = "×";
+    x.setAttribute("aria-label", t("resetSortAria"));
+    x.dataset.hint = t("resetSortHint");
+    x.addEventListener("click", () => swbResetSort());
+    el.appendChild(x);
+    frag.appendChild(el);
+  }
 
   chips.forEach((chip) => {
     const el = document.createElement("span");
@@ -211,13 +235,15 @@ function renderActiveFilters() {
     }
   }
 
-  const clearAll = document.createElement("button");
-  clearAll.type = "button";
-  clearAll.className = "af-clear-all";
-  clearAll.textContent = t("activeFiltersClearAll");
-  clearAll.setAttribute("aria-label", t("activeFiltersClearAllAria"));
-  clearAll.addEventListener("click", () => { if (resetFiltersBtn) resetFiltersBtn.click(); });
-  frag.appendChild(clearAll);
+  if (filtering) {
+    const clearAll = document.createElement("button");
+    clearAll.type = "button";
+    clearAll.className = "af-clear-all";
+    clearAll.textContent = t("activeFiltersClearAll");
+    clearAll.setAttribute("aria-label", t("activeFiltersClearAllAria"));
+    clearAll.addEventListener("click", () => { if (resetFiltersBtn) resetFiltersBtn.click(); });
+    frag.appendChild(clearAll);
+  }
 
   activeFiltersEl.replaceChildren(frag);
   activeFiltersEl.classList.remove("hidden");

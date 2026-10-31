@@ -751,7 +751,10 @@ document.addEventListener("keydown", (e) => {
   }
   // Enter lub znak drukowalny na zaznaczonej komórce otwiera edytor (jak w Excelu).
   // Polskie litery idą z AltGr (Windows: Ctrl+Alt) albo z Option (Mac: Alt) — to pisanie, nie skrót.
-  const altLetter = e.key.length === 1 && !e.metaKey
+  // Ctrl+Alt+litera, która NIE dała innego znaku (Ctrl+Alt+R → „r”), to skrót (reset sortowania,
+  // szerokości), nie pisanie — AltGr daje wtedy ą/ś/ł…, czyli coś innego niż sam klawisz.
+  const plainKey = /^Key[A-Z]$/.test(e.code || "") && e.key.toLowerCase() === e.code.slice(3).toLowerCase();
+  const altLetter = e.key.length === 1 && !e.metaKey && !(e.ctrlKey && e.altKey && plainKey)
     && (e.getModifierState?.("AltGraph") || (e.altKey && !e.ctrlKey) || (e.altKey && e.ctrlKey && /\p{L}/u.test(e.key)));
   if (((!meta && !e.altKey) || altLetter) && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
     if (e.key === "Enter") {
@@ -791,6 +794,12 @@ document.addEventListener("keydown", (e) => {
   if (meta && e.shiftKey && e.key.toLowerCase() === "x") {
     e.preventDefault();
     resetFiltersBtn.click();
+  }
+  // Ctrl/⌘+Alt+R — reset sortowania (e.code: na Macu Option zmienia znak, „®”).
+  // Nie S: Ctrl+Alt+S = AltGr+S = „ś” na polskiej klawiaturze w Windows.
+  if (meta && e.altKey && !e.shiftKey && e.code === "KeyR") {
+    e.preventDefault();
+    swbResetSort();
   }
   if (meta && e.altKey && e.key.toLowerCase() === "w") {
     e.preventDefault();

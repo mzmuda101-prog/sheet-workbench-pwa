@@ -8,7 +8,7 @@
 //   4. „Ukryj takie" w innej kolumnie DOKLEJA się przez && (zawężanie jak w Accessie),
 //   5. pasek pokazuje „Widać X z Y" i pigułkę; × zdejmuje filtr, „Wyczyść" zdejmuje wszystko,
 //   6. pusta komórka → „Pokaż tylko puste",
-//   7. Shift+F10 otwiera menu z klawiatury (fokus na 1. pozycji), Esc zamyka i oddaje fokus,
+//   7. Shift+F10 otwiera menu z klawiatury (fokus na 1. pozycji, ↓ = 2.), Esc zamyka i oddaje fokus,
 //   8. przytrzymanie palcem otwiera menu i NIE otwiera edytora komórki (klik połknięty),
 //   9. w konsoli brak błędów.
 //
@@ -102,7 +102,9 @@ async function run() {
       items: [...document.querySelectorAll("#cellMenu .cell-menu-item")].map((b) => b.textContent),
     }));
     report.menu = menu;
-    ok("2. prawy klik otwiera menu z kolumną i wartością", menu.visible && menu.head.includes(c0.value.slice(0, 10)) && menu.items.length === 4 && /notatk|note/i.test(menu.items[3]), menu); // + „Dodaj notatkę” (cell-notes.js)
+    ok("2. prawy klik otwiera menu z kolumną i wartością", menu.visible && menu.head.includes(c0.value.slice(0, 10))
+      // menu jak w Excelu (2026-10-31): Wytnij/Kopiuj/… + „Pokaż tylko takie”/„Ukryj takie” + notatka na końcu
+      && menu.items.includes("Pokaż tylko takie") && menu.items.includes("Ukryj takie") && /notatk|note/i.test(menu.items[menu.items.length - 1]), menu);
 
     // 3. Pokaż tylko takie
     await page.click("#cellMenu .cmi-show");
@@ -173,10 +175,11 @@ async function run() {
     await sleep(200);
     const kb = await page.evaluate(() => ({
       visible: !document.getElementById("cellMenu").classList.contains("hidden"),
-      focused: document.activeElement?.classList?.contains("cmi-show"),
+      // fokus na PIERWSZEJ pozycji menu (jak Shift+F10 w Excelu), ↓ = następna
+      focused: document.activeElement === document.querySelector("#cellMenu .cell-menu-item"),
     }));
     await page.keyboard.press("ArrowDown");
-    const second = await page.evaluate(() => document.activeElement?.classList?.contains("cmi-hide"));
+    const second = await page.evaluate(() => document.activeElement === document.querySelectorAll("#cellMenu .cell-menu-item")[1]);
     await page.keyboard.press("Escape");
     await sleep(150);
     const back = await page.evaluate(() => ({

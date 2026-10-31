@@ -4134,14 +4134,20 @@ if (exportModalEl) {
   exportModalEl.addEventListener("click", (e) => { if (e.target === exportModalEl) closeExportModal(); });
   exportModalEl.addEventListener("keydown", handleExportModalKeydown);
 }
-if (resetSortBtn) {
-  resetSortBtn.addEventListener("click", () => {
-    multiSortState = [];
-    normalizeSortState();
-    applyCurrentSort();
-    toast(t("defaultSortRestored"), "info");
-  });
+// Reset sortowania = kolejność wierszy z pliku. Jedno miejsce dla przycisku w panelu,
+// chipa „sortowanie: … ×” w pasku filtrów i skrótu Ctrl/⌘+Alt+R.
+function swbResetSort() {
+  if (!Array.isArray(multiSortState) || !multiSortState.length) {
+    toast(t("sortNothingToReset"), "info");
+    return false;
+  }
+  multiSortState = [];
+  normalizeSortState();
+  applyCurrentSort();
+  toast(t("defaultSortRestored"), "info");
+  return true;
 }
+if (resetSortBtn) resetSortBtn.addEventListener("click", () => swbResetSort());
 saveBtn.addEventListener("click", () => {
   if (!canFSA) {
     toast(t("webSaveInfo"), "info");

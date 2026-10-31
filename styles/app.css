@@ -1793,8 +1793,11 @@ details.panel[open] > summary {
 /* ===================================================
    LAYOUT HELPERS
    =================================================== */
-.stack { display: grid; gap: 10px; min-width: 0; }
-.row   { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; min-width: 0; }
+/* minmax(0, …), nie auto/1fr: kolumna „auto” rośnie do najdłuższego tekstu w środku (długa
+   nazwa pliku rozpychała całą sekcję panelu poza jego krawędź — iPad, 2026-10-31). */
+.stack { display: grid; gap: 10px; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.row   { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-width: 0; }
+.stack > *, .row > * { min-width: 0; }
 .divider { height: 1px; background: var(--border-subtle); margin: 2px 0; }
 
 .insights-block {
@@ -2614,6 +2617,7 @@ details.panel[open] > summary {
 }
 
 .file-name {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -4227,15 +4231,17 @@ tbody tr.row-focused td {
 /* Pod zaznaczeniem wiersza tło fill jest zakryte zielenią zaznaczenia — wtedy jasny/biały
    tekst komórki zamieniamy na czytelny var(--ink) (ciemny w jasnym motywie, jasny w ciemnym),
    żeby zaznaczony wiersz pozostał widoczny ORAZ tekst nie znikał. */
-tbody tr.row-focused td.cell-light-text,
-tbody td.cell-in-range.cell-light-text,
-tbody td.cell-selected.cell-light-text,
-tbody td.cell-active.cell-light-text { color: var(--ink) !important; }
+/* (komórki Z wypełnieniem pomijamy: ich kolor zostaje pod półprzezroczystym zaznaczeniem,
+   więc tekst z pliku dalej jest czytelny — zob. „Wypełnienia z pliku pod zaznaczeniem”) */
+tbody tr.row-focused td.cell-light-text:not(.cell-has-fill),
+tbody td.cell-in-range.cell-light-text:not(.cell-has-fill),
+tbody td.cell-selected.cell-light-text:not(.cell-has-fill),
+tbody td.cell-active.cell-light-text:not(.cell-has-fill) { color: var(--ink) !important; }
 /* DARK theme: tło zaznaczenia jest ciemne → czarny/czarniawy tekst zamieniamy na jasny var(--ink). */
-[data-theme="dark"] tbody tr.row-focused td.cell-dark-text,
-[data-theme="dark"] tbody td.cell-in-range.cell-dark-text,
-[data-theme="dark"] tbody td.cell-selected.cell-dark-text,
-[data-theme="dark"] tbody td.cell-active.cell-dark-text { color: var(--ink) !important; }
+[data-theme="dark"] tbody tr.row-focused td.cell-dark-text:not(.cell-has-fill),
+[data-theme="dark"] tbody td.cell-in-range.cell-dark-text:not(.cell-has-fill),
+[data-theme="dark"] tbody td.cell-selected.cell-dark-text:not(.cell-has-fill),
+[data-theme="dark"] tbody td.cell-active.cell-dark-text:not(.cell-has-fill) { color: var(--ink) !important; }
 
 /* Uchwyt wypełniania (autofill.js) — kwadracik na prawym dolnym narożniku ramki
    zaznaczenia, wystający lekko na zewnątrz jak w Excelu. Leży w #tableWrap (nie w <td>,
@@ -7611,9 +7617,10 @@ body.tr-active .toast-container {
 }
 /* Nakładka (<1024 px): przy lżejszym rozmyciu między kartami panelu prześwitywała tabela,
    a przyciski-duchy („Reset filtrów”) leżały wprost na jej tekście. Panel-nakładka dostaje
-   więc własne, prawie pełne tło — pod nim zostaje lekko rozmyta tabela. */
+   więc własne, pełne tło. */
 :root:not(.sidebar-docked) .sidebar {
-  background: color-mix(in srgb, var(--bg) 96%, transparent);
+  /* pełne krycie (2026-10-31): przy 96% tekst tabeli dalej prześwitywał między kartami */
+  background: var(--bg);
   border-radius: 20px;
   padding: 8px;
   box-shadow: 0 18px 44px rgba(18, 30, 23, 0.18);
@@ -8641,7 +8648,7 @@ button.fx-label:focus-visible { background: var(--accent-light); color: var(--ac
 /* panel wysunięty z paska (nieprzypięty): nad tabelą, z własnym tłem — tabela się nie przesuwa */
 :root.sidebar-docked:not(.panel-pinned) .sidebar {
   z-index: 45;
-  background: color-mix(in srgb, var(--bg) 97%, transparent);
+  background: var(--bg); /* pełne krycie — przy 97% prześwitywała tabela (iPad, 2026-10-31) */
   border: 1px solid var(--border);
   border-radius: 18px;
   padding: 8px;
@@ -9163,4 +9170,25 @@ html:not(.force-glass) .sidebar details.panel {
   /* symetrycznie — środek zostaje na swojej komórce; zajęty bok obcina clip-path */
   margin-left: calc(0px - max(var(--spill-l, 0px), var(--spill-r, 0px)));
   margin-right: calc(0px - max(var(--spill-l, 0px), var(--spill-r, 0px)));
+}
+
+/* Wypełnienia z pliku pod zaznaczeniem (2026-10-31). Wypełnienie ma pełne krycie (jak w Excelu),
+   a zaznaczenie / wiersz fokusu / trafienie szukania kładą się na nim PÓŁPRZEZROCZYSTĄ
+   warstwą — kolor komórki dalej widać, jak w Excelu, zamiast znikać pod tłem zaznaczenia.
+   --cell-fill ustawia applyCellStyle (table.js). Tekst zostaje w kolorze z pliku. */
+:is(tbody tr, thead tr.pre-row) td.cell-has-fill.cell-selected,
+:is(tbody tr, thead tr.pre-row) td.cell-has-fill.cell-active {
+  background: linear-gradient(color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 22%, transparent)), var(--cell-fill, transparent) !important;
+}
+:is(tbody tr, thead tr.pre-row) td.cell-has-fill.cell-in-range {
+  background: linear-gradient(color-mix(in srgb, var(--accent) 18%, transparent), color-mix(in srgb, var(--accent) 18%, transparent)), var(--cell-fill, transparent) !important;
+}
+tbody tr.row-focused td.cell-has-fill {
+  background: linear-gradient(color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--accent) 16%, transparent)), var(--cell-fill, transparent) !important;
+}
+tbody tr.row-matched td.cell-has-fill {
+  background: linear-gradient(color-mix(in srgb, var(--accent-light) 45%, transparent), color-mix(in srgb, var(--accent-light) 45%, transparent)), var(--cell-fill, transparent) !important;
+}
+tbody.has-cell-range tr.row-focused td.cell-has-fill:not(.cell-in-range) {
+  background: var(--cell-fill, transparent) !important;
 }

@@ -5,7 +5,7 @@
 //   2. po zapisie pasek pokazuje „★ nazwa” zamiast przycisku,
 //   3. po „Wyczyść” puste pole szukania pokazuje sekcję „Zapisane widoki” z opisem,
 //   4. klik w widok przywraca tę samą liczbę wierszy i to samo sortowanie,
-//   5. samo sortowanie (bez filtra) da się zapisać z listy („＋ Zapisz bieżący widok”),
+//   5. samo sortowanie (bez filtra) da się zapisać — „☆ Zapisz widok” przy chipie sortowania na pasku,
 //   6. widok z kolumną, której nie ma w arkuszu, nie włącza się i NIC nie zmienia (powód w opisie),
 //   7. × usuwa widok, a widoki przeżywają przeładowanie strony,
 //   8. w konsoli brak błędów.
@@ -103,9 +103,14 @@ async function run() {
   await page.evaluate(() => quickSearchEl.blur());
   await page.click("#quickSearch");
   await sleep(400);
-  ok("lista proponuje „＋ Zapisz bieżący widok”", await page.locator("#qsLiveResults .qs-view-save").isVisible());
+  // od 2026-10-31 samo sortowanie też pokazuje pasek (chip „sortowanie: … ×”), a z nim „☆ Zapisz widok”
+  // — lista szukania wtedy go nie dubluje (qs-history.js: canSave tylko bez paska)
+  const barSave = page.locator("#activeFilters .af-save-view");
+  ok("samo sortowanie: „☆ Zapisz widok” na pasku przy chipie sortowania",
+    (await barSave.isVisible()) && (await page.locator('#activeFilters .af-chip[data-filter="sort"]').isVisible()));
+  await page.evaluate(() => quickSearchEl.blur());
   promptAnswer = "Alfabetycznie";
-  await page.click("#qsLiveResults .qs-view-save");
+  await barSave.click();
   await sleep(300);
   const two = await page.evaluate(() => JSON.parse(localStorage.getItem("swb-saved-views-v1") || "[]").map((v) => v.name));
   ok("zapisane samo sortowanie (nowy widok na górze)", JSON.stringify(two) === JSON.stringify(["Alfabetycznie", "Projekt wg roku"]), two);
