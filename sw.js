@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20261031-07";
+const CACHE_VERSION = "20261031-08";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -64,6 +64,7 @@ const SHELL_ASSETS = [
   `./app/debug-loaders.js?v=${ASSET_V}`,
   `./app/build-rows-core.js?v=${ASSET_V}`,
   `./app/build-rows-worker.js?v=${ASSET_V}`,
+  `./app/cell-spill.js?v=${ASSET_V}`,
   `./app/launch-files.js?v=${ASSET_V}`,
   `./app/bootstrap.js?v=${ASSET_V}`,
   "./assets/images/favicon.png?v=20260610-05",

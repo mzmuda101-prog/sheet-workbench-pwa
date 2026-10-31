@@ -2335,6 +2335,7 @@ function invalidateRowNodeCache() {
 // Odświeża w gotowym wierszu TYLKO to, co zmienia się między renderami.
 function refreshReusedRow(tr, row, rowPos, model, useExcelLayout, pulseMatches) {
   const rowKey = tr.dataset.rowKey;
+  tr._swbRow = row;
   const classes = [];
   if (focusedCellState && focusedCellState.rowKey === rowKey
     && !isSingleCellSelection() && !isCellSelectionMode()) classes.push("row-focused");
@@ -2425,6 +2426,7 @@ function buildTableRow(ctx, row, rowPos) {
   }
   const tr = document.createElement("tr");
   tr.dataset.rowKey = reuseKey;
+  tr._swbRow = row; // cell-spill.js: dane wiersza bez szukania po kluczu
   if (focusedCellState && focusedCellState.rowKey === tr.dataset.rowKey
     && !isSingleCellSelection() && !isCellSelectionMode()) tr.classList.add("row-focused");
   if (cellStyleShowSubheaders && row.isSubheader) tr.classList.add("row-subheader");
@@ -2627,6 +2629,7 @@ function appendPreHeaderRows(model, headers) {
     tr.className = "pre-row";
     tr.dataset.rowIndex = String(p.rowIndex0);
     tr.dataset.rowKey = getRowSelectionKey(p); // „pre:N” — ta sama siatka zaznaczenia co dane
+    tr._swbRow = p; // tekst wylewa się na puste komórki obok — cell-spill.js, jak w wierszach danych
     const head = document.createElement("td");
     head.className = "row-head";
     head.textContent = String(p.rowIndex0 + 1);
@@ -2647,12 +2650,6 @@ function appendPreHeaderRows(model, headers) {
         if (merge.colspan > 1) td.colSpan = merge.colspan;
         if (merge.rowspan > 1) td.rowSpan = merge.rowspan;
         td.classList.add("cell-merged");
-      } else if (text && typeof p.values[i] === "string") {
-        // Tekst „wylewa się” na puste komórki obok — jak w Excelu (liczby nie).
-        const next = i + 1;
-        if (next < headers.length && !p.display[next] && !covered.has(`${p.rowIndex0}:${next}`) && !anchors.has(`${p.rowIndex0}:${next}`)) {
-          td.classList.add("pre-spill");
-        }
       }
       tr.appendChild(td);
     }
@@ -2853,6 +2850,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     if (typeof updateScrollTopFab === "function") updateScrollTopFab();
     syncHorizontalScrollbar();
   });
+  if (typeof swbSpill !== "undefined") swbSpill.invalidate(); // tekst na puste komórki obok (nowy układ kolumn)
 }
 
 function buildRows(sheet, headerRow, wb) {

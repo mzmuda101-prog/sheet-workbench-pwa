@@ -236,6 +236,14 @@ function getTooltipText(cell) {
 
 function isCellTextTruncated(cell) {
   if (!cell) return false;
+  // tekst wylany na puste komórki obok (cell-spill.js): ucięty dopiero poza nimi
+  if (cell._swbSpill && typeof swbSpill !== "undefined") {
+    const range = document.createRange();
+    range.selectNodeContents(cell);
+    const cs = getComputedStyle(cell);
+    const inner = cell.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    return range.getBoundingClientRect().width > inner + swbSpill.visibleWidth(cell) + 1;
+  }
   return cell.scrollWidth - cell.clientWidth > 1;
 }
 

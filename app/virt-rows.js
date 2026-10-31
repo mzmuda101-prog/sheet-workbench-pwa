@@ -182,8 +182,8 @@ const swbVirt = (() => {
       const frag = document.createDocumentFragment();
       const nodes = [];
       for (let i = ns; i <= ne; i++) { const tr = buildRow(i); nodes.push(tr); frag.appendChild(tr); added.push(i); }
-      if (st.bottomSpacer.isConnected) tbodyEl.insertBefore(frag, st.bottomSpacer);
-      else tbodyEl.appendChild(frag);
+      if (st.bottomSpacer.isConnected) { tbodyEl.insertBefore(frag, st.bottomSpacer); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
+      else { tbodyEl.appendChild(frag); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
       st.nodes = nodes;
     } else {
       // zdejmij to, co wyjeżdża (okna się nakładają, więc coś zawsze zostaje)
@@ -194,7 +194,7 @@ const swbVirt = (() => {
         const frag = document.createDocumentFragment();
         const fresh = [];
         for (let i = ns; i < st.s; i++) { const tr = buildRow(i); fresh.push(tr); frag.appendChild(tr); added.push(i); }
-        tbodyEl.insertBefore(frag, st.nodes[0]);
+        { tbodyEl.insertBefore(frag, st.nodes[0]); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
         st.nodes = fresh.concat(st.nodes);
         st.s = ns;
       }
@@ -203,8 +203,8 @@ const swbVirt = (() => {
       if (ne > curE) {
         const frag = document.createDocumentFragment();
         for (let i = curE + 1; i <= ne; i++) { const tr = buildRow(i); st.nodes.push(tr); frag.appendChild(tr); added.push(i); }
-        if (st.bottomSpacer.isConnected) tbodyEl.insertBefore(frag, st.bottomSpacer);
-        else tbodyEl.appendChild(frag);
+        if (st.bottomSpacer.isConnected) { tbodyEl.insertBefore(frag, st.bottomSpacer); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
+        else { tbodyEl.appendChild(frag); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
       }
     }
     st.s = ns; st.e = ne;

@@ -8766,8 +8766,6 @@ thead tr.pre-row > td.row-head {
   color: var(--table-num);
   padding: calc(var(--cell-pad-y, 7px) * var(--table-zoom)) calc(6px * var(--table-zoom));
 }
-/* tekst wylewa się na puste komórki obok, jak w Excelu */
-thead tr.pre-row > td.pre-spill { overflow: visible; text-overflow: clip; }
 /* ostatni wiersz nad nagłówkiem: wyraźna granica „tu zaczyna się tabela” */
 thead tr.pre-row + tr.header-row th { border-top: 1px solid var(--border); }
 .table-wrap.freeze-first-col thead tr.pre-row > td.row-head,
@@ -9137,4 +9135,32 @@ html:not(.force-glass) .sidebar details.panel {
 @media (pointer: coarse) {
   .af-view { padding: 5px 11px; font-size: 12.5px; }
   .af-save-view { min-height: 32px; font-size: 12.5px; }
+}
+
+/* Tekst wylewa się na puste komórki obok, jak w Excelu (cell-spill.js). clip-path przycina
+   do pustych sąsiadów (--spill-l/--spill-r) i robi z komórki osobną warstwę malowaną po
+   tłach sąsiadów — tekst leży na ich wypełnieniu/zaznaczeniu, jak w Excelu. */
+#dataTable td.cell-spill {
+  overflow: visible;
+  text-overflow: clip;
+  /* nad pozycjonowanymi sąsiadami (aktywna komórka z uchwytem, notatka) — inaczej ich
+     zaznaczenie przygaszało wylany tekst; pod zamrożoną kolumną (4) i nagłówkami (5+) */
+  position: relative;
+  z-index: 1;
+  clip-path: inset(0 calc(0px - var(--spill-r, 0px)) 0 calc(0px - var(--spill-l, 0px)));
+}
+/* do prawej / wyśrodkowane: flex przy za długim tekście wystaje na stronę POCZĄTKU
+   (do prawej → widać koniec tekstu) albo równo na obie (środek), czego zwykły tekst nie umie */
+#dataTable td.cell-spill > .spill-t {
+  display: flex;
+  white-space: nowrap;
+  pointer-events: none; /* wylany tekst nie zabiera kliknięć pustym komórkom obok */
+  margin-left: calc(0px - var(--spill-l, 0px));
+}
+#dataTable td.spill-right > .spill-t { justify-content: flex-end; }
+#dataTable td.spill-center > .spill-t {
+  justify-content: center;
+  /* symetrycznie — środek zostaje na swojej komórce; zajęty bok obcina clip-path */
+  margin-left: calc(0px - max(var(--spill-l, 0px), var(--spill-r, 0px)));
+  margin-right: calc(0px - max(var(--spill-l, 0px), var(--spill-r, 0px)));
 }

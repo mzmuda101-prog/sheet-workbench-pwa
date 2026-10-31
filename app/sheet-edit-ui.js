@@ -517,6 +517,7 @@ var sheetEditUi = (() => {
     if (td) {
       td.textContent = typeof getDisplayValue === "function" ? getDisplayValue(a.row, a.col) : String(a.row.display?.[a.col] ?? "");
       if (typeof flashCellSaved === "function") flashCellSaved(td);
+      if (typeof swbSpill !== "undefined") swbSpill.refreshRow(td.parentElement);
     }
     if (typeof rememberColumnValue === "function") rememberColumnValue(a.col, a.row.values?.[a.col]);
     afterCommitMove(move);

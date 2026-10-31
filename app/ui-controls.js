@@ -5028,6 +5028,7 @@ function openCellEditor(td, options = {}) {
       // nad nagłówkiem (collectPreHeaderRows), więc przeliczenie odświeża już nowy obiekt.
       const freshRow = getRowByKey(rowKey) || row;
       td.textContent = Array.isArray(freshRow.display) ? freshRow.display[colIndex0] : "";
+      if (typeof swbSpill !== "undefined") swbSpill.refreshRow(td.parentElement);
       setDirtyState(true);
       flashCellSaved(td);
       if (move) {
@@ -5063,6 +5064,7 @@ function openCellEditor(td, options = {}) {
     const display = Array.isArray(row.display) ? row.display[colIndex0] : (newVal == null ? "" : toDisplay(newVal));
     close();
     td.textContent = display;
+    if (typeof swbSpill !== "undefined") swbSpill.refreshRow(td.parentElement);
     setDirtyState(true);
     flashCellSaved(td);
     if (move) {
@@ -5108,6 +5110,7 @@ function openCellEditor(td, options = {}) {
       e.preventDefault();
       close();
       td.textContent = prevText;
+      if (typeof swbSpill !== "undefined") swbSpill.refreshRow(td.parentElement);
     }
   });
   input.addEventListener("blur", () => {
