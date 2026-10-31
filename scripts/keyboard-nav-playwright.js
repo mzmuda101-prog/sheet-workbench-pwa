@@ -649,6 +649,13 @@ async function run() {
   if (TOUCH) await page.tap('#dataTable tbody tr[data-row-key] td[data-col-index="2"]');
   else await page.click('#dataTable tbody tr[data-row-key] td[data-col-index="2"]');
   await sleep(250);
+  if (TOUCH) {
+    // palec w trybie Edycja zaznacza KOMÓRKĘ (2026-10-31, touch-range-playwright.js) —
+    // ta sekcja sprawdza wygląd trybu wiersza, więc ustawiamy go jawnie
+    const poTapie = await page.evaluate(() => selectionKind);
+    check("tap palcem w Edycji zaznacza komórkę", poTapie === "cell", poTapie);
+    await page.evaluate(() => setSelectionKind("row"));
+  }
   await page.keyboard.press("ArrowDown");
   await sleep(300);
   const wWierszu = await wyglad();

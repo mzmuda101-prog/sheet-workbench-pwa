@@ -383,6 +383,14 @@ function swbFillCopy(direction) {
 // gdy tabela zmieni rozmiar (szerokość kolumny, wysokość wiersza, zoom). Wyjątek: róg
 // w ZAMROŻONEJ kolumnie (sticky) — tam uchwyt zostaje w komórce (klasa is-inset), bo
 // w #tableWrap odjeżdżałby od niej przy przewijaniu w bok.
+//
+// PALEC: ten sam róg ROZCIĄGA ZAZNACZENIE (w każdą stronę, jak kółka w Arkuszach Google /
+// Excelu na iPhonie), a niczego nie wypełnia. Dwa filmy z iPhone'a (2026-10-31): (1) palec,
+// który chciał przesunąć tabelę w bok, złapał uchwyt i seria dat nadpisała formuły w kolejnych
+// kolumnach; (2) nie dało się w ogóle zaznaczyć zakresu — Shift+klik nie istnieje na telefonie,
+// a róg był wyłącznie wypełnianiem. Wypełnianie na dotyku = przytrzymanie zaznaczenia → menu
+// („Wypełnij serią / w dół / w prawo”, filter-bar.js) — świadomy wybór zamiast gestu, który
+// łatwo zrobić niechcący. Mysz i rysik zostają przy wypełnianiu jak w Excelu.
 
 const swbFillHandle = (() => {
   if (typeof document === "undefined" || typeof tbodyEl === "undefined" || !tbodyEl) return { sync() {} };
@@ -393,6 +401,7 @@ const swbFillHandle = (() => {
   let drag = null;
   let host = null;      // komórka-róg, przy której stoi uchwyt
   let placeFrame = 0;
+  let lastPointerType = "";
 
   function sourceRect() {
     const rect = typeof rangeCellsToCopy === "function" ? rangeCellsToCopy() : null;
@@ -459,17 +468,24 @@ const swbFillHandle = (() => {
 
   function cellAt(x, y) {
     const hit = document.elementFromPoint(x, y);
-    const td = hit && hit.closest ? hit.closest("#dataTable tbody td[data-col-index]") : null;
+    // dane albo wiersz nad nagłówkiem (oba mają tr[data-row-key]) — indeks w widoku zaznaczenia
+    const td = hit && hit.closest ? hit.closest("#dataTable tr[data-row-key] > td[data-col-index]") : null;
     if (!td) return null;
     const tr = td.parentElement;
-    const model = currentDisplayModel;
-    const r = typeof swbVirt !== "undefined" && swbVirt.isActive() ? swbVirt.indexOfKey(tr.dataset.rowKey)
-      : model.rows.findIndex((row) => getRowSelectionKey(row) === tr.dataset.rowKey);
+    const r = swbSelIndexOfKey(drag ? drag.rect.model : swbSelView(), tr.dataset.rowKey);
     const c = parseInt(td.dataset.colIndex, 10);
     return r >= 0 && Number.isFinite(c) ? { r, c } : null;
   }
 
   function preview(target) {
+    if (drag.extend) {
+      // rozciąganie zaznaczenia: ruchomy koniec idzie za palcem w dowolną stronę
+      if (target && (target.r !== drag.end?.r || target.c !== drag.end?.c)) {
+        drag.end = target;
+        setSelectedCell(getRowSelectionKey(drag.rect.model.rows[target.r]), target.c, { scroll: false });
+      }
+      return;
+    }
     const { rect } = drag;
     let dir = null;
     let end = null;
@@ -496,24 +512,34 @@ const swbFillHandle = (() => {
     if (y > box.bottom - 28) dy = 18;
     else if (y < box.top + 40) dy = -18;
     if (x > box.right - 28) dx = 18;
+    else if (drag.extend && x < box.left + 28) dx = -18; // zaznaczenie rośnie też w lewo
     if (dy || dx) {
       tableWrapEl.scrollBy(dx, dy);
-      preview(cellAt(Math.min(x, box.right - 4), Math.min(Math.max(y, box.top + 2), box.bottom - 4)));
+      preview(cellAt(Math.min(Math.max(x, box.left + 4), box.right - 4), Math.min(Math.max(y, box.top + 2), box.bottom - 4)));
     }
     drag.raf = requestAnimationFrame(autoScroll);
   }
 
   el.addEventListener("pointerdown", (e) => {
+    lastPointerType = e.pointerType || "";
     if (e.button !== 0 || !allowed()) return;
     const rect = sourceRect();
     if (!rect) return;
     e.preventDefault();
     e.stopPropagation();
-    // kotwica w lewym górnym rogu źródła, ruchomy koniec = podgląd celu
     const model = rect.model;
-    setFocusedCell(getRowSelectionKey(model.rows[rect.rowStart]), rect.colMin, { scroll: false });
-    setSelectedCell(getRowSelectionKey(model.rows[rect.rowEnd]), rect.colMax, { scroll: false });
-    drag = { rect: { ...rect }, dir: null, end: null, last: { x: e.clientX, y: e.clientY }, id: e.pointerId, raf: 0 };
+    const extend = e.pointerType === "touch";
+    if (extend) {
+      // kotwica zostaje tam, gdzie była (aktywna komórka); zakres = od niej do palca
+      setSelectionKind("cell");
+      if (!focusedCellState) setFocusedCell(getRowSelectionKey(model.rows[rect.rowStart]), rect.colMin, { scroll: false });
+      swbTouchFillOrigin = swbRectKeys(rect);
+    } else {
+      // kotwica w lewym górnym rogu źródła, ruchomy koniec = podgląd celu
+      setFocusedCell(getRowSelectionKey(model.rows[rect.rowStart]), rect.colMin, { scroll: false });
+      setSelectedCell(getRowSelectionKey(model.rows[rect.rowEnd]), rect.colMax, { scroll: false });
+    }
+    drag = { rect: { ...rect }, extend, dir: null, end: null, last: { x: e.clientX, y: e.clientY }, id: e.pointerId, raf: 0 };
     // Nasłuch na oknie, nie na uchwycie: przy przewijaniu (nowy silnik tabeli) wiersz
     // z uchwytem może zniknąć z DOM, a razem z nim zdarzenia wysyłane do uchwytu.
     window.addEventListener("pointermove", onMove, true);
@@ -540,6 +566,11 @@ const swbFillHandle = (() => {
     window.removeEventListener("pointercancel", onCancel, true);
     document.documentElement.classList.remove("swb-filling");
     const model = d.rect.model;
+    if (d.extend) {
+      sync();
+      if (!cancelled && d.end) swbTouchRangeHintOnce();
+      return;
+    }
     if (cancelled || !d.dir || !swbFillCanEdit()) {
       setSelectedCell(getRowSelectionKey(model.rows[d.rect.rowEnd]), d.rect.colMax, { scroll: false });
       sync();
@@ -548,7 +579,7 @@ const swbFillHandle = (() => {
     const invert = !!(e && (e.ctrlKey || e.altKey || e.metaKey));
     swbFillRange(model, d.rect, d.dir, d.end, { mode: "series", invert });
     // zaznaczony zostaje cały wypełniony zakres, jak w Excelu
-    const m = currentDisplayModel;
+    const m = swbSelView();
     const endRow = d.dir === "down" ? d.end : d.rect.rowEnd;
     const endCol = d.dir === "right" ? d.end : d.rect.colMax;
     if (m && m.rows[d.rect.rowStart] && m.rows[endRow]) {
@@ -561,13 +592,15 @@ const swbFillHandle = (() => {
   el.addEventListener("dblclick", (e) => {
     e.preventDefault();
     e.stopPropagation();
+    // dwutap palcem to nie „wypełnij do końca danych” — na dotyku róg tylko zaznacza
+    if (lastPointerType === "touch") return;
     if (!swbFillCanEdit()) return;
     const rect = sourceRect();
     if (!rect) return;
     const end = swbFillDownLimit(rect);
     if (end <= rect.rowEnd) { toast(t("fillNoNeighbor"), "info"); return; }
     swbFillRange(rect.model, rect, "down", end, { mode: "series" });
-    const m = currentDisplayModel;
+    const m = swbSelView();
     setFocusedCell(getRowSelectionKey(m.rows[rect.rowStart]), rect.colMin, { scroll: false, keepSelection: true });
     setSelectedCell(getRowSelectionKey(m.rows[end]), rect.colMax, { scroll: true });
     sync();
@@ -578,6 +611,62 @@ const swbFillHandle = (() => {
 
   return { sync, get dragging() { return !!drag; } };
 })();
+
+// ── Wypełnianie zaznaczenia z menu (dotyk) ───────────────────────────────────────
+// Zaznaczenie sprzed rozciągnięcia palcem — to ono jest „źródłem” serii, jak przy
+// przeciąganiu uchwytu myszą (np. 1, 2 zaznaczone i rozciągnięte w dół → 3, 4, 5…).
+// Trzymane po kluczach wierszy, bo model widoku podmienia się przy każdym renderze.
+let swbTouchFillOrigin = null; // { rowStartKey, rowEndKey, colMin, colMax }
+
+function swbRectKeys(rect) {
+  return {
+    rowStartKey: getRowSelectionKey(rect.model.rows[rect.rowStart]),
+    rowEndKey: getRowSelectionKey(rect.model.rows[rect.rowEnd]),
+    colMin: rect.colMin,
+    colMax: rect.colMax,
+  };
+}
+
+// Źródło i kierunek serii dla zaznaczonego zakresu: zapamiętany początek, gdy zakres jest
+// jego przedłużeniem w dół albo w prawo; inaczej pierwszy wiersz (zakres wysoki) albo
+// pierwsza kolumna (jeden wiersz) — jak „Wypełnij → Seria” w Excelu.
+function swbFillSeriesPlan(rect) {
+  if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) return null;
+  const o = swbTouchFillOrigin;
+  if (o) {
+    const idx = (key) => rect.model.rows.findIndex((row) => getRowSelectionKey(row) === key);
+    const rs = idx(o.rowStartKey);
+    const re = idx(o.rowEndKey);
+    const src = { rowStart: rs, rowEnd: re, colMin: o.colMin, colMax: o.colMax };
+    if (rs === rect.rowStart && o.colMin === rect.colMin && re >= rs) {
+      if (o.colMax === rect.colMax && re < rect.rowEnd) return { src, dir: "down", end: rect.rowEnd };
+      if (re === rect.rowEnd && o.colMax < rect.colMax) return { src, dir: "right", end: rect.colMax };
+    }
+  }
+  if (rect.rowCount > 1) return { src: { rowStart: rect.rowStart, rowEnd: rect.rowStart, colMin: rect.colMin, colMax: rect.colMax }, dir: "down", end: rect.rowEnd };
+  return { src: { rowStart: rect.rowStart, rowEnd: rect.rowEnd, colMin: rect.colMin, colMax: rect.colMin }, dir: "right", end: rect.colMax };
+}
+
+function swbFillSeriesSelection() {
+  if (!swbFillCanEdit()) return 0;
+  const rect = typeof getSelectionRectangle === "function" ? getSelectionRectangle() : null;
+  const plan = swbFillSeriesPlan(rect);
+  if (!plan) { toast(t("fillNeedRange"), "info"); return 0; }
+  const n = swbFillRange(rect.model, plan.src, plan.dir, plan.end, { mode: "series" });
+  swbTouchFillOrigin = null;
+  return n;
+}
+
+// Jednorazowa podpowiedź po pierwszym rozciągnięciu palcem: bez niej nikt nie zgadnie,
+// że wypełnianie przeszło do menu przytrzymania.
+const SWB_TOUCH_RANGE_HINT_KEY = "swb-touch-range-hint-v1";
+function swbTouchRangeHintOnce() {
+  try {
+    if (localStorage.getItem(SWB_TOUCH_RANGE_HINT_KEY)) return;
+    localStorage.setItem(SWB_TOUCH_RANGE_HINT_KEY, "1");
+  } catch { return; }
+  toast(t("touchRangeHint"), "info");
+}
 
 // Dwuklik uchwytu: do ostatniego wiersza ciągłych danych w kolumnie obok (lewej, a gdy
 // pusta — prawej), jak w Excelu.

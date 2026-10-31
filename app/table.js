@@ -112,6 +112,7 @@ function buildLongViewModel() {
 
 function getRowSelectionKey(row) {
   if (!row) return "";
+  if (row.isPreRow) return `pre:${row.rowIndex0}`;
   if (row.isLongViewRow) {
     return `long:${row.sourceRowIndex0 ?? row.rowIndex0}:${row.sourceBlockIndex ?? 0}`;
   }
@@ -151,16 +152,59 @@ function updateTableStatus(model) {
   setStatus(t("statusTableRows", { ...parts, focused: focusedSuffix }), { pulseKey: t("statusTableRows", { ...parts, focused: "" }) });
 }
 
+// ── Wiersze nad nagłówkiem W MODELU ZAZNACZENIA ────────────────────────────────
+// Tytuł, KPI, opis z pliku (wiersze 1…nagłówek−1, appendPreHeaderRows) to zwykłe komórki
+// arkusza, ale dawniej miały WŁASNE, osobne zaznaczenie (klasa pre-active) — więc
+// formatowanie, strzałki, Delete, pisanie, kopiuj/wklej, menu, zakresy i uchwyt ich nie
+// widziały, a działał tylko dwuklik (zgłoszenie 2026-10-31). Teraz to wiersze z kluczem
+// „pre:N” na początku LISTY ZAZNACZENIA: selection view = [...nad nagłówkiem, ...dane].
+// Filtry, sortowanie, analizy i liczniki dalej widzą wyłącznie currentDisplayModel.rows —
+// widok zaznaczenia dotyczy tylko tego, po czym chodzi kursor.
+let _selViewCache = { model: null, rows: null, n: -1, pre: null, view: null };
+function swbSelPreRows(model) {
+  if (!model || model.mode !== "wide" || !Array.isArray(model.headers) || !theadEl || !theadEl.querySelector("tr.pre-row")) return [];
+  return collectPreHeaderRows(model.headers.length);
+}
+function swbSelView(model = currentDisplayModel) {
+  if (!model || !Array.isArray(model.rows)) return model;
+  if (model.base) return model; // już jest widokiem
+  const pre = swbSelPreRows(model);
+  if (!pre.length) return model;
+  const c = _selViewCache;
+  if (c.model === model && c.rows === model.rows && c.n === model.rows.length && c.pre === pre) return c.view;
+  const view = { ...model, rows: pre.concat(model.rows), base: model, preCount: pre.length };
+  _selViewCache = { model, rows: model.rows, n: model.rows.length, pre, view };
+  return view;
+}
+// Pozycja wiersza w widoku zaznaczenia (nowy silnik tabeli zna indeksy bez szukania).
+function swbSelIndexOfKey(view, key) {
+  if (!view || !key || !Array.isArray(view.rows)) return -1;
+  const pre = view.preCount || 0;
+  if (key.startsWith("pre:")) {
+    for (let i = 0; i < pre; i++) if (getRowSelectionKey(view.rows[i]) === key) return i;
+    return -1;
+  }
+  const base = view.base || view;
+  if (typeof swbVirt !== "undefined" && swbVirt.isActive() && base === currentDisplayModel) {
+    const r = swbVirt.indexOfKey(key);
+    return r < 0 ? -1 : r + pre;
+  }
+  return view.rows.findIndex((row) => getRowSelectionKey(row) === key);
+}
+const isPreRowKey = (key) => typeof key === "string" && key.startsWith("pre:");
+
+// Komórki siatki leżą w <tbody> ORAZ w wierszach nad nagłówkiem (<thead> tr.pre-row) —
+// oba mają tr[data-row-key], wiersze nagłówka i liter kolumn go nie mają.
 function findCellElement(cellState) {
   if (!cellState) return null;
-  return tbodyEl.querySelector(
+  return tableEl.querySelector(
     `tr[data-row-key="${CSS.escape(cellState.rowKey)}"] td[data-col-index="${cellState.colIndex0}"]`
   );
 }
 
 function findFocusedRowElement() {
   if (!focusedCellState) return null;
-  return tbodyEl.querySelector(`tr[data-row-key="${CSS.escape(focusedCellState.rowKey)}"]`);
+  return tableEl.querySelector(`tr[data-row-key="${CSS.escape(focusedCellState.rowKey)}"]`);
 }
 
 // Czy zaznaczona jest dokładnie jedna komórka (zakres 1×1) — np. po Shift+kliku
@@ -191,7 +235,7 @@ function firstNavigableCell() {
 // Jedyny punkt wejścia Tabem: aktywna komórka, a gdy jej nie ma — pierwsza w widoku.
 function syncGridRovingTabindex(cell) {
   const target = cell || findCellElement(focusedCellState) || firstNavigableCell();
-  tbodyEl.querySelectorAll('td[tabindex="0"]').forEach((td) => {
+  tableEl.querySelectorAll('tr[data-row-key] > td[tabindex="0"]').forEach((td) => {
     if (td !== target) td.removeAttribute("tabindex");
   });
   if (target && target.getAttribute("tabindex") !== "0") target.setAttribute("tabindex", "0");
@@ -226,7 +270,7 @@ function giveGridDomFocus() {
 
 function gridHasDomFocus() {
   const active = document.activeElement;
-  return !!(active && tbodyEl.contains(active));
+  return !!(active && (tbodyEl.contains(active) || !!active.closest?.("#dataTable tr.pre-row")));
 }
 
 // Bieżący poziom zaznaczenia. Ustawiany przez gest (klik / Shift+klik / Shift+strzałka
@@ -298,7 +342,7 @@ function syncFocusedCellInDom(options = {}) {
   // z ofokusowanej komórki od razu gubi fokus (activeElement → <body>).
   const hadGridFocus = gridHasDomFocus();
   tbodyEl.querySelectorAll("tr.row-focused").forEach((row) => row.classList.remove("row-focused"));
-  tbodyEl.querySelectorAll("td.cell-active").forEach((td) => td.classList.remove("cell-active"));
+  tableEl.querySelectorAll("tr[data-row-key] > td.cell-active").forEach((td) => td.classList.remove("cell-active"));
   let rowEl = findFocusedRowElement();
   // Nowy silnik: wiersz może istnieć w danych, ale leżeć poza oknem DOM. Przy jawnym
   // przewinięciu do niego (strzałki, Enter w edytorze) dorysuj okno; w przeciwnym razie
@@ -323,7 +367,8 @@ function syncFocusedCellInDom(options = {}) {
   // W trybie „Sama komórka" aktywna komórka niesie całe podświetlenie — niezależnie
   // od tego, czy wszedłeś do niej myszą, dotykiem czy strzałką (obwódka :focus-visible
   // pokazuje się tylko po klawiaturze, więc sama nie wystarczy).
-  if (cell && isCellSelectionMode()) cell.classList.add("cell-active");
+  // Wiersz nad nagłówkiem nie jest rekordem tabeli — tam zawsze stoi się na komórce.
+  if (cell && (isCellSelectionMode() || isPreRowKey(focusedCellState.rowKey))) cell.classList.add("cell-active");
   // Fokus DOM przenosimy tylko wtedy, gdy user faktycznie jest w siatce (albo jawnie
   // o to prosimy). Bez tego renderTable po każdym wpisanym znaku w szybkim szukaniu
   // kradłby fokus z pola do tabeli.
@@ -332,7 +377,7 @@ function syncFocusedCellInDom(options = {}) {
 }
 
 function syncSelectedCellInDom(options = {}) {
-  tbodyEl.querySelectorAll("td.cell-selected").forEach((cell) => cell.classList.remove("cell-selected"));
+  tableEl.querySelectorAll("tr[data-row-key] > td.cell-selected").forEach((cell) => cell.classList.remove("cell-selected"));
   let cell = findCellElement(selectedCellState);
   const virtKeeps = typeof swbVirt !== "undefined" && selectedCellState && swbVirt.hasKey(selectedCellState.rowKey);
   if (!cell && virtKeeps && options.scroll && swbVirt.ensureRowRendered(selectedCellState.rowKey)) {
@@ -357,8 +402,6 @@ function setFocusedCell(rowKey, colIndex0, options = {}) {
     return;
   }
   focusedCellState = { rowKey, colIndex0 };
-  // jedna aktywna komórka naraz: zwykła komórka zdejmuje zaznaczenie z wierszy nad nagłówkiem
-  if (theadEl) theadEl.querySelectorAll("td.pre-active").forEach((x) => x.classList.remove("pre-active"));
   // Nowa aktywna komórka (kotwica) = świeży start: wyczyść poprzedni zakres,
   // chyba że jawnie go rozszerzamy (Shift → options.keepSelection). Dzięki temu
   // zwykły klik / strzałka daje pojedynczą komórkę, a nie zakres od starego końca.
@@ -391,28 +434,30 @@ function setSelectedCell(rowKey, colIndex0, options = {}) {
 
 function moveFocusedCell(rowDelta, colDelta) {
   if (!focusedCellState || !currentDisplayModel?.rows?.length || !currentDisplayModel?.headers?.length) return false;
-  const rowIndex = currentDisplayModel.rows.findIndex((row) => getRowSelectionKey(row) === focusedCellState.rowKey);
+  const view = swbSelView(); // strzałka w górę z 1. wiersza danych wchodzi nad nagłówek
+  const rowIndex = swbSelIndexOfKey(view, focusedCellState.rowKey);
   if (rowIndex < 0) {
     focusedCellState = null;
     return false;
   }
-  const nextRowIndex = Math.max(0, Math.min(currentDisplayModel.rows.length - 1, rowIndex + rowDelta));
-  const nextColIndex = Math.max(0, Math.min(currentDisplayModel.headers.length - 1, focusedCellState.colIndex0 + colDelta));
-  const nextRow = currentDisplayModel.rows[nextRowIndex];
+  const nextRowIndex = Math.max(0, Math.min(view.rows.length - 1, rowIndex + rowDelta));
+  const nextColIndex = Math.max(0, Math.min(view.headers.length - 1, focusedCellState.colIndex0 + colDelta));
+  const nextRow = view.rows[nextRowIndex];
   setFocusedCell(getRowSelectionKey(nextRow), nextColIndex, { scroll: true });
   return true;
 }
 
 function moveSelectedCell(rowDelta, colDelta) {
   if (!selectedCellState || !currentDisplayModel?.rows?.length || !currentDisplayModel?.headers?.length) return false;
-  const rowIndex = currentDisplayModel.rows.findIndex((row) => getRowSelectionKey(row) === selectedCellState.rowKey);
+  const view = swbSelView();
+  const rowIndex = swbSelIndexOfKey(view, selectedCellState.rowKey);
   if (rowIndex < 0) {
     selectedCellState = null;
     return false;
   }
-  const nextRowIndex = Math.max(0, Math.min(currentDisplayModel.rows.length - 1, rowIndex + rowDelta));
-  const nextColIndex = Math.max(0, Math.min(currentDisplayModel.headers.length - 1, selectedCellState.colIndex0 + colDelta));
-  const nextRow = currentDisplayModel.rows[nextRowIndex];
+  const nextRowIndex = Math.max(0, Math.min(view.rows.length - 1, rowIndex + rowDelta));
+  const nextColIndex = Math.max(0, Math.min(view.headers.length - 1, selectedCellState.colIndex0 + colDelta));
+  const nextRow = view.rows[nextRowIndex];
   setSelectedCell(getRowSelectionKey(nextRow), nextColIndex, { scroll: true });
   return true;
 }
@@ -422,10 +467,10 @@ function moveSelectedCell(rowDelta, colDelta) {
 // (selectedCellState). Istnieje tylko gdy obie komórki są ustawione.
 function getSelectionRectangle() {
   if (!focusedCellState || !selectedCellState) return null;
-  const model = currentDisplayModel;
-  if (!model?.rows?.length) return null;
-  const anchorRowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
-  const endRowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === selectedCellState.rowKey);
+  if (!currentDisplayModel?.rows?.length) return null;
+  const model = swbSelView(); // rect.model.rows = wiersze nad nagłówkiem + dane
+  const anchorRowIdx = swbSelIndexOfKey(model, focusedCellState.rowKey);
+  const endRowIdx = swbSelIndexOfKey(model, selectedCellState.rowKey);
   if (anchorRowIdx < 0 || endRowIdx < 0) return null;
   const rowStart = Math.min(anchorRowIdx, endRowIdx);
   const rowEnd = Math.max(anchorRowIdx, endRowIdx);
@@ -543,8 +588,8 @@ function rangeCellsToCopy() {
   const rect = getSelectionRectangle();
   if (rect) return rect;
   if (!focusedCellState || !currentDisplayModel?.rows?.length) return null;
-  const model = currentDisplayModel;
-  const rowIdx = model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
+  const model = swbSelView();
+  const rowIdx = swbSelIndexOfKey(model, focusedCellState.rowKey);
   if (rowIdx < 0) return null;
   return {
     model,
@@ -689,14 +734,14 @@ async function pasteClipboardToSelection(opts = {}) {
     return;
   }
   if (!focusedCellState) return;
-  const model = currentDisplayModel;
+  const model = swbSelView(); // wklejanie działa też nad nagłówkiem
   // Zaznaczony zakres → wklejamy od jego LEWEGO GÓRNEGO rogu (jak Excel), niezależnie
   // od tego, z której strony user zaczął zaznaczać.
   const rect = getSelectionRectangle();
   const isRange = !!(rect && (rect.rowCount > 1 || rect.colCount > 1));
   const anchorRowIdx = isRange
     ? rect.rowStart
-    : model.rows.findIndex((r) => getRowSelectionKey(r) === focusedCellState.rowKey);
+    : swbSelIndexOfKey(model, focusedCellState.rowKey);
   if (anchorRowIdx < 0) return;
 
   const got = opts.source === "app"
@@ -783,8 +828,8 @@ function fillSelection(direction) {
 function syncRangeHighlightInDom() {
   // uchwyt wypełniania idzie za zaznaczeniem (autofill.js)
   if (typeof swbFillHandleSync === "function") swbFillHandleSync();
-  tbodyEl
-    .querySelectorAll("td.cell-in-range")
+  tableEl
+    .querySelectorAll("tr[data-row-key] > td.cell-in-range")
     .forEach((c) => c.classList.remove(...RANGE_EDGE_CLASSES));
   const rect = getSelectionRectangle();
   if (!rect || (rect.rowCount === 1 && rect.colCount === 1)) {
@@ -797,18 +842,19 @@ function syncRangeHighlightInDom() {
   tbodyEl.classList.add("has-cell-range");
   // Nowy silnik: zakres może liczyć tysiące wierszy, a w DOM jest tylko okno — idziemy
   // po narysowanych wierszach zamiast szukać każdego wiersza zakresu osobno.
-  const virtual = typeof swbVirt !== "undefined" && swbVirt.isActive() && rect.model === currentDisplayModel;
+  const virtual = typeof swbVirt !== "undefined" && swbVirt.isActive() && (rect.model.base || rect.model) === currentDisplayModel;
   const targets = [];
   if (virtual) {
-    tbodyEl.querySelectorAll("tr[data-row-key]").forEach((tr) => {
-      const r = swbVirt.indexOfKey(tr.dataset.rowKey);
+    // narysowane wiersze: nad nagłówkiem (zawsze w DOM) + okno nowego silnika
+    tableEl.querySelectorAll("tr[data-row-key]").forEach((tr) => {
+      const r = swbSelIndexOfKey(rect.model, tr.dataset.rowKey);
       if (r >= rect.rowStart && r <= rect.rowEnd) targets.push([r, tr]);
     });
   } else {
     for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
       const row = rect.model.rows[r];
       if (!row) continue;
-      const tr = tbodyEl.querySelector(`tr[data-row-key="${CSS.escape(getRowSelectionKey(row))}"]`);
+      const tr = tableEl.querySelector(`tr[data-row-key="${CSS.escape(getRowSelectionKey(row))}"]`);
       if (tr) targets.push([r, tr]);
     }
   }
@@ -865,20 +911,14 @@ function syncSelectionHeadersInDom(rect, rangeRows) {
 // fokus lub zaznaczenie. Czyści wszystko jednym tapnięciem.
 function updateClearSelectionFab() {
   if (!clearSelectionFabEl) return;
-  const active = !!(focusedCellState || selectedCellState || theadEl?.querySelector("td.pre-active"));
+  const active = !!(focusedCellState || selectedCellState);
   clearSelectionFabEl.classList.toggle("is-visible", active);
 }
 
-// Komórka z wierszy NAD nagłówkiem (pre-row) ma własne zaznaczenie (klasa pre-active),
-// poza focusedCellState. „Odznacz”, Esc i klik w zwykłą komórkę muszą je zdejmować —
-// inaczej obwódka zostawała mimo „Odznacz” (zgłoszenie z iPhone'a 2026-10-24).
-function clearPreActiveCell() {
-  const cells = theadEl ? theadEl.querySelectorAll("td.pre-active") : [];
-  if (!cells.length) return false;
-  cells.forEach((x) => x.classList.remove("pre-active"));
-  updateClearSelectionFab();
-  return true;
-}
+// Dawniej wiersze nad nagłówkiem miały osobne zaznaczenie (pre-active) i trzeba je było
+// zdejmować osobno. Teraz to zwykłe focusedCellState („pre:N”), więc „Odznacz” i Esc
+// czyszczą je razem ze wszystkim — zostaje tylko zgodność wywołań.
+function clearPreActiveCell() { return false; }
 
 // Nagłówki, których sumowanie nie ma sensu (identyfikatory: Nr/ID/LP/kod… oraz lata)
 // — pomijamy je w totalach widoku, bo „suma ID/lat" to szum, nie informacja.
@@ -2313,8 +2353,10 @@ function collectPreHeaderRows(colCount) {
       display.push(shown == null ? "" : String(shown));
       cellStyles.push(extractCellStyle(cell, workbook, xfStyleAt(ref)));
     }
-    rows.push({ rowIndex0: r, values, display, cellStyles });
+    rows.push({ rowIndex0: r, values, display, cellStyles, isPreRow: true });
   }
+  // formaty z bieżącej sesji (pogrubienie, kolor, format liczb…) — jak w wierszach danych
+  if (anyContent && typeof cfmtOverlayRows === "function") cfmtOverlayRows(rows);
   _preHeaderCache = { key, rows: anyContent ? rows : [] };
   return _preHeaderCache.rows;
 }
@@ -2346,6 +2388,7 @@ function appendPreHeaderRows(model, headers) {
     const tr = document.createElement("tr");
     tr.className = "pre-row";
     tr.dataset.rowIndex = String(p.rowIndex0);
+    tr.dataset.rowKey = getRowSelectionKey(p); // „pre:N” — ta sama siatka zaznaczenia co dane
     const head = document.createElement("td");
     head.className = "row-head";
     head.textContent = String(p.rowIndex0 + 1);
@@ -2381,100 +2424,9 @@ function appendPreHeaderRows(model, headers) {
   return pre.length;
 }
 
-// Edycja komórek nad nagłówkiem (punkt A2): dwuklik (dotyk: drugie tapnięcie w zaznaczoną
-// komórkę) otwiera pole w komórce; Enter/Tab = zapisz, Esc = anuluj, wyjście z pola = zapisz.
-// Zapis tą samą drogą co zwykłe komórki (updateSheetCell / formuły) — więc działa Cofnij,
-// szkic i zapis do pliku. Edytor zgłasza się jako activeCellEditor, żeby przebudowa tabeli
-// (flushCellEditor) zatwierdziła go zamiast zgubić.
-function openPreCellEditor(td) {
-  if (!td || !td.isConnected || !workbook || !currentSheetName) return;
-  if (typeof activeCellEditor !== "undefined" && activeCellEditor) {
-    if (activeCellEditor.td === td) return;
-    if (typeof flushCellEditor === "function") flushCellEditor();
-    if (activeCellEditor) return;
-  }
-  if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
-  const rowIndex0 = parseInt(td.parentElement?.dataset.rowIndex || "", 10);
-  const col = parseInt(td.dataset.colIndex || "", 10);
-  if (!Number.isFinite(rowIndex0) || !Number.isFinite(col)) return;
-  if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) { toast(t("editDerivedCol"), "info"); return; }
-  const sheet = workbook.Sheets[currentSheetName];
-  const ref = XLSX.utils.encode_cell({ r: rowIndex0, c: currentStartCol + col });
-  const cell = sheet ? sheet[ref] : null;
-  const formulaText = typeof swbFormulaText === "function" ? swbFormulaText(currentSheetName, ref) : null;
-  const raw = cell ? cell.v : null;
-  const base = formulaText != null ? formulaText
-    : raw == null ? "" : (raw instanceof Date ? formatDateForEdit(raw) : String(raw));
-  const input = document.createElement("input");
-  input.type = "text";
-  input.className = "cell-editor";
-  input.setAttribute("aria-label", t("editCellAria"));
-  input.value = base;
-  td.classList.add("cell-editing");
-  td.appendChild(input);
-  let finished = false;
-  const close = () => {
-    if (finished) return;
-    finished = true;
-    input.remove();
-    td.classList.remove("cell-editing");
-    if (activeCellEditor && activeCellEditor.input === input) activeCellEditor = null;
-  };
-  // fromRender: wołane z flushCellEditor w trakcie renderTable — bez ponownego renderu
-  const commit = (fromRender) => {
-    if (finished) return;
-    const text = input.value;
-    if (text === base) { close(); return; }
-    const parsed = parseCellInput(text, rowIndex0, col);
-    if (parsed && parsed.type === "formula") {
-      const res = typeof swbFormulaCommitAt === "function" ? swbFormulaCommitAt(rowIndex0, col, text) : "skip";
-      if (res !== "ok") {
-        if (res === "skip") toast(t("formulaEditBlocked"), "warning");
-        if (typeof shakeCellEditor === "function") shakeCellEditor(input);
-        if (!fromRender) input.focus();
-        return;
-      }
-    } else {
-      updateSheetCell(rowIndex0, col, parsed);
-    }
-    close();
-    setDirtyState(true);
-    if (!fromRender) {
-      renderActiveTable();
-      const fresh = theadEl.querySelector(`tr.pre-row[data-row-index="${rowIndex0}"] td.pre-cell[data-col-index="${col}"]`);
-      if (fresh && typeof flashCellSaved === "function") flashCellSaved(fresh);
-    }
-  };
-  activeCellEditor = { td, input, commit: () => commit(true), close };
-  input.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); commit(false); }
-    else if (e.key === "Escape") { e.preventDefault(); close(); }
-  });
-  input.addEventListener("blur", () => setTimeout(() => commit(false), 0));
-  input.focus();
-  try { input.select(); } catch (_) { /* */ }
-}
-
-if (theadEl && !theadEl.dataset.preEditBound) {
-  theadEl.dataset.preEditBound = "1";
-  theadEl.addEventListener("click", (e) => {
-    const td = e.target.closest("td.pre-cell");
-    if (!td || td.classList.contains("cell-editing")) return;
-    const wasActive = td.classList.contains("pre-active");
-    theadEl.querySelectorAll("td.pre-active").forEach((x) => x.classList.remove("pre-active"));
-    // jedna aktywna komórka naraz (jak w Excelu): zdejmij fokus/zakres z tabeli pod nagłówkiem
-    if (focusedCellState || selectedCellState) { setSelectedCell("", -1); setFocusedCell("", -1); }
-    td.classList.add("pre-active");
-    updateClearSelectionFab();
-    // dotyk nie ma dwukliku: drugie tapnięcie w zaznaczoną komórkę = edycja
-    if (wasActive && e.pointerType !== "mouse" && (e.pointerType || matchMedia("(pointer: coarse)").matches)) openPreCellEditor(td);
-  });
-  theadEl.addEventListener("dblclick", (e) => {
-    const td = e.target.closest("td.pre-cell");
-    if (td) openPreCellEditor(td);
-  });
-}
+// Edycja komórek nad nagłówkiem: od 2026-10-31 zwykły edytor komórki (openCellEditor),
+// zwykłe kliknięcie/dwuklik (ui-controls.js) i zwykłe zaznaczenie — to wiersze „pre:N”
+// w widoku zaznaczenia (swbSelView). Dawny osobny edytor i pre-active usunięte.
 
 function renderTable(modelOrHeaders, maybeRows) {
   const model = Array.isArray(modelOrHeaders)

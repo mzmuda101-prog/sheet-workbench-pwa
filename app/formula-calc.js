@@ -378,7 +378,14 @@ function fcRowFor(r) {
     baseRows.forEach((row) => { if (row && !row.isLongViewRow && Number.isFinite(row.rowIndex0) && !map.has(row.rowIndex0)) map.set(row.rowIndex0, row); });
     fcRowMapCache = { rows: baseRows, map };
   }
-  return fcRowMapCache.map.get(r) || null;
+  const row = fcRowMapCache.map.get(r);
+  if (row) return row;
+  // wiersz nad nagłówkiem (tytuł/KPI) — ten sam obiekt, który trzyma widok zaznaczenia i edytor
+  if (typeof swbSelView === "function" && typeof currentHeaderRow === "number" && r < currentHeaderRow - 1) {
+    const view = swbSelView();
+    for (let i = 0; i < (view?.preCount || 0); i++) if (view.rows[i].rowIndex0 === r) return view.rows[i];
+  }
+  return null;
 }
 function fcRefreshRow(sheet, r, c) {
   if (sheet !== currentSheetName) return false;

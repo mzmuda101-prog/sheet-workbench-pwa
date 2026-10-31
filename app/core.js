@@ -850,7 +850,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261029-04";
+const APP_BUILD_VERSION = "20261031-02";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -987,14 +987,18 @@ const CELL_ACTIONS_ENABLED = (() => {
   }
 })();
 
-// Dwa powiadomienia o sukcesie tuż po sobie (np. „Plik wczytany”, a zaraz „Wczytano
-// arkusz”) nie piętrzą się jeden na drugim — drugi PODMIENIA treść pierwszego.
-let _lastSuccessToast = null; // { el, label, timer, at }
+// Dwa powiadomienia tego samego rodzaju tuż po sobie (np. „Plik wczytany”, a zaraz
+// „Wczytano arkusz”, albo kilka „Cofnięto zmianę” pod rząd) nie piętrzą się jeden na
+// drugim — kolejne PODMIENIA treść poprzedniego. Na telefonie stos toastów u góry zasłaniał
+// szukanie i przyciski (film z iPhone'a 2026-10-31: trzy „Cofnięto zmianę (1 kom.)”).
+// Ostrzeżenia i błędy zostają osobno — każde niesie inną informację, której nie wolno zgubić.
+const TOAST_MERGE_TYPES = new Set(["success", "info"]);
+let _lastMergeToast = null; // { el, label, type, timer, at }
 const TOAST_MERGE_MS = 2000;
 
 function toast(msg, type = "info") {
-  const last = _lastSuccessToast;
-  if (type === "success" && last && last.el.isConnected && !last.el.classList.contains("out")
+  const last = _lastMergeToast;
+  if (TOAST_MERGE_TYPES.has(type) && last && last.type === type && last.el.isConnected && !last.el.classList.contains("out")
     && performance.now() - last.at < TOAST_MERGE_MS) {
     last.label.textContent = msg;
     last.at = performance.now();
@@ -1017,7 +1021,7 @@ function toast(msg, type = "info") {
   toastContainerEl.appendChild(toastEl);
 
   const timer = scheduleToastOut(toastEl);
-  if (type === "success") _lastSuccessToast = { el: toastEl, label, timer, at: performance.now() };
+  if (TOAST_MERGE_TYPES.has(type)) _lastMergeToast = { el: toastEl, label, type, timer, at: performance.now() };
 }
 
 function scheduleToastOut(toastEl) {

@@ -239,10 +239,11 @@ var sheetEditUi = (() => {
     }
     if (painterBtn) painterBtn.setAttribute("aria-pressed", painterFmt ? "true" : "false");
 
-    // pasek formuły
-    const key = a ? `${currentSheetName}|${a.ref}` : "";
+    // pasek formuły (komórki nad nagłówkiem to zwykłe „pre:N” — cfmtActiveCell je zna)
+    const ref = a ? a.ref : "";
+    const key = ref ? `${currentSheetName}|${ref}` : "";
     if (nameBox && document.activeElement !== nameBox) {
-      nameBox.value = a ? a.ref : "";
+      nameBox.value = ref;
     }
     if (fxInput) {
       const editorOpen = !!document.querySelector("#dataTable input.cell-editor");

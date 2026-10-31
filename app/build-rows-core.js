@@ -319,10 +319,29 @@
     "#NAME?": "#NAZWA?", "#NUM!": "#LICZBA!", "#N/A": "#N/D", "#SPILL!": "#ROZLANIE!", "#CALC!": "#OBL!",
   };
 
+  // Kopia swbLocalizeDateWords z workbook.js — polskie nazwy miesięcy/dni w datach.
+  const DATE_WORDS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December",
+    "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+    "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const DATE_WORDS_PL = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień",
+    "sty", "lut", "mar", "kwi", "cze", "lip", "sie", "wrz", "paź", "lis", "gru",
+    "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela",
+    "pon", "wt", "śr", "czw", "pt", "sob", "niedz"];
+  const DATE_WORDS_MAP = new Map(DATE_WORDS_EN.map((w, i) => [w, DATE_WORDS_PL[i]]));
+  const DATE_WORDS_RE = new RegExp(`\\b(${DATE_WORDS_EN.join("|")})\\b`, "g");
+  function localizeDateWords(shown, code) {
+    if (typeof shown !== "string" || !/[A-Za-z]/.test(shown)) return shown;
+    const lcid = /\[\$[^\]]*-([0-9a-f]+)\]/i.exec(String(code || ""));
+    if (lcid && (parseInt(lcid[1], 16) & 0x3ff) !== 0x15) return shown;
+    return shown.replace(DATE_WORDS_RE, (w) => DATE_WORDS_MAP.get(w) || w);
+  }
+
   function localizeCellText(shown, cell, lang) {
     if (lang === "en" || typeof shown !== "string" || !cell) return shown;
     if (cell.t === "b") return cell.v ? "PRAWDA" : "FAŁSZ";
     if (cell.t === "e") return ERR_PL[shown] || shown;
+    if ((cell.t === "n" || cell.t === "d") && isDateFormatCode(cell.z)) return localizeDateWords(shown, cell.z);
     if (cell.t !== "n" || !/\d[.,]\d/.test(shown)) return shown;
     if (isDateFormatCode(cell.z)) return shown;
     return shown.replace(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d*\.\d+/g, (tok) => tok.replace(/,/g, "\u00a0").replace(".", ","));

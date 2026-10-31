@@ -4287,9 +4287,13 @@ tbody td.has-fill-handle { position: relative; }
   bottom: 1px;
   margin: 0;
 }
+/* Dotyk: róg pod palcem ROZCIĄGA ZAZNACZENIE (autofill.js), więc wygląda jak uchwyt
+   zaznaczenia z mobilnych arkuszy — kółko, nie kwadracik wypełniania. Pole chwytu 36 px:
+   przy 24 px palec trafiał obok, w komórkę, a drugie stuknięcie w nią otwierało edycję
+   zamiast rozciągać zaznaczenie (film z iPhone'a 2026-10-31). */
 @media (pointer: coarse) {
-  .fill-handle { --fh-hit: 24px; --fh-box: 10px; }
-  .fill-handle::after { border-radius: 2px; }
+  .fill-handle { --fh-hit: 36px; --fh-box: 13px; }
+  .fill-handle::after { border-radius: 50%; box-shadow: 0 0 0 2px var(--surface), 0 1px 3px rgba(0, 0, 0, .25); }
 }
 .swb-filling, .swb-filling * { cursor: crosshair !important; }
 .swb-filling #dataTable { user-select: none; -webkit-user-select: none; }
@@ -4411,16 +4415,17 @@ border-bottom-right-radius: 8px;
    syncRangeHighlightInDom). Obwódkę składamy z 4 zmiennych (po jednej na krawędź), żeby
    komórki narożne pokazały dwie krawędzie naraz — box-shadow z jednej reguły by się
    nadpisywał. Kolory i waga — w bloku „Zaznaczenie jak w Excelu” niżej. */
-tbody td.cell-in-range {
+/* (wiersze nad nagłówkiem — thead tr.pre-row — są tą samą siatką zaznaczenia, 2026-10-31) */
+:is(tbody, thead tr.pre-row) td.cell-in-range {
   --rng-t: 0 0 0 0 transparent;
   --rng-b: 0 0 0 0 transparent;
   --rng-l: 0 0 0 0 transparent;
   --rng-r: 0 0 0 0 transparent;
 }
-tbody td.range-edge-top { --rng-t: inset 0 2px 0 0 var(--sel-frame); }
-tbody td.range-edge-bottom { --rng-b: inset 0 -2px 0 0 var(--sel-frame); }
-tbody td.range-edge-left { --rng-l: inset 2px 0 0 0 var(--sel-frame); }
-tbody td.range-edge-right { --rng-r: inset -2px 0 0 0 var(--sel-frame); }
+:is(tbody, thead tr.pre-row) td.range-edge-top { --rng-t: inset 0 2px 0 0 var(--sel-frame); }
+:is(tbody, thead tr.pre-row) td.range-edge-bottom { --rng-b: inset 0 -2px 0 0 var(--sel-frame); }
+:is(tbody, thead tr.pre-row) td.range-edge-left { --rng-l: inset 2px 0 0 0 var(--sel-frame); }
+:is(tbody, thead tr.pre-row) td.range-edge-right { --rng-r: inset -2px 0 0 0 var(--sel-frame); }
 
 /* Gdy jest aktywny zakres, stłum pas wiersza fokusu POZA prostokątem zaznaczenia,
    żeby poziome podświetlenie wiersza nie kolidowało z obwódką zakresu (jak w Arkuszach). */
@@ -4917,25 +4922,25 @@ tbody td.cell-filter-match {
    z .cell-selected zamiast powtarzać wartości — inaczej rozjeżdża się przy każdej zmianie.
    Bez transition: zaznaczenie przeskakuje od razu (jak w arkuszu), a przy szybkim
    chodzeniu strzałkami nie ciągnie za sobą gasnącej ramki. */
-tbody tr td.cell-selected,
-tbody tr td.cell-active {
+:is(tbody tr, thead tr.pre-row) td.cell-selected,
+:is(tbody tr, thead tr.pre-row) td.cell-active {
   background: var(--sel-fill) !important;
   box-shadow: inset 0 0 0 2px var(--sel-frame) !important;
   border-radius: 0 !important;
   transition: none;
 }
-tbody tr td.cell-in-range {
+:is(tbody tr, thead tr.pre-row) td.cell-in-range {
   background: var(--sel-range-fill) !important;
   box-shadow: var(--rng-t), var(--rng-b), var(--rng-l), var(--rng-r) !important;
   border-radius: 0 !important;
   transition: none;
 }
-tbody tr td.cell-in-range.range-anchor { background: var(--sel-base) !important; }
+:is(tbody tr, thead tr.pre-row) td.cell-in-range.range-anchor { background: var(--sel-base) !important; }
 /* Nagłówki zaznaczenia (jak w Excelu): numer wiersza i litera kolumny aktywnej komórki
    lub zakresu — zabarwione tło + kreska w akcencie od strony siatki. Zieleń = zaznaczenie;
    bursztyn (--warning) zostaje wyłącznie dla trafień filtra. Klasę .hdr-sel stawia
    syncSelectionHeadersInDom (table.js) różnicowo, tylko na zmienionych nagłówkach. */
-tbody tr td.row-head.hdr-sel {
+:is(tbody tr, thead tr.pre-row) td.row-head.hdr-sel {
   background: var(--sel-head-fill) !important;
   color: var(--sel-head-ink);
   box-shadow: inset -2px 0 0 var(--sel-frame) !important;
@@ -5587,13 +5592,15 @@ html.low-power .loading-overlay.is-file {
   flex-shrink: 0;
 }
 
-.toast.success { border-left: 3px solid var(--success); }
+/* Rodzaj toastu niesie ikona i lekko zabarwiona ramka. Dawny pasek 3 px po lewej na
+   zaokrąglonym pudełku rysował się jak nawias „(” odstający od treści (film z iPhone'a). */
+.toast.success { border-color: color-mix(in srgb, var(--success) 45%, var(--glass-border)); }
 .toast.success .toast-icon { background: var(--success-bg); color: var(--success); }
-.toast.error   { border-left: 3px solid var(--danger); }
+.toast.error   { border-color: color-mix(in srgb, var(--danger) 55%, var(--glass-border)); }
 .toast.error   .toast-icon { background: var(--danger-bg); color: var(--danger); }
-.toast.info    { border-left: 3px solid var(--info); }
+.toast.info    { border-color: color-mix(in srgb, var(--info) 40%, var(--glass-border)); }
 .toast.info    .toast-icon { background: var(--info-bg); color: var(--info); }
-.toast.warning { border-left: 3px solid var(--warning); }
+.toast.warning { border-color: color-mix(in srgb, var(--warning) 55%, var(--glass-border)); }
 .toast.warning .toast-icon { background: var(--warning-bg); color: var(--warning); }
 
 .cursor-hint {
@@ -6721,6 +6728,9 @@ body.tr-active .toast-container {
    pokazywał spokojne 60 fps, a obraz i tak szarpał.
 
    Zostaje ten sam układ i kolory, tylko bez rozmycia (tła pełniejsze).
+   ZASADA: każdy element z listy „bez rozmycia” musi dostać niżej PEŁNE tło. Toast był
+   jedynym bez niego — półprzezroczyste szkło bez blura leżało na nazwie pliku i „Zapisz”,
+   a litery przenikały się (film z iPhone'a 2026-10-31). Strażnik: bughunt-fixes (toasty).
    Na desktopie (pointer: fine) szkło jest nietknięte.
    `?glass` w adresie WŁĄCZA szkło z powrotem — gdyby kiedyś trzeba było powtórzyć
    pomiar albo przetestować tańszy wariant rozmycia.
@@ -6737,7 +6747,7 @@ body.tr-active .toast-container {
   html:not(.force-glass) .toast,
   html:not(.force-glass) .loading-box,
   html:not(.force-glass) .scroll-top-fab,
-  html:not(.force-glass) .clear-selection-fab {
+  html:not(.force-glass) .clear-sel-fab {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
@@ -6748,11 +6758,19 @@ body.tr-active .toast-container {
   html:not(.force-glass) .sidebar-handle,
   html:not(.force-glass) .sheet-picker-fab,
   html:not(.force-glass) .scroll-top-fab,
-  html:not(.force-glass) .clear-selection-fab,
+  html:not(.force-glass) .clear-sel-fab,
   html:not(.force-glass) .quick-search-popup-box,
-  html:not(.force-glass) .loading-box {
-    background: var(--panel);
+  html:not(.force-glass) .loading-box,
+  html:not(.force-glass) .toast {
+    /* Te elementy PŁYWAJĄ nad treścią, a samo --panel jest półprzezroczyste (62 % / 75 %) —
+       bez rozmycia litery spod spodu przenikały się z ich własnymi („×Maria” na ✕,
+       toast na nazwie pliku). Panel kładziemy na --surface: ten sam odcień, pełne krycie. */
+    background: linear-gradient(var(--panel), var(--panel)), var(--surface);
   }
+  /* FAB-y na desktopie mają przygaszone 0.9 — na telefonie bez rozmycia przez to i tak
+     prześwitywał tekst komórki pod spodem. */
+  html:not(.force-glass) .clear-sel-fab.is-visible,
+  html:not(.force-glass) .scroll-top-fab.is-visible { opacity: 1; }
   html:not(.force-glass) .cell-tooltip { background: var(--surface); }
 }
 
@@ -8737,7 +8755,7 @@ thead tr.pre-row + tr.header-row th { border-top: 1px solid var(--border); }
 }
 /* komórka nad nagłówkiem: zaznaczona (klik) i w edycji (dwuklik / drugie tapnięcie) */
 thead tr.pre-row > td.pre-cell { cursor: cell; }
-thead tr.pre-row > td.pre-active { box-shadow: inset 0 0 0 2px var(--accent); }
+thead tr.pre-row > td.pre-cell:focus { outline: none; }
 thead tr.pre-row > td.cell-editing { position: relative; overflow: visible; }
 
 /* Pasek cyfr i operatorów nad klawiaturą telefonu (key-bar.js). Pozycję (transform)

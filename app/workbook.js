@@ -440,10 +440,33 @@ const SWB_ERR_PL = {
   "#NULL!": "#ZERO!", "#DIV/0!": "#DZIEL/0!", "#VALUE!": "#ARG!", "#REF!": "#ADR!",
   "#NAME?": "#NAZWA?", "#NUM!": "#LICZBA!", "#N/A": "#N/D", "#SPILL!": "#ROZLANIE!", "#CALC!": "#OBL!",
 };
+// Nazwy miesięcy i dni z SSF są angielskie („29 Oct 26”, „Wednesday”), polski Excel pokazuje
+// „29 paź 26”, „środa”. Daty z PLIKU przechodziły przez localizeDisplayedDate, ale wartość
+// WPISANA albo WYPEŁNIONA serią szła prosto z formatu (cfmtFormatValue) i zostawała po
+// angielsku — film z iPhone'a 2026-10-31: „29 Oct 26” obok „17 wrz 26”. Tłumaczymy słowa
+// w gotowym tekście, więc układ formatu (kolejność, separatory, rok) zostaje nietknięty.
+// Jawny język formatu inny niż polski ([$-409] = angielski) Excel PL też pokazuje w nim.
+const SWB_DATE_WORDS_EN = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December",
+  "Jan", "Feb", "Mar", "Apr", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
+  "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const SWB_DATE_WORDS_PL = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień",
+  "sty", "lut", "mar", "kwi", "cze", "lip", "sie", "wrz", "paź", "lis", "gru",
+  "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota", "niedziela",
+  "pon", "wt", "śr", "czw", "pt", "sob", "niedz"];
+const SWB_DATE_WORDS_MAP = new Map(SWB_DATE_WORDS_EN.map((w, i) => [w, SWB_DATE_WORDS_PL[i]]));
+const SWB_DATE_WORDS_RE = new RegExp(`\\b(${SWB_DATE_WORDS_EN.join("|")})\\b`, "g");
+function swbLocalizeDateWords(shown, code) {
+  if (typeof shown !== "string" || !/[A-Za-z]/.test(shown)) return shown;
+  const lcid = /\[\$[^\]]*-([0-9a-f]+)\]/i.exec(String(code || ""));
+  if (lcid && (parseInt(lcid[1], 16) & 0x3ff) !== 0x15) return shown;
+  return shown.replace(SWB_DATE_WORDS_RE, (w) => SWB_DATE_WORDS_MAP.get(w) || w);
+}
 function swbLocalizeCellText(shown, cell, lang) {
   if (lang === "en" || typeof shown !== "string" || !cell) return shown;
   if (cell.t === "b") return cell.v ? "PRAWDA" : "FAŁSZ";
   if (cell.t === "e") return SWB_ERR_PL[shown] || shown;
+  if ((cell.t === "n" || cell.t === "d") && swbIsDateFormat(cell.z)) return swbLocalizeDateWords(shown, cell.z);
   if (cell.t !== "n" || !/\d[.,]\d/.test(shown)) return shown;
   if (swbIsDateFormat(cell.z)) return shown;
   return shown.replace(/\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d*\.\d+/g, (tok) => tok.replace(/,/g, " ").replace(".", ","));

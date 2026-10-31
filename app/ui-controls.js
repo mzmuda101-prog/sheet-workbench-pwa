@@ -4089,8 +4089,8 @@ resetWidthsBtn.addEventListener("click", () => {
 // Shift+klik buduje zakres komórek — wtedy zablokuj natywne (OS-owe) zaznaczanie
 // tekstu, by nie „łapało" treści komórek. Zwykły drag bez Shift zaznacza tekst
 // normalnie (np. żeby skopiować zawartość komórki).
-tbodyEl.addEventListener("mousedown", (e) => {
-  if (e.shiftKey) e.preventDefault();
+tableEl.addEventListener("mousedown", (e) => {
+  if (e.shiftKey && gridCellFromEvent(e)) e.preventDefault();
 });
 
 // DOTYK: „tap-to-edit" — powtórny tap w już zaznaczoną komórkę wchodzi w edycję.
@@ -4106,15 +4106,28 @@ const cellTapCoarseMQ = typeof matchMedia === "function" ? matchMedia("(pointer:
 // edytowaną komórką. Stąd znacznik czasu ostatniego tapnięcia w jej obrębie — czytają go
 // i handler kliknięcia siatki, i blur (blur nie niesie informacji o tym, co go wywołało).
 let lastPointerInEditedCell = 0;
+// Rodzaj wskaźnika ostatniego wciśnięcia w siatce: zdarzenie click nie wszędzie niesie
+// pointerType (starsze WebKity), a media query (pointer: coarse) mówi o urządzeniu, nie
+// o geście — iPad z myszką/rysikiem to też „coarse”.
+let lastTbodyPointerType = "";
+tableEl.addEventListener("pointerdown", (e) => { lastTbodyPointerType = e.pointerType || ""; }, true);
 document.addEventListener("pointerdown", (e) => {
   if (!activeCellEditor || !activeCellEditor.td) return;
   if (e.target === activeCellEditor.input) return;      // normalne wejście w pole
   if (activeCellEditor.td.contains(e.target)) lastPointerInEditedCell = Date.now();
 }, true);
 
-tbodyEl.addEventListener("click", (e) => {
-  const td = e.target.closest("td");
-  if (!td || td.classList.contains("row-head")) return;
+// Komórka siatki pod zdarzeniem: dane (tbody) albo wiersz nad nagłówkiem (thead tr.pre-row).
+function gridCellFromEvent(e) {
+  const td = e.target.closest?.("td");
+  if (!td || td.classList.contains("row-head")) return null;
+  if (tbodyEl.contains(td)) return td;
+  return td.classList.contains("pre-cell") && td.parentElement?.dataset.rowKey ? td : null;
+}
+
+function onGridCellClick(e) {
+  const td = gridCellFromEvent(e);
+  if (!td) return;
   // Tap w edytowaną komórkę (także w jej margines) — zostajemy w edycji i oddajemy
   // pole palcowi, zamiast traktować to jak kliknięcie w siatkę.
   if (activeCellEditor && activeCellEditor.td === td) {
@@ -4147,8 +4160,15 @@ tbodyEl.addEventListener("click", (e) => {
   // arkuszach) — bez klawiatury i bez kapryśnego dwutapu.
   const tapToEdit = cellTapCoarseMQ && cellTapCoarseMQ.matches && !activeCellEditor &&
     focusedCellState && focusedCellState.rowKey === rowKey && focusedCellState.colIndex0 === colIndex0;
-  // Zwykły klik zawsze wraca na poziom wiersza — patrz model gestów w core.js.
-  setSelectionKind("row", { repaint: false });
+  // Zwykły klik wraca na poziom wiersza — patrz model gestów w core.js. Wyjątek: PALEC
+  // w trybie Edycja. Tam pole nazwy, pasek formuły, formatowanie i uchwyt w rogu dotyczą
+  // jednej komórki, a podświetlony wiersz nie mówił, której (zrzut z iPhone'a 2026-10-31:
+  // „C6” w polu nazwy, uchwyt w rogu C6, ramki brak). Shift+klik i klawiatura nie istnieją
+  // na telefonie, więc tryb komórki musi dawać sam gest.
+  // Wiersz nad nagłówkiem nie jest rekordem — tam zawsze poziom komórki.
+  const cellTap = (lastTbodyPointerType === "touch" && typeof swbIsEditMode === "function" && swbIsEditMode())
+    || rowKey.startsWith("pre:");
+  setSelectionKind(cellTap ? "cell" : "row", { repaint: false });
   setFocusedCell(rowKey, colIndex0, { scroll: false });
   giveGridDomFocus();
   // Desktop (mysz) zostaje przy dblclick. openCellEditor sam pilnuje trybu „wide"
@@ -4156,7 +4176,9 @@ tbodyEl.addEventListener("click", (e) => {
   // nie kłóci się z dblclick (dwutap: 1. tap zaznacza, 2. tap już tu otwiera edytor,
   // późniejszy dblclick trafia w guard).
   if (tapToEdit) openCellEditor(td);
-});
+}
+tbodyEl.addEventListener("click", onGridCellClick);
+if (theadEl) theadEl.addEventListener("click", onGridCellClick);
 
 // --- Edycja komórki (inline input) ---------------------------------------
 // Edycja działa tylko w trybie "wide": wiersze long-view są syntetyczne i nie
@@ -4166,6 +4188,12 @@ let activeCellEditor = null;
 
 function getRowByKey(rowKey) {
   if (!rowKey || !currentDisplayModel || !Array.isArray(currentDisplayModel.rows)) return null;
+  // „pre:N” = wiersz nad nagłówkiem (widok zaznaczenia, table.js swbSelView)
+  if (rowKey.startsWith("pre:")) {
+    const view = typeof swbSelView === "function" ? swbSelView() : null;
+    const i = view ? swbSelIndexOfKey(view, rowKey) : -1;
+    return i >= 0 ? view.rows[i] : null;
+  }
   return currentDisplayModel.rows.find((r) => getRowSelectionKey(r) === rowKey) || null;
 }
 
@@ -4856,7 +4884,10 @@ function openCellEditor(td, options = {}) {
         return;
       }
       close();
-      td.textContent = Array.isArray(row.display) ? row.display[colIndex0] : "";
+      // Wynik czytamy z AKTUALNEGO obiektu wiersza: zapis formuły unieważnia pamięć wierszy
+      // nad nagłówkiem (collectPreHeaderRows), więc przeliczenie odświeża już nowy obiekt.
+      const freshRow = getRowByKey(rowKey) || row;
+      td.textContent = Array.isArray(freshRow.display) ? freshRow.display[colIndex0] : "";
       setDirtyState(true);
       flashCellSaved(td);
       if (move) {
@@ -4971,11 +5002,12 @@ function openCellEditor(td, options = {}) {
   }
 }
 
-tbodyEl.addEventListener("dblclick", (e) => {
-  const td = e.target.closest("td");
-  if (!td || td.classList.contains("row-head")) return;
-  openCellEditor(td);
-});
+function onGridCellDblClick(e) {
+  const td = gridCellFromEvent(e);
+  if (td) openCellEditor(td);
+}
+tbodyEl.addEventListener("dblclick", onGridCellDblClick);
+if (theadEl) theadEl.addEventListener("dblclick", onGridCellDblClick);
 
 [searchQueryEl, searchQuery2El, filterOperatorsEl, filterOperators2El, onlyNonEmptyEl, dateModeEl, dateFromEl, dateToEl, lastDaysEl].forEach((el) => {
   if (!el) return;

@@ -286,7 +286,7 @@ function collectSelectionCombos(rect) {
   const combos = [];
   for (let r = rect.rowStart; r <= rect.rowEnd; r++) {
     const row = rect.model.rows[r];
-    if (!row) continue;
+    if (!row || row.isPreRow) continue; // filtr dotyczy rekordów, nie tytułu nad tabelą
     const values = headers.map(({ col }) => String(getDisplayValue(row, col) ?? "").replace(/\s+/g, " ").trim());
     const key = values.join("\u0000").toLowerCase();
     if (seen.has(key)) continue;
@@ -404,22 +404,42 @@ function cellMenuExplainItem(target) {
   return { id: "explain", label: t("cellMenuExplain"), run: () => { closeCellMenu(); swbOpenFormulaExplain({ formula, r, c }); } };
 }
 
+// Wypełnianie zaznaczenia — na dotyku to JEDYNA droga (róg pod palcem tylko rozciąga
+// zaznaczenie, autofill.js), a na myszy skrót obok Ctrl+D/R i uchwytu.
+function cellMenuFillItems(target) {
+  const rect = target.rect;
+  if (!rect || !workbook || currentDisplayModel?.mode !== "wide" || typeof swbFillRange !== "function") return [];
+  if (typeof swbIsEditMode === "function" && !swbIsEditMode()) return [];
+  return [
+    { id: "fill-series", label: t("cellMenuFillSeries"), run: () => { closeCellMenu(); swbFillSeriesSelection(); } },
+    rect.rowCount > 1 ? { id: "fill-down", label: t("cellMenuFillDown"), run: () => { closeCellMenu(); swbFillCopy("down"); } } : null,
+    rect.colCount > 1 ? { id: "fill-right", label: t("cellMenuFillRight"), run: () => { closeCellMenu(); swbFillCopy("right"); } } : null,
+  ];
+}
+
 function cellMenuItems(target) {
   const paste = cellMenuPasteItem(target);
   const pasteValues = paste ? cellMenuPasteValuesItem(target) : null;
+  // „Pokaż/Ukryj wiersze z tą wartością” filtruje REKORDY tabeli — komórka nad nagłówkiem
+  // (tytuł, KPI) nie jest rekordem, więc tam tych pozycji nie ma.
+  const preOnly = target.multi
+    ? [...target.rect.rowKeys].every((k) => k.startsWith("pre:"))
+    : !!target.row?.isPreRow;
+  const filterItem = (item) => (preOnly ? null : item);
   if (target.multi) {
     return [
-      { id: "show", label: t("cellMenuMultiShow"), run: () => applyCellFilter(false) },
-      { id: "hide", label: t("cellMenuMultiHide"), run: () => applyCellFilter(true) },
+      filterItem({ id: "show", label: t("cellMenuMultiShow"), run: () => applyCellFilter(false) }),
+      filterItem({ id: "hide", label: t("cellMenuMultiHide"), run: () => applyCellFilter(true) }),
       { id: "copy", label: t("cellMenuMultiCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
       paste,
     pasteValues,
+      ...cellMenuFillItems(target),
     ].filter(Boolean);
   }
   const empty = !String(target.value ?? "").trim();
   return [
-    { id: "show", label: t(empty ? "cellMenuShowEmpty" : "cellMenuShowOnly"), run: () => applyCellFilter(false) },
-    { id: "hide", label: t(empty ? "cellMenuHideEmpty" : "cellMenuHide"), run: () => applyCellFilter(true) },
+    filterItem({ id: "show", label: t(empty ? "cellMenuShowEmpty" : "cellMenuShowOnly"), run: () => applyCellFilter(false) }),
+    filterItem({ id: "hide", label: t(empty ? "cellMenuHideEmpty" : "cellMenuHide"), run: () => applyCellFilter(true) }),
     { id: "copy", label: t("cellMenuCopy"), run: () => { closeCellMenu(); copySelectionToClipboard(); } },
     paste,
     pasteValues,
@@ -434,7 +454,7 @@ function openCellMenu(td, point, { viaKeyboard = false } = {}) {
   const rowKey = tr?.dataset.rowKey || "";
   const colIndex0 = parseInt(td.dataset.colIndex || "", 10);
   if (!rowKey || !Number.isFinite(colIndex0)) return false;
-  const row = currentDisplayModel.rows.find((r) => getRowSelectionKey(r) === rowKey);
+  const row = getRowByKey(rowKey); // także wiersz nad nagłówkiem („pre:N”)
   if (!row) return false;
   hideCellTooltip();
 
@@ -456,7 +476,8 @@ function openCellMenu(td, point, { viaKeyboard = false } = {}) {
     // Komórka pod menu staje się aktywną (Kopiuj kopiuje właśnie ją, widać, o co chodzi).
     setSelectionKind("cell", { repaint: false });
     setFocusedCell(rowKey, colIndex0, { scroll: false });
-    const header = currentDisplayModel.headers[colIndex0];
+    // nad nagłówkiem nazwa kolumny nic nie mówi — adres komórki (jak w polu nazwy)
+    const header = row.isPreRow ? XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + colIndex0 }) : currentDisplayModel.headers[colIndex0];
     const value = String(getDisplayValue(row, colIndex0) ?? "");
     cellMenuTarget = { header, value, td, row, col: colIndex0 };
     h.textContent = afShort(header || "—", 28);
@@ -515,12 +536,14 @@ function cellMenuTd(target) {
   const td = target?.closest?.("td[data-col-index]");
   if (!td || td.classList.contains("row-head")) return null;
   if (td.querySelector("input.cell-editor")) return null; // w edycji zostaje natywne menu pola
-  return tbodyEl && tbodyEl.contains(td) ? td : null;
+  if (tbodyEl && tbodyEl.contains(td)) return td;
+  // wiersz nad nagłówkiem — te same działania, co komórka danych (bez filtrów, patrz niżej)
+  return td.classList.contains("pre-cell") && td.parentElement?.dataset.rowKey ? td : null;
 }
 
 if (cellMenuEl && tbodyEl) {
   // Mysz: prawy klik. (Android przy przytrzymaniu też wysyła contextmenu.)
-  tbodyEl.addEventListener("contextmenu", (e) => {
+  tableEl.addEventListener("contextmenu", (e) => {
     const td = cellMenuTd(e.target);
     if (!td || !workbook) return;
     e.preventDefault();
@@ -534,7 +557,7 @@ if (cellMenuEl && tbodyEl) {
   let lpX = 0;
   let lpY = 0;
   const lpCancel = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = 0; } };
-  tbodyEl.addEventListener("touchstart", (e) => {
+  tableEl.addEventListener("touchstart", (e) => {
     lpCancel();
     if (e.touches.length !== 1 || !workbook) return;
     const td = cellMenuTd(e.target);
@@ -550,23 +573,23 @@ if (cellMenuEl && tbodyEl) {
       }
     }, 520);
   }, { passive: true });
-  tbodyEl.addEventListener("touchmove", (e) => {
+  tableEl.addEventListener("touchmove", (e) => {
     if (!lpTimer) return;
     const touch = e.touches[0];
     if (!touch || Math.abs(touch.clientX - lpX) > 10 || Math.abs(touch.clientY - lpY) > 10) lpCancel();
   }, { passive: true });
-  tbodyEl.addEventListener("touchend", lpCancel, { passive: true });
-  tbodyEl.addEventListener("touchcancel", lpCancel, { passive: true });
+  tableEl.addEventListener("touchend", lpCancel, { passive: true });
+  tableEl.addEventListener("touchcancel", lpCancel, { passive: true });
 
   // Klik, który kończy przytrzymanie, nie może trafić do siatki (drugi tap = edytor).
   window.addEventListener("click", (e) => {
     if (Date.now() > suppressCellClickUntil) return;
     if (cellMenuEl.contains(e.target)) return;
-    if (tbodyEl.contains(e.target)) { e.stopPropagation(); e.preventDefault(); }
+    if (tableEl.contains(e.target)) { e.stopPropagation(); e.preventDefault(); }
   }, true);
 
   // Klawiatura: klawisz menu albo Shift+F10 na komórce siatki.
-  tbodyEl.addEventListener("keydown", (e) => {
+  tableEl.addEventListener("keydown", (e) => {
     if (!(e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey))) return;
     const td = cellMenuTd(e.target) || cellMenuTd(document.activeElement)
       || (focusedCellState ? findCellElement(focusedCellState) : null);
