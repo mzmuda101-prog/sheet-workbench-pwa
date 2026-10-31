@@ -80,9 +80,12 @@ async function auditFileInner(browser, file, res) {
 
   // Profil kolumn: ile tekstów / dat / liczb.
   const prof = await page.evaluate(() => {
+    // komórki z formułą narzędzia celowo omijają (edit-tools.js editToolIsFormulaCell) —
+    // do audytu wybieramy kolumny z WPISANYMI wartościami
     const cols = currentHeaders.map((h, i) => {
       let s = 0, d = 0, n = 0, dateText = 0, numText = 0;
       baseRows.forEach((r) => {
+        if (editToolIsFormulaCell(r, i)) return;
         const v = r.values[i];
         if (typeof v === "string" && v.trim()) {
           s++;
@@ -107,6 +110,8 @@ async function auditFileInner(browser, file, res) {
     const v = r.values[col];
     return v instanceof Date ? { d: v.getTime() } : v === undefined ? null : v;
   }), col);
+  // komórki z formułą: zostają formułą (wynik może się przeliczyć), audyt ich nie porównuje z wzorcem
+  const formulaMask = (col) => page.evaluate((col) => baseRows.map((r) => editToolIsFormulaCell(r, col)), col);
   const pendingCount = () => page.evaluate(() => Object.keys(pendingEdits[currentSheetName] || {}).length);
   const sel = (id, v) => page.selectOption(`#${id}`, String(v));
   const setCheck = (id, on) => page.evaluate(([id, on]) => { const el = document.getElementById(id); if (el.checked !== on) el.click(); }, [id, on]);
@@ -153,6 +158,7 @@ async function auditFileInner(browser, file, res) {
     await sel("editColumnSelect", col);
     await setup();
     const before = await snapshot(col);
+    const fx = await formulaMask(col);
     const pend0 = await pendingCount();
     const pv = await preview();
     const afterPv = await snapshot(col);
@@ -161,7 +167,7 @@ async function auditFileInner(browser, file, res) {
       const fn = new Function("v", "row", "col", src);
       return baseRows.map((r) => {
         // podnagłówki i wiersze pochodne apka celowo omija (jak przy edycji komórki)
-        const out = r.isSubheader || r.isLongViewRow ? undefined : fn(r.values[col], r, col);
+        const out = r.isSubheader || r.isLongViewRow || editToolIsFormulaCell(r, col) ? undefined : fn(r.values[col], r, col);
         const v = out === undefined ? r.values[col] : out;
         return v instanceof Date ? { d: v.getTime() } : v === undefined ? null : v;
       });
@@ -169,9 +175,13 @@ async function auditFileInner(browser, file, res) {
     const expChanged = expected.filter((v, i) => JSON.stringify(v) !== JSON.stringify(before[i])).length;
     await apply();
     const after = await snapshot(col);
-    const changed = after.filter((v, i) => JSON.stringify(v) !== JSON.stringify(before[i])).length;
+    const changed = after.filter((v, i) => !fx[i] && JSON.stringify(v) !== JSON.stringify(before[i])).length;
     const diffs = [];
-    after.forEach((v, i) => { if (JSON.stringify(v) !== JSON.stringify(expected[i])) diffs.push({ row: i, before: before[i], got: v, want: expected[i] }); });
+    after.forEach((v, i) => { if (!fx[i] && JSON.stringify(v) !== JSON.stringify(expected[i])) diffs.push({ row: i, before: before[i], got: v, want: expected[i] }); });
+    if (fx.some(Boolean)) {
+      const kept = await page.evaluate((col) => baseRows.filter((r) => editToolIsFormulaCell(r, col)).length, col);
+      ok(`${name}: formuły zostały formułami (${kept})`, kept === fx.filter(Boolean).length, { kept, was: fx.filter(Boolean).length });
+    }
     ok(`${name}: wynik = referencja`, diffs.length === 0, { diffs: diffs.slice(0, 4), n: diffs.length });
     ok(`${name}: podgląd (${pv}) = zmienione (${changed})`, pv === changed, { pv, changed, expChanged });
     const pend1 = await pendingCount();
@@ -179,7 +189,7 @@ async function auditFileInner(browser, file, res) {
     if (changed) {
       await undo();
       const back = await snapshot(col);
-      ok(`${name}: Cofnij przywraca`, JSON.stringify(back) === JSON.stringify(before) && (await pendingCount()) === pend0, { pend: await pendingCount(), pend0 });
+      ok(`${name}: Cofnij przywraca`, JSON.stringify(back.filter((_, i) => !fx[i])) === JSON.stringify(before.filter((_, i) => !fx[i])) && (await pendingCount()) === pend0, { pend: await pendingCount(), pend0 });
     }
     notes.push(`${name}: ${changed} zmian`);
     return changed;
@@ -228,7 +238,12 @@ async function auditFileInner(browser, file, res) {
   await runCase(`Zamień całą komórkę „${commonVal.slice(0, 20)}” (bez wielkości)`, tc, setReplace(commonVal.toUpperCase(), "ZMIENIONE", { ic: true, whole: true }),
     `return typeof v === "string" && v.toLocaleLowerCase("pl-PL") === ${CV}.toLocaleLowerCase("pl-PL") ? "ZMIENIONE" : undefined;`);
   await runCase("Regex: cyfry → #", tc, setReplace("\\d", "#", { regex: true }),
-    `return typeof v === "string" ? v.replace(/\\d/gu, "#") : undefined;`);
+    // znajdź i zamień działa też na LICZBACH (wartość surowa), jak w Excelu — tak jak „Liczby: 0→9”
+    `if (typeof v === "string") return v.replace(/\\d/gu, "#");
+      if (typeof v !== "number") return undefined;
+      const s = String(v); const n = s.replace(/\\d/gu, "#");
+      if (n === s) return undefined;
+      const p = parseInputValue(n); return p ? p.value : n;`);
   // znajdź i zamień na DATACH (po tym, co widać) i LICZBACH (wartość surowa)
   if (dateCol.d > 0) {
     const shown = await page.evaluate((col) => { const r = baseRows.find((r) => r.values[col] instanceof Date); return r ? String(getDisplayValue(r, col)) : ""; }, dateCol.i);
