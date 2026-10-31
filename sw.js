@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20261031-06";
+const CACHE_VERSION = "20261031-07";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -7,6 +7,8 @@ const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
 // instalacyjny celuje wtedy w URL-e, których strona już nie prosi (cache miss na
 // starcie, offline-first dla JS/CSS realnie nie działa do pierwszego online-visit).
 const ASSET_V = CACHE_VERSION;
+// plik z menu „Udostępnij” (Android) czeka tu, aż strona go odbierze (app/launch-files.js)
+const SHARE_CACHE = "excel-wb-share";
 // Po tylu ms bez odpowiedzi sieci start idzie z cache (patrz handler nawigacji).
 const NAVIGATION_TIMEOUT_MS = 3000;
 
@@ -62,6 +64,7 @@ const SHELL_ASSETS = [
   `./app/debug-loaders.js?v=${ASSET_V}`,
   `./app/build-rows-core.js?v=${ASSET_V}`,
   `./app/build-rows-worker.js?v=${ASSET_V}`,
+  `./app/launch-files.js?v=${ASSET_V}`,
   `./app/bootstrap.js?v=${ASSET_V}`,
   "./assets/images/favicon.png?v=20260610-05",
   "./assets/images/apple-touch-icon.png?v=20260429-01",
@@ -140,7 +143,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((keys) =>
       Promise.all(
         keys
-          .filter((key) => key !== APP_CACHE && key !== HEAVY_CACHE && key !== RUNTIME_CACHE)
+          .filter((key) => key !== APP_CACHE && key !== HEAVY_CACHE && key !== RUNTIME_CACHE && key !== SHARE_CACHE)
           .map((key) => caches.delete(key))
       )
     )
@@ -160,8 +163,28 @@ self.addEventListener("message", (event) => {
   }
 });
 
+// share_target (manifest.json): Android wysyła udostępniony arkusz POST-em — odkładamy go
+// do cache i przekierowujemy na stronę, która go otworzy (./?open=shared).
+async function receiveSharedFile(request) {
+  try {
+    const form = await request.formData();
+    const file = form.getAll("file").find((f) => f && typeof f === "object" && f.size >= 0);
+    if (file) {
+      const cache = await caches.open(SHARE_CACHE);
+      await cache.put("./__shared-file", new Response(file, {
+        headers: { "Content-Type": file.type || "application/octet-stream", "X-File-Name": encodeURIComponent(file.name || "arkusz.xlsx") },
+      }));
+    }
+  } catch (_) { /* uszkodzone dane — strona po prostu nic nie otworzy */ }
+  return Response.redirect("./?open=shared", 303);
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
+  if (request.method === "POST" && new URL(request.url).pathname.endsWith("/share-target")) {
+    event.respondWith(receiveSharedFile(request));
+    return;
+  }
   if (request.method !== "GET") return;
 
   const reqUrl = new URL(request.url);
