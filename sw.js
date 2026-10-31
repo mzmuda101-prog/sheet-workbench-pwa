@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20261031-12";
+const CACHE_VERSION = "20261031-13";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -67,10 +67,12 @@ const SHELL_ASSETS = [
   `./app/cell-spill.js?v=${ASSET_V}`,
   `./app/launch-files.js?v=${ASSET_V}`,
   `./app/bootstrap.js?v=${ASSET_V}`,
-  "./assets/images/favicon.png?v=20260610-05",
-  "./assets/images/apple-touch-icon.png?v=20260429-01",
+  "./assets/images/favicon.png?v=20261031-logo",
+  "./assets/images/apple-touch-icon.png?v=20261031-logo",
   "./assets/images/icon-192.png",
   "./assets/images/icon-512.png",
+  "./assets/images/icon-maskable-192.png",
+  "./assets/images/icon-maskable-512.png",
   "./assets/images/logo-mateusz-transparent.webp",
   "./assets/images/logo-mateusz-orange.webp",
   "./assets/images/logo-refresh.webp",
