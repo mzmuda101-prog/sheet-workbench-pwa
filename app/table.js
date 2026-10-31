@@ -1502,7 +1502,7 @@ function getAggregationHeaderSourceData(headerRow = currentHeaderRow, scopeMode 
 
   try {
     const { data, group } = getCachedHeaderRowScan(sheet, headerRow);
-    const rows = markSubheaderRows(data.rows.slice());
+    const rows = markSubheaderRows(data.rows.slice(), data.merges);
     const visibleRowIndexes = scopeMode === "filtered"
       ? new Set(viewRows.map((row) => row.rowIndex0))
       : null;

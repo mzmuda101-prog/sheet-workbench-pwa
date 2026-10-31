@@ -151,7 +151,7 @@ function rebuildCurrentSheetData() {
   if (!sheet) return;
   const data = buildRows(sheet, currentHeaderRow, workbook);
   if (typeof cfmtOverlayRows === "function") cfmtOverlayRows(data.rows);
-  baseRows = markSubheaderRows(data.rows);
+  baseRows = markSubheaderRows(data.rows, data.merges);
   applyFilters();
   sortRows();
   renderActiveTable();

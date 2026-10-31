@@ -360,7 +360,7 @@ function tryBuildDurationAnalysisFromAlternateHeaders() {
       const group = Array.isArray(groups) && groups.length ? groups[0] : null;
       if (!group || !Array.isArray(group.blocks) || group.blocks.length < 2) return;
 
-      const shadowRows = markSubheaderRows(data.rows.slice());
+      const shadowRows = markSubheaderRows(data.rows.slice(), data.merges);
       const result = buildDurationAnalysisFromRows(group, shadowRows, {
         helperHeaderRow: headerRow,
         helperMode: true,

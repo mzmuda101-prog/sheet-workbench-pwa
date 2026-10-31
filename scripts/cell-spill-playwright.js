@@ -82,7 +82,7 @@ async function run() {
   check("8. tabela z samym tekstem: brak „podnagłówków” (szarych, zablokowanych wierszy)", sub.length === 0, sub);
   const subNum = await p.evaluate(() => {
     const mk = (vals) => ({ values: vals });
-    const rows = [mk(["Dział A", "opis", null]), mk(["Jan", 12, 3]), mk(["Ewa", 7, 1]), mk(["Ola", 4, 2]), mk(["Dział B", "opis", null]), mk(["Piotr", 9, 5])];
+    const rows = [mk(["Dział A", "opis", null]), mk(["Jan", 12, 3]), mk(["Ewa", 7, 1]), mk(["Ola", 4, 2]), { values: ["Dział B", "opis", null], cellStyles: [{ bold: true }] }, mk(["Piotr", 9, 5])]; // sekcja w środku: z sygnałem autora (pogrubienie)
     markSubheaderRows(rows);
     return rows.map((r) => !!r.isSubheader);
   });

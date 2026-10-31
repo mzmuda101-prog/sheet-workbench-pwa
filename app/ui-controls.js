@@ -7,48 +7,99 @@ function hexToRgba(hex, alpha = 0.35) {
   return `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, ${alpha})`;
 }
 
-// [EN] Mark rows that look like subheaders (e.g. second header row or important info) in first N data rows
-// Podnagłówek to wiersz, który ODSTAJE od reszty: sam tekst wśród wierszy z liczbami/datami
-// („Dział A” nad kwotami). W tabeli z samym tekstem (grafik, lista nazwisk, opisy) KAŻDY
-// wiersz tak wygląda — dawniej pierwsze 10 dostawało znacznik, szare tło i blokadę edycji
-// (2026-10-31). Teraz: gdy takich wierszy jest dużo, to zwykłe dane, nie podnagłówki.
-function markSubheaderRows(rows, maxCheck = 10) {
-  const looksLikeSubheader = (row) => {
-    if (!row || !Array.isArray(row.values) || row.values.length === 0) return false;
-    let nonEmpty = 0;
-    let textLike = 0;
-    let numericLike = 0;
-    row.values.forEach((v) => {
-      if (v != null && String(v).trim() !== "") {
-        nonEmpty += 1;
-        if (typeof v === "number" || v instanceof Date) numericLike += 1;
-        else textLike += 1;
-      }
+// ── Wiersze sekcji („podnagłówki”), przebudowa 2026-10-31 ────────────────────────
+// Wiersz sekcji to taki, który ODSTAJE od reszty tabeli: „Dział A”, „Tydzień 12”, „MATERIAŁY:”
+// nad wierszami z kwotami. To wyłącznie PODPOWIEDŹ (szary pasek, podział na sekcje w analizach,
+// pominięcie przy zmianach całej kolumny i granica „przenoszenia” w trybie spisywania) —
+// edycji nie blokuje, bo Excel takiego pojęcia nie ma.
+// Dawniej: tylko pierwsze 10 wierszy i reguła „≥2 teksty, zero liczb” — w tabeli z samym
+// tekstem (grafik) łapała zwykłe wiersze, a „Dział B” w środku tabeli był niewidoczny.
+// Teraz cała tabela i punkty za wskazówki — kształt wiersza sam nie wystarcza, potrzebny
+// jest choć jeden SYGNAŁ autora (pogrubienie, wypełnienie, scalenie, etykieta, góra tabeli):
+//   kształt:  brak liczb/dat tam, gdzie typowy wiersz je ma (+1) · mało wypełnionych komórek (+1)
+//   sygnały:  scalenie w poprzek (+2) · pogrubienie (+1) · wypełnienie (+1) · etykieta (+1)
+//             („Dział …”, „…:”, WERSALIKI, nazwa miesiąca/dnia) · druga linia nagłówka u góry (+2)
+// Próg: ≥3 punkty i ≥1 sygnał. Bezpiecznik: gdy „sekcją” wyszłoby ponad 30% wierszy, to
+// wzór danych, a nie sekcje — wtedy zostaje tylko ewentualna druga linia nagłówka.
+const SECTION_LABEL_RE = /^(?:dział|dzial|sekcja|grupa|część|czesc|rozdział|rozdzial|etap|kategoria|tydzień|tydzien|miesiąc|miesiac|kwartał|kwartal|rok|zmiana|oddział|oddzial|section|group|part|chapter|category|week|month|quarter|stage)(?![\p{L}\d])/iu; // nie \b: dla JS „ł”/„ń” to nie litera
+const SECTION_NAMES_RE = /^(?:styczeń|styczen|luty|marzec|kwiecień|kwiecien|maj|czerwiec|lipiec|sierpień|sierpien|wrzesień|wrzesien|październik|pazdziernik|listopad|grudzień|grudzien|poniedziałek|poniedzialek|wtorek|środa|sroda|czwartek|piątek|piatek|sobota|niedziela|january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?![\p{L}\d])/iu;
+
+function looksLikeSectionLabel(text) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 60) return false;
+  if (/[:：]$/.test(t)) return true;
+  if (SECTION_LABEL_RE.test(t) || SECTION_NAMES_RE.test(t)) return true;
+  const letters = t.replace(/[^\p{L}]/gu, "");
+  return letters.length >= 3 && letters === letters.toLocaleUpperCase("pl") && letters !== letters.toLocaleLowerCase("pl");
+}
+
+function markSubheaderRows(rows, merges) {
+  const n = rows.length;
+  if (!n) return rows;
+  const isNum = (v) => typeof v === "number" || v instanceof Date;
+  const present = (v) => v != null && String(v).trim() !== "";
+  // profil tabeli: typowa liczba wypełnionych komórek i kolumny „liczbowe”
+  const SAMPLE = Math.min(n, 400);
+  const step = n > SAMPLE ? n / SAMPLE : 1;
+  const fills = [];
+  const numHits = [];
+  const colHits = [];
+  for (let k = 0; k < SAMPLE; k++) {
+    const vals = rows[Math.floor(k * step)]?.values || [];
+    let f = 0;
+    vals.forEach((v, c) => {
+      if (!present(v)) return;
+      f += 1;
+      colHits[c] = (colHits[c] || 0) + 1;
+      if (isNum(v)) numHits[c] = (numHits[c] || 0) + 1;
     });
-    const n = row.values.length;
-    return nonEmpty >= 2
-      && textLike / nonEmpty >= 0.8
-      && numericLike === 0
-      && nonEmpty <= Math.max(6, Math.ceil(n * 0.75));
-  };
-  // tabela „tekstowa” = większość niepustych wierszy bez żadnej liczby/daty
-  const sampleN = Math.min(rows.length, 60);
-  let filled = 0;
-  let noNumbers = 0;
-  for (let i = 0; i < sampleN; i++) {
-    const vals = rows[i] && Array.isArray(rows[i].values) ? rows[i].values : [];
-    const present = vals.filter((v) => v != null && String(v).trim() !== "");
-    if (!present.length) continue;
-    filled += 1;
-    if (!present.some((v) => typeof v === "number" || v instanceof Date)) noNumbers += 1;
+    if (f) fills.push(f);
   }
-  const textTable = filled >= 3 && noNumbers / filled >= 0.6;
-  const toCheck = Math.min(maxCheck, rows.length);
-  for (let i = 0; i < toCheck; i++) {
+  if (!fills.length) return rows;
+  fills.sort((a, b) => a - b);
+  const typicalFill = fills[Math.floor(fills.length / 2)];
+  const numericCols = [];
+  colHits.forEach((h, c) => { if (h && (numHits[c] || 0) / h >= 0.6) numericCols.push(c); });
+  // scalenia w poprzek wiersza (≥2 kolumny) — klasyczny pasek sekcji w Excelu
+  const mergedRows = new Set();
+  (Array.isArray(merges) ? merges : []).forEach((m) => {
+    if (m && m.s && m.e && m.e.c > m.s.c && m.s.r === m.e.r) mergedRows.add(m.s.r);
+  });
+
+  const flagged = [];
+  let topHeader = -1;
+  for (let i = 0; i < n; i++) {
     const row = rows[i];
-    if (!textTable && looksLikeSubheader(row)) row.isSubheader = true;
-    else if (row && row.isSubheader) row.isSubheader = false;
+    if (!row || !Array.isArray(row.values)) continue;
+    if (row.isSubheader) row.isSubheader = false;
+    const vals = row.values;
+    let filled = 0;
+    let nums = 0;
+    let firstText = -1;
+    for (let c = 0; c < vals.length; c++) {
+      if (!present(vals[c])) continue;
+      filled += 1;
+      if (isNum(vals[c])) nums += 1;
+      else if (firstText < 0) firstText = c;
+    }
+    if (!filled || firstText < 0) continue; // pusty albo bez tekstu — nie sekcja
+    const textRatio = (filled - nums) / filled;
+    if (textRatio < 0.8) continue;
+    let shape = 0;
+    let signal = 0;
+    if (numericCols.length && !numericCols.some((c) => present(vals[c]) && isNum(vals[c]))) shape += 1;
+    if (filled <= Math.max(1, Math.floor(typicalFill * 0.4))) shape += 1;
+    const st = Array.isArray(row.cellStyles) ? row.cellStyles[firstText] : null;
+    if (st && st.bold) signal += 1;
+    if (st && st.hasCustomFill) signal += 1;
+    if (typeof row.rowIndex0 === "number" && mergedRows.has(row.rowIndex0)) signal += 2;
+    if (looksLikeSectionLabel(vals[firstText])) signal += 1;
+    // druga linia nagłówka: na samej górze, sam tekst, a tabela niżej ma liczby
+    if (i < 2 && topHeader === i - 1 && numericCols.length && nums === 0 && filled >= 2) { signal += 2; topHeader = i; }
+    if (signal >= 1 && shape + signal >= 3) flagged.push(i);
   }
+  const keep = flagged.length > Math.max(2, n * 0.3) ? flagged.filter((i) => i <= topHeader) : flagged;
+  keep.forEach((i) => { rows[i].isSubheader = true; });
   return rows;
 }
 
@@ -2393,7 +2444,7 @@ loadBtn.addEventListener("click", () => {
       currentSheetRowHeights = data.rowHeights || {};
       currentSheetStats = data.stats || null;
       if (typeof cfmtOverlayRows === "function") cfmtOverlayRows(data.rows);
-      baseRows = markSubheaderRows(data.rows);
+      baseRows = markSubheaderRows(data.rows, data.merges);
       const kpiData = collectKpiEntries(sheet, headerRow);
       currentKpiEntries = Array.isArray(kpiData?.entries) ? kpiData.entries : [];
       currentKpiAnchorRow = Number(kpiData?.anchorRow) || headerRow;
