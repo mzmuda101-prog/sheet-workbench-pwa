@@ -212,6 +212,68 @@ async function run() {
   const savedLeaks = leaksIn(savedTexts, ["Jan Kowalski", "Anna Nowak", "jan.kowalski@firma.pl", "44051401359", "Ewa Mazur"]);
   ok("zapis po anonimizacji w miejscu bez oryginałów", savedLeaks.length === 0, savedLeaks.slice(0, 6));
 
+  // ── 8. tabele, listy wyboru, nazwy, WYSZUKAJ (scripts/fixtures/anon-tables.xlsx) ──
+  // Arkusz „bazy” ma DWIE tabele; dolna („zadania”: mikrofony, nagłośnienie…) zaczyna się
+  // pod wykrytym wierszem nagłówka arkusza. Jej nagłówki NIE mogą się zmienić (Excel:
+  // „zawartość, która powoduje problem” — zgłoszenie 2026-10-31).
+  const FIX_TABLES = path.join(__dirname, "fixtures", "anon-tables.xlsx");
+  await openFile(page, FIX_TABLES);
+  const tsc = await scanWith(page, "file");
+  ok("tabele: kolumna tabeli „zadania” ma własny nagłówek", tsc.cols.some((c) => /^bazy\|mikrofony\|person$/.test(c)), tsc.cols);
+  const tc = await runCopy(page);
+  const tTexts = await zipTexts(tc.bytes);
+  const tWb = XLSX.read(Buffer.from(tc.bytes), { type: "buffer" });
+  const bz = tWb.Sheets.bazy;
+  ok("tabele: nagłówki dolnej tabeli bez zmian", ["A12", "B12", "C12", "D12"].map((r) => bz[r] && bz[r].v).join("|") === "mikrofony|nagłośnienie|porządkowi|scena", ["A12", "B12", "C12", "D12"].map((r) => bz[r] && bz[r].v));
+  ok("tabele: nagłówek górnej tabeli bez zmian", bz.A3.v === "Imię i nazwisko", bz.A3.v);
+  for (const [p, x] of Object.entries(tTexts)) {
+    if (!/^xl\/tables\//.test(p)) continue;
+    const ref = x.match(/<table\b[^>]*\bref="([A-Z]+\d+):/)[1];
+    const st0 = XLSX.utils.decode_cell(ref);
+    const names = [...x.matchAll(/<tableColumn\b[^>]*\bname="([^"]*)"/g)].map((m) => decode(m[1]));
+    const cells = names.map((_, i) => { const c = bz[XLSX.utils.encode_cell({ r: st0.r, c: st0.c + i })]; return c ? String(c.v) : ""; });
+    ok(`tabele: ${p} — nazwy kolumn = komórki nagłówka`, names.join("|") === cells.join("|"), [names, cells]);
+  }
+  ok("tabele: dane w dolnej tabeli zanonimizowane", /^Osoba \d{3}$/.test(bz.A13.v), bz.A13.v);
+  ok("tabele: test szczelności 0", tc.report.leaks.length === 0, tc.report.leaks);
+  ok("tabele: kontrola powiązań — listy wyboru w porządku", /każda wartość nadal jest na swojej liście/.test(tc.reportText), tc.reportText.slice(-400));
+  const gl = tWb.Sheets.Glowne;
+  ok("tabele: wartość z listy = wartość ze źródła listy", [bz.A13.v, bz.A14.v, bz.A15.v, bz.A16.v, bz.A17.v].includes(gl.B2.v), [gl.B2.v]);
+  const glXml = decode(Object.entries(tTexts).find(([p, x]) => /^xl\/worksheets\/sheet\d+\.xml$/.test(p) && x.includes('r="F2"'))?.[1] || "");
+  const f2 = (glXml.match(/<c r="F2"[^>]*><f>([^<]*)<\/f>/) || [])[1] || "";
+  ok("tabele: stała w formule zamieniona spójnie", new RegExp(`IF\\(B2="${gl.B2.v}"`).test(f2), [f2, gl.B2.v]);
+  const V2 = require("./ooxml-validate.js");
+  if (V2.available()) {
+    const tmp = path.join(os.tmpdir(), `anon-tables-${Date.now()}.xlsx`);
+    fs.writeFileSync(tmp, Buffer.from(tc.bytes));
+    const [o2, a2] = V2.validate([FIX_TABLES, tmp]);
+    const fresh2 = V2.newErrors(o2, a2);
+    ok("tabele: Open XML SDK bez nowych błędów", fresh2.length === 0, fresh2.slice(0, 4).map(V2.short));
+  }
+  // zabezpieczenie zapisu: rozjechany nagłówek tabeli → nazwa kolumny i odwołanie Tabela[Kolumna] dostosowane
+  const synced = await page.evaluate(async (bytes) => {
+    const zip = await JSZip.loadAsync(new Uint8Array(bytes));
+    const sp = await resolveSheetPaths(zip);
+    const p = sp.bazy;
+    let x = await zip.file(p).async("string");
+    x = x.replace(/(<c r="A3"[^>]*>)[\s\S]*?(<\/c>)/, '<c r="A3" t="inlineStr"><is><t>Osoba</t></is></c>');
+    zip.file(p, x);
+    const n = await swbAnonSyncTables(zip, sp);
+    const t = await zip.file(Object.keys(zip.files).find((f) => /tables\/table\d+\.xml$/.test(f) && /bracia/.test(zip.files[f].name) || false) || "xl/tables/table1.xml").async("string");
+    const all = await Promise.all(Object.keys(zip.files).filter((f) => /tables\/table\d+\.xml$/.test(f)).map((f) => zip.file(f).async("string")));
+    const gx = await zip.file(sp.Glowne).async("string");
+    return { n, cols: all.join("").match(/tableColumn id="1" name="[^"]*"/g), f: (gx.match(/VLOOKUP\([^<]*/) || [""])[0] };
+  }, tc.bytes);
+  ok("tabele: synchronizacja nazwy kolumny", synced.n === 1 && synced.cols.some((c) => /name="Osoba"/.test(c)), synced);
+  ok("tabele: odwołanie strukturalne w formule poprawione", /bracia\[\[Osoba\]:\[Telefon\]\]/.test(decode(synced.f)), synced.f);
+
+  // ── 9. raport: pełne wartości i adresy (zakres = jeden arkusz, reszta poza zakresem) ──
+  const sc9 = await scanWith(page, "sheet");
+  void sc9;
+  const r9 = await runCopy(page);
+  ok("raport: lista wycieków z pełnymi wartościami i adresami", r9.report.leaks.some((e) => e.kind === "cells" && e.items.some((it) => /\p{Lu}\p{Ll}+ \p{Lu}/u.test(it.term) && it.refs.length)), r9.report.leaks.slice(0, 2));
+  ok("raport: bez skracania „…”", !/\p{L}…\p{L}/u.test(r9.reportText.split("Test szczelności")[1] || ""), r9.reportText.slice(0, 300));
+
   // ── 7. prawdziwy plik RODO ──
   if (fs.existsSync(FILE_RODO) && !process.env.SKIP_RODO) {
     await openFile(page, FILE_RODO);
@@ -222,6 +284,21 @@ async function run() {
     ok("RODO: test szczelności 0", rl && rl.length === 0, rl && rl.slice(0, 6));
     const rt = await zipTexts(rc.bytes);
     ok("RODO: brak „Adam Kamiński”, „Pilipczuk”, „Maślankiewicz”", leaksIn(rt, ["Adam Kamiński", "Pilipczuk", "Maślankiewicz", "Bielak"]).length === 0, leaksIn(rt, ["Adam Kamiński", "Pilipczuk", "Maślankiewicz", "Bielak"]).slice(0, 6));
+    // Excel „naprawia” plik, gdy pozycje pola w pamięci tabeli przestawnej się powtarzają
+    // (Open XML SDK tego NIE łapie — sprawdzone w prawdziwym Excelu 2026-10-31)
+    const dupes = [];
+    Object.entries(rt).filter(([p]) => /pivotCacheDefinition/.test(p)).forEach(([p, x]) => {
+      for (const m of x.matchAll(/<cacheField\b[^>]*name="([^"]*)"[^>]*>([\s\S]*?)<\/cacheField>/g)) {
+        const vals = [...m[2].matchAll(/<s v="([^"]*)"/g)].map((v) => decode(v[1]).toLowerCase());
+        if (new Set(vals).size !== vals.length) dupes.push(`${p}:${m[1]}`);
+      }
+    });
+    ok("RODO: pozycje tabeli przestawnej unikalne", dupes.length === 0, dupes);
+    // fałszywe dane: fałszywe imię/nazwisko nie może wyglądać jak prawdziwa osoba z pliku
+    await page.evaluate(() => swbAnon.close());
+    await scanWith(page, "file", () => { swbAnon.state.methods.person = "fake"; });
+    const rf = await runCopy(page);
+    ok("RODO fałszywe dane: test szczelności 0", rf.report.leaks.length === 0, rf.report.leaks.slice(0, 3));
     const rwb = XLSX.read(Buffer.from(rc.bytes), { type: "buffer" });
     ok("RODO: kopia czyta się (wszystkie arkusze)", rwb.SheetNames.length >= 7, rwb.SheetNames);
     try {

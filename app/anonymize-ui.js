@@ -72,7 +72,20 @@ const swbAnon = (() => {
       reportSaved: "Zapisano: {name}",
       reportInPlace: "Zmiany są w otwartym pliku. Zapisz plik (Zapisz / Zapisz jako) — przy zapisie apka wyczyści też ślady poza komórkami. Cofnij: Ctrl/⌘+Z.",
       leakOk: "Test szczelności: w żadnej części pliku nie ma już oryginalnych danych ({parts} sprawdzonych części).",
-      leakFound: "Test szczelności: oryginalne dane zostały jeszcze w {n} miejscach. Zwykle to komórki poza wybranym zakresem — wybierz „Cały plik”, żeby je też objąć.",
+      leakFound: "Test szczelności: oryginalne dane zostały jeszcze w {n} miejscach (lista niżej). Często to komórki poza wybranym zakresem — wybierz „Cały plik”, żeby je też objąć.",
+      leakFoundFile: "Test szczelności: te same teksty co zanonimizowane dane zostały jeszcze w {n} miejscach (lista niżej). Sprawdź, czy to dane osobowe, czy np. nagłówek albo nazwa zakresu — wtedy to fałszywy alarm.",
+      lkCells: "Arkusz „{s}” — komórki:", lkSheetOther: "Arkusz „{s}” — poza komórkami (lista wyboru, nagłówek wydruku, hiperłącze…):",
+      lkSheetName: "Nazwy arkuszy:", lkDefinedName: "Nazwy zakresów (Formuły → Menedżer nazw):", lkDefinedValue: "Treść nazw zakresów:",
+      lkTableName: "Nazwy tabel:", lkTableColumn: "Tabela „{t}” — nazwy kolumn:", lkAppTitles: "Właściwości pliku — lista nazw arkuszy i zakresów:",
+      lkPart: "{p}:", lkHeader: "nagłówek", lkFormula: "wynik formuły",
+      lkHintNames: "To nazwa w strukturze pliku, a nie dane w komórce. Jeśli to nie są dane osobowe (np. „mikrofony”), to fałszywy alarm.",
+      lkHintHeaders: "To nagłówki — apka ich nie zmienia (od nich zależą tabele, listy i formuły). Jeśli to nie dane osobowe, to fałszywy alarm.",
+      plCore: "Właściwości pliku", plChart: "Wykres", plDrawing: "Rysunek / pole tekstowe", plPivot: "Tabela przestawna", plNotes: "Notatki i komentarze",
+      linksOk: "Powiązania: {rules} list wyboru, {cells} komórek sprawdzonych — każda wartość nadal jest na swojej liście.",
+      linksBroken: "Powiązania: {n} komórek ma wartość spoza swojej listy wyboru po anonimizacji:",
+      personFormulaHint: "Plik ma formuły. Jeśli któraś składa imię i nazwisko w innej formie (np. „Nazwisko Imię”, „I. Nazwisko”), wybierz dla osób „Fałszywe dane” — z pseudonimu „Osoba 001” formuła zrobi „001 Osoba”.",
+      linksFix: "Zwykle lista źródłowa (np. arkusz z bazą) była poza zakresem anonimizacji. Wybierz „Cały plik” — wtedy lista i komórki zmienią się tą samą zamianą.",
+      linksNote: "Te same wartości dostają wszędzie tę samą zamianę, więc listy z „bazy”, WYSZUKAJ/X.WYSZUKAJ po nazwisku, nazwy zakresów i tabele dalej się zgadzają. Formuły przeliczą się z nowych danych.",
       leakPart: "{where}: {terms}",
       warnImages: "Plik ma obrazy — ich treści apka nie sprawdza.",
       warnRevisions: "Plik ma historię zmian współdzielenia — może zawierać stare wartości.",
@@ -81,7 +94,7 @@ const swbAnon = (() => {
       cleaned: "Wyczyszczone ślady: {list}.",
       cl_metadata: "właściwości pliku", cl_authors: "autorzy", cl_formulaResults: "wyniki formuł", cl_formulaConstants: "stałe w formułach",
       cl_links: "łącza i listy", cl_headersFooters: "nagłówki/stopki", cl_notes: "notatki", cl_notesRemoved: "usunięte notatki",
-      cl_unusedStrings: "stare teksty", cl_charts: "wykresy", cl_pivots: "tabele przestawne",
+      cl_unusedStrings: "stare teksty", cl_charts: "wykresy", cl_pivots: "tabele przestawne", cl_tablesSynced: "nazwy kolumn tabel",
       sharedStrings: "teksty komórek pliku", inSheet: "arkusz „{s}”",
       toastInPlace: "Zanonimizowano {n} komórek. Zapisz plik, żeby zmiany trafiły na dysk.",
       toastLeakOnSave: "Zapisano, ale oryginalne dane zostały jeszcze w {n} miejscach pliku (poza zakresem anonimizacji).",
@@ -153,7 +166,20 @@ const swbAnon = (() => {
       reportSaved: "Saved: {name}",
       reportInPlace: "The changes are in the open file. Save it (Save / Save as) — saving also cleans traces outside cells. Undo: Ctrl/⌘+Z.",
       leakOk: "Leak test: no original data left in any part of the file ({parts} parts checked).",
-      leakFound: "Leak test: original data is still in {n} places. Usually these are cells outside the chosen scope — choose “Whole file” to cover them.",
+      leakFound: "Leak test: original data is still in {n} places (listed below). Often these are cells outside the chosen scope — choose “Whole file” to cover them.",
+      leakFoundFile: "Leak test: the same texts as the anonymized data are still in {n} places (listed below). Check whether it's personal data or e.g. a header or range name — then it's a false alarm.",
+      lkCells: "Sheet “{s}” — cells:", lkSheetOther: "Sheet “{s}” — outside cells (dropdown list, print header, hyperlink…):",
+      lkSheetName: "Sheet names:", lkDefinedName: "Range names (Formulas → Name Manager):", lkDefinedValue: "Range name contents:",
+      lkTableName: "Table names:", lkTableColumn: "Table “{t}” — column names:", lkAppTitles: "File properties — list of sheet and range names:",
+      lkPart: "{p}:", lkHeader: "header", lkFormula: "formula result",
+      lkHintNames: "This is a name in the file structure, not data in a cell. If it isn't personal data (e.g. “microphones”), it's a false alarm.",
+      lkHintHeaders: "These are headers — the app doesn't change them (tables, lists and formulas depend on them). If it isn't personal data, it's a false alarm.",
+      plCore: "File properties", plChart: "Chart", plDrawing: "Drawing / text box", plPivot: "Pivot table", plNotes: "Notes and comments",
+      linksOk: "Links: {rules} dropdown lists, {cells} cells checked — every value is still on its list.",
+      linksBroken: "Links: {n} cells have a value outside their dropdown list after anonymization:",
+      personFormulaHint: "The file has formulas. If one builds the name in another form (e.g. “Last First”, “F. Last”), choose “Fake data” for people — from the pseudonym “Person 001” a formula makes “001 Person”.",
+      linksFix: "Usually the source list (e.g. a database sheet) was outside the anonymized scope. Choose “Whole file” — then the list and the cells change with the same replacement.",
+      linksNote: "The same values get the same replacement everywhere, so lists from a “database” sheet, VLOOKUP/XLOOKUP by name, range names and tables still match. Formulas recalculate from the new data.",
       leakPart: "{where}: {terms}",
       warnImages: "The file has images — the app doesn't check their content.",
       warnRevisions: "The file has shared-workbook revision history — it may hold old values.",
@@ -162,7 +188,7 @@ const swbAnon = (() => {
       cleaned: "Cleaned traces: {list}.",
       cl_metadata: "file properties", cl_authors: "authors", cl_formulaResults: "formula results", cl_formulaConstants: "formula constants",
       cl_links: "links and lists", cl_headersFooters: "headers/footers", cl_notes: "notes", cl_notesRemoved: "removed notes",
-      cl_unusedStrings: "old texts", cl_charts: "charts", cl_pivots: "pivot tables",
+      cl_unusedStrings: "old texts", cl_charts: "charts", cl_pivots: "pivot tables", cl_tablesSynced: "table column names",
       sharedStrings: "file cell texts", inSheet: "sheet “{s}”",
       toastInPlace: "Anonymized {n} cells. Save the file to write the changes to disk.",
       toastLeakOnSave: "Saved, but original data is still in {n} places of the file (outside the anonymized scope).",
@@ -270,7 +296,7 @@ const swbAnon = (() => {
     if (sc.err) return { err: sc.err };
     SwbAnon.resetLearned();
     const compiled = SwbAnon.compileRules({ terms: lines(st.rules.terms), patterns: lines(st.rules.patterns), exceptions: lines(st.rules.exceptions) });
-    const result = { cols: [], cells: 0, formulas: 0, sheets: sc.sheets.length, compiled };
+    const result = { cols: [], cells: 0, formulas: 0, sheets: sc.sheets.length, compiled, protectedCells: new Set(), headerCells: new Set() };
     let total = 0;
     const plans = sc.sheets.map((s) => {
       const ws = workbook.Sheets[s.name];
@@ -283,41 +309,65 @@ const swbAnon = (() => {
     let tick = performance.now();
     for (const p of plans) {
       const { ws, range, header0 } = p;
-      const byCol = new Map();
+      const tables = tablesOfSheet(p.name);
       for (let c = range.s.c; c <= range.e.c; c++) {
         if (p.cols && !p.cols.has(c)) { done += range.e.r - range.s.r + 1; continue; }
         const headCell = header0 >= 0 ? ws[XLSX.utils.encode_cell({ r: header0, c })] : null;
-        const header = headCell && headCell.v != null ? String(headCell.w ?? headCell.v) : "";
-        const cells = [];
+        const sheetHeader = headCell && headCell.v != null ? String(headCell.w ?? headCell.v) : "";
+        // Kolumna dzieli się na odcinki: każda tabela Excela ma własny nagłówek (i profil),
+        // reszta arkusza — nagłówek arkusza. Nagłówki i wiersze sum tabel są nietykalne:
+        // Excel wymaga, żeby nazwa kolumny tabeli była identyczna z komórką nagłówka.
+        const segs = new Map(); // klucz tabeli ("" = poza tabelą) → komórki
         for (let r = range.s.r; r <= range.e.r; r++) {
           done++;
-          if (r === header0) continue;
+          const tb = tables.find((t) => r >= t.r0 && r <= t.r1 && c >= t.c0 && c <= t.c1) || null;
+          if (tb && (r < tb.r0 + tb.headerRows || r > tb.r1 - tb.totalsRows)) { result.protectedCells.add(`${p.name}!${XLSX.utils.encode_cell({ r, c })}`); continue; }
+          if (!tb && r === header0) continue;
           if (p.rows && !p.rows.has(r)) continue;
           const cell = ws[XLSX.utils.encode_cell({ r, c })];
           if (!cell || cell.v == null || cell.v === "" || cell.t === "z" || cell.t === "e") continue;
           if (cell.f) { result.formulas++; continue; }
           result.cells++;
-          cells.push({ r, v: cell.v, above: header0 >= 0 && r < header0 });
+          const key = tb ? tb.name : "";
+          if (!segs.has(key)) segs.set(key, { tb, cells: [] });
+          segs.get(key).cells.push({ r, v: cell.v, above: !tb && header0 >= 0 && r < header0 });
           if (performance.now() - tick > 40) {
             onProgress && onProgress(done, total);
             await new Promise((res) => setTimeout(res, 0));
             tick = performance.now();
           }
         }
-        if (!cells.length) continue;
-        const dataCells = cells.filter((x) => !x.above);
-        const profile = SwbAnon.profileColumn(header, dataCells.slice(0, 2000), compiled);
-        cells.forEach((x) => { x.hits = typeof x.v === "string" ? SwbAnon.findInText(x.v, compiled, header) : typeof x.v === "number" && Number.isInteger(x.v) && x.v > 999999 ? SwbAnon.findInText(String(x.v), compiled, header) : []; });
-        byCol.set(c, true);
-        result.cols.push({ sheet: p.name, c, header, profile, cells, letter: XLSX.utils.encode_col(c) });
+        for (const [key, seg] of segs) {
+          const header = seg.tb ? (seg.tb.colNames[c - seg.tb.c0] ?? "") : sheetHeader;
+          const cells = seg.cells;
+          const dataCells = cells.filter((x) => !x.above);
+          const profile = SwbAnon.profileColumn(header, dataCells.slice(0, 2000), compiled);
+          cells.forEach((x) => { x.hits = typeof x.v === "string" ? SwbAnon.findInText(x.v, compiled, header) : typeof x.v === "number" && Number.isInteger(x.v) && x.v > 999999 ? SwbAnon.findInText(String(x.v), compiled, header) : []; });
+          result.cols.push({ sheet: p.name, c, table: key, header, profile, cells, letter: XLSX.utils.encode_col(c) });
+        }
       }
-      void byCol;
+      if (header0 >= 0) for (let c = range.s.c; c <= range.e.c; c++) result.headerCells.add(`${p.name}!${XLSX.utils.encode_cell({ r: header0, c })}`);
     }
     onProgress && onProgress(total, total);
     return result;
   }
 
-  const colKey = (col) => `${col.sheet}|${col.c}`;
+  const colKey = (col) => `${col.sheet}|${col.c}|${col.table || ""}`;
+
+  // Tabele Excela arkusza (z currentTables, czytanych przy otwarciu pliku).
+  function tablesOfSheet(sheetName) {
+    const out = [];
+    const seen = new Set();
+    const all = typeof currentTables === "object" && currentTables ? currentTables : {};
+    for (const tb of Object.values(all)) {
+      if (!tb || seen.has(tb) || tb.sheetName !== sheetName) continue;
+      seen.add(tb);
+      let rg;
+      try { rg = XLSX.utils.decode_range(tb.ref); } catch { continue; }
+      out.push({ name: tb.displayName || tb.name || tb.ref, r0: rg.s.r, r1: rg.e.r, c0: rg.s.c, c1: rg.e.c, headerRows: Number.isFinite(tb.headerRows) ? tb.headerRows : 1, totalsRows: Number.isFinite(tb.totalsRows) ? tb.totalsRows : 0, colNames: tb.colNames || [] });
+    }
+    return out;
+  }
   function colMode(col) {
     const m = st.colModes[colKey(col)];
     if (m) return m;
@@ -457,7 +507,7 @@ const swbAnon = (() => {
     }
     bumpSheetDataStamp();
     if (typeof swbNotesInvalidate === "function") swbNotesInvalidate();
-    const cleanup = { session: plan.session, opts: { ...st.traces }, workbook };
+    const cleanup = { session: plan.session, opts: { ...st.traces }, workbook, headerCells: st.scan && st.scan.headerCells, protectedCells: st.scan && st.scan.protectedCells };
     if (group.length && typeof undoStack !== "undefined") {
       const cur = group.find((s) => s.sheet === currentSheetName) || group[0];
       const all = [cur, ...group.filter((s) => s !== cur)];
@@ -474,7 +524,8 @@ const swbAnon = (() => {
     return true;
   }
 
-  async function buildCopyBytes(plan) {
+  // traces/noClean — warianty do testów (szukanie, który krok czyszczenia psuje plik)
+  async function buildCopyBytes(plan, traces = st.traces, noClean = false) {
     const merged = {};
     Object.entries(pendingEdits || {}).forEach(([sn, cells]) => { merged[sn] = { ...cells }; });
     plan.changes.forEach((ch) => {
@@ -491,7 +542,8 @@ const swbAnon = (() => {
       merged[ch.sheet][ref] = payload;
     });
     const patched = await buildPatchedXlsx(originalFileBytes, merged, buildSheetFormulaMaps());
-    return swbAnonCleanZip(patched, plan.session, st.traces, { personMethod: st.methods.person });
+    if (noClean) return { bytes: patched, report: null };
+    return swbAnonCleanZip(patched, plan.session, traces, { personMethod: st.methods.person, headerCells: st.scan.headerCells, protectedCells: st.scan.protectedCells });
   }
 
   async function saveCopy(bytes) {
@@ -523,7 +575,7 @@ const swbAnon = (() => {
     const c = swbAnonPendingCleanup;
     if (!c || c.workbook !== workbook || typeof swbAnonCleanZip !== "function") return bytes;
     try {
-      const out = await swbAnonCleanZip(bytes, c.session, c.opts, { personMethod: c.session.methods.person });
+      const out = await swbAnonCleanZip(bytes, c.session, c.opts, { personMethod: c.session.methods.person, headerCells: c.headerCells, protectedCells: c.protectedCells });
       if (out.report.leaks.length) setTimeout(() => toast(tx("toastLeakOnSave", { n: out.report.leaks.length }), "warning"), 400);
       swbAnon.lastReport = out.report;
       return out.bytes;
@@ -701,6 +753,8 @@ const swbAnon = (() => {
         grid.appendChild(row);
       });
       sec.appendChild(grid);
+      // formuły budujące formy nazwiska („Nazwisko Imię”, „I. Nazwisko”) z pseudonimu „Osoba 001” robią „001 Osoba”
+      if (plan.typeCounts.person && st.scan.formulas && st.methods.person !== "fake") sec.appendChild(el("p", "field-note", tx("personFormulaHint")));
       R.results.appendChild(sec);
     }
 
@@ -716,7 +770,8 @@ const swbAnon = (() => {
       cols.forEach((col) => {
         const row = el("div", "anon-col-row");
         const name = el("div", "anon-col-name");
-        name.appendChild(el("span", "anon-col-letter", multiSheet ? `${col.sheet} › ${col.letter}` : col.letter));
+        const where = `${multiSheet ? `${col.sheet} › ` : ""}${col.letter}${col.table ? ` · ${col.table}` : ""}`;
+        name.appendChild(el("span", "anon-col-letter", where));
         name.appendChild(el("span", "anon-col-head", col.header || "—"));
         const opts = [["auto", tx("colAuto")], ...SwbAnon.TYPES.filter((t) => t !== "other").map((t) => [t, `${tx("wholeCell")}${tx(`t_${t}`)}`]), ["skip", tx("colSkip")]];
         const sel = select(opts, colMode(col), (v) => { st.colModes[colKey(col)] = v; refreshPlan(); });
@@ -852,7 +907,124 @@ const swbAnon = (() => {
     return box;
   }
 
-  function renderReport({ changed, savedName, report, inPlace }) {
+  // Wycieki: pełne wartości i dokładne miejsca — żeby dało się ocenić, czy to dane osobowe,
+  // czy np. nazwa zakresu albo nagłówek (fałszywy alarm).
+  function renderLeaks(leaks) {
+    const box = el("div", "anon-leaks-box");
+    const places = leaks.reduce((n, e) => n + e.items.length, 0);
+    box.appendChild(el("p", "anon-warn", tx(st.lastScope === "file" ? "leakFoundFile" : "leakFound", { n: fmtN(places) })));
+    const q = (v) => `„${v}”`;
+    leaks.forEach((e) => {
+      const block = el("div", "anon-leak");
+      let head;
+      if (e.kind === "cells") head = tx("lkCells", { s: e.sheet });
+      else if (e.kind === "sheetOther") head = tx("lkSheetOther", { s: e.sheet });
+      else if (e.kind === "sheetName") head = tx("lkSheetName");
+      else if (e.kind === "definedName") head = tx("lkDefinedName");
+      else if (e.kind === "tableName") head = tx("lkTableName");
+      else if (e.kind === "tableColumn") head = tx("lkTableColumn", { t: e.label });
+      else if (e.kind === "appTitles") head = tx("lkAppTitles");
+      else if (e.label === "definedNameValue") head = tx("lkDefinedValue");
+      else head = tx("lkPart", { p: partLabel(e.label) });
+      block.appendChild(el("div", "anon-leak-head", head));
+      const ul = el("ul", "anon-leaks");
+      e.items.slice(0, 40).forEach((it) => {
+        const li = el("li");
+        li.appendChild(el("span", "anon-leak-term", q(it.term)));
+        if (it.refs && it.refs.length) {
+          const refs = it.refs.slice(0, 12).map((r) => `${r.ref}${r.header ? ` (${tx("lkHeader")})` : r.formula ? ` (${tx("lkFormula")})` : ""}`).join(", ");
+          li.appendChild(el("span", "anon-leak-refs", ` — ${refs}${it.refs.length > 12 ? ` +${it.refs.length - 12}` : ""}`));
+        }
+        ul.appendChild(li);
+      });
+      if (e.items.length > 40) ul.appendChild(el("li", null, tx("more", { n: fmtN(e.items.length - 40) })));
+      block.appendChild(ul);
+      const hint = { sheetName: "lkHintNames", definedName: "lkHintNames", tableName: "lkHintNames", tableColumn: "lkHintNames", appTitles: "lkHintNames" }[e.kind]
+        || (e.kind === "cells" && e.items.every((it) => it.refs.every((r) => r.header)) ? "lkHintHeaders" : null);
+      if (hint) block.appendChild(el("p", "field-note", tx(hint)));
+      box.appendChild(block);
+    });
+    return box;
+  }
+  function partLabel(p) {
+    if (/^docProps\/core/i.test(p)) return tx("plCore");
+    if (/^xl\/charts\//i.test(p)) return tx("plChart");
+    if (/^xl\/drawings\//i.test(p)) return tx("plDrawing");
+    if (/^xl\/pivot/i.test(p)) return tx("plPivot");
+    if (/^xl\/(comments|threadedComments)/i.test(p)) return tx("plNotes");
+    if (/sharedStrings/i.test(p)) return tx("sharedStrings");
+    return p;
+  }
+
+  // ── kontrola powiązań: listy wyboru (Sprawdzanie poprawności → Lista) ──────
+  // Komórka, która przed anonimizacją miała wartość z listy, musi ją mieć także po — lista
+  // źródłowa (zakres, nazwa, kolumna tabeli albo lista wpisana) zmienia się tą samą zamianą.
+  function checkLinks(plan) {
+    if (typeof dvRulesBySheet === "undefined" || !dvRulesBySheet || !plan) return null;
+    const changed = new Map(plan.changes.map((ch) => [`${ch.sheet}!${ch.r},${ch.c}`, ch.after ? ch.after.value : null]));
+    const orig = (sheet, r, c) => { const cell = workbook.Sheets[sheet]?.[XLSX.utils.encode_cell({ r, c })]; return cell ? (cell.w ?? cell.v) : null; };
+    const after = (sheet, r, c) => { const k = `${sheet}!${r},${c}`; return changed.has(k) ? changed.get(k) : orig(sheet, r, c); };
+    const norm = (v) => (v == null ? "" : String(v instanceof Date ? toDisplay(v) : v).trim().toLowerCase());
+    const rangeOf = (f) => {
+      let ref = String(f || "").trim().replace(/^=/, "");
+      if (typeof dvNameRefs !== "undefined" && dvNameRefs && dvNameRefs.has(ref)) ref = dvNameRefs.get(ref);
+      if (typeof dvResolveStructuredToA1 === "function") ref = dvResolveStructuredToA1(ref) || ref;
+      return ref;
+    };
+    const readSet = (ref, sheet, valueAt) => {
+      let sn = sheet, part = ref;
+      const bang = ref.lastIndexOf("!");
+      if (bang >= 0) { sn = ref.slice(0, bang).replace(/^'(.*)'$/, "$1").replace(/''/g, "'"); part = ref.slice(bang + 1); }
+      let rg;
+      try { rg = XLSX.utils.decode_range(part.replace(/\$/g, "")); } catch { return null; }
+      if (!workbook.Sheets[sn]) return null;
+      const set = new Set();
+      for (let r = rg.s.r; r <= rg.e.r && set.size < 5000; r++) for (let c = rg.s.c; c <= rg.e.c; c++) { const v = norm(valueAt(sn, r, c)); if (v) set.add(v); }
+      return set;
+    };
+    let rules = 0, cells = 0;
+    const broken = [];
+    for (const [sheet, list] of dvRulesBySheet) {
+      for (const rule of list) {
+        if (rule.type !== "list") continue;
+        const f = String(rule.formula1Raw || "").trim();
+        let before, now;
+        if (/^".*"$/.test(f)) {
+          const items = f.slice(1, -1).split(",").map((x) => x.trim()).filter(Boolean);
+          before = new Set(items.map(norm));
+          now = new Set(items.map((x) => norm(plan.session.rewriteString(x))));
+        } else {
+          const ref = rangeOf(f);
+          before = readSet(ref, sheet, orig);
+          now = readSet(ref, sheet, after);
+        }
+        if (!before || !now) continue;
+        rules++;
+        for (const rg of rule.ranges) {
+          for (let r = rg.s.r; r <= Math.min(rg.e.r, rg.s.r + 5000); r++) for (let c = rg.s.c; c <= rg.e.c; c++) {
+            const v0 = norm(orig(sheet, r, c));
+            if (!v0 || !before.has(v0)) continue; // pusta albo spoza listy już przed — nie nasza sprawa
+            cells++;
+            const v1 = norm(after(sheet, r, c));
+            if (!now.has(v1)) broken.push(`${sheet}!${XLSX.utils.encode_cell({ r, c })}`);
+          }
+        }
+      }
+    }
+    return rules ? { rules, cells, broken } : null;
+  }
+  function renderLinks(lk) {
+    const box = el("div", "anon-links");
+    if (!lk.broken.length) box.appendChild(el("p", "anon-ok", tx("linksOk", { rules: fmtN(lk.rules), cells: fmtN(lk.cells) })));
+    else {
+      box.appendChild(el("p", "anon-warn", tx("linksBroken", { n: fmtN(lk.broken.length) })));
+      box.appendChild(el("p", "anon-leak-refs", lk.broken.slice(0, 20).join(", ") + (lk.broken.length > 20 ? ` +${lk.broken.length - 20}` : "")));
+    }
+    box.appendChild(el("p", "field-note", tx(lk.broken.length ? "linksFix" : "linksNote")));
+    return box;
+  }
+
+  function renderReport({ changed, savedName, report, inPlace, links }) {
     const sec = section(tx("reportTitle"), "anon-report");
     sec.id = "anonReport";
     sec.appendChild(el("p", null, tx("reportCells", { n: fmtN(changed) })));
@@ -862,18 +1034,10 @@ const swbAnon = (() => {
       const cl = Object.entries(report.cleaned).map(([k, n]) => `${tx(`cl_${k}`)} (${fmtN(n)})`);
       if (cl.length) sec.appendChild(el("p", "field-note", tx("cleaned", { list: cl.join(", ") })));
       if (!report.leaks.length) sec.appendChild(el("p", "anon-ok", tx("leakOk", { parts: fmtN(report.partsChecked || 0) })));
-      else {
-        sec.appendChild(el("p", "anon-warn", tx("leakFound", { n: report.leaks.length })));
-        const ul = el("ul", "anon-leaks");
-        report.leaks.slice(0, 12).forEach((lk) => {
-          const where = lk.sheet ? tx("inSheet", { s: lk.sheet }) : /sharedStrings/i.test(lk.part) ? tx("sharedStrings") : lk.part;
-          const terms = lk.terms.slice(0, 5).map((s) => (s.length > 3 ? `${s.slice(0, 2)}…${s.slice(-1)}` : s)).join(", ") + (lk.terms.length > 5 ? ` +${lk.terms.length - 5}` : "");
-          ul.appendChild(el("li", null, tx("leakPart", { where, terms })));
-        });
-        sec.appendChild(ul);
-      }
+      else sec.appendChild(renderLeaks(report.leaks));
       report.warnings.forEach((w) => sec.appendChild(el("p", "field-note", tx(`warn${w[0].toUpperCase()}${w.slice(1)}`))));
     }
+    if (links) sec.appendChild(renderLinks(links));
     R.report = sec;
     if (R.results) R.results.appendChild(sec);
     sec.scrollIntoView && sec.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -885,13 +1049,15 @@ const swbAnon = (() => {
     // świeży plan tuż przed wykonaniem — ten sam, który widać w podglądzie
     const plan = buildPlan();
     st.plan = plan;
+    st.lastScope = st.scope;
     R.report = null;
+    const links = checkLinks(plan);
     if (st.output === "inplace") {
       if (!applyInPlace(plan)) return;
       toast(tx("toastInPlace", { n: fmtN(plan.changes.length) }), "success");
       st.scan = null; st.plan = null;
       render();
-      renderReport({ changed: plan.changes.length, inPlace: true });
+      renderReport({ changed: plan.changes.length, inPlace: true, links });
       return;
     }
     if (!originalFileBytes || typeof buildPatchedXlsx !== "function") { toast(tx("noBytes"), "warning"); return; }
@@ -907,7 +1073,7 @@ const swbAnon = (() => {
       R.status.textContent = "";
       if (savedName === null) { R.run.disabled = false; return; }
       log(`Anonimizacja: zapisano kopie ${savedName} (${plan.changes.length} komorek)`, "success");
-      renderReport({ changed: plan.changes.length, savedName, report });
+      renderReport({ changed: plan.changes.length, savedName, report, links });
     } catch (err) {
       R.status.textContent = "";
       toast(`${tx("noBytes")} (${err && err.message})`, "error");
@@ -948,7 +1114,7 @@ const swbAnon = (() => {
   if (openBtn) openBtn.addEventListener("click", () => open());
   syncPanel();
 
-  return { open, close: closeModal, scan, buildPlan, state: st, cleanOnSave, syncPanel, lastReport: null, lastBytes: null };
+  return { open, close: closeModal, scan, buildPlan, buildCopyBytes, state: st, cleanOnSave, syncPanel, lastReport: null, lastBytes: null };
 })();
 
 function swbAnonSyncLanguage() { swbAnon.syncPanel(); }

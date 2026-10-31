@@ -489,7 +489,7 @@ const SwbAnon = (() => {
     // pełne imię znane dla „inicjał + nazwisko” (A. Kamiński → Adam Kamiński), gdy jednoznaczne
     const fullByInitial = new Map();
 
-    const learned = { first: new Map(), sur: new Set() };
+    const learned = { first: new Map(), sur: new Set(), realFirst: new Set() };
     const activate = () => { LEARNED = learned; };
     activate();
     const surByFirstIni = new Map(); // „faustyna|g” → „grabowska”
@@ -511,6 +511,7 @@ const SwbAnon = (() => {
       }
       if (!p) return;
       p.surnameIdx.forEach((i) => { const w = p.tokens[i].replace(/[.,]$/, ""); if (w.length >= 3 && /^\p{Lu}/u.test(w)) learned.sur.add(norm(w)); });
+      if (p.first) learned.realFirst.add(norm(p.first));
       if (p.firstIdx < 0 || !p.surnameIdx.length) return;
       const surJoined = p.surnameIdx.map((i) => norm(p.tokens[i].replace(/[.,]$/, ""))).join(" ");
       const k2 = `${norm(p.first)}|${surJoined[0]}`;
@@ -557,9 +558,11 @@ const SwbAnon = (() => {
       if (!fakeFirstMap.has(k)) {
         const list = (gender || FIRST.get(k) || (/a$/i.test(realFirst) ? "f" : "m")) === "f" ? FEM_FIRST : MALE_FIRST;
         const r = rng(`first:${k}`, seed);
-        let pick = list[Math.floor(r() * list.length)];
-        if (norm(pick) === k) pick = list[(list.indexOf(pick) + 1) % list.length];
-        fakeFirstMap.set(k, pick);
+        // jak przy nazwiskach: nie bierzemy imienia, które nosi ktoś w tym pliku („S. Dawid” z
+        // fałszywego Dawida wyglądałby jak prawdziwy Dawid S. — test szczelności to łapał)
+        let i = Math.floor(r() * list.length);
+        for (let tries = 0; tries < list.length && (norm(list[i]) === k || learned.realFirst.has(norm(list[i]))); tries++) i = (i + 1) % list.length;
+        fakeFirstMap.set(k, list[i]);
       }
       return fakeFirstMap.get(k);
     }

@@ -658,6 +658,7 @@ async function parseTables(zip) {
     };
     const nameM = xml.match(/<table\b[^>]*\bname="([^"]+)"/);
     const dispM = xml.match(/\bdisplayName="([^"]+)"/);
+    meta.displayName = decodeXmlEntities((dispM || nameM || [])[1] || ""); // z wielkością liter (anonimizacja: opis kolumn)
     if (nameM) tables[decodeXmlEntities(nameM[1]).toLowerCase()] = meta;
     if (dispM) tables[decodeXmlEntities(dispM[1]).toLowerCase()] = meta;
   }
