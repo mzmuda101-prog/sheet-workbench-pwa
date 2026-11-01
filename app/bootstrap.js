@@ -336,6 +336,7 @@ if (wideLongToggleEl) {
 if (freezeHeadersEl) {
   freezeHeadersEl.addEventListener("change", () => {
     applyFreezeHeaders();
+    rememberSheetFreeze();
     toast(freezeHeadersEl.checked ? t("freezeHeadersOn") : t("freezeHeadersOff"), "info");
   });
   applyFreezeHeaders();
@@ -384,7 +385,7 @@ if (colWidthAllEl) {
 if (freezeFirstColEl) {
   freezeFirstColEl.addEventListener("change", () => {
     applyFreezeFirstColumn();
-    saveCellStylePreferences();
+    if (!rememberSheetFreeze()) saveCellStylePreferences(); // bez pliku: domyślne ustawienie
   });
 }
 if (recalcDatesEl) {

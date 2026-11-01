@@ -84,7 +84,10 @@ function installHelpers() {
     x = Math.max(b.left + 2, Math.min(b.right - 2, x));
     const hits = [];
     const holes = [];
-    for (let y = Math.ceil(b.top + 3); y < b.bottom - 3; y += 12) {
+    // przyklejony nagłówek (blokada wierszy — domyślnie z <pane> Excela) zasłania górę: to nie dziura
+    // (przyklejone są pojedyncze wiersze <thead>, sam <thead> odjeżdża — liczy się dół wiersza nagłówka)
+    const headBottom = tableWrapEl.classList.contains("freeze-headers") && fr ? fr.bottom : b.top;
+    for (let y = Math.ceil(Math.max(b.top, headBottom) + 3); y < b.bottom - 3; y += 12) {
       const el = document.elementFromPoint(x, y);
       const tr = el && el.closest ? el.closest("#dataTable tbody tr[data-row-key]") : null;
       if (!tr) { holes.push({ y: Math.round(y - b.top), what: el ? `${el.tagName}.${el.className}` : "null" }); continue; }

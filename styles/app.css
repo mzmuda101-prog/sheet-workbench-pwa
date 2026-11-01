@@ -7273,7 +7273,10 @@ body.tr-active .toast-container {
 /* bez pliku: nie ma czego szukać ani przełączać — zostaje status i „Narzędzia” (tam wczytanie) */
 .table-panel.no-data .quick-search,
 .table-panel.no-data .table-actions,
+.table-panel.no-data .toolbar-main,
+.table-panel.no-data .fmt-sheet-btn,
 .table-panel.no-data .toolbar-toggle { display: none !important; }
+.table-panel.no-data .table-toolbar::before { display: none; }
 
 .panel-toggle { display: inline-flex; align-items: center; gap: 6px; height: 34px; }
 .panel-toggle-count {

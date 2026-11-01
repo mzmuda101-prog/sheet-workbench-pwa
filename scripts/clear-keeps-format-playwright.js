@@ -109,6 +109,9 @@ async function run() {
   const want = { "42": "number:42", "12,5": "number:12.5", "-3,75": "number:-3.75", "1 234,50": "number:1234.5", "007": "number:7", "2026-05-01": "date:2026-5-1", "01.05.2026": "date:2026-5-1", "7 maja 2026": "date:2026-5-7", "500 600 700": "string:500 600 700", "Mariańska 27, 29": "string:Mariańska 27, 29", "12%": "number:0.12" }; // 12% jak Excel: 0,12 (format 0% — excel-input)
   const bad = Object.keys(want).filter((k) => parsed[k] !== want[k]).map((k) => `${k} → ${parsed[k]} (chciałem ${want[k]})`);
   ok("6. wpisywane liczby/daty/teksty rozpoznane jak w Excelu (PL)", bad.length === 0, bad);
+  // przejście widoku (vt-scene) po usunięciu wiersza zasłania tabelę dla kliknięć — w WebKicie
+  // przy przyklejonej kolumnie (blokada z <pane> pliku) trwa dłużej niż sleep
+  await page.waitForFunction(() => !document.documentElement.classList.contains("vt-scene"), null, { timeout: 5000 });
   await page.dblclick(td(4, 0));
   await page.waitForSelector(`${td(4, 0)} input.cell-editor`, { timeout: 3000 });
   await page.keyboard.press("ControlOrMeta+a");

@@ -32,7 +32,9 @@ ok(t1.includes("phone:600 123 456"), "telefon w tekście");
 ok(t1.includes("pesel:44051401359"), "PESEL w tekście");
 ok(types("Rachunek PL61 1090 1014 0000 0712 1981 2874").some((x) => x.startsWith("iban:")), "IBAN w tekście");
 ok(types("ul. Lipowa 12/3, 62-200 Gniezno").some((x) => x.startsWith("address:ul. Lipowa 12/3")), "adres");
-ok(types("ul. Lipowa 12/3, 62-200 Gniezno").includes("postcode:62-200"), "kod pocztowy");
+// kod i miejscowość po adresie należą do adresu (zamiennik ma tę samą budowę); sam kod osobno
+ok(types("ul. Lipowa 12/3, 62-200 Gniezno").includes("address:ul. Lipowa 12/3, 62-200 Gniezno"), "adres z kodem i miejscowością");
+ok(types("kod pocztowy 62-200").includes("postcode:62-200"), "kod pocztowy");
 ok(types("Spotkanie z Adamem? Rozmawiał Jan Kowalski wczoraj").includes("person:Jan Kowalski"), "osoba w zdaniu");
 ok(types("Odebrał B. Bielak").length === 0 || types("Odebrał B. Bielak").includes("person:B. Bielak"), "inicjał + nazwisko (słownik)");
 ok(types("Pani Maślankiewicz dzwoniła").some((x) => x.startsWith("person:")), "Pani + nazwisko");
@@ -137,6 +139,33 @@ ok(types("rozmawiałem z pawłem nowickim wczoraj").includes("person:pawłem now
 ok(types("Przekaż Annie Kowalskiej klucze").some((x) => x.startsWith("person:Annie Kowalskiej")), "celownik, wielkie litery");
 eq(types("dla polskiego zespołu w trakcie").length, 0, "zwykłe słowa z końcówką -skiego nie są osobą");
 eq(types("3 maja polskiego święta").length, 0, "„maja” to nie imię");
+
+// ── adresy (zgłoszenie 2026-11-01: wyrywanie ulic) ─────────────
+[
+  ["Mieszka przy ul. Długa 5/3 w Krakowie", "address:ul. Długa 5/3"],
+  ["al. Jana Pawła II 30", "address:al. Jana Pawła II 30"],
+  ["ul. 3 Maja 1", "address:ul. 3 Maja 1"],
+  ["ul. gen. Andersa 7a", "address:ul. gen. Andersa 7a"],
+  ["os. Słoneczne 4 m. 2", "address:os. Słoneczne 4 m. 2"],
+  ["UL. KRÓTKA 4", "address:UL. KRÓTKA 4"],
+  ["Adres: ulica Długa", "address:ulica Długa"],
+  ["Lipowa 12, 31-100 Kraków", "address:Lipowa 12, 31-100 Kraków"],
+  ["ul. Adama Mickiewicza 12 m. 4, 00-950 Warszawa", "address:ul. Adama Mickiewicza 12 m. 4, 00-950 Warszawa"],
+].forEach(([s, want]) => ok(types(s).includes(want), `adres: ${s} — jest ${JSON.stringify(types(s))}`));
+ok(!types("ul. Adama Mickiewicza 12").some((x) => x.startsWith("person:")), "osoba w nazwie ulicy należy do adresu");
+eq(types("Grupa 3 i Rozdział 5, Gr3 Osoba 010").length, 0, "etykiety z numerem to nie adres");
+eq(A.addressCellScore("Osoba 010"), 0, "numer z zerem wiodącym to nie numer domu");
+eq(A.profileColumn("Teren", ["Długa 5", "Lipowa 12/3", "Krótka 1", "Polna 7a"].map((v) => ({ v }))).type, "address", "kolumna „Długa 5…” = adresy (po treści)");
+eq(A.profileColumn("Kolumna", ["Grupa 1", "Grupa 2", "Grupa 3", "Grupa 4"].map((v) => ({ v }))).type, null, "„Grupa 1…4” to nie adresy");
+eq(A.profileColumn("Ulica", ["Długa", "Polna"].map((v) => ({ v }))).type, "address", "nagłówek „Ulica”");
+{
+  const sa = A.createSession({ seed: 7, methods: { address: "fake" } });
+  const f1 = sa.replaceText("address", "Lipowa 12, 31-100 Kraków", "fake");
+  ok(/^\p{Lu}\p{Ll}+ \d+, \d{2}-\d{3} \p{Lu}/u.test(f1) && !/Lipowa|Kraków/.test(f1), `fałszywy adres ma tę samą budowę — ${f1}`);
+  ok(/^ul\. \p{Lu}\p{Ll}+ \d+\/\d+$/u.test(sa.replaceText("address", "ul. Długa 5/3", "fake")), "fałszywy adres z mieszkaniem");
+  eq(sa.replaceText("address", "Lipowa 12, 31-100 Kraków", "generalize"), "Kraków", "uogólnienie → miejscowość");
+  eq(sa.replaceText("address", "ul. Długa 5/3", "generalize"), "ul. Długa", "uogólnienie → ulica bez numeru");
+}
 
 console.log(`${fails ? "❌" : "✅"} anonymize-core: ${passes} ok, ${fails} błędów`);
 process.exit(fails ? 1 : 0);

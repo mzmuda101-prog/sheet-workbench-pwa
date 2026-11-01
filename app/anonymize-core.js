@@ -162,6 +162,41 @@ const SwbAnon = (() => {
     postcode: "generalize", place: "keep", dob: "generalize", plate: "mask", vin: "mask", ip: "mask", other: "redact",
   };
 
+  // ── Adresy ──────────────────────────────────────────────────────────────
+  // „ul. Długa 5/3”, „al. Jana Pawła II 12 m. 4”, „ul. 3 Maja 1”, „ul. gen. Andersa 7, 00-950 Warszawa”,
+  // „os. Słoneczne 4”, „ulica Długa” (bez numeru — średnia pewność), „Długa 5, 00-950 Warszawa”
+  // (bez prefiksu, ale z kodem). Sama „Długa 5” bez prefiksu i kodu = tylko w kolumnie adresów
+  // (nagłówek „Adres”, „Ulica” albo treść kolumny — addressCellScore), bo „Grupa 3”, „Rozdział 5”.
+  const ci = (w) => w.replace(/\p{L}/gu, (ch) => `[${ch.toLowerCase()}${ch.toUpperCase()}]`);
+  const STREET_PREFIXES = ["ulica", "ul\\.?", "aleje", "aleja", "al\\.", "osiedle", "os\\.", "plac", "pl\\.", "rondo", "skwer", "bulwar", "bulw\\.", "rynek", "trakt"];
+  const ADDR_PREFIX = `(?:${STREET_PREFIXES.map(ci).join("|")})`;
+  const ADDR_TOK = "(?:\\p{Lu}[\\p{L}'’-]*\\.?|\\p{Ll}{2,6}\\.)"; // „Długa”, „II”, „gen.”, „św.”
+  const ADDR_NAME = `(?:${ADDR_TOK}|\\d{1,2})(?:\\s+${ADDR_TOK}){0,4}`; // „3 Maja”
+  const ADDR_HOUSE = "\\d{1,4}[a-zA-Z]?(?:\\s?[/-]\\s?\\d{1,4}[a-zA-Z]?)?(?:,?\\s*(?:m\\.?|lok\\.?|lokal|mieszk\\.?)\\s*\\d{1,4}[a-zA-Z]?)?";
+  const ADDR_TOWN = "\\p{Lu}\\p{Ll}+(?:[ -]\\p{Lu}\\p{Ll}+)?";
+  const ADDR_TAIL = `(?:,?\\s*\\d{2}-\\d{3}(?:\\s+${ADDR_TOWN})?)?`;
+  const ADDR_RE_PREFIXED = new RegExp(`(?<![\\p{L}\\p{N}])${ADDR_PREFIX}\\s*${ADDR_NAME}\\s+${ADDR_HOUSE}${ADDR_TAIL}(?![\\p{L}\\p{N}])`, "gu");
+  const ADDR_RE_STREET_ONLY = new RegExp(`(?<![\\p{L}\\p{N}])${ADDR_PREFIX}\\s*${ADDR_NAME}(?![\\p{L}\\p{N}])(?!\\s*\\d)`, "gu");
+  const ADDR_NAME_PLAIN = "\\p{Lu}[\\p{L}'’-]*\\.?(?:\\s+(?:\\p{Lu}[\\p{L}'’-]*\\.?|\\p{Ll}{2,6}\\.)){0,3}";
+  const ADDR_RE_POSTCODE = new RegExp(`(?<![\\p{L}\\p{N}])(?:${ADDR_NAME_PLAIN}|\\d{1,2}\\s+${ADDR_NAME_PLAIN})\\s+${ADDR_HOUSE},?\\s*\\d{2}-\\d{3}(?:\\s+${ADDR_TOWN})?(?![\\p{L}\\p{N}])`, "gu");
+  const ADDR_RE_CELL = new RegExp(`^(?:${ADDR_PREFIX}\\s*)?(${ADDR_NAME})\\s+(\\d{1,4})[a-zA-Z]?(?:\\s?[/-]\\s?\\d{1,4}[a-zA-Z]?)?(?:,?\\s*(?:m\\.?|lok\\.?|lokal|mieszk\\.?)\\s*\\d{1,4}[a-zA-Z]?)?${ADDR_TAIL}$`, "u");
+  const RE_ADDR_PREFIX_START = new RegExp(`^${ADDR_PREFIX}\\s*`, "u");
+
+  // Cała komórka wygląda na adres (dla profilu kolumny): 1 = z prefiksem/kodem, 0.7 = „Długa 5”.
+  // Numer z zerami wiodącymi („Osoba 010”) to nie numer domu.
+  function addressCellScore(v) {
+    const s = String(v ?? "").trim();
+    if (!s || s.length > 90) return 0;
+    const m = s.match(ADDR_RE_CELL);
+    if (!m || /^0\d/.test(m[2])) return 0;
+    return RE_ADDR_PREFIX_START.test(s) || /\d{2}-\d{3}/.test(s) ? 1 : 0.7;
+  }
+  // Nazwa ulicy z komórki-adresu (bez prefiksu i numeru) — do oceny różnorodności kolumny.
+  function addressStreet(v) {
+    const m = String(v ?? "").trim().match(ADDR_RE_CELL);
+    return m ? norm(m[1]) : "";
+  }
+
   // Wzorce w tekście. validate(m) → "high" | "medium" | null.
   const B = "(?<![\\p{L}\\p{N}])"; // granica „nie litera/cyfra” z przodu (Unicode)
   const E = "(?![\\p{L}\\p{N}])";
@@ -180,7 +215,10 @@ const SwbAnon = (() => {
     { type: "ip", re: rx(`${B}(?:(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)\\.){3}(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)${E}`), validate: (s, ctx) => (/\bip\b|adres ip|serwer|host/i.test(ctx) || !/^\d{1,2}\.\d{1,2}\.\d{1,2}\.\d{1,2}$/.test(s) ? "medium" : null) },
     { type: "phone", re: rx(`${B}(?:(?:\\+|00)48[ -]?)?(?:\\d{3}[ -]\\d{3}[ -]\\d{3}|\\d{2}[ -]\\d{3}[ -]\\d{2}[ -]\\d{2}|\\(\\d{2}\\)[ -]?\\d{3}[ -]?\\d{2}[ -]?\\d{2})${E}`), validate: (s) => (digits(s).replace(/^(00)?48/, "").length === 9 ? "high" : null) },
     { type: "phone", re: rx(`${B}(?:(?:\\+|00)48[ -]?)?\\d{9}${E}`), validate: (s, ctx) => (/^(\+|00)48/.test(s) || /tel|kom|phone|nr\s*tel|dzwo/i.test(ctx) ? "high" : null) },
-    { type: "address", re: /(?<![\p{L}])(?:ul\.|ulica|al\.|aleja|aleje|os\.|osiedle|pl\.|plac)\s*[\p{Lu}\d][\p{L}\d.'-]*(?:\s+[\p{Lu}\d][\p{L}\d.'-]*){0,3}\s+\d{1,4}[a-zA-Z]?(?:\s*\/\s*\d{1,4}[a-zA-Z]?|\s*(?:m\.|lok\.)\s*\d{1,4})?(?![\p{L}\p{N}])/gu, validate: () => "high" },
+    // adresy: z prefiksem (z numerem i bez), bez prefiksu tylko z kodem pocztowym — patrz ADDR_* niżej
+    { type: "address", re: ADDR_RE_PREFIXED, validate: () => "high" },
+    { type: "address", re: ADDR_RE_POSTCODE, validate: () => "high" },
+    { type: "address", re: ADDR_RE_STREET_ONLY, validate: () => "medium" },
     { type: "postcode", re: rx(`${B}\\d{2}-\\d{3}${E}`), validate: (s, ctx) => (/^\d{2}-\d{3}\s+\p{Lu}/u.test(ctx.slice(ctx.indexOf(s))) || /kod|poczt/i.test(ctx) ? "high" : "medium") },
     { type: "plate", re: rx(`${B}[BCDEFGKLNOPRSTWZ][A-Z]{1,2} (?=[0-9A-Z]*\\d)[0-9A-Z]{4,5}${E}`), validate: () => "medium" },
     { type: "vin", re: rx(`${B}(?=[A-HJ-NPR-Z0-9]*\\d[A-HJ-NPR-Z0-9]*\\d)(?=[A-HJ-NPR-Z0-9]*[A-HJ-NPR-Z][A-HJ-NPR-Z0-9]*[A-HJ-NPR-Z])[A-HJ-NPR-Z0-9]{17}${E}`), validate: () => "medium" },
@@ -319,6 +357,12 @@ const SwbAnon = (() => {
       }
     }
     if (!c.types || c.types.person) findPersons(s, raw);
+    // „ul. Adama Mickiewicza 5” — osoba w nazwie ulicy należy do adresu (adres wygrywa)
+    const addrSpans = raw.filter((h) => h.type === "address");
+    if (addrSpans.length) for (let i = raw.length - 1; i >= 0; i--) {
+      const h = raw[i];
+      if (h.type === "person" && addrSpans.some((a) => h.start >= a.start && h.end <= a.end)) raw.splice(i, 1);
+    }
     // Pierwszeństwo: typ wg TYPES, potem dłuższe trafienie.
     const rank = (h) => TYPES.indexOf(h.type);
     raw.sort((a, b) => rank(a) - rank(b) || (b.end - b.start) - (a.end - a.start) || a.start - b.start);
@@ -384,7 +428,8 @@ const SwbAnon = (() => {
   // Profil kolumny: values = [{v, isNum, isDate}], zwraca typ całej kolumny (albo null) i liczniki.
   function profileColumn(header, values, compiled) {
     const hint = headerHint(header);
-    let nonEmpty = 0, personish = 0;
+    let nonEmpty = 0, personish = 0, addressish = 0;
+    const streets = new Set();
     const whole = {}; // typ → ile komórek w całości jest tym typem
     for (const it of values) {
       const v = it.v;
@@ -392,6 +437,7 @@ const SwbAnon = (() => {
       nonEmpty++;
       if (typeof v === "string") {
         if (personCellScore(v) >= 0.8) personish++;
+        if (addressCellScore(v) >= 0.7) { addressish++; streets.add(addressStreet(v)); }
         const hits = findInText(v, compiled, header);
         if (hits.length === 1 && hits[0].start === 0 && hits[0].end === v.trim().length) whole[hits[0].type] = (whole[hits[0].type] || 0) + 1;
       } else if (typeof v === "number" && Number.isInteger(v)) {
@@ -417,6 +463,10 @@ const SwbAnon = (() => {
         const sh = n / nonEmpty;
         if (sh >= 0.6 && sh > share) { type = t; share = sh; }
       }
+      // „Długa 5”, „Lipowa 12/3” bez prefiksu: kolumna adresów, jeśli większość komórek tak wygląda
+      // i ulice są różne („Grupa 1”, „Grupa 2”… to etykiety, nie adresy)
+      const sh = addressish / nonEmpty;
+      if (sh >= 0.6 && sh > share && personish / nonEmpty < 0.5 && streets.size >= Math.max(2, addressish * 0.4)) { type = "address"; share = sh; }
     }
     return { hint, type, share, nonEmpty };
   }
@@ -736,12 +786,21 @@ const SwbAnon = (() => {
       const b = FAKE_SURNAMES[Math.floor(r() * FAKE_SURNAMES.length)];
       return `${asciiFold(a)}.${asciiFold(b)}${Math.floor(r() * 90 + 10)}@example.com`;
     }
+    // Ta sama budowa co oryginał: prefiks (albo jego brak), numer mieszkania, kod i miejscowość.
     function fakeAddress(src, r) {
-      const prefix = (String(src).match(/^(ul\.|ulica|al\.|aleja|aleje|os\.|osiedle|pl\.|plac)\s*/i) || ["ul. "])[0];
-      const street = STREETS[Math.floor(r() * STREETS.length)];
+      const str = String(src).trim();
+      const pm = str.match(RE_ADDR_PREFIX_START);
+      const prefix = pm ? (/\s$/.test(pm[0]) ? pm[0] : `${pm[0]} `) : /\d/.test(str) ? "" : "ul. ";
+      const own = norm(str);
+      let k = Math.floor(r() * STREETS.length);
+      while (own.includes(norm(STREETS[k]))) k = (k + 1) % STREETS.length; // nie ta sama ulica co prawdziwa
+      const street = STREETS[k];
       const no = 1 + Math.floor(r() * 120);
-      const flat = /\/|m\.|lok\./.test(src) ? `/${1 + Math.floor(r() * 60)}` : "";
-      return `${/\s$/.test(prefix) ? prefix : prefix + " "}${street} ${no}${flat}`;
+      const flatM = str.match(/\d\s?\/\s?\d|(?:m\.?|lok\.?|lokal)\s*\d/);
+      const flat = !flatM ? "" : /\//.test(flatM[0]) ? `/${1 + Math.floor(r() * 60)}` : ` m. ${1 + Math.floor(r() * 60)}`;
+      const pc = str.match(/(,?\s*)\d{2}-\d{3}(\s+\p{Lu})?/u);
+      const tail = pc ? `${pc[1] || " "}${String(10 + Math.floor(r() * 89))}-${randDigits(r, 3)}${pc[2] ? ` ${CITIES.filter((c) => !own.includes(norm(c)))[Math.floor(r() * (CITIES.length - 1))] || CITIES[0]}` : ""}` : "";
+      return /\d/.test(str) ? `${prefix}${street} ${no}${flat}${tail}` : `${prefix}${street}`;
     }
     function fakeAlnum(src, r) {
       return String(src).replace(/[A-Z]/g, () => "ABCDEFGHJKLMNPRSTUVWXYZ"[Math.floor(r() * 23)]).replace(/[a-z]/g, () => "abcdefghjkmnprstuvwxyz"[Math.floor(r() * 22)]).replace(/\d/g, () => String(Math.floor(r() * 10)));
@@ -772,9 +831,13 @@ const SwbAnon = (() => {
       const str = String(s);
       if (type === "postcode") return str.replace(/-\d{3}$/, "-xxx");
       if (type === "pesel") { const d = peselDate(digits(str)); return d ? String(d.y) : "***"; }
+      // adres → miejscowość (gdy jest po kodzie), inaczej sama ulica bez numeru („ul. Długa”)
       if (type === "address") {
-        const m = str.match(/(?:\d{2}-\d{3}\s+)?(\p{Lu}[\p{L}-]+(?:\s\p{Lu}[\p{L}-]+)?)\s*$/u);
-        return m && !/\d/.test(m[1]) && !/^(ul|al|os|pl)$/i.test(m[1]) ? m[1] : `[${label("address")}]`;
+        const town = str.match(/\d{2}-\d{3}\s+(\p{Lu}\p{Ll}+(?:[ -]\p{Lu}\p{Ll}+)?)\s*$/u);
+        if (town) return town[1];
+        const m = str.match(ADDR_RE_CELL);
+        if (m && /\d/.test(str)) return `${(str.match(RE_ADDR_PREFIX_START) || [""])[0]}${m[1]}`.trim();
+        return `[${label("address")}]`;
       }
       if (type === "phone") return reformat(str, digits(str).slice(0, digits(str).length - 6) + "000000");
       if (type === "ip") return str.replace(/\.\d+$/, ".0");
@@ -948,7 +1011,7 @@ const SwbAnon = (() => {
     TYPES, METHODS, DEFAULT_METHODS, norm, fold,
     validators: { peselValid, nipValid, regonValid, ibanValid, luhnValid, idCardValid, passportValid, kwValid },
     resetLearned: () => { LEARNED = { first: new Map(), sur: new Set() }; },
-    findInText, compileRules, headerHint, profileColumn, personCellScore, parsePerson, createSession, findLeaks, sha256Hex,
+    findInText, compileRules, headerHint, profileColumn, personCellScore, addressCellScore, parsePerson, createSession, findLeaks, sha256Hex,
   };
 })();
 

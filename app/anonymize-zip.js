@@ -143,6 +143,13 @@ async function swbAnonCleanZip(bytes, session, opts = {}, ctx = {}) {
         .replace(/(<fileSharing\b[^>]*\buserName=")[^"]*(")/g, "$1$2");
       if (wb !== before) { zipWriteUtf8Xml(zip, "xl/workbook.xml", wb); bump("metadata"); }
     }
+    // Pamięć tabeli przestawnej: refreshedBy = nazwa użytkownika, który ostatnio odświeżył.
+    for (const p of Object.keys(zip.files)) {
+      if (!/^xl\/pivotCache\/pivotCacheDefinition\d*\.xml$/i.test(p)) continue;
+      const xml = await swbAnonText(zip, p);
+      const out = xml && xml.replace(/(<pivotCacheDefinition\b[^>]*\brefreshedBy=")[^"]+(")/, "$1$2");
+      if (out && out !== xml) { zipWriteUtf8Xml(zip, p, out); bump("metadata"); }
+    }
     for (const p of Object.keys(zip.files)) {
       if (!/^xl\/persons\/[^/]+\.xml$/i.test(p)) continue;
       let xml = await swbAnonText(zip, p);

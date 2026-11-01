@@ -192,8 +192,10 @@ function applyAutoHeaderRowIfEnabled() {
 // zgadywanie po treści. Bierzemy go, gdy wygląda na nagłówek (≥2 wypełnione komórki,
 // w tym tekst) i pod nim są dane; inaczej zwykłe wykrywanie.
 let currentFrozenRowsBySheet = new Map(); // nazwa arkusza → liczba zablokowanych wierszy
+let currentFrozenColsBySheet = new Map(); // nazwa arkusza → liczba zablokowanych kolumn (xSplit)
 async function readFrozenRows(bytes, wb) {
   const map = new Map();
+  currentFrozenColsBySheet = new Map();
   if (typeof JSZip === "undefined" || !bytes || !wb) return map;
   try {
     const zip = await getSharedWorkbookZip(bytes);
@@ -215,12 +217,43 @@ async function readFrozenRows(bytes, wb) {
       if (!pane) continue;
       const attrs = pane[1];
       const state = (attrs.match(/\bstate="([^"]+)"/) || [])[1] || "";
+      if (!/^frozen/.test(state)) continue;
+      const xSplit = Number((attrs.match(/\bxSplit="([\d.]+)"/) || [])[1]);
+      if (Number.isInteger(xSplit) && xSplit >= 1) currentFrozenColsBySheet.set(decodeXmlEntities(sm[1]), xSplit);
       const ySplit = Number((attrs.match(/\bySplit="([\d.]+)"/) || [])[1]);
-      if (!/^frozen/.test(state) || !Number.isInteger(ySplit) || ySplit < 1 || ySplit > 100) continue;
+      if (!Number.isInteger(ySplit) || ySplit < 1 || ySplit > 100) continue;
       map.set(decodeXmlEntities(sm[1]), ySplit);
     }
   } catch { /* uszkodzony XML — zwykłe wykrywanie */ }
   return map;
+}
+
+// Blokada wierszy nagłówków i pierwszej kolumny — pamiętana OSOBNO dla każdego arkusza
+// (plik + arkusz), nie dla całej apki: w „Bazie” chcesz przyklejone nazwiska, w „Raporcie” nie.
+// Arkusz bez zapisu: to, co zablokował autor w Excelu (Widok → Zablokuj okienka), inaczej wył.
+const FREEZE_MEMORY_KEY = "swb-freeze-by-sheet-v1";
+const FREEZE_MEMORY_MAX = 300;
+const freezeMemoryKey = (sheetName) => `${currentFileName || ""}|${sheetName || ""}`;
+function readFreezeMemory() {
+  try { return JSON.parse(localStorage.getItem(FREEZE_MEMORY_KEY) || "{}") || {}; } catch { return {}; }
+}
+function restoreSheetFreeze(sheetName) {
+  const saved = readFreezeMemory()[freezeMemoryKey(sheetName)];
+  if (freezeHeadersEl) freezeHeadersEl.checked = saved ? !!saved.h : currentFrozenRowsBySheet.has(sheetName);
+  if (freezeFirstColEl) freezeFirstColEl.checked = saved ? !!saved.c : currentFrozenColsBySheet.has(sheetName);
+  applyFreezeHeaders();
+  applyFreezeFirstColumn();
+}
+function rememberSheetFreeze() {
+  if (!currentSheetName || typeof workbook === "undefined" || !workbook) return false;
+  const all = readFreezeMemory();
+  const k = freezeMemoryKey(currentSheetName);
+  delete all[k]; // na koniec = najświeższy (przy limicie wypadają najstarsze)
+  all[k] = { h: !!(freezeHeadersEl && freezeHeadersEl.checked), c: !!(freezeFirstColEl && freezeFirstColEl.checked) };
+  const keys = Object.keys(all);
+  keys.slice(0, Math.max(0, keys.length - FREEZE_MEMORY_MAX)).forEach((x) => delete all[x]);
+  try { localStorage.setItem(FREEZE_MEMORY_KEY, JSON.stringify(all)); } catch { /* prywatne okno — tylko na tę sesję */ }
+  return true;
 }
 
 function frozenHeaderRowFor(sheetName, sheet) {
@@ -2434,6 +2467,7 @@ loadBtn.addEventListener("click", () => {
         aggregationWorkbenchState.customHeaderRow = headerRow;
       }
       currentSheetName = sheetName;
+      restoreSheetFreeze(sheetName);
       updateSheetTabActive(sheetName);
       if (typeof appFrame !== "undefined") appFrame.syncFile();
       const data = await buildRowsAsync(sheet, headerRow, workbook);

@@ -230,6 +230,8 @@ async function run() {
   // pod wykrytym wierszem nagłówka arkusza. Jej nagłówki NIE mogą się zmienić (Excel:
   // „zawartość, która powoduje problem” — zgłoszenie 2026-10-31).
   const FIX_TABLES = path.join(__dirname, "fixtures", "anon-tables.xlsx");
+  if (!fs.existsSync(FIX_TABLES)) console.log("⚠ pominięto sekcję tabel: brak scripts/fixtures/anon-tables.xlsx");
+  else {
   await openFile(page, FIX_TABLES);
   const tsc = await scanWith(page, "file");
   ok("tabele: kolumna tabeli „zadania” ma własny nagłówek", tsc.cols.some((c) => /^bazy\|mikrofony\|person$/.test(c)), tsc.cols);
@@ -279,13 +281,31 @@ async function run() {
   }, tc.bytes);
   ok("tabele: synchronizacja nazwy kolumny", synced.n === 1 && synced.cols.some((c) => /name="Osoba"/.test(c)), synced);
   ok("tabele: odwołanie strukturalne w formule poprawione", /bracia\[\[Osoba\]:\[Telefon\]\]/.test(decode(synced.f)), synced.f);
+  }
 
+  if (fs.existsSync(FIX_TABLES)) {
   // ── 9. raport: pełne wartości i adresy (zakres = jeden arkusz, reszta poza zakresem) ──
   const sc9 = await scanWith(page, "sheet");
   void sc9;
   const r9 = await runCopy(page);
   ok("raport: lista wycieków z pełnymi wartościami i adresami", r9.report.leaks.some((e) => e.kind === "cells" && e.items.some((it) => /\p{Lu}\p{Ll}+ \p{Lu}/u.test(it.term) && it.refs.length)), r9.report.leaks.slice(0, 2));
   ok("raport: bez skracania „…”", !/\p{L}…\p{L}/u.test(r9.reportText.split("Test szczelności")[1] || ""), r9.reportText.slice(0, 300));
+  }
+
+  // ── 8b. adresy (scripts/fixtures/anon-addresses.xlsx): kolumna „Ulica” po nagłówku,
+  // „Teren” („Lipowa 12”, „Krótka 1”) po treści, adresy w wolnym tekście „Uwagi” ──
+  const FIX_ADDR = path.join(__dirname, "fixtures", "anon-addresses.xlsx");
+  await openFile(page, FIX_ADDR);
+  const asc = await scanWith(page, "file", () => { swbAnon.state.methods.address = "fake"; });
+  ok("adresy: kolumna Ulica i Teren rozpoznane", ["Klienci|Ulica|address", "Klienci|Teren|address"].every((k) => asc.cols.includes(k)), asc.cols);
+  const ac = await runCopy(page);
+  const aWb = XLSX.read(Buffer.from(ac.bytes), { type: "buffer" });
+  const kl = aWb.Sheets.Klienci;
+  const aVals = Object.keys(kl).filter((k) => k[0] !== "!").map((k) => String(kl[k].v));
+  const aLeaks = ["Długa 5", "Jana Pawła", "Andersa", "Słoneczne 4", "Polnej 8", "Lipowa 12", "Kwiatowa 15", "31-100", "Kraków"].filter((w) => aVals.some((v) => new RegExp(`(?<![\\p{L}\\d])${w}(?![\\p{L}\\d])`, "u").test(v)));
+  ok("adresy: brak prawdziwych ulic po anonimizacji", aLeaks.length === 0, [aLeaks, aVals.slice(0, 30)]);
+  ok("adresy: fałszywy adres ma budowę oryginału", /^ul\. \p{Lu}\p{Ll}+ \d+\/\d+$/u.test(kl.C2.v) && /^os\. \p{Lu}\p{Ll}+ \d+ m\. \d+$/u.test(kl.C5.v), [kl.C2.v, kl.C5.v]);
+  ok("adresy: test szczelności 0", ac.report.leaks.length === 0, ac.report.leaks);
 
   // ── 7. prawdziwy plik RODO ──
   if (fs.existsSync(FILE_RODO) && !process.env.SKIP_RODO) {

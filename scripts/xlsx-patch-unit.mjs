@@ -188,3 +188,21 @@ console.log("✅ xlsx-patch-unit OK (double save, emoji, emoji w edytowanej kom�
   }
   console.log("✅ xlsx-patch-unit OK (self-closing row, x: prefix, attr order, empty sheetData)");
 }
+// Od-dzielanie grupy shared: master z &/</" w formule NIE może dostać podwójnego
+// kodowania (&amp;amp;) — Excel usuwał wtedy formułę „naprawą” (2026-11-01, plik po anonimizacji).
+{
+  const W = '<?xml version="1.0"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">';
+  const fm = 'IF(A1&gt;0,A1&amp;" &lt;x&gt; "&amp;&quot;q&quot;,"")';
+  const src = W + `<sheetData><row r="1"><c r="A1"><v>1</v></c><c r="C1" t="str"><f t="shared" ref="C1:C2" si="0">${fm}</f><v>a</v></c></row>` +
+    '<row r="2"><c r="A2"><v>2</v></c><c r="C2" t="str"><f t="shared" si="0"/><v>b</v></c></row></sheetData></worksheet>';
+  const out = patchSheetXml(src, { C2: { t: "s", v: "Osoba 1" } }, { C2: 'IF(A2>0,A2&" <x> "&"""q""","")' });
+  const fails6 = [];
+  if (out.includes("&amp;amp;") || out.includes("&amp;gt;") || out.includes("&amp;quot;")) fails6.push("double-escaped master");
+  if (!out.includes(`<c r="C1" t="str"><f>${fm.replace(/&quot;/g, '"')}</f>`)) fails6.push("master text: " + (out.match(/<c r="C1".*?<\/c>/) || [])[0]);
+  if (/t="shared"/.test(out)) fails6.push("group not unshared");
+  if (fails6.length) {
+    console.error("❌ xlsx-patch-unit FAIL (shared master escaping):", fails6.join("; "));
+    process.exit(1);
+  }
+  console.log("✅ xlsx-patch-unit OK (shared master not double-escaped)");
+}

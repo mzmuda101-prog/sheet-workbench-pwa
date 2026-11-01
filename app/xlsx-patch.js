@@ -149,7 +149,10 @@ function unshareTouchedGroupsString(inner, cells, formulaMap, cellMap) {
     const touched = members.some((m) => Object.prototype.hasOwnProperty.call(cells, m.ref));
     if (!touched) return;
     members.forEach((m) => {
-      const text = m.text || (formulaMap && formulaMap[m.ref]) || "";
+      // Treść mastera jest wycięta z XML (już zakodowana: &amp; &lt; &quot;) — dekodujemy,
+      // bo replaceSharedFormulaInInner koduje ponownie. Bez tego „&amp;amp;” = formuła,
+      // którą Excel usuwa przy naprawie (zgłoszenie 2026-11-01, „Baza danych” C3/E67).
+      const text = (m.text && decodeXmlText(m.text)) || (formulaMap && formulaMap[m.ref]) || "";
       const newInner = replaceSharedFormulaInInner(m.cell.inner, text);
       if (newInner === m.cell.inner) return;
       const newFull = `<c r="${m.ref}"${m.cell.attrs}>${newInner}</c>`;
@@ -742,6 +745,13 @@ function createStyleWriter(stylesXml) {
     },
     prefix: P,
   };
+}
+
+// Pełne dekodowanie tekstu węzła XML (nazwane + numeryczne encje).
+function decodeXmlText(s) {
+  const named = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+  return String(s).replace(/&(?:#x([0-9a-f]+)|#(\d+)|(amp|lt|gt|quot|apos));/gi, (m, h, d, n) =>
+    h ? String.fromCodePoint(parseInt(h, 16)) : d ? String.fromCodePoint(+d) : named[n.toLowerCase()]);
 }
 
 function decodeXmlEntitiesSimple(s) {

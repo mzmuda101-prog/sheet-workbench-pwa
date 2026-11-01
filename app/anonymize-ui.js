@@ -762,7 +762,9 @@ const swbAnon = (() => {
         row.dataset.type = type;
         const name = el("span", "anon-type-name");
         name.append(el("span", `anon-tag t-${type}`, tx(`t_${type}`)));
-        const sel = select(methodOptions(type).map((m) => [m, tx(`m_${m}`)]), st.methods[type] || "redact", (v) => { st.methods[type] = v; savePrefs(); refreshPlan(); });
+        // przykład pseudonimu wg rodzaju: „Adres 001”, „PESEL 001” (nie zawsze „Osoba 001”)
+        const mLabel = (m) => (m === "pseudo" && type !== "email" ? tx("m_pseudo").replace(/\(.*\)/, `(${labels()[type]} 001)`) : tx(`m_${m}`));
+        const sel = select(methodOptions(type).map((m) => [m, mLabel(m)]),st.methods[type] || "redact", (v) => { st.methods[type] = v; savePrefs(); refreshPlan(); });
         sel.setAttribute("aria-label", tx(`t_${type}`));
         const cnt = el("span", "anon-count", `${fmtN(plan.typeCounts[type])}×`);
         cnt.style.textAlign = "right";
