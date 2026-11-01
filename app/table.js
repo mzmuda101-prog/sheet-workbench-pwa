@@ -1789,7 +1789,9 @@ function colorFromStyleNode(node, resolveTheme = false) {
   if (direct) return direct;
   if (resolveTheme) {
     const tint = Number(node.tint ?? node.Tint) || 0;
-    const idx = node.indexed ?? node.Indexed;
+    // SheetJS zapisuje kolor czcionki z palety jako {index, rgb} i psuje rgb (indexed 2 → "ff00"
+    // bez zer, normalizeHexColor go odrzuca), więc wtedy bierzemy numer z palety.
+    const idx = node.indexed ?? node.Indexed ?? node.index;
     if (Number.isInteger(idx) && INDEXED_COLORS[idx]) {
       return tint ? applyColorTint(INDEXED_COLORS[idx], tint) : INDEXED_COLORS[idx];
     }
@@ -2688,6 +2690,7 @@ function appendPreHeaderRows(model, headers, narrowCols = null) {
       for (let c = c0; c <= c1; c++) if (r !== m.s.r || c !== c0) covered.add(`${r}:${c}`);
     }
   });
+  const useExcelLayout = isExcelLayoutEnabled();
   const frag = document.createDocumentFragment();
   pre.forEach((p) => {
     const tr = document.createElement("tr");
@@ -2711,6 +2714,9 @@ function appendPreHeaderRows(model, headers, narrowCols = null) {
       const text = p.display[i] || "";
       td.textContent = text;
       if (p.cellStyles[i]) applyCellStyle(td, p.cellStyles[i]);
+      // „Zawijaj tekst” z pliku w wierszach nad nagłówkiem (Wymiary z Excela) — jak nagłówek z th-wrap:
+      // to tytuły i dopiski, którym Excel daje wysoki wiersz (np. „Aktualizacja 1.1: …” w 4 liniach).
+      if (useExcelLayout && p.cellStyles[i] && p.cellStyles[i].wrapText) td.classList.add("cell-wrap");
       const merge = anchors.get(k);
       if (merge) {
         if (merge.colspan > 1) td.colSpan = merge.colspan;

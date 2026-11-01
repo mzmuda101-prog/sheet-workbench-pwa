@@ -3882,8 +3882,9 @@ thead .guide-row th {
   padding-left: calc(5px * var(--table-zoom));
   padding-right: calc(5px * var(--table-zoom));
 }
-/* Nagłówek z „Zawijaj tekst” w pliku (Wymiary z Excela) — w kilku liniach jak w Excelu */
-#dataTable thead th.th-wrap {
+/* Nagłówek i wiersze nad nim z „Zawijaj tekst” w pliku (Wymiary z Excela) — w kilku liniach jak w Excelu */
+#dataTable thead th.th-wrap,
+#dataTable thead tr.pre-row > td.pre-cell.cell-wrap {
   white-space: normal;
   text-overflow: clip;
   overflow: hidden; /* jak Excel: słowo nie dzieli się w środku, nadmiar się ucina */

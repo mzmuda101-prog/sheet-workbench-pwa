@@ -1,7 +1,7 @@
 // [EN] Dedicated worker — importScripts xlsx + shared buildRowsCore
 // Wersja z adresu workera (?v=…) — ten sam URL co w precache SW, więc działa też
 // offline, zanim worker zostanie użyty pierwszy raz online.
-importScripts("../lib/xlsx.full.min.js", "build-rows-core.js" + self.location.search);
+importScripts("../lib/xlsx.full.min.js", "excel-date-format.js" + self.location.search, "build-rows-core.js" + self.location.search);
 
 self.onmessage = (event) => {
   const msg = event.data || {};

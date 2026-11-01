@@ -548,6 +548,11 @@ function localizeDisplayedDate(value, shown, cell = null) {
     date = new Date(2000, value - 1, 1);
   }
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return shown;
+  // Własny format z pliku („d/mmm/yyyy” → „17.wrz.2026”) — dokładnie jak Excel (app/excel-date-format.js).
+  if (cell && typeof cell.z === "string" && typeof swbExcelMonthDate === "function") {
+    const exact = swbExcelMonthDate(date, cell.z, I18N[currentLang]?.locale || "pl-PL");
+    if (exact) return exact;
+  }
 
   const normalizedShown = shown.trim().toLowerCase();
   const hasEnglishWeekdayWord = /\b(mon|monday|tue|tues|tuesday|wed|wednesday|thu|thur|thurs|thursday|fri|friday|sat|saturday|sun|sunday)\b/i.test(

@@ -84,7 +84,9 @@
     if (direct) return direct;
     if (resolveTheme) {
       const tint = Number(node.tint ?? node.Tint) || 0;
-      const idx = node.indexed ?? node.Indexed;
+      // SheetJS zapisuje kolor czcionki z palety jako {index, rgb} i psuje rgb (indexed 2 → "ff00"
+      // bez zer, normalizeHexColor go odrzuca), więc wtedy bierzemy numer z palety.
+      const idx = node.indexed ?? node.Indexed ?? node.index;
       if (Number.isInteger(idx) && INDEXED_COLORS[idx]) {
         return tint ? applyColorTint(INDEXED_COLORS[idx], tint) : INDEXED_COLORS[idx];
       }
@@ -309,6 +311,11 @@
       date = new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate());
     }
     if (!date || Number.isNaN(date.getTime())) return shown;
+    // Własny format z pliku („d/mmm/yyyy” → „17.wrz.2026”) — jak Excel (excel-date-format.js, importScripts).
+    if (cell && typeof cell.z === "string" && typeof global.swbExcelMonthDate === "function") {
+      const exact = global.swbExcelMonthDate(date, cell.z, locale || "pl-PL");
+      if (exact) return exact;
+    }
     try {
       return new Intl.DateTimeFormat(locale || "pl-PL", { day: "2-digit", month: "short", year: "2-digit" })
         .format(date).replace(/\.$/g, "").replace(/\s+/g, " ").trim() || shown;
