@@ -81,6 +81,41 @@ async function run() {
   await scrollTo(0);
   const backAtZero = await probe();
 
+  // ── N kolumn (2026-11-01): 3 kolumny danych stoją w miejscu i przylegają do siebie,
+  // szyba (freeze-pane.js) kopiuje numer wiersza + 3 kolumny, ustawienie pamiętane per arkusz.
+  const lefts = () => page.evaluate(() => {
+    const wl = document.getElementById("tableWrap").getBoundingClientRect().left;
+    return [...document.querySelector("#dataTable tbody tr[data-row-key]").cells].slice(0, 5).map((c) => Math.round(c.getBoundingClientRect().left - wl));
+  });
+  await page.evaluate(() => { setSheetFrozenCols(3); syncFrozenColOffsets(); });
+  const n3AtZero = await lefts();
+  await scrollTo(500);
+  const n3Scrolled = await lefts();
+  const paneCells = await page.evaluate(() => {
+    const wrap = document.getElementById("tableWrap");
+    wrap.scrollLeft = 520;
+    wrap.dispatchEvent(new Event("scroll"));
+    const fp = window.__freezePane;
+    const on = fp && fp.isActive();
+    const row = document.querySelector(".fz-pane tbody tr");
+    return { on, cells: row ? row.cells.length : 0, offCount: document.querySelectorAll("#dataTable tbody td.fz-off").length, rows: document.querySelectorAll("#dataTable tbody tr").length };
+  });
+  await scrollTo(500);
+  // przejście klawiaturą do kolumny tuż za zamrożonymi: komórka nie chowa się pod nimi (scroll-padding)
+  const reveal = await page.evaluate(async () => {
+    const key = document.querySelector("#dataTable tbody tr[data-row-key]").dataset.rowKey;
+    document.getElementById("tableWrap").scrollLeft = 900;
+    await new Promise((r) => setTimeout(r, 400));
+    setFocusedCell(key, 3, { scroll: true });
+    const td = findCellElement(focusedCellState);
+    const fr = td.parentElement.cells[3].getBoundingClientRect().right;
+    return { tdLeft: Math.round(td.getBoundingClientRect().left), frozenRight: Math.round(fr) };
+  });
+  const n3Mem = await page.evaluate(() => JSON.parse(localStorage.getItem("swb-freeze-by-sheet-v1") || "{}"));
+  await page.evaluate(() => setSheetFrozenCols(0));
+  await sleep(100);
+  const n0 = await probe();
+
   await browser.close();
 
   const failures = [];
@@ -99,9 +134,18 @@ async function run() {
   if (Math.abs(onScrolled.left - onAtZero.left) > 2) {
     failures.push(`zamrożona kolumna przesunęła się przy przewijaniu: ${onAtZero.left}px → ${onScrolled.left}px`);
   }
+  // N kolumn
+  if (!n3Scrolled.slice(0, 4).every((x, i) => Math.abs(x - n3AtZero[i]) <= 2)) failures.push(`3 zamrożone kolumny przesunęły się: ${n3AtZero} → ${n3Scrolled}`);
+  if (Math.abs(n3Scrolled[4] - n3AtZero[4]) < 100) failures.push(`4. kolumna danych powinna odjechać: ${n3AtZero[4]} → ${n3Scrolled[4]}`);
+  if (!(n3AtZero[1] < n3AtZero[2] && n3AtZero[2] < n3AtZero[3])) failures.push(`zamrożone kolumny nie leżą obok siebie: ${n3AtZero}`);
+  if (paneCells.on && paneCells.cells !== 4) failures.push(`szyba powinna kopiować 4 komórki w wierszu, ma ${paneCells.cells}`);
+  if (paneCells.on && paneCells.offCount !== paneCells.rows * 4) failures.push(`fz-off na ${paneCells.offCount} komórkach, oczekiwano ${paneCells.rows * 4}`);
+  if (!Object.values(n3Mem).some((v) => v.c === 3)) failures.push(`liczba kolumn nie zapisana per arkusz: ${JSON.stringify(n3Mem)}`);
+  if (reveal.tdLeft < reveal.frozenRight - 1) failures.push(`komórka z fokusem schowana pod zamrożonymi kolumnami: ${JSON.stringify(reveal)}`);
+  if (n0.frozen || n0.position === "sticky") failures.push("po „Odblokuj kolumny” komórki nadal przyklejone");
   if (errors.length) failures.push(`błędy konsoli/strony: ${errors.join(" | ")}`);
 
-  console.log(JSON.stringify({ off, onAtZero, onScrolled, backAtZero, errors }, null, 2));
+  console.log(JSON.stringify({ off, onAtZero, onScrolled, backAtZero, n3AtZero, n3Scrolled, paneCells, n0, errors }, null, 2));
   if (failures.length) throw new Error(failures.join("; "));
   console.log("✅ freeze-col-playwright OK");
 }

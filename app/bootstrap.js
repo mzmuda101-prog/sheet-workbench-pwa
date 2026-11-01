@@ -385,9 +385,20 @@ if (colWidthAllEl) {
 if (freezeFirstColEl) {
   freezeFirstColEl.addEventListener("change", () => {
     applyFreezeFirstColumn();
+    syncFreezeCountField();
     if (!rememberSheetFreeze()) saveCellStylePreferences(); // bez pliku: domyślne ustawienie
   });
 }
+const freezeColCountEl = document.getElementById("freezeColCount");
+if (freezeColCountEl) {
+  freezeColCountEl.addEventListener("change", () => {
+    setFrozenColCount(freezeColCountEl.value);
+    freezeColCountEl.value = String(frozenColCount); // poza 1–10 → przycięte
+    applyFreezeFirstColumn();
+    rememberSheetFreeze();
+  });
+}
+syncFreezeCountField();
 if (recalcDatesEl) {
   recalcDatesEl.addEventListener("change", () => {
     syncCellStyleFlags();

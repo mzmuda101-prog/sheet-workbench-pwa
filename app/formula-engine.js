@@ -781,7 +781,9 @@
     if (isErr(crit)) return () => false;
     if (typeof crit === "number") return (v) => (typeof v === "number" ? v === crit : (typeof v === "string" && parseNumberText(v) === crit));
     if (typeof crit === "boolean") return (v) => v === crit;
-    if (crit === null || crit === undefined) return (v) => v === null || v === "";
+    // Pusta komórka jako kryterium to w Excelu LICZBA 0, nie „puste”: =LICZ.JEŻELI(A1:A5;B1) przy pustym
+    // B1 liczy zera (sprawdzone w Excelu 2026-11-01). Puste liczy dopiero kryterium "" (tekst).
+    if (crit === null || crit === undefined) return makeCriterion(0);
     const s = String(crit);
     const m = s.match(/^(<=|>=|<>|<|>|=)?([\s\S]*)$/);
     const op = m[1] || "=";

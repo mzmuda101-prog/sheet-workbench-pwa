@@ -851,7 +851,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261101-05";
+const APP_BUILD_VERSION = "20261101-09";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1251,9 +1251,106 @@ function applyFreezeFirstColumn() {
   if (typeof swbSpill !== "undefined") swbSpill.schedule(); // zamrożona 1. kolumna się nie wylewa
   if (!tableWrapEl) return;
   tableWrapEl.classList.toggle("freeze-first-col", !!(freezeFirstColEl && freezeFirstColEl.checked));
+  scheduleFrozenColOffsets();
   // uchwyt wypełniania w zamrożonej kolumnie siedzi w komórce, poza nią — w #tableWrap (autofill.js)
   if (typeof swbFillHandleSync === "function") swbFillHandleSync();
 }
+
+// ── Blokada N kolumn (jak Excel: Widok → Zablokuj okienka) ────────────────────
+// Klasa .freeze-first-col = „blokada włączona”; ile kolumn danych — frozenColCount.
+// 1. kolumnę danych obsługują reguły w app.css (left = --row-head-w). Dla 2..N
+// dopisujemy reguły do własnego <style> (nth-child → wiersze dorysowane później, też przez
+// nowy silnik, przyklejają się same), a przesunięcia --fz-left-K liczymy z faktycznych
+// szerokości komórek nagłówka (table-layout: fixed potrafi rozciągnąć kolumny).
+const FROZEN_COLS_MAX = 10;
+let frozenColCount = 1;
+let frozenColEffective = 1; // tyle naprawdę przyklejonych (wąski ekran — patrz niżej)
+let _fzStyleEl = null;
+let _fzStyleFor = -1;
+let _fzOffsetsRaf = 0;
+function getFrozenColCount() {
+  return tableWrapEl && tableWrapEl.classList.contains("freeze-first-col") ? Math.min(frozenColCount, frozenColEffective) : 0;
+}
+// komórka (td/th w wierszu tabeli) leży w zamrożonym obszarze: numer wiersza + N kolumn
+function isFrozenCellIndex(cellIndex) {
+  return cellIndex <= getFrozenColCount() && getFrozenColCount() > 0;
+}
+function setFrozenColCount(n) {
+  frozenColCount = Math.max(1, Math.min(FROZEN_COLS_MAX, Math.round(Number(n)) || 1));
+  scheduleFrozenColOffsets();
+}
+function frozenColsCss(n) {
+  if (n < 2) return "";
+  const W = ".table-wrap.freeze-first-col";
+  let css = `${W} tbody td:nth-child(2){box-shadow:none}\n`;
+  for (let c = 3; c <= n + 1; c++) {
+    const L = `left:var(--fz-left-${c})`;
+    css += `${W} tbody td:nth-child(${c}),${W} thead th:nth-child(${c}),${W} thead tr.pre-row>td:nth-child(${c}){position:sticky;${L};background:var(--surface)}\n`
+      + `${W} tbody td:nth-child(${c}){z-index:4}${W} thead th:nth-child(${c}){z-index:9}${W} thead tr.pre-row>td:nth-child(${c}){z-index:5}\n`
+      // szyba (freeze-pane.js): prawdziwe komórki i kopia bez sticky — jak .fz-off w app.css
+      + `${W} tbody td.fz-off:nth-child(${c}),${W} .fz-clone tbody td:nth-child(${c}){position:relative;left:auto}\n`;
+  }
+  css += `${W} #dataTable tbody tr:not(.vr-spacer)>td:nth-child(-n+${n + 1}):not(.fz-off),${W} #dataTable thead tr.pre-row>td:nth-child(-n+${n + 1}){position:sticky}\n`; // jak w app.css (notatka/uchwyt)
+  css += `${W} tbody td:nth-child(${n + 1}):not(.fz-off){box-shadow:6px 0 8px -6px rgba(20,30,20,.16)}\n`
+    + `@media (pointer: coarse){${W} tbody td:nth-child(${n + 1}):not(.fz-off){box-shadow:1px 0 0 color-mix(in srgb,var(--ink) 12%,transparent)}}\n`;
+  return css;
+}
+function scheduleFrozenColOffsets() {
+  if (_fzOffsetsRaf || !tableWrapEl) return;
+  _fzOffsetsRaf = requestAnimationFrame(() => { _fzOffsetsRaf = 0; syncFrozenColOffsets(); });
+}
+// Bezpiecznik wąskiego ekranu: zamrożony obszar najwyżej ~¾ szerokości okna tabeli —
+// inaczej na telefonie reszta kolumn nie miałaby gdzie się przewijać. Ustawienie
+// (frozenColCount) zostaje; na szerszym ekranie wraca w całości.
+const FROZEN_MAX_SHARE = 0.75;
+function syncFrozenColOffsets() {
+  const want = tableWrapEl && tableWrapEl.classList.contains("freeze-first-col") ? frozenColCount : 0;
+  const hr = theadEl ? theadEl.querySelector("tr.header-row") : null;
+  let eff = want;
+  const lefts = [];
+  if (want >= 1 && hr) {
+    const limit = tableWrapEl.clientWidth * FROZEN_MAX_SHARE;
+    let x = 0;
+    eff = 1;
+    for (let c = 1; c <= want + 1 && c <= hr.cells.length; c++) {
+      lefts[c] = x;
+      x += hr.cells[c - 1].offsetWidth;
+      if (c >= 3 && (x <= limit || !limit)) eff = c - 1;
+    }
+  }
+  frozenColEffective = Math.max(1, eff);
+  const n = getFrozenColCount();
+  const note = document.getElementById("freezeColCountNote");
+  if (note) {
+    const capped = want > 1 && n < want;
+    note.hidden = !capped;
+    if (capped && typeof t === "function") note.textContent = t("freezeColsCapped").replace("{n}", n);
+  }
+  if (n !== _fzStyleFor) {
+    if (!_fzStyleEl) { _fzStyleEl = document.createElement("style"); _fzStyleEl.id = "frozenColsStyle"; document.head.appendChild(_fzStyleEl); }
+    _fzStyleEl.textContent = frozenColsCss(n);
+    _fzStyleFor = n;
+    if (typeof swbSpill !== "undefined") swbSpill.schedule(); // zamrożone kolumny się nie wylewają
+  }
+  for (let c = 3; c <= n + 1; c++) tableWrapEl.style.setProperty(`--fz-left-${c}`, `${lefts[c] || 0}px`);
+}
+
+// Po scrollIntoView komórki (strzałki, Tab, skoki): zwykła komórka nie może zostać pod
+// zamrożonymi kolumnami, a sama zamrożona nie przewija tabeli w bok. NIE scroll-padding-left:
+// przy nim przeglądarka „wyciągała” spod niego też przyklejone komórki — klik w zamrożoną
+// kolumnę przewijał tabelę do lewej (i co próbę odpalał szybę freeze-pane).
+function keepCellClearOfFrozen(el, scrollLeftBefore) {
+  const n = getFrozenColCount();
+  if (!n || !el || el.tagName !== "TD" || !el.parentElement) return;
+  if (el.cellIndex <= n) { tableWrapEl.scrollLeft = scrollLeftBefore; return; }
+  const last = el.parentElement.cells[n];
+  if (!last) return;
+  const hidden = last.getBoundingClientRect().right - el.getBoundingClientRect().left;
+  if (hidden > 0) tableWrapEl.scrollLeft -= hidden;
+}
+// Przebudowa nagłówka (render) albo zmiana szerokości tabeli (zoom, kolumny) → nowe przesunięcia.
+if (typeof MutationObserver === "function" && theadEl) new MutationObserver(scheduleFrozenColOffsets).observe(theadEl, { childList: true });
+if (typeof ResizeObserver === "function" && tableEl) new ResizeObserver(scheduleFrozenColOffsets).observe(tableEl);
 
 
 // ── Wskaźnik trybu wprowadzania (klawiatura vs wskaźnik) ─────────────────────

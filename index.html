@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20261031-logo" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20261101-05" />
+    <link rel="stylesheet" href="styles/app.css?v=20261101-09" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -573,9 +573,14 @@
                   <input id="freezeHeaders" type="checkbox" />
                   Zablokuj wiersze nagłówków
                 </label>
-                <label class="field checkbox" data-hint data-hint-pl="Przykleja kolumnę numerów i pierwszą kolumnę danych przy przewijaniu w bok. Pamiętane osobno dla każdego arkusza; bez zapisu — tak, jak zablokowano w Excelu." data-hint-en="Pins the row-number column and the first data column when scrolling sideways. Remembered per sheet; otherwise as frozen in Excel." data-hint-delay="1.1" data-hint-touch="on">
+                <label class="field checkbox" data-hint data-hint-pl="Przykleja kolumnę numerów i pierwsze kolumny danych przy przewijaniu w bok (ile — niżej). Pamiętane osobno dla każdego arkusza; bez zapisu — tak, jak zablokowano w Excelu." data-hint-en="Pins the row-number column and the first data columns when scrolling sideways (how many — below). Remembered per sheet; otherwise as frozen in Excel." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="freezeFirstCol" type="checkbox" />
-                  Zablokuj pierwszą kolumnę
+                  Zablokuj kolumny z lewej
+                </label>
+                <label class="field freeze-count-field" id="freezeColCountField" hidden data-hint data-hint-pl="Ile kolumn danych zostaje przy lewej krawędzi (1–10), jak w Excelu „Zablokuj okienka”. Szybciej: przytrzymaj / kliknij prawym nazwę kolumny → „Zablokuj kolumny do tej”." data-hint-en="How many data columns stay pinned on the left (1–10), like Excel's Freeze Panes. Faster: long-press / right-click a column name → “Freeze columns up to here”." data-hint-delay="1.1" data-hint-touch="on">
+                  Ile kolumn
+                  <input id="freezeColCount" type="number" min="1" max="10" step="1" inputmode="numeric" enterkeyhint="done" value="1" />
+                  <span class="panel-hint" id="freezeColCountNote" hidden></span>
                 </label>
                 <div class="divider"></div>
                 <div class="field-subtitle" id="cellStyleOptionsTitle">Style komórek z pliku</div>
@@ -1944,53 +1949,53 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20261101-05"></script>
-    <script defer src="app/render-budget.js?v=20261101-05"></script>
-    <script defer src="app/language.js?v=20261101-05"></script>
-    <script defer src="app/similar-names.js?v=20261101-05"></script>
-    <script defer src="app/analysis.js?v=20261101-05"></script>
-    <script defer src="app/smart-filters.js?v=20261101-05"></script>
-    <script defer src="app/workbook.js?v=20261101-05"></script>
-    <script defer src="app/xlsx-patch.js?v=20261101-05"></script>
-    <script defer src="app/table.js?v=20261101-05"></script>
-    <script defer src="app/virt-rows.js?v=20261101-05"></script>
-    <script defer src="app/conditional-formatting.js?v=20261101-05"></script>
-    <script defer src="app/formula-engine.js?v=20261101-05"></script>
-    <script defer src="app/formula-calc.js?v=20261101-05"></script>
-    <script defer src="app/formula-explain.js?v=20261101-05"></script>
-    <script defer src="app/data-validation.js?v=20261101-05"></script>
-    <script defer src="app/derived-columns.js?v=20261101-05"></script>
-    <script defer src="app/formulas.js?v=20261101-05"></script>
-    <script defer src="app/edit-tools.js?v=20261101-05"></script>
-    <script defer src="app/cell-format.js?v=20261101-05"></script>
-    <script defer src="app/ui-controls.js?v=20261101-05"></script>
-    <script defer src="app/filter-bar.js?v=20261101-05"></script>
-    <script defer src="app/qs-history.js?v=20261101-05"></script>
-    <script defer src="app/undo.js?v=20261101-05"></script>
-    <script defer src="app/cell-notes.js?v=20261101-05"></script>
-    <script defer src="app/anonymize-core.js?v=20261101-05"></script>
-    <script defer src="app/anonymize-zip.js?v=20261101-05"></script>
-    <script defer src="app/anonymize-ui.js?v=20261101-05"></script>
-    <script defer src="app/drafts.js?v=20261101-05"></script>
-    <script defer src="app/transcribe.js?v=20261101-05"></script>
-    <script defer src="app/local-ai.js?v=20261101-05"></script>
-    <script defer src="app/nl-query.js?v=20261101-05"></script>
-    <script defer src="app/report.js?v=20261101-05"></script>
-    <script defer src="app/freeze-pane.js?v=20261101-05"></script>
-    <script defer src="app/app-frame.js?v=20261101-05"></script>
-    <script defer src="app/sheet-edit-ui.js?v=20261101-05"></script>
-    <script defer src="app/frame-compact.js?v=20261101-05"></script>
-    <script defer src="app/key-bar.js?v=20261101-05"></script>
-    <script defer src="app/cell-spill.js?v=20261101-05"></script>
-    <script defer src="app/autofill.js?v=20261101-05"></script>
-    <script defer src="app/move-cells.js?v=20261101-05"></script>
-    <script defer src="app/header-edit.js?v=20261101-05"></script>
-    <script defer src="app/formula-ui.js?v=20261101-05"></script>
+    <script defer src="app/core.js?v=20261101-09"></script>
+    <script defer src="app/render-budget.js?v=20261101-09"></script>
+    <script defer src="app/language.js?v=20261101-09"></script>
+    <script defer src="app/similar-names.js?v=20261101-09"></script>
+    <script defer src="app/analysis.js?v=20261101-09"></script>
+    <script defer src="app/smart-filters.js?v=20261101-09"></script>
+    <script defer src="app/workbook.js?v=20261101-09"></script>
+    <script defer src="app/xlsx-patch.js?v=20261101-09"></script>
+    <script defer src="app/table.js?v=20261101-09"></script>
+    <script defer src="app/virt-rows.js?v=20261101-09"></script>
+    <script defer src="app/conditional-formatting.js?v=20261101-09"></script>
+    <script defer src="app/formula-engine.js?v=20261101-09"></script>
+    <script defer src="app/formula-calc.js?v=20261101-09"></script>
+    <script defer src="app/formula-explain.js?v=20261101-09"></script>
+    <script defer src="app/data-validation.js?v=20261101-09"></script>
+    <script defer src="app/derived-columns.js?v=20261101-09"></script>
+    <script defer src="app/formulas.js?v=20261101-09"></script>
+    <script defer src="app/edit-tools.js?v=20261101-09"></script>
+    <script defer src="app/cell-format.js?v=20261101-09"></script>
+    <script defer src="app/ui-controls.js?v=20261101-09"></script>
+    <script defer src="app/filter-bar.js?v=20261101-09"></script>
+    <script defer src="app/qs-history.js?v=20261101-09"></script>
+    <script defer src="app/undo.js?v=20261101-09"></script>
+    <script defer src="app/cell-notes.js?v=20261101-09"></script>
+    <script defer src="app/anonymize-core.js?v=20261101-09"></script>
+    <script defer src="app/anonymize-zip.js?v=20261101-09"></script>
+    <script defer src="app/anonymize-ui.js?v=20261101-09"></script>
+    <script defer src="app/drafts.js?v=20261101-09"></script>
+    <script defer src="app/transcribe.js?v=20261101-09"></script>
+    <script defer src="app/local-ai.js?v=20261101-09"></script>
+    <script defer src="app/nl-query.js?v=20261101-09"></script>
+    <script defer src="app/report.js?v=20261101-09"></script>
+    <script defer src="app/freeze-pane.js?v=20261101-09"></script>
+    <script defer src="app/app-frame.js?v=20261101-09"></script>
+    <script defer src="app/sheet-edit-ui.js?v=20261101-09"></script>
+    <script defer src="app/frame-compact.js?v=20261101-09"></script>
+    <script defer src="app/key-bar.js?v=20261101-09"></script>
+    <script defer src="app/cell-spill.js?v=20261101-09"></script>
+    <script defer src="app/autofill.js?v=20261101-09"></script>
+    <script defer src="app/move-cells.js?v=20261101-09"></script>
+    <script defer src="app/header-edit.js?v=20261101-09"></script>
+    <script defer src="app/formula-ui.js?v=20261101-09"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20261101-05"></script>
-    <script defer src="app/launch-files.js?v=20261101-05"></script>
-    <script defer src="app/bootstrap.js?v=20261101-05"></script>
+    <script defer src="app/debug-loaders.js?v=20261101-09"></script>
+    <script defer src="app/launch-files.js?v=20261101-09"></script>
+    <script defer src="app/bootstrap.js?v=20261101-09"></script>
   </body>
 </html>

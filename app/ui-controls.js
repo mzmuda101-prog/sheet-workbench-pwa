@@ -193,9 +193,15 @@ function applyAutoHeaderRowIfEnabled() {
 // w tym tekst) i pod nim są dane; inaczej zwykłe wykrywanie.
 let currentFrozenRowsBySheet = new Map(); // nazwa arkusza → liczba zablokowanych wierszy
 let currentFrozenColsBySheet = new Map(); // nazwa arkusza → liczba zablokowanych kolumn (xSplit)
+// Widok z Excela: gdzie arkusz był przewinięty (topLeftCell) i domyślna wysokość wiersza
+// (<sheetFormatPr defaultRowHeight> w pt) — wiersze bez własnej wysokości mają właśnie tyle.
+let currentSheetViewBySheet = new Map(); // nazwa arkusza → { topLeft: "H5", defaultRowPt: 14 }
+let currentSheetDefaultRowPt = 0;
 async function readFrozenRows(bytes, wb) {
   const map = new Map();
   currentFrozenColsBySheet = new Map();
+  currentSheetViewBySheet = new Map();
+  excelStartViewDone.clear();
   if (typeof JSZip === "undefined" || !bytes || !wb) return map;
   try {
     const zip = await getSharedWorkbookZip(bytes);
@@ -213,7 +219,20 @@ async function readFrozenRows(bytes, wb) {
       // <sheetViews> leży przed <sheetData> — wystarczy początek pliku
       const dataAt = xml.indexOf("sheetData");
       const head = dataAt > 0 ? xml.slice(0, dataAt) : xml.slice(0, 4000);
+      const view = (head.match(/<(?:[\w-]+:)?sheetView\b([^>]*)>/) || [])[1] || "";
       const pane = head.match(/<(?:[\w-]+:)?pane\b([^>]*)\/?>/);
+      // Przewinięcie: <sheetView topLeftCell> = lewa górna część; przy zablokowanych okienkach
+      // przewijana część ma własne <pane topLeftCell> — kolumna z niego, gdy zablokowane są kolumny
+      // (xSplit), wiersz — gdy wiersze (ySplit). RODO: widok A7 + pane B1 (xSplit=1) → B7.
+      const viewTL = (view.match(/\btopLeftCell="([A-Z]+)(\d+)"/) || []).slice(1);
+      const paneTL = pane ? (pane[1].match(/\btopLeftCell="([A-Z]+)(\d+)"/) || []).slice(1) : [];
+      const paneX = pane && Number((pane[1].match(/\bxSplit="([\d.]+)"/) || [])[1]) > 0;
+      const paneY = pane && Number((pane[1].match(/\bySplit="([\d.]+)"/) || [])[1]) > 0;
+      const tlCol = (paneX && paneTL[0]) || viewTL[0] || "A";
+      const tlRow = (paneY && paneTL[1]) || viewTL[1] || "1";
+      const topLeft = viewTL.length || paneTL.length ? `${tlCol}${tlRow}` : "";
+      const defPt = Number((head.match(/<(?:[\w-]+:)?sheetFormatPr\b[^>]*\bdefaultRowHeight="([\d.]+)"/) || [])[1]);
+      currentSheetViewBySheet.set(decodeXmlEntities(sm[1]), { topLeft, defaultRowPt: defPt > 0 ? defPt : 0, frozen: !!(pane && /state="frozen/.test(pane[1])) });
       if (!pane) continue;
       const attrs = pane[1];
       const state = (attrs.match(/\bstate="([^"]+)"/) || [])[1] || "";
@@ -228,6 +247,90 @@ async function readFrozenRows(bytes, wb) {
   return map;
 }
 
+// Pierwsze otwarcie arkusza = ten sam widok co w Excelu: przewinięty tak, by komórka
+// topLeftCell była w lewym górnym rogu (pod nagłówkiem i za zablokowanymi kolumnami).
+// Raz na arkusz po otwarciu pliku — powrót do arkusza zostawia to, co przewinął użytkownik.
+const excelStartViewDone = new Set();
+// Pozycje BEZWZGLĘDNE (miejsce w treści − to, co przyklejone), więc kolejne wywołanie daje ten sam
+// wynik — liczenie „o ile jeszcze” przy przyklejonym nagłówku narastało (RODO: 2195 px zamiast ~100).
+function scrollToExcelTopLeft(cell, settle = false) {
+  const wrapBox = tableWrapEl.getBoundingClientRect();
+  const sticky = (el) => !!el && getComputedStyle(el).position === "sticky";
+  const col = cell.c - currentStartCol;
+  if (col > 0) {
+    const td = tableWrapEl.querySelector(`tbody tr[data-row-key] td[data-col-index="${col}"]`);
+    if (td) {
+      const inContent = td.getBoundingClientRect().left - wrapBox.left + tableWrapEl.scrollLeft;
+      // przyklejona lewa część (numer wiersza + zablokowane kolumny) ma stałą szerokość
+      const stuck = [...td.parentElement.children].filter((el) => el !== td && sticky(el) && el.getBoundingClientRect().left < td.getBoundingClientRect().left)
+        .reduce((w, el) => w + el.getBoundingClientRect().width, 0);
+      const target = Math.max(0, Math.round(inContent - stuck));
+      // drobna różnica (zaokrąglenie) to nie przewinięcie — każde zdarzenie scroll zamyka otwarte menu
+      if (Math.abs(target - tableWrapEl.scrollLeft) > 4) tableWrapEl.scrollLeft = target;
+    }
+  }
+  if (cell.r >= (currentHeaderRow || 1)) {
+    const tr = tableWrapEl.querySelector(`tbody tr[data-row-index="${cell.r}"]`);
+    if (tr) {
+      const inContent = tr.getBoundingClientRect().top - wrapBox.top + tableWrapEl.scrollTop;
+      // przyklejony nagłówek: jego dolna krawędź po przyklejeniu = top (z CSS) + wysokość
+      // Tylko przy zablokowanym (przyklejonym) nagłówku: bez blokady przewinięcie w dół schowałoby
+      // nagłówki kolumn — a od nich zależą menu, sortowanie i filtry. Przy blokadzie wiersz staje pod nim.
+      const th = tableWrapEl.querySelector("thead tr.header-row th");
+      // …i tylko gdy wiersza nie widać: wiersz widoczny od razu (np. pierwszy wiersz danych) zostaje
+      // w zwykłym widoku apki, z wierszami nad nagłówkiem
+      // (dociągnięcie po chwili poprawia już ustawiony widok — wtedy wiersz bywa na ekranie, tylko krzywo)
+      const offscreen = settle ? tableWrapEl.scrollTop > 0 : tr.getBoundingClientRect().bottom > wrapBox.bottom;
+      if (sticky(th) && offscreen) {
+        tableWrapEl.scrollTop = Math.max(0, Math.round(inContent - th.getBoundingClientRect().height));
+        // teraz nagłówek jest przyklejony — wiersz ma stanąć dokładnie pod jego dolną krawędzią
+        // (wartość „top” z CSS zawiera inne przesunięcia, więc mierzymy to, co widać)
+        const gap = Math.round(tr.getBoundingClientRect().top - th.getBoundingClientRect().bottom);
+        if (Math.abs(gap) > 1) tableWrapEl.scrollTop = Math.max(0, tableWrapEl.scrollTop + gap);
+      }
+    }
+  }
+  return [tableWrapEl.scrollLeft, tableWrapEl.scrollTop];
+}
+// Użytkownik zaczął działać (klik, dotyk, klawisz, kółko) — oczekujący widok startowy odpada,
+// inaczej spóźnione przewinięcie zamykałoby właśnie otwarte menu albo przesuwało edycję.
+let excelStartViewUserEpoch = 0;
+["pointerdown", "keydown", "wheel", "touchstart"].forEach((ev) => document.addEventListener(ev, () => { excelStartViewUserEpoch++; }, { capture: true, passive: true }));
+function excelCellVisibleNow(cell) {
+  const wrap = tableWrapEl.getBoundingClientRect();
+  const col = Math.max(0, cell.c - currentStartCol);
+  const row = tableWrapEl.querySelector(`tbody tr[data-row-index="${cell.r}"]`)
+    || (cell.r < (currentHeaderRow || 1) ? tableWrapEl.querySelector("tbody tr[data-row-key]") : null);
+  const td = row && row.querySelector(`td[data-col-index="${col}"]`);
+  if (!td) return false; // wiersz poza oknem rysowania = poza ekranem
+  const r = td.getBoundingClientRect();
+  return r.top >= wrap.top && r.bottom <= wrap.bottom && r.left >= wrap.left && r.right <= wrap.right + 1;
+}
+function applyExcelStartView(sheetName, attempt = 0, epoch = excelStartViewUserEpoch) {
+  const v = currentSheetViewBySheet.get(sheetName);
+  if (!v || !v.topLeft || excelStartViewDone.has(sheetName) || !tableWrapEl || sheetName !== currentSheetName) return;
+  if (epoch !== excelStartViewUserEpoch) { excelStartViewDone.add(sheetName); return; }
+  let cell;
+  try { cell = XLSX.utils.decode_cell(v.topLeft); } catch { return; }
+  // Wczytanie arkusza idzie z animacją przejścia — nowa tabela bywa narysowana dopiero po
+  // kilku klatkach. Czekamy na nią (do ~1,5 s), zamiast przewijać jeszcze starą.
+  const ready = tableWrapEl.querySelector("tbody tr[data-row-key] td[data-col-index]");
+  if (!ready || tableWrapEl.dataset.renderedSheet && tableWrapEl.dataset.renderedSheet !== sheetName) {
+    if (attempt < 30) setTimeout(() => applyExcelStartView(sheetName, attempt + 1, epoch), 50);
+    return;
+  }
+  excelStartViewDone.add(sheetName);
+  // Komórkę widać od razu (np. pierwszy wiersz danych za zablokowanymi kolumnami — przykład apki
+  // ma C6) → nic nie ruszamy: każde zbędne przewinięcie gubiło klik/fokus tuż po otwarciu.
+  if (excelCellVisibleNow(cell)) return;
+  scrollToExcelTopLeft(cell);
+  // Tabela dosuwa się jeszcze chwilę po wczytaniu (wysokości wierszy, dorysowanie okna) — póki
+  // użytkownik niczego nie ruszył, dociągnij widok jeszcze raz (liczenie jest bezwzględne).
+  setTimeout(() => {
+    if (epoch === excelStartViewUserEpoch && sheetName === currentSheetName) scrollToExcelTopLeft(cell, true);
+  }, 350);
+}
+
 // Blokada wierszy nagłówków i pierwszej kolumny — pamiętana OSOBNO dla każdego arkusza
 // (plik + arkusz), nie dla całej apki: w „Bazie” chcesz przyklejone nazwiska, w „Raporcie” nie.
 // Arkusz bez zapisu: to, co zablokował autor w Excelu (Widok → Zablokuj okienka), inaczej wył.
@@ -237,19 +340,41 @@ const freezeMemoryKey = (sheetName) => `${currentFileName || ""}|${sheetName || 
 function readFreezeMemory() {
   try { return JSON.parse(localStorage.getItem(FREEZE_MEMORY_KEY) || "{}") || {}; } catch { return {}; }
 }
-function restoreSheetFreeze(sheetName) {
+// startCol = pierwsza kolumna tabeli w arkuszu (0 = A): xSplit liczy kolumny od A,
+// a tabela może zaczynać się dalej.
+function restoreSheetFreeze(sheetName, startCol = 0) {
   const saved = readFreezeMemory()[freezeMemoryKey(sheetName)];
   if (freezeHeadersEl) freezeHeadersEl.checked = saved ? !!saved.h : currentFrozenRowsBySheet.has(sheetName);
-  if (freezeFirstColEl) freezeFirstColEl.checked = saved ? !!saved.c : currentFrozenColsBySheet.has(sheetName);
+  // zapis: liczba kolumn (0 = wył.), starszy zapis: true/false
+  const cols = saved ? (saved.c === true ? 1 : Number(saved.c) || 0) : Math.max(0, (currentFrozenColsBySheet.get(sheetName) || 0) - startCol);
+  if (freezeFirstColEl) freezeFirstColEl.checked = cols > 0;
+  if (cols > 0) setFrozenColCount(cols);
+  syncFreezeCountField();
   applyFreezeHeaders();
   applyFreezeFirstColumn();
+}
+// Pole „Ile kolumn” pod przełącznikiem: widoczne tylko przy włączonej blokadzie.
+function syncFreezeCountField() {
+  const field = document.getElementById("freezeColCountField");
+  const input = document.getElementById("freezeColCount");
+  const on = !!(freezeFirstColEl && freezeFirstColEl.checked);
+  if (field) field.hidden = !on;
+  if (input && document.activeElement !== input) input.value = String(frozenColCount);
+}
+// Blokada n kolumn w bieżącym arkuszu (0 = odblokuj) — menu nagłówka kolumny.
+function setSheetFrozenCols(n) {
+  if (freezeFirstColEl) freezeFirstColEl.checked = n > 0;
+  if (n > 0) setFrozenColCount(n);
+  syncFreezeCountField();
+  applyFreezeFirstColumn();
+  if (!rememberSheetFreeze() && typeof saveCellStylePreferences === "function") saveCellStylePreferences();
 }
 function rememberSheetFreeze() {
   if (!currentSheetName || typeof workbook === "undefined" || !workbook) return false;
   const all = readFreezeMemory();
   const k = freezeMemoryKey(currentSheetName);
   delete all[k]; // na koniec = najświeższy (przy limicie wypadają najstarsze)
-  all[k] = { h: !!(freezeHeadersEl && freezeHeadersEl.checked), c: !!(freezeFirstColEl && freezeFirstColEl.checked) };
+  all[k] = { h: !!(freezeHeadersEl && freezeHeadersEl.checked), c: freezeFirstColEl && freezeFirstColEl.checked ? frozenColCount : 0 };
   const keys = Object.keys(all);
   keys.slice(0, Math.max(0, keys.length - FREEZE_MEMORY_MAX)).forEach((x) => delete all[x]);
   try { localStorage.setItem(FREEZE_MEMORY_KEY, JSON.stringify(all)); } catch { /* prywatne okno — tylko na tę sesję */ }
@@ -2467,7 +2592,6 @@ loadBtn.addEventListener("click", () => {
         aggregationWorkbenchState.customHeaderRow = headerRow;
       }
       currentSheetName = sheetName;
-      restoreSheetFreeze(sheetName);
       updateSheetTabActive(sheetName);
       if (typeof appFrame !== "undefined") appFrame.syncFile();
       const data = await buildRowsAsync(sheet, headerRow, workbook);
@@ -2476,10 +2600,16 @@ loadBtn.addEventListener("click", () => {
       // Limit wierszy dobrany do zmierzonej szybkości urządzenia (chyba że wpisany ręcznie).
       if (typeof renderBudget !== "undefined") renderBudget.applyToSheet(currentHeaders.length);
       currentStartCol = data.startCol || 0;
+      restoreSheetFreeze(sheetName, currentStartCol); // blokada per arkusz, zanim tabela się narysuje
       currentMerges = Array.isArray(data.merges) ? data.merges : [];
       currentHeaderStyles = Array.isArray(data.headerStyles) ? data.headerStyles : [];
       currentSheetColWidths = Array.isArray(data.colWidths) ? data.colWidths : [];
       currentSheetRowHeights = data.rowHeights || {};
+      // Domyślna wysokość z pliku tylko w arkuszu, który MA własne wysokości wierszy (część wierszy
+      // 15 pt, reszta bez „ht” — „bazy”): wtedy całość jak w Excelu. Arkusz bez nich zostaje
+      // w gęstości apki (inaczej każdy plik robił się nagle gęsty, a „Gęstość” przestawała działać).
+      currentSheetDefaultRowPt = Object.keys(currentSheetRowHeights).length
+        ? (currentSheetViewBySheet.get(sheetName) || {}).defaultRowPt || 0 : 0;
       currentSheetStats = data.stats || null;
       if (typeof cfmtOverlayRows === "function") cfmtOverlayRows(data.rows);
       baseRows = markSubheaderRows(data.rows, data.merges);
@@ -2541,6 +2671,7 @@ loadBtn.addEventListener("click", () => {
       // Jedno zbiorcze powiadomienie (toast() scala je z „Plik wczytany” sprzed chwili).
       toast(t("sheetLoadedRows", { sheet: sheetName, rows: formatRowCount(baseRows.length) }), "success");
       log(`Wczytano arkusz: ${sheetName}`, "success");
+      requestAnimationFrame(() => applyExcelStartView(sheetName));
       sheetLoadedName = sheetName;
     } finally {
       // wczytanie wyprzedzone przez nowsze nie gasi JEGO wskaźnika ładowania
@@ -4279,7 +4410,7 @@ function onGridCellClick(e) {
   //   • przytrzymanie dalej otwiera to samo menu (filter-bar.js) — nasz dodatek.
   // Dawniej drugie stuknięcie od razu edytowało, a menu było tylko pod przytrzymaniem.
   if (lastTbodyPointerType === "touch" && !activeCellEditor) {
-    const now = Date.now();
+    const now = (typeof swbForwardedTapAt === "number" && swbForwardedTapAt) || Date.now();
     const tapKey = `${rowKey}:${colIndex0}`;
     const dbl = lastCellTap.key === tapKey && now - lastCellTap.at < 420;
     lastCellTap = { key: tapKey, at: now };

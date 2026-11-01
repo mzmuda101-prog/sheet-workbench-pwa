@@ -247,6 +247,17 @@ function swbOpenHeaderMenu(th, point) {
     { id: "hdr-sort-asc", label: t("hdrSortAsc"), run: () => swbHeaderSort(name, "asc") },
     { id: "hdr-sort-desc", label: t("hdrSortDesc"), run: () => swbHeaderSort(name, "desc") },
   ];
+  // Excel: Widok → Zablokuj okienka. N = pozycja kolumny w tabeli (komórka 0 to numery wierszy).
+  if (typeof setSheetFrozenCols === "function") {
+    const upTo = th.cellIndex;
+    const frozenNow = getFrozenColCount();
+    if (frozenNow !== upTo) items.push({ id: "hdr-freeze", label: t("hdrFreezeTo"), run: () => {
+      if (upTo > FROZEN_COLS_MAX) { toast(t("hdrFreezeTooMany").replace("{max}", FROZEN_COLS_MAX), "info"); return; }
+      setSheetFrozenCols(upTo);
+      toast(t("freezeColsOn").replace("{n}", upTo), "info");
+    } });
+    if (frozenNow) items.push({ id: "hdr-unfreeze", label: t("hdrUnfreeze"), run: () => { setSheetFrozenCols(0); toast(t("freezeColsOff"), "info"); } });
+  }
   const frag = document.createDocumentFragment();
   frag.appendChild(head);
   items.forEach((item, i) => {
@@ -282,6 +293,7 @@ function swbOpenHeaderMenu(th, point) {
   const mw = cellMenuEl.offsetWidth;
   const mh = cellMenuEl.offsetHeight;
   if (x + mw > vw - 8) x = Math.max(8, vw - mw - 8);
+  x = Math.max(8, x); // nagłówek częściowo pod zamrożonymi kolumnami / za lewą krawędzią
   if (y + mh > vh - 8) y = Math.max(8, rect.top - mh - 4);
   cellMenuEl.style.left = `${Math.round(x + (vv ? vv.offsetLeft : 0))}px`;
   cellMenuEl.style.top = `${Math.round(y + (vv ? vv.offsetTop : 0))}px`;

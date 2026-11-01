@@ -321,14 +321,20 @@ function scrollCellIntoView(el) {
         _cellScrollFrame = 0;
         const target = _cellScrollTarget;
         _cellScrollTarget = null;
-        if (target && target.isConnected) target.scrollIntoView({ block: "nearest", inline: "nearest" });
+        if (target && target.isConnected) {
+          const sl = tableWrapEl.scrollLeft;
+          target.scrollIntoView({ block: "nearest", inline: "nearest" });
+          keepCellClearOfFrozen(target, sl);
+        }
       });
     }
     return;
   }
   // zwykłe przewinięcie od razu — i bez starego, odłożonego celu, który cofnąłby widok
   if (_cellScrollFrame) { cancelAnimationFrame(_cellScrollFrame); _cellScrollFrame = 0; _cellScrollTarget = null; }
+  const sl = tableWrapEl.scrollLeft;
   el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  keepCellClearOfFrozen(el, sl); // zamrożone kolumny (core.js)
 }
 
 function syncFocusedCellInDom(options = {}) {
@@ -1630,6 +1636,21 @@ function toPixelWidth(meta) {
   return null;
 }
 
+// Wysokość wiersza z pliku (Wymiary z Excela): własna z <row ht>, a bez niej domyślna arkusza
+// (<sheetFormatPr defaultRowHeight>) — Excel tak rysuje wiersze bez „ht” („bazy” od wiersza 24:
+// 14 pt, a apka dawała ~31 px). Wiersz z tekstem w kilku liniach Excel by dopasował — tu też.
+function excelFileRowHeight(row) {
+  const own = toPixelHeight(currentSheetRowHeights[row.rowIndex0]);
+  if (own) return own;
+  const pt = typeof currentSheetDefaultRowPt === "number" ? currentSheetDefaultRowPt : 0;
+  if (!(pt > 0)) return 0;
+  // Przewijanie wirtualne (bardzo duże arkusze) liczy pozycje z wysokości wierszy — narzucona
+  // domyślna rozjeżdżała mu okno (virt-guard &virt=1). Tam zostają naturalne wysokości.
+  if (typeof swbVirt !== "undefined" && swbVirt.isActive && swbVirt.isActive()) return 0;
+  if (Array.isArray(row.display) && row.display.some((d) => typeof d === "string" && d.includes("\n"))) return 0;
+  return Math.max(18, Math.round((pt * 96) / 72));
+}
+
 function toPixelHeight(meta) {
   if (!meta || typeof meta !== "object") return null;
   if (Number.isFinite(meta.hpx)) return Math.max(18, Math.round(meta.hpx));
@@ -2331,6 +2352,14 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
 let _rowNodeCache = new Map();   // rowKey -> <tr>
 let _rowNodeEnvKey = "";
 
+const NARROW_COL_PX = 64;
+const TIGHT_COL_PX = 100;
+function swbHeaderCellEmpty(i) {
+  const sh = typeof workbook !== "undefined" && workbook && workbook.Sheets[currentSheetName];
+  if (!sh) return false;
+  const cell = sh[XLSX.utils.encode_cell({ r: (currentHeaderRow || 1) - 1, c: currentStartCol + i })];
+  return !cell || cell.v == null || String(cell.v).trim() === "";
+}
 function computeRenderEnvKey(model, headers, useExcelLayout, limit, hasCfMap) {
   return [
     model.mode,
@@ -2381,7 +2410,7 @@ function refreshReusedRow(tr, row, rowPos, model, useExcelLayout, pulseMatches) 
   }
 
   let rowH = manualRowHeights[row.rowIndex0] || (manualRowHeightAll > 0 ? manualRowHeightAll : 0);
-  if (!rowH && useExcelLayout) rowH = toPixelHeight(currentSheetRowHeights[row.rowIndex0]) || 0;
+  if (!rowH && useExcelLayout) rowH = excelFileRowHeight(row);
   if (rowH) {
     tr.style.height = `${rowH}px`;
     classes.push("row-fixed-height");
@@ -2474,7 +2503,7 @@ function buildTableRow(ctx, row, rowPos) {
   }
   // Wysokość wiersza: ręczne przeciąganie > jednolita z pola > z pliku (Wymiary z Excela).
   let rowH = manualRowHeights[row.rowIndex0] || (manualRowHeightAll > 0 ? manualRowHeightAll : 0);
-  if (!rowH && useExcelLayout) rowH = toPixelHeight(currentSheetRowHeights[row.rowIndex0]) || 0;
+  if (!rowH && useExcelLayout) rowH = excelFileRowHeight(row);
   if (rowH) {
     tr.style.height = `${rowH}px`;
     tr.classList.add("row-fixed-height");
@@ -2505,6 +2534,7 @@ function buildTableRow(ctx, row, rowPos) {
     // (CSS przycina tylko wizualnie). Na nagłówkach atrybut ZOSTAJE, bo tam textContent
     // zawiera doklejoną strzałkę sortowania.
     td.dataset.colIndex = String(i);
+    if (ctx.narrowCols && ctx.narrowCols.has(i)) td.classList.add(ctx.narrowCols.get(i));
     if (selectedCellState && selectedCellState.rowKey === tr.dataset.rowKey && selectedCellState.colIndex0 === i) {
       td.classList.add("cell-selected");
     }
@@ -2636,7 +2666,7 @@ function collectPreHeaderRows(colCount) {
   return _preHeaderCache.rows;
 }
 
-function appendPreHeaderRows(model, headers) {
+function appendPreHeaderRows(model, headers, narrowCols = null) {
   if (model.mode !== "wide" || !rowsAboveHeaderEnabled()) return 0;
   const pre = collectPreHeaderRows(headers.length);
   if (!pre.length) return 0;
@@ -2676,6 +2706,7 @@ function appendPreHeaderRows(model, headers) {
       const td = document.createElement("td");
       td.className = "pre-cell";
       td.dataset.colIndex = String(i);
+      if (narrowCols && narrowCols.has(i)) td.classList.add(narrowCols.get(i));
       if (noteCols && noteCols.has(currentStartCol + i)) td.classList.add("cell-has-note");
       const text = p.display[i] || "";
       td.textContent = text;
@@ -2746,6 +2777,10 @@ function renderTable(modelOrHeaders, maybeRows) {
 
   const useExcelLayout = isExcelLayoutEnabled();
   const widths = computeColumnWidths(headers, rows, useExcelLayout);
+  // Wąskie kolumny z Excela: odstęp wewnętrzny maleje z szerokością (Excel ma 2–3 px). Przy stałych
+  // 12 px „WE:” w 40 px kończyło się „W…”, a „Osoba 004” w 73 px — „Osoba…”. Szerokie bez zmian.
+  const narrowCols = new Map(); // indeks → klasa
+  if (useExcelLayout) widths.forEach((w, i) => { if (w <= NARROW_COL_PX) narrowCols.set(i, "cell-narrow"); else if (w <= TIGHT_COL_PX) narrowCols.set(i, "cell-tight"); });
   const rowHeaderDigits = String(rows.length + currentHeaderRow).length;
   const rowHeaderWidth = Math.max(42, rowHeaderDigits * 8 + 18);
   // Offset dla sticky 1. kolumny danych (blokada kolumny) = szerokość kolumny numerów.
@@ -2764,6 +2799,7 @@ function renderTable(modelOrHeaders, maybeRows) {
   tableEl.appendChild(colgroup);
   tableEl.appendChild(theadEl);
   tableEl.appendChild(tbodyEl);
+  if (tableWrapEl) tableWrapEl.dataset.renderedSheet = currentSheetName || ""; // widok startowy z Excela czeka na swój arkusz
 
   const guideRow = document.createElement("tr");
   guideRow.className = "guide-row";
@@ -2785,7 +2821,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     guideRow.appendChild(th);
   });
   theadEl.appendChild(guideRow);
-  const preRowCount = appendPreHeaderRows(model, headers);
+  const preRowCount = appendPreHeaderRows(model, headers, narrowCols);
   if (tableWrapEl) tableWrapEl.classList.toggle("has-pre-rows", preRowCount > 0);
 
   const headRow = document.createElement("tr");
@@ -2805,9 +2841,16 @@ function renderTable(modelOrHeaders, maybeRows) {
     th.setAttribute("scope", "col");
     th.dataset.sortHeader = h; // sort przez delegację na theadEl (bez N listenerów przy każdym renderze)
     th.dataset.colIndex = String(i); // menu nagłówka / zmiana nazwy (header-edit.js)
-    th.textContent = h;
+    // Pusta komórka nagłówka: nazwa kolumny to litera (A, B…) — potrzebna do filtrów, ale w samym
+    // wierszu nagłówka Excel pokazuje pustkę (litera i tak stoi w wierszu nad nim).
+    const headCellEmpty = model.mode === "wide" && h === XLSX.utils.encode_col(i + currentStartCol) && swbHeaderCellEmpty(i);
+    th.textContent = headCellEmpty ? "" : h;
     th.dataset.fullText = h; // [EN] Header text without sort arrow — for truncated tooltip
     if (currentHeaderStyles[i]) applyCellStyle(th, currentHeaderStyles[i]);
+    // „Zawijaj tekst” z pliku w wierszu nagłówka (Excel: „ile ogl.” w dwóch liniach) — w treści
+    // komórek dalej steruje przełącznik w Widoku, ale nagłówek ma w pliku wysokość na kilka linii
+    if (useExcelLayout && currentHeaderStyles[i] && currentHeaderStyles[i].wrapText) th.classList.add("th-wrap");
+    if (narrowCols.has(i)) th.classList.add(narrowCols.get(i));
 
     if (headerMergeLayout) {
       const merge = headerMergeLayout.anchors.get(i);
@@ -2842,7 +2885,7 @@ function renderTable(modelOrHeaders, maybeRows) {
 
   // Ponowne użycie wierszy: bezpieczne tylko, gdy nic nie zmieniło TREŚCI komórek
   // (envKey), nie ma scaleń (zależą od widocznego zakresu) i nie jest otwarty edytor.
-  const envKey = computeRenderEnvKey(model, headers, useExcelLayout, limit, !!cfMapForRender);
+  const envKey = computeRenderEnvKey(model, headers, useExcelLayout, limit, !!cfMapForRender) + "\u0001n" + [...narrowCols].map(([i, k]) => `${i}${k[5]}`).join(",");
   const mergesActive = !!(mergeLayout && ((mergeLayout.anchors && mergeLayout.anchors.size > 0) || (mergeLayout.covered && mergeLayout.covered.size > 0)));
   const editorOpen = typeof activeCellEditor !== "undefined" && !!activeCellEditor;
   const reuseBlocked = mergesActive || editorOpen || (typeof window !== "undefined" && window.__swbNoRowReuse === true);
@@ -2850,7 +2893,7 @@ function renderTable(modelOrHeaders, maybeRows) {
   const nextRowNodes = new Map();
 
   const rowCtx = {
-    model, headers, useExcelLayout, pulseMatches, mergeLayout, cfMapForRender,
+    model, headers, useExcelLayout, pulseMatches, mergeLayout, cfMapForRender, narrowCols,
     canReuse, reuseMap: _rowNodeCache, nextRowNodes,
   };
   // Nowy silnik tabeli (virt-rows.js): w DOM tylko okno widocznych wierszy + zapas.

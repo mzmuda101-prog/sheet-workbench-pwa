@@ -1,7 +1,7 @@
 // freeze-pane.js — „SZYBA" ZAMROŻONEJ KOLUMNY NA CZAS PRZEWIJANIA.
 //
-// PROBLEM: blokada 1. kolumny to `position: sticky` na DWÓCH komórkach w KAŻDYM wierszu
-// (numer wiersza + 1. kolumna danych). Przeglądarka robi z każdej przyklejonej komórki
+// PROBLEM: blokada kolumn to `position: sticky` na N+1 komórkach w KAŻDYM wierszu
+// (numer wiersza + N kolumn danych, getFrozenColCount w core.js). Przeglądarka robi z każdej przyklejonej komórki
 // OSOBNĄ warstwę — przy 200 wierszach to ~400 warstw, które w każdej klatce przewijania
 // trzeba przeliczyć, złożyć i często przemalować. Zmierzone (Chromium, CPU ×6, 200 w.):
 // przewijanie w bok 185 ms pracy bez blokady → 604 ms z blokadą; w pionie 884 → 1195 ms.
@@ -11,7 +11,7 @@
 //   • W SPOCZYNKU nic się nie zmienia — prawdziwe przyklejone komórki, pełna obsługa
 //     kliknięć, zaznaczania, edycji, klawiatury, dokładnie jak wcześniej.
 //   • NA CZAS PRZEWIJANIA przyklejenie z komórek zdejmujemy (klasa `fz-off` na nich),
-//     a nad tabelą kładziemy jedną przyklejoną warstwę z kopią dwóch pierwszych
+//     a nad tabelą kładziemy jedną przyklejoną warstwę z kopią zamrożonych
 //     kolumn. Jedna warstwa zamiast setek → przewijanie kosztuje tyle, co bez blokady.
 //   • Po ~180 ms bez ruchu szyba znika i wracają prawdziwe przyklejone komórki.
 //
@@ -40,9 +40,10 @@
 
   // Fokus na zamrożonej komórce (chodzenie strzałkami): kopia nie ma :focus, więc
   // obwódka fokusu zniknęłaby na czas przewijania — wtedy zostajemy przy sticky.
+  const nCells = () => getFrozenColCount() + 1; // numer wiersza + N kolumn danych
   const focusInFrozen = () => {
     const a = document.activeElement;
-    return !!(a && a.tagName === "TD" && a.cellIndex < 2 && a.parentElement && a.parentElement.parentElement === tbodyEl);
+    return !!(a && a.tagName === "TD" && a.cellIndex < nCells() && a.parentElement && a.parentElement.parentElement === tbodyEl);
   };
 
   const eligible = () =>
@@ -68,24 +69,26 @@
   function build() {
     const rows = tbodyEl.rows;
     const first = rows[0];
-    if (!first || first.cells.length < 2) return false;
+    const n = nCells();
+    if (!first || first.cells.length < n) return false;
     // Szerokości z faktycznego układu (table-layout: fixed potrafi rozciągnąć kolumny).
-    const w0 = first.cells[0].getBoundingClientRect().width;
-    const w1 = first.cells[1].getBoundingClientRect().width;
+    const ws = [];
+    for (let k = 0; k < n; k++) ws.push(first.cells[k].getBoundingClientRect().width);
+    const total = ws.reduce((a, b) => a + b, 0);
     const heights = new Array(rows.length);
     for (let i = 0; i < rows.length; i++) heights[i] = rows[i].getBoundingClientRect().height;
 
     pane = document.createElement("div");
     pane.className = "fz-pane";
     pane.setAttribute("aria-hidden", "true");
-    pane.style.width = `${w0 + w1}px`;
+    pane.style.width = `${total}px`;
 
     cloneTable = document.createElement("table");
     cloneTable.className = `${tableEl.className} fz-clone`.trim();
-    cloneTable.style.width = `${w0 + w1}px`;
+    cloneTable.style.width = `${total}px`;
     cloneTable.style.top = `${tbodyEl.offsetTop}px`;
     const colgroup = document.createElement("colgroup");
-    [w0, w1].forEach((w) => {
+    ws.forEach((w) => {
       const col = document.createElement("col");
       col.style.width = `${w}px`;
       colgroup.appendChild(col);
@@ -100,8 +103,7 @@
       const st = tr.getAttribute("style");
       if (st) ctr.setAttribute("style", st);
       ctr.style.height = `${heights[i]}px`;
-      if (tr.cells[0]) ctr.appendChild(cloneCell(tr.cells[0]));
-      if (tr.cells[1]) ctr.appendChild(cloneCell(tr.cells[1]));
+      for (let k = 0; k < n && k < tr.cells.length; k++) ctr.appendChild(cloneCell(tr.cells[k]));
       frag.appendChild(ctr);
     }
     cloneBody.appendChild(frag);
@@ -128,7 +130,7 @@
       const td = node.closest("td");
       if (!td || td.parentElement.parentElement !== tbodyEl) continue;
       if (td.querySelector("input.cell-editor")) { stop(true); return; }
-      if (td.cellIndex > 1) continue;
+      if (td.cellIndex >= nCells()) continue;
       const ctr = cloneBody && cloneBody.rows[td.parentElement.sectionRowIndex];
       const old = ctr && ctr.cells[td.cellIndex];
       if (old) old.replaceWith(cloneCell(td));
@@ -144,10 +146,10 @@
     // stylu przy CPU ×6 na starcie każdego przewijania), tu tylko ~400.
     const rows = tbodyEl.rows;
     offCells = [];
+    const n = nCells();
     for (let i = 0; i < rows.length; i++) {
       const c = rows[i].cells;
-      if (c[0]) offCells.push(c[0]);
-      if (c[1]) offCells.push(c[1]);
+      for (let k = 0; k < n && k < c.length; k++) offCells.push(c[k]);
     }
     for (let i = 0; i < offCells.length; i++) offCells[i].classList.add("fz-off");
     observer = observer || new MutationObserver(onMutations);

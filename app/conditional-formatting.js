@@ -252,6 +252,25 @@ function cfFunc(name, args) {
     case "MAX": { const v = cfFlat(args).map(cfNum).filter((x) => !isNaN(x)); return v.length ? arrMax(v) : 0; }
     case "SUM": return cfFlat(args).reduce((acc, x) => acc + (isNaN(cfNum(x)) ? 0 : cfNum(x)), 0);
     case "COUNT": return cfFlat(args).filter((x) => typeof x === "number").length;
+    // kryteria jak w formułach komórek (formula-engine.js): „>5”, „Jan*”, pusta komórka = 0…
+    // (np. „=LICZ.JEŻELI($W$4:$W$23;F4)=0” — podświetl, czego nie ma na liście)
+    case "COUNTIF": case "COUNTIFS": case "SUMIF": {
+      if (typeof FormulaEngine === "undefined") return CF_ERR;
+      const pairs = [];
+      if (name === "SUMIF") pairs.push([args[0], args[1]]);
+      else for (let i = 0; i + 1 < args.length; i += 2) pairs.push([args[i], args[i + 1]]);
+      const lists = pairs.map(([rg]) => (Array.isArray(rg) ? rg : [rg]));
+      const len = lists[0].length;
+      if (lists.some((l) => l.length !== len)) return CF_ERR;
+      const tests = pairs.map(([, crit]) => FormulaEngine.makeCriterion(crit));
+      const sumList = name === "SUMIF" ? (args[2] === undefined ? lists[0] : (Array.isArray(args[2]) ? args[2] : [args[2]])) : null;
+      let acc = 0;
+      for (let i = 0; i < len; i++) {
+        if (!tests.every((t, k) => t(lists[k][i]))) continue;
+        if (sumList) { const x = sumList[i]; if (typeof x === "number") acc += x; } else acc++;
+      }
+      return acc;
+    }
     case "COUNTA": return cfFlat(args).filter((x) => x !== null && x !== "").length;
     case "AVERAGE": { const v = cfFlat(args).filter((x) => typeof x === "number"); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : CF_ERR; }
     case "VALUE": { const x = Number(s(0).replace(/\s/g, "").replace(",", ".")); return isNaN(x) ? CF_ERR : x; }

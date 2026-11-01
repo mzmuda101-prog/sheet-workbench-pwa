@@ -65,6 +65,8 @@ const swbVirt = (() => {
 
   function fixedHeightOf(row, useExcelLayout) {
     let h = manualRowHeights[row.rowIndex0] || (manualRowHeightAll > 0 ? manualRowHeightAll : 0);
+    // tylko WŁASNA wysokość wiersza z pliku — domyślną arkusza (excelFileRowHeight) wiersz po narysowaniu
+    // przekracza o 1–2 px (czcionka, obramowanie), więc tu jej nie zakładamy: takie wiersze są mierzone
     if (!h && useExcelLayout) h = toPixelHeight(currentSheetRowHeights[row.rowIndex0]) || 0;
     return h || 0;
   }

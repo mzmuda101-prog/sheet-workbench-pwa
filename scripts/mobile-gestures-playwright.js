@@ -34,7 +34,9 @@ async function open(browser, opts) {
   await page.evaluate(() => { document.getElementById("heroSplash")?.remove(); return loadSampleFile(); });
   await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
   await page.waitForFunction(() => !document.documentElement.classList.contains("vt-scene"), null, { timeout: 10000 });
-  await page.evaluate(() => { sheetEditUi.setMode("edit"); document.querySelectorAll(".toast").forEach((t) => t.remove()); });
+  // Bez blokady kolumn: przykład ma w Excelu zablokowane 2 kolumny (domyślnie przejmowane), a wtedy
+  // na telefonie kolumna D stoi przy prawej krawędzi i ciągnięcie uchwytu przewija tabelę w bok.
+  await page.evaluate(() => { sheetEditUi.setMode("edit"); if (typeof setSheetFrozenCols === "function") setSheetFrozenCols(0); document.querySelectorAll(".toast").forEach((t) => t.remove()); });
   await sleep(400);
   return { ctx, page, errors };
 }

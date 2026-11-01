@@ -673,6 +673,12 @@ const I18N = {
     hdrRenameItem: "Zmień nazwę kolumny",
     hdrSortAsc: "Sortuj rosnąco",
     hdrSortDesc: "Sortuj malejąco",
+    hdrFreezeTo: "Zablokuj kolumny do tej",
+    hdrUnfreeze: "Odblokuj kolumny",
+    hdrFreezeTooMany: "Najwyżej {max} kolumn — przy większej liczbie nie zostałoby miejsca na resztę tabeli.",
+    freezeColsOn: "Zablokowano kolumn: {n} (tylko w tym arkuszu)",
+    freezeColsOff: "Odblokowano kolumny",
+    freezeColsCapped: "Na tym ekranie zmieści się kolumn: {n} — pozostałe wrócą na szerszym.",
     hdrMenuAria: "Działania na kolumnie",
     hdrRenameAria: "Nowa nazwa kolumny „{name}”",
     hdrRenamed: "Nowa nazwa kolumny: {name}",
@@ -1966,6 +1972,12 @@ const I18N = {
     hdrRenameItem: "Rename column",
     hdrSortAsc: "Sort ascending",
     hdrSortDesc: "Sort descending",
+    hdrFreezeTo: "Freeze columns up to here",
+    hdrUnfreeze: "Unfreeze columns",
+    hdrFreezeTooMany: "At most {max} columns — more would leave no room for the rest of the table.",
+    freezeColsOn: "Columns frozen: {n} (this sheet only)",
+    freezeColsOff: "Columns unfrozen",
+    freezeColsCapped: "{n} fit on this screen — the rest return on a wider one.",
     hdrMenuAria: "Column actions",
     hdrRenameAria: "New name for column “{name}”",
     hdrRenamed: "Column renamed: {name}",
@@ -2874,7 +2886,8 @@ const STATIC_TRANSLATIONS = {
     zoom: "Powiększenie",
     rowHeightLabel: "Wysokość wierszy (px)",
     colWidthLabel: "Szerokość kolumn (px)",
-    freezeFirstColLabel: "Zablokuj pierwszą kolumnę",
+    freezeFirstColLabel: "Zablokuj kolumny z lewej",
+    freezeColCountLabel: "Ile kolumn",
     workbenchAnalysis: "Przegląd arkusza",
     file: "Plik",
     sheetSection: "Arkusz",
@@ -3243,7 +3256,8 @@ const STATIC_TRANSLATIONS = {
     zoom: "Zoom",
     rowHeightLabel: "Row height (px)",
     colWidthLabel: "Column width (px)",
-    freezeFirstColLabel: "Freeze first column",
+    freezeFirstColLabel: "Freeze columns on the left",
+    freezeColCountLabel: "How many columns",
     workbenchAnalysis: "Sheet overview",
     file: "File",
     sheetSection: "Sheet",
@@ -3834,6 +3848,7 @@ function applyStaticTranslations() {
   setFieldLabel("rowHeightAll", copy.rowHeightLabel);
   setFieldLabel("colWidthAll", copy.colWidthLabel);
   setCheckboxText("freezeFirstCol", copy.freezeFirstColLabel);
+  setFieldLabel("freezeColCount", copy.freezeColCountLabel);
   setText("#panel-workbench-analysis .panel-title", copy.workbenchAnalysis);
   setText('#subtitle-workbook', copy.file);
   setText('#subtitle-sheet', copy.sheetSection);

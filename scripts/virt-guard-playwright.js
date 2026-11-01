@@ -179,6 +179,9 @@ async function run() {
 
   // 3. strzałka w dół ×40 z pierwszej komórki
   await page.evaluate(async () => { tableWrapEl.scrollTop = 0; await __vg.frames(2); });
+  // Przykład ma w Excelu 2 zablokowane kolumny (xSplit=2) — kolumna 1 jest pod „szybą” (freeze-pane.js),
+  // która przez ~180 ms po przewinięciu celowo połyka klik. Klikamy dopiero w spoczynku.
+  await page.waitForTimeout(260);
   await page.click("#dataTable tbody tr[data-row-key] td[data-col-index='1']");
   await sleep(150);
   // Strzałka przewija jak w Excelu: najwyżej o wiersz–dwa, bez skoku na środek.

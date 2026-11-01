@@ -412,6 +412,7 @@ function swbFillCopy(direction) {
 // („Wypełnij serią / w dół / w prawo”, filter-bar.js) — świadomy wybór zamiast gestu, który
 // łatwo zrobić niechcący. Mysz i rysik zostają przy wypełnianiu jak w Excelu.
 
+let swbForwardedTapAt = 0; // czas dotknięcia przekazanego z uchwytu do komórki (onGridCellClick)
 const swbFillHandle = (() => {
   if (typeof document === "undefined" || typeof tbodyEl === "undefined" || !tbodyEl) return { sync() {} };
   const el = document.createElement("span");
@@ -465,7 +466,7 @@ const swbFillHandle = (() => {
     if (elStart.parentElement) elStart.remove();
   }
 
-  const inFrozenCol = (td) => tableWrapEl.classList.contains("freeze-first-col") && td.cellIndex <= 1;
+  const inFrozenCol = (td) => isFrozenCellIndex(td.cellIndex);
 
   // Środek kwadracika = narożnik ramki (środek jej 2-pikselowej kreski), nie zewnętrzny róg
   // komórki: clientWidth/Height pomijają obramowanie dolne komórki.
@@ -593,7 +594,7 @@ const swbFillHandle = (() => {
     setFocusedCell(getRowSelectionKey(model.rows[rect.rowEnd]), rect.colMax, { scroll: false });
     setSelectedCell(getRowSelectionKey(model.rows[rect.rowStart]), rect.colMin, { scroll: false });
     swbTouchFillOrigin = null;
-    startDrag(e, rect, true);
+    startDrag(e, rect, true, true);
   });
   el.addEventListener("pointerdown", (e) => {
     lastPointerType = e.pointerType || "";
@@ -614,10 +615,10 @@ const swbFillHandle = (() => {
       setFocusedCell(getRowSelectionKey(model.rows[rect.rowStart]), rect.colMin, { scroll: false });
       setSelectedCell(getRowSelectionKey(model.rows[rect.rowEnd]), rect.colMax, { scroll: false });
     }
-    startDrag(e, rect, extend);
+    startDrag(e, rect, extend, true);
   });
-  function startDrag(e, rect, extend) {
-    drag = { rect: { ...rect }, extend, dir: null, end: null, last: { x: e.clientX, y: e.clientY }, start: { x: e.clientX, y: e.clientY, t: performance.now() }, id: e.pointerId, raf: 0 };
+  function startDrag(e, rect, extend, main = false) {
+    drag = { rect: { ...rect }, extend, main, dir: null, end: null, last: { x: e.clientX, y: e.clientY }, start: { x: e.clientX, y: e.clientY, t: performance.now() }, id: e.pointerId, raf: 0 };
     // Nasłuch na oknie, nie na uchwycie: przy przewijaniu (nowy silnik tabeli) wiersz
     // z uchwytem może zniknąć z DOM, a razem z nim zdarzenia wysyłane do uchwytu.
     window.addEventListener("pointermove", onMove, true);
@@ -650,6 +651,16 @@ const swbFillHandle = (() => {
       const dx = (e ? e.clientX : d.last.x) - d.start.x;
       const dy = (e ? e.clientY : d.last.y) - d.start.y;
       const fast = performance.now() - d.start.t < 250 && Math.hypot(dx, dy) >= 30;
+      // Stuknięcie BEZ ruchu = stuknięcie w komórkę pod uchwytem. W zamrożonej kolumnie uchwyt
+      // (pole 36 px) leży w komórce i zakrywał ją prawie całą — drugie stuknięcie nie otwierało
+      // menu, a podwójne edycji (Chrome na Androidzie dodatkowo „przyciąga” palec do uchwytu).
+      // Samo przekazanie robi natywny „click” w uchwyt (niżej) — zrobione tutaj, zamykałby je
+      // ten właśnie click (menu/edytor otwarte przed nim).
+      if (!cancelled && e && !d.end && d.main && Math.hypot(dx, dy) < 8) {
+        sync();
+        tapThrough = { x: e.clientX, y: e.clientY, t: performance.now() };
+        return;
+      }
       if (!cancelled && fast && typeof swbJumpToEdge === "function") {
         const dir = Math.abs(dy) >= Math.abs(dx) ? (dy > 0 ? "down" : "up") : (dx > 0 ? "right" : "left");
         // od rogu sprzed gestu — w trakcie krótkiego ruchu autoprzewijanie przy krawędzi
@@ -682,7 +693,25 @@ const swbFillHandle = (() => {
     }
     sync();
   };
-  el.addEventListener("click", (e) => { e.stopPropagation(); e.preventDefault(); });
+  // Stuknięcie palcem w uchwyt bez ruchu → klik w to, co leży pod palcem: komórkę albo numer
+  // wiersza (Chrome na Androidzie „przyciąga” palec do pobliskiego uchwytu, także od numeru wiersza).
+  let tapThrough = null;
+  const passTap = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const tap = tapThrough;
+    tapThrough = null;
+    if (!tap || performance.now() - tap.t > 800) return;
+    const under = document.elementsFromPoint(tap.x, tap.y)
+      .find((n) => n.tagName === "TD" && (tbodyEl.contains(n) || n.classList.contains("pre-cell")));
+    if (!under) return;
+    // podwójne stuknięcie liczy się od DOTKNIĘCIA, nie od spóźnionego „click” (pod obciążeniem
+    // przychodzi później i dwutap wyglądał na dwa wolne stuknięcia)
+    swbForwardedTapAt = Date.now() - (performance.now() - tap.t);
+    try { under.click(); } finally { swbForwardedTapAt = 0; }
+  };
+  el.addEventListener("click", passTap);
+  elStart.addEventListener("click", passTap);
   el.addEventListener("dblclick", (e) => {
     e.preventDefault();
     e.stopPropagation();

@@ -100,7 +100,7 @@ const swbSpill = (() => {
       const v = row && row.values ? row.values[i] : null;
       const style = row && row.cellStyles ? row.cellStyles[i] : null;
       const h = String((style && style.horizontal) || "").toLowerCase();
-      if (off || !row || !isText(v) || (frozen && i === 0)
+      if (off || !row || !isText(v) || (i < frozen)
         || td.classList.contains("cell-merged") || td.classList.contains("cell-wrap") || td.classList.contains("cell-editing")
         || (style && style.userWrap) || NO_SPILL_ALIGN.has(h)) { clear(td); continue; }
       const text = td.textContent;
@@ -111,7 +111,7 @@ const swbSpill = (() => {
       let L = 0;
       let R = 0;
       if (align !== "right") for (let j = i + 1; j < byCol.length && R < MAX_REACH && emptyAt(row, byCol[j], j, sheet); j++) R += widths[j] || 0;
-      if (align !== "left") for (let j = i - 1; j >= 0 && L < MAX_REACH && !(frozen && j === 0) && emptyAt(row, byCol[j], j, sheet); j--) L += widths[j] || 0;
+      if (align !== "left") for (let j = i - 1; j >= 0 && L < MAX_REACH && j >= frozen && emptyAt(row, byCol[j], j, sheet); j--) L += widths[j] || 0;
       if (!L && !R) clear(td);
       else apply(td, align, L, R);
     }
@@ -126,7 +126,7 @@ const swbSpill = (() => {
   function context() {
     return {
       sheet: sheetNow(),
-      frozen: typeof tableWrapEl !== "undefined" && tableWrapEl && tableWrapEl.classList.contains("freeze-first-col"),
+      frozen: typeof getFrozenColCount === "function" ? getFrozenColCount() : 0, // ile kolumn danych zamrożonych
       off: tableEl.classList.contains("wrap-cells")
         || !(typeof currentDisplayModel !== "undefined" && currentDisplayModel && currentDisplayModel.mode === "wide"),
     };
