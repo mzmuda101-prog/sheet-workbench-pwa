@@ -232,7 +232,7 @@ body.splashing {
    APP SHELL
    =================================================== */
 .app {
-  max-width: 1380px;
+  max-width: var(--content-max, 1380px);
   margin: 0 auto;
   padding: 18px 16px 48px;
 }
@@ -7587,7 +7587,7 @@ body.tr-active .toast-container {
 /* ── ≥1024 px: panel obok tabeli ── */
 :root.sidebar-docked .sidebar {
   top: var(--dock-top, 120px);
-  left: max(16px, calc((100vw - 1380px - var(--sidebar-w, 320px) - 14px) / 2 + 16px));
+  left: max(16px, calc((100vw - var(--content-max, 1380px) - var(--sidebar-w, 320px) - 14px) / 2 + 16px));
   height: calc(100dvh - var(--dock-top, 120px) - 16px);
   max-height: calc(100dvh - var(--dock-top, 120px) - 16px);
 }
@@ -8607,10 +8607,10 @@ button.fx-label:focus-visible { background: var(--accent-light); color: var(--ac
 :root.sidebar-docked {
   --rail-w: 52px;
   --rail-gap: 10px;
-  --app-max: calc(1380px + var(--rail-w) + var(--rail-gap));
+  --app-max: calc(var(--content-max, 1380px) + var(--rail-w) + var(--rail-gap));
   --rail-left: max(16px, calc((100vw - var(--app-max)) / 2 + 16px));
 }
-:root.sidebar-docked.sidebar-open.panel-pinned { --app-max: calc(1380px + var(--rail-w) + var(--rail-gap) + var(--sidebar-w, 320px) + 14px); }
+:root.sidebar-docked.sidebar-open.panel-pinned { --app-max: calc(var(--content-max, 1380px) + var(--rail-w) + var(--rail-gap) + var(--sidebar-w, 320px) + 14px); }
 :root.sidebar-docked .app { max-width: var(--app-max); }
 :root.sidebar-docked .main { margin-left: calc(var(--rail-w) + var(--rail-gap)); }
 :root.sidebar-docked.sidebar-open.panel-pinned .main { margin-left: calc(var(--rail-w) + var(--rail-gap) + var(--sidebar-w, 320px) + 14px); }
@@ -9299,3 +9299,27 @@ details.anon-sec[open] > summary::before { content: "▾ "; }
   .anon-actions .btn { flex: 1 1 auto; }
 }
 [data-theme="dark"] .anon-tag.t-person { color: #c9a8f0; }
+
+/* ===================================================
+   SZEROKIE MONITORY (2026-11-01): 27–34" (2560×1440, 3440×1440, 4K bez skalowania).
+   Arkusz korzysta z szerokości jak Excel — limit 1380 px rósł tylko do pustych pasów po
+   bokach, a tabela przewijała się w bok z uciętymi komórkami. Od 1660 px limit rośnie
+   płynnie (= 1380 przy 1660, bez skoku), do 2400 px — dalej puste boki niż rozciągnięty
+   pasek narzędzi na 3440 px. Poniżej 1660 px nic się nie zmienia.
+   =================================================== */
+@media (min-width: 1660px) {
+  :root { --content-max: clamp(1380px, calc(100vw - 280px), 2400px); }
+}
+/* Pole szukania: na szerokim pasku rosło do ~1700 px (otwarte ~2200) — tekst przy lewej,
+   ≠ = a… .* i „Filtruj” setki pikseli dalej. Limit jak na laptopie: zwykłe ≤1100 px (resztę
+   bierze odstęp, przyciski zostają po prawej), przy pisaniu (qs-wide) ≤1320 px. */
+@media (min-width: 1660px) {
+  .table-toolbar > .quick-search {
+    max-width: 1100px; margin-inline-end: auto;
+    transition: max-width .24s ease, max-height var(--t-slow) ease, opacity var(--t);
+  }
+  .table-toolbar.qs-wide > .quick-search { max-width: 1320px; }
+}
+@media (min-width: 1660px) and (prefers-reduced-motion: reduce) {
+  .table-toolbar > .quick-search { transition: none; }
+}
