@@ -109,6 +109,7 @@ function cfmtStyleWithFmt(base, fmt) {
   if ("fill" in fmt) {
     s.fillColor = cfmtHex(fmt.fill);
     s.hasCustomFill = !!s.fillColor;
+    s.fillGradient = ""; // własny kolor zastępuje gradient z pliku
   }
   if ("color" in fmt) s.fontColor = cfmtHex(fmt.color);
   if ("color" in fmt || "fill" in fmt) {

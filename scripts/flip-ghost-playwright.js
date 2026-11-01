@@ -45,6 +45,10 @@ async function openApp(browser, { mobile = false, reducedMotion = "no-preference
   await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0, null, { timeout: 30000 });
   await page.evaluate(() => loadBtn.click());
   await page.waitForFunction(() => document.querySelectorAll("#dataTable tbody tr").length > 20, null, { timeout: 30000 });
+  // Plik ma w Excelu zoom 125% (od 20261102 otwiera się w nim) — porównanie pikseli kopii jest
+  // pomyślane przy 100%: ułamkowe wysokości wierszy dają różnice wygładzania tekstu ~12/255.
+  await page.evaluate(() => { if (zoomLevelEl.value !== "1") { zoomLevelEl.value = "1"; zoomLevelEl.dispatchEvent(new Event("change")); } });
+  await page.waitForTimeout(150);
   // tabela gotowa: bez nakładki wczytywania i bez trwających animacji (wjazd tabeli, panel) —
   // zamiast stałych 1,5 s + 0,5 s przy każdym z 9 otwarć pliku
   const calm = () => page.waitForFunction(() => !document.body.classList.contains("is-loading")

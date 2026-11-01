@@ -232,7 +232,8 @@ async function readFrozenRows(bytes, wb) {
       const tlRow = (paneY && paneTL[1]) || viewTL[1] || "1";
       const topLeft = viewTL.length || paneTL.length ? `${tlCol}${tlRow}` : "";
       const defPt = Number((head.match(/<(?:[\w-]+:)?sheetFormatPr\b[^>]*\bdefaultRowHeight="([\d.]+)"/) || [])[1]);
-      currentSheetViewBySheet.set(decodeXmlEntities(sm[1]), { topLeft, defaultRowPt: defPt > 0 ? defPt : 0, frozen: !!(pane && /state="frozen/.test(pane[1])) });
+      const zoomPct = Number((view.match(/\bzoomScale="(\d+)"/) || [])[1]);
+      currentSheetViewBySheet.set(decodeXmlEntities(sm[1]), { topLeft, defaultRowPt: defPt > 0 ? defPt : 0, frozen: !!(pane && /state="frozen/.test(pane[1])), zoom: zoomPct > 0 ? zoomPct / 100 : 1 });
       if (!pane) continue;
       const attrs = pane[1];
       const state = (attrs.match(/\bstate="([^"]+)"/) || [])[1] || "";
@@ -305,6 +306,29 @@ function excelCellVisibleNow(cell) {
   if (!td) return false; // wiersz poza oknem rysowania = poza ekranem
   const r = td.getBoundingClientRect();
   return r.top >= wrap.top && r.bottom <= wrap.bottom && r.left >= wrap.left && r.right <= wrap.right + 1;
+}
+// Powiększenie arkusza z pliku (<sheetView zoomScale>, Wymiary z Excela, ekran ≥ 768 px): arkusz zapisany
+// w 150% otwiera się w 150%, jak w Excelu. Zoom użytkownika zapamiętujemy i oddajemy przy arkuszu
+// w 100%; ręczna zmiana zoomu wygrywa (od niej nic się samo nie zmienia aż do kolejnego arkusza z zoomem).
+let excelAutoZoomPrev = null; // zoom użytkownika sprzed automatycznego (null = nic nie nadpisane)
+function applyExcelSheetZoom(sheetName) {
+  if (!zoomLevelEl || !isExcelLayoutEnabled() || window.innerWidth < 768) return;
+  const v = currentSheetViewBySheet.get(sheetName);
+  const want = v && v.zoom && Math.abs(v.zoom - 1) > 0.04 ? v.zoom : null;
+  let target = null;
+  if (want) {
+    if (excelAutoZoomPrev == null) excelAutoZoomPrev = zoomLevelEl.value;
+    const opts = [...zoomLevelEl.options].map((o) => o.value);
+    target = opts.reduce((best, o) => (Math.abs(parseFloat(o) - want) < Math.abs(parseFloat(best) - want) ? o : best), opts[0]);
+  } else if (excelAutoZoomPrev != null) {
+    target = excelAutoZoomPrev;
+    excelAutoZoomPrev = null;
+  }
+  if (target == null || target === zoomLevelEl.value) return;
+  zoomLevelEl.value = target;
+  applyZoom();
+  const zoomText = document.getElementById("zoomNowText"); // napis „150%” w pasku (frame-compact.js)
+  if (zoomText) zoomText.textContent = `${Math.round(parseFloat(target) * 100)}%`;
 }
 function applyExcelStartView(sheetName, attempt = 0, epoch = excelStartViewUserEpoch) {
   const v = currentSheetViewBySheet.get(sheetName);
@@ -2656,6 +2680,7 @@ loadBtn.addEventListener("click", () => {
         // Transitions = płynny morf transformem (nie liczy się do CLS).
         const panelFileSheet = document.getElementById("panel-file-sheet");
         if (panelFileSheet) panelFileSheet.removeAttribute("open");
+        applyExcelSheetZoom(sheetName); // przed rysowaniem — bez drugiego renderu
         scheduleViewRefresh({ table: true, analyses: true, formula: true, sync: true });
       });
       // Inny arkusz TEGO SAMEGO pliku: zmiany z poprzedniego arkusza dalej czekają na zapis
@@ -5415,6 +5440,7 @@ maxRowsEl.addEventListener("change", () => {
 });
 
 zoomLevelEl.addEventListener("change", () => {
+  excelAutoZoomPrev = null; // ręczny wybór zostaje (applyExcelSheetZoom go nie cofnie)
   setTimeout(() => {
     applyZoom();
     if (currentHeaders.length) {

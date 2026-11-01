@@ -674,6 +674,9 @@ async function parseTables(zip) {
       totalsRowShown: /\btotalsRowShown="1"/.test(xml),
       headerRows: Number((xml.match(/\bheaderRowCount="(\d+)"/) || [])[1] ?? 1),
       totalsRows: Number((xml.match(/\btotalsRowCount="(\d+)"/) || [])[1] ?? 0),
+      // styl tabeli (paski wierszy) — table.js tableBandColorAt
+      styleName: ((xml.match(/<tableStyleInfo\b[^>]*\bname="([^"]+)"/) || [])[1]) || "",
+      rowStripes: /<tableStyleInfo\b[^>]*\bshowRowStripes="1"/.test(xml),
     };
     const nameM = xml.match(/<table\b[^>]*\bname="([^"]+)"/);
     const dispM = xml.match(/\bdisplayName="([^"]+)"/);

@@ -4050,9 +4050,10 @@ tbody td.cell-recalced::after {
   border-top: none;
 }
 
+/* Bez własnej ramki: Excel nie obrysowuje scaleń (puste scalenia rysowały „pudełka”, których w pliku nie ma).
+   Że to scalenie — mówi podpowiedź „Scalona komórka: …”. */
 tbody td.cell-merged {
   vertical-align: middle;
-  box-shadow: inset 0 0 0 1px rgba(47,111,92,.12);
 }
 tbody td.cell-has-fill:not([style*="background"]) {
   background: rgba(47,111,92,.08);

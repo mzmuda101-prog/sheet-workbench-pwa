@@ -1640,15 +1640,16 @@ function toPixelWidth(meta) {
 // (<sheetFormatPr defaultRowHeight>) — Excel tak rysuje wiersze bez „ht” („bazy” od wiersza 24:
 // 14 pt, a apka dawała ~31 px). Wiersz z tekstem w kilku liniach Excel by dopasował — tu też.
 function excelFileRowHeight(row) {
+  const zoom = (typeof zoomLevelEl !== "undefined" && parseFloat(zoomLevelEl.value)) || 1; // rośnie z powiększeniem, jak szerokości
   const own = toPixelHeight(currentSheetRowHeights[row.rowIndex0]);
-  if (own) return own;
+  if (own) return Math.round(own * zoom);
   const pt = typeof currentSheetDefaultRowPt === "number" ? currentSheetDefaultRowPt : 0;
   if (!(pt > 0)) return 0;
   // Przewijanie wirtualne (bardzo duże arkusze) liczy pozycje z wysokości wierszy — narzucona
   // domyślna rozjeżdżała mu okno (virt-guard &virt=1). Tam zostają naturalne wysokości.
   if (typeof swbVirt !== "undefined" && swbVirt.isActive && swbVirt.isActive()) return 0;
   if (Array.isArray(row.display) && row.display.some((d) => typeof d === "string" && d.includes("\n"))) return 0;
-  return Math.max(18, Math.round((pt * 96) / 72));
+  return Math.max(18, Math.round(((pt * 96) / 72) * zoom));
 }
 
 function toPixelHeight(meta) {
@@ -2016,6 +2017,29 @@ function resolveXfStyleFromIndex(sIdx, wb) {
   };
 }
 
+// Wypełnienie gradientowe z pliku (<gradientFill>, stopnie z łatki SheetJS) → tło CSS.
+// Excel: linear — kąt 0° = od lewej do prawej, rośnie zgodnie z zegarem (CSS: 90° + kąt);
+// path — od prostokąta left/right/top/bottom (0 = róg lewy-górny, 0,5 = środek) na zewnątrz.
+// Kolory 64/65 (auto) = czarny/biały. Zwraca { css, first } albo null.
+function excelGradientCss(gradient) {
+  const stops = gradient && Array.isArray(gradient.stops) ? gradient.stops : [];
+  if (stops.length < 2) return null;
+  const parts = [];
+  for (const st of stops) {
+    const c = st.color || {};
+    const hex = c.indexed === 64 ? "#000000" : c.indexed === 65 ? "#FFFFFF" : colorFromStyleNode(c, true);
+    if (!hex) return null;
+    parts.push(`${hex} ${Math.round((Number(st.position) || 0) * 100)}%`);
+  }
+  const first = parts[0].split(" ")[0];
+  if (gradient.type === "path") {
+    const x = Math.round(((gradient.left || 0) + (gradient.right || 0)) * 50);
+    const y = Math.round(((gradient.top || 0) + (gradient.bottom || 0)) * 50);
+    return { css: `radial-gradient(farthest-corner at ${x}% ${y}%, ${parts.join(", ")})`, first };
+  }
+  return { css: `linear-gradient(${Math.round(90 + (Number(gradient.degree) || 0))}deg, ${parts.join(", ")})`, first };
+}
+
 function extractCellStyle(cell, wb, xfStyle = null) {
   const cellS = cell && cell.s && typeof cell.s === "object" ? cell.s : null;
   if (!cellS && !xfStyle) return null;
@@ -2034,9 +2058,10 @@ function extractCellStyle(cell, wb, xfStyle = null) {
   const isDefaultFont = xfStyle ? xfStyle.fontId === 0 : false;
   const font = isDefaultFont ? null : rawFont;
 
-  const fillColor = colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor, true);
+  const fillGradient = fill && fill.gradient ? excelGradientCss(fill.gradient) : null;
+  const fillColor = fillGradient ? fillGradient.first : colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor, true);
   const fontColor = colorFromStyleNode(font?.color || font?.Color, true);
-  const hasCustomFill = !isDefaultLikeFill(fill, fillColor);
+  const hasCustomFill = fillGradient ? true : !isDefaultLikeFill(fill, fillColor);
   // Czerń/biel zwykle pomijamy (żeby dark mode mógł sterować kolorem), ALE gdy komórka
   // ma własne wypełnienie, jawny kolor tekstu (np. biały na ciemnym tle) jest istotny
   // dla kontrastu — wtedy go honorujemy (jak w Excelu).
@@ -2054,6 +2079,7 @@ function extractCellStyle(cell, wb, xfStyle = null) {
 
   const styleOut = {
     fillColor,
+    fillGradient: fillGradient ? fillGradient.css : "",
     hasCustomFill,
     fontColor,
     hasCustomFontColor,
@@ -2077,7 +2103,11 @@ function applyEdgeBorder(td, edge) {
   if (!edge) return;
   const borderStyle = edge.style || edge.Style || "";
   if (!borderStyle || borderStyle === "none") return;
-  const color = colorFromStyleNode(edge.color || edge.Color) || "rgba(0,0,0,0.32)";
+  // Automatyczny / czarny / prawie czarny = kolor tekstu motywu (w ciemnym motywie linia nie znika),
+  // reszta (motyw, paleta, rgb) jak w pliku. Krawędzie czyta łatka SheetJS (pc: left/right/top/bottom).
+  const node = edge.color || edge.Color;
+  const hex = node && !node.auto ? colorFromStyleNode(node, true) : null;
+  const color = hex && !isDarkNeutralColor(hex) ? hex : "var(--ink)";
   const width = /^(medium|thick|mediumDashed|mediumDashDot|mediumDashDotDot)$/.test(borderStyle) ? 2 : 1;
   const line = /dash|dot/i.test(borderStyle) ? (/dot/i.test(borderStyle) && !/dash/i.test(borderStyle) ? "dotted" : "dashed") : (borderStyle === "double" ? "double" : "solid");
   return `${borderStyle === "double" ? 3 : width}px ${line} ${color}`;
@@ -2093,7 +2123,7 @@ function applyCellStyle(td, style) {
     // a pliki, w których kolor coś znaczy (statusy, grafiki), traciły sens.
     const bg = hexToRgba(style.fillColor, 1);
     if (bg) {
-      td.style.background = bg;
+      td.style.background = style.fillGradient || bg;
       td.style.setProperty("--cell-fill", bg); // zaznaczenie kładzie się NA kolor (styles: cell-has-fill)
       fillShownColor = style.fillColor;
     }
@@ -2148,6 +2178,82 @@ function applyCellStyle(td, style) {
   }
 }
 
+// Ramki scalenia jak w Excelu: dolną krawędź rysuje ostatni wiersz scalenia, prawą — ostatnia
+// kolumna (np. notatki C56:M59 — górna linia gruba z C56, dolna z C59). Sama kotwica ich nie ma.
+function applyMergeEdgeBorders(td, s, e) {
+  if (!cellStyleShowBorders || !workbook || !s || !e) return;
+  const idx = currentStyleIndexMap ? currentStyleIndexMap.get(currentSheetName) : null;
+  if (!idx) return;
+  const borderAt = (r, c) => {
+    const xf = resolveXfStyleFromIndex(idx.get(XLSX.utils.encode_cell({ r, c })), workbook);
+    return xf && xf.border;
+  };
+  if (e.r > s.r) {
+    const b = borderAt(e.r, s.c);
+    const line = b && applyEdgeBorder(td, b.bottom || b.Bottom);
+    if (line) td.style.borderBottom = line;
+  }
+  if (e.c > s.c) {
+    const b = borderAt(s.r, e.c);
+    const line = b && applyEdgeBorder(td, b.right || b.Right);
+    if (line) td.style.borderRight = line;
+  }
+}
+
+// Paski wierszy tabel Excela („Formatuj jako tabelę”). Wbudowane style z kolorem N (1 = tekst,
+// 2–7 = akcenty 1–6): Light1–7, Light15–21, Medium1–7 — pasek = kolor N rozjaśniony (tekst 85%,
+// akcent 80%). Wyrocznia Excela (display format, „bazy” TableStyleLight1): pierwszy wiersz danych
+// D9D9D9, drugi bez, na zmianę. Inne style (ciemne, Medium8+) — bez pasków, jak dotąd.
+let _tableBandCache = { key: null, list: [] };
+function tableBandList() {
+  const src = typeof currentTables === "object" && currentTables ? currentTables : null;
+  const key = src && currentSheetName ? currentSheetName : null;
+  if (_tableBandCache.key === key && _tableBandCache.src === src) return _tableBandCache.list;
+  const list = [];
+  const seen = new Set();
+  if (src && workbook) {
+    const palette = swbThemeColors(workbook);
+    Object.values(src).forEach((t) => {
+      if (!t || seen.has(t) || t.sheetName !== currentSheetName || !t.rowStripes) return;
+      seen.add(t);
+      const m = /^TableStyle(Light|Medium)(\d+)$/.exec(t.styleName || "");
+      if (!m) return;
+      const num = Number(m[2]);
+      const ok = m[1] === "Light" ? (num <= 7 || (num >= 15 && num <= 21)) : num <= 7;
+      if (!ok) return;
+      const n = ((num - 1) % 7) + 1;
+      const base = n === 1 ? palette[1] : palette[4 + n - 2];
+      let range;
+      try { range = XLSX.utils.decode_range(t.ref); } catch { return; }
+      const first = range.s.r + (t.headerRows || 0);
+      const last = range.e.r - (t.totalsRows || 0);
+      if (last < first) return;
+      list.push({ r0: first, r1: last, c0: range.s.c, c1: range.e.c, color: applyColorTint(base, n === 1 ? 0.85 : 0.8) });
+    });
+  }
+  _tableBandCache = { key, src, list };
+  return list;
+}
+function tableBandColorAt(rowIndex0, colAbs) {
+  const list = tableBandList();
+  for (const b of list) {
+    if (rowIndex0 < b.r0 || rowIndex0 > b.r1 || colAbs < b.c0 || colAbs > b.c1) continue;
+    return (rowIndex0 - b.r0) % 2 === 0 ? b.color : null;
+  }
+  return null;
+}
+
+// Wiersze pod górnym wierszem scaleń wielowierszowych (do 500 wierszy na scalenie — bez kosztu
+// przy scaleniach na cały arkusz). Wspólne z build-rows-core.js (kopia w wątku roboczym).
+function swbRowsInsideMerges(merges) {
+  const out = new Set();
+  (Array.isArray(merges) ? merges : []).forEach((m) => {
+    if (!m || !m.s || !m.e || m.e.r <= m.s.r || m.e.r - m.s.r > 500) return;
+    for (let r = m.s.r + 1; r <= m.e.r; r++) out.add(r);
+  });
+  return out;
+}
+
 function computeMergeLayout(rowsShown, colCount) {
   if (!Array.isArray(currentMerges) || !currentMerges.length || !rowsShown.length) return null;
   const rowPosByAbs = new Map();
@@ -2160,13 +2266,16 @@ function computeMergeLayout(rowsShown, colCount) {
     if (merge.s.c < currentStartCol || merge.e.c >= currentStartCol + colCount) return;
     const topPos = rowPosByAbs.get(merge.s.r);
     if (topPos == null) return;
+    // Wysokość = kolejne pokazane wiersze od góry scalenia. Całkiem puste wiersze w środku (bez komórek
+    // w pliku — tak zapisuje np. openpyxl) nie trafiają do tabeli; dawniej przez nie przepadało CAŁE
+    // scalenie (notatka w jednej komórce z „…”), teraz kończy się na ostatnim kolejnym wierszu.
+    let rowspan = 0;
     for (let r = merge.s.r; r <= merge.e.r; r++) {
-      const p = rowPosByAbs.get(r);
-      if (p == null || p !== topPos + (r - merge.s.r)) return;
+      if (rowPosByAbs.get(r) !== topPos + (r - merge.s.r)) break;
+      rowspan++;
     }
     const startCol = merge.s.c - currentStartCol;
     const endCol = merge.e.c - currentStartCol;
-    const rowspan = merge.e.r - merge.s.r + 1;
     const colspan = endCol - startCol + 1;
     if (rowspan < 2 && colspan < 2) return;
 
@@ -2174,6 +2283,8 @@ function computeMergeLayout(rowsShown, colCount) {
     anchors.set(anchorKey, {
       rowspan,
       colspan,
+      s: merge.s,
+      e: merge.e,
       ref: XLSX.utils.encode_range({
         s: { r: merge.s.r, c: merge.s.c },
         e: { r: merge.e.r, c: merge.e.c },
@@ -2261,14 +2372,17 @@ function computeColumnWidths(headers, rows, useExcelLayout) {
   }
 
   if (useExcelLayout && Array.isArray(currentSheetColWidths) && currentSheetColWidths.length) {
+    // Szerokości z pliku rosną z powiększeniem (jak w Excelu) — inaczej przy 150% tekst rósł,
+    // a kolumny zostawały te same i wszystko kończyło się „…”.
+    const zoom = (typeof zoomLevelEl !== "undefined" && parseFloat(zoomLevelEl.value)) || 1;
     const out = widths.map((_, i) => {
       const manual = manualColumnWidths[i];
       if (manual) return Math.max(min, Math.min(max, manual));
       // Wierność wymiarom z pliku: NIE podnosimy do min=80 (toPixelWidth ma już podłogę 40px),
       // żeby wąskie kolumny Excela (np. „Nr.") realnie były wąskie — inaczej nie widać różnicy.
       const fromSheet = toPixelWidth(currentSheetColWidths[i]);
-      if (fromSheet) return Math.min(max, fromSheet);
-      return 140;
+      if (fromSheet) return Math.min(max * zoom, Math.round(fromSheet * zoom));
+      return Math.round(140 * zoom);
     });
     _colWidthCacheKey = cacheKey;
     _colWidthCacheVal = out;
@@ -2564,6 +2678,23 @@ function buildTableRow(ctx, row, rowPos) {
     }
 
     if (row.cellStyles && row.cellStyles[i]) applyCellStyle(td, row.cellStyles[i]);
+    // Scalenie przy Wymiarach z Excela: „Zawijaj tekst” z pliku działa (scalony blok to zwykle
+    // notatka/opis na kilka wierszy — w jednej linii ucinał się „…”), ramki z krawędzi scalenia.
+    if (useExcelLayout && td.classList.contains("cell-merged")) {
+      if (row.cellStyles && row.cellStyles[i] && row.cellStyles[i].wrapText) td.classList.add("cell-wrap");
+      const anchor = mergeLayout && mergeLayout.anchors.get(mergeKey);
+      if (anchor) applyMergeEdgeBorders(td, anchor.s, anchor.e);
+    }
+    // pasek wiersza tabeli Excela — tylko pod komórką bez własnego wypełnienia (formatowanie warunkowe niżej nadpisze)
+    if (cellStyleShowFills && model.mode === "wide" && !td.classList.contains("cell-has-fill")) {
+      const band = tableBandColorAt(row.rowIndex0, currentStartCol + i);
+      if (band) {
+        td.classList.add("cell-has-fill", "cell-table-band");
+        td.style.background = band;
+        td.style.setProperty("--cell-fill", band);
+        if (!td.style.color) td.style.color = isLightColor(band) ? "#000000" : "#FFFFFF";
+      }
+    }
     // kolor z formatu liczbowego ([Red]/[Czerwony] dla ujemnych…) — cell-format.js
     if (row.nfFmt && row.nfFmt[i] && typeof swbApplyNumFmtColor === "function") swbApplyNumFmtColor(td, row, i);
     if (cfMapForRender) {
@@ -2786,7 +2917,8 @@ function renderTable(modelOrHeaders, maybeRows) {
   // Wąskie kolumny z Excela: odstęp wewnętrzny maleje z szerokością (Excel ma 2–3 px). Przy stałych
   // 12 px „WE:” w 40 px kończyło się „W…”, a „Osoba 004” w 73 px — „Osoba…”. Szerokie bez zmian.
   const narrowCols = new Map(); // indeks → klasa
-  if (useExcelLayout) widths.forEach((w, i) => { if (w <= NARROW_COL_PX) narrowCols.set(i, "cell-narrow"); else if (w <= TIGHT_COL_PX) narrowCols.set(i, "cell-tight"); });
+  const zoomNow = (zoomLevelEl && parseFloat(zoomLevelEl.value)) || 1; // szerokości rosną z zoomem — progi też
+  if (useExcelLayout) widths.forEach((w, i) => { if (w <= NARROW_COL_PX * zoomNow) narrowCols.set(i, "cell-narrow"); else if (w <= TIGHT_COL_PX * zoomNow) narrowCols.set(i, "cell-tight"); });
   const rowHeaderDigits = String(rows.length + currentHeaderRow).length;
   const rowHeaderWidth = Math.max(42, rowHeaderDigits * 8 + 18);
   // Offset dla sticky 1. kolumny danych (blokada kolumny) = szerokość kolumny numerów.
@@ -2961,6 +3093,8 @@ function buildRows(sheet, headerRow, wb) {
   let formulaMissingResultCount = 0;
   let commentCount = 0;
   let hyperlinkCount = 0;
+  // Puste wiersze wewnątrz scalenia (np. notatka na 4 wiersze) zostają — inaczej scalenie się rozpada.
+  const mergeRows = swbRowsInsideMerges(sheet["!merges"]);
   for (let r = headerRow; r <= range.e.r; r++) {
     const values = [];
     const display = [];
@@ -3013,7 +3147,7 @@ function buildRows(sheet, headerRow, wb) {
       cellStyles.push(wb ? extractCellStyle(cell, wb, xfStyleAt(ref)) : null);
       if (v !== null && v !== "") any = true;
     }
-    if (!any) continue;
+    if (!any && !mergeRows.has(r)) continue;
     rows.push({ values, display, rawValues: values, rowIndex0: r, cellStyles, recalcCells });
   }
   // Wymiary z Excela: szerokości kolumn (z !cols, wyrównane do wyświetlanego zakresu od range.s.c)

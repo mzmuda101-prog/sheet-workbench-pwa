@@ -175,6 +175,29 @@
     };
   }
 
+  // Wypełnienie gradientowe z pliku (<gradientFill>, stopnie z łatki SheetJS) → tło CSS.
+  // Excel: linear — kąt 0° = od lewej do prawej, rośnie zgodnie z zegarem (CSS: 90° + kąt);
+  // path — od prostokąta left/right/top/bottom (0 = róg lewy-górny, 0,5 = środek) na zewnątrz.
+  // Kolory 64/65 (auto) = czarny/biały. Zwraca { css, first } albo null.
+  function excelGradientCss(gradient) {
+    const stops = gradient && Array.isArray(gradient.stops) ? gradient.stops : [];
+    if (stops.length < 2) return null;
+    const parts = [];
+    for (const st of stops) {
+      const c = st.color || {};
+      const hex = c.indexed === 64 ? "#000000" : c.indexed === 65 ? "#FFFFFF" : colorFromStyleNode(c, true);
+      if (!hex) return null;
+      parts.push(`${hex} ${Math.round((Number(st.position) || 0) * 100)}%`);
+    }
+    const first = parts[0].split(" ")[0];
+    if (gradient.type === "path") {
+      const x = Math.round(((gradient.left || 0) + (gradient.right || 0)) * 50);
+      const y = Math.round(((gradient.top || 0) + (gradient.bottom || 0)) * 50);
+      return { css: `radial-gradient(farthest-corner at ${x}% ${y}%, ${parts.join(", ")})`, first };
+    }
+    return { css: `linear-gradient(${Math.round(90 + (Number(gradient.degree) || 0))}deg, ${parts.join(", ")})`, first };
+  }
+
   function extractCellStyle(cell, wb, xfStyle = null) {
     const cellS = cell && cell.s && typeof cell.s === "object" ? cell.s : null;
     if (!cellS && !xfStyle) return null;
@@ -187,9 +210,10 @@
     const rawFont = (xfStyle && xfStyle.font) || cellS?.font || cellS?.Font || null;
     const isDefaultFont = xfStyle ? xfStyle.fontId === 0 : false;
     const font = isDefaultFont ? null : rawFont;
-    const fillColor = colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor, true);
+    const fillGradient = fill && fill.gradient ? excelGradientCss(fill.gradient) : null;
+    const fillColor = fillGradient ? fillGradient.first : colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor, true);
     const fontColor = colorFromStyleNode(font?.color || font?.Color, true);
-    const hasCustomFill = !isDefaultLikeFill(fill, fillColor);
+    const hasCustomFill = fillGradient ? true : !isDefaultLikeFill(fill, fillColor);
     const fontColorIsDefaultLike = isDefaultLikeFontColor(fontColor);
     const hasCustomFontColor = !!fontColor && (!fontColorIsDefaultLike || hasCustomFill);
     const hasCustomAlign = isCustomAlignment(alignment);
@@ -199,6 +223,7 @@
     const baseFontSize = getWorkbookDefaultFontSize(wb);
     return {
       fillColor,
+      fillGradient: fillGradient ? fillGradient.css : "",
       hasCustomFill,
       fontColor,
       hasCustomFontColor,
@@ -394,6 +419,12 @@
     let formulaMissingResultCount = 0;
     let commentCount = 0;
     let hyperlinkCount = 0;
+    // puste wiersze wewnątrz scalenia zostają (kopia swbRowsInsideMerges z table.js)
+    const mergeRows = new Set();
+    merges.forEach((m) => {
+      if (!m || !m.s || !m.e || m.e.r <= m.s.r || m.e.r - m.s.r > 500) return;
+      for (let rr = m.s.r + 1; rr <= m.e.r; rr++) mergeRows.add(rr);
+    });
     for (let r = headerRow; r <= range.e.r; r++) {
       const values = [];
       const display = [];
@@ -421,7 +452,7 @@
         cellStyles.push(wb ? extractCellStyle(cell, wb, xfStyleAt(ref)) : null);
         if (v !== null && v !== "") any = true;
       }
-      if (!any) continue;
+      if (!any && !mergeRows.has(r)) continue;
       rows.push({ values, display, rawValues: values, rowIndex0: r, cellStyles });
     }
     const colWidths = headers.map((_, i) => colMeta[range.s.c + i] || null);
