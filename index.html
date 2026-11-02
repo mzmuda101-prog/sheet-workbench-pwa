@@ -18,7 +18,7 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20261031-logo" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20261102-01" />
+    <link rel="stylesheet" href="styles/app.css?v=20261102-02" />
   </head>
   <body>
     <!-- Intro splash -->
@@ -567,58 +567,60 @@
                     <line x1="3" y1="6" x2="21" y2="6"></line>
                     <line x1="3" y1="18" x2="21" y2="18"></line>
                   </svg>
-                  Reset szerokości
+                  Przywróć szerokości kolumn
                 </button>
                 <label class="field checkbox" data-hint data-hint-pl="Przykleja nagłówki kolumn (i wiersze nad nimi) przy przewijaniu w dół. Pamiętane osobno dla każdego arkusza; bez zapisu — tak, jak zablokowano w Excelu." data-hint-en="Pins the column headers (and rows above them) when scrolling down. Remembered per sheet; otherwise as frozen in Excel." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="freezeHeaders" type="checkbox" />
-                  Zablokuj wiersze nagłówków
+                  Zablokowane wiersze nagłówka
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Przykleja kolumnę numerów i pierwsze kolumny danych przy przewijaniu w bok (ile — niżej). Pamiętane osobno dla każdego arkusza; bez zapisu — tak, jak zablokowano w Excelu." data-hint-en="Pins the row-number column and the first data columns when scrolling sideways (how many — below). Remembered per sheet; otherwise as frozen in Excel." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="freezeFirstCol" type="checkbox" />
-                  Zablokuj kolumny z lewej
+                  Zablokowane kolumny z lewej
                 </label>
                 <label class="field freeze-count-field" id="freezeColCountField" hidden data-hint data-hint-pl="Ile kolumn danych zostaje przy lewej krawędzi (1–10), jak w Excelu „Zablokuj okienka”. Szybciej: przytrzymaj / kliknij prawym nazwę kolumny → „Zablokuj kolumny do tej”." data-hint-en="How many data columns stay pinned on the left (1–10), like Excel's Freeze Panes. Faster: long-press / right-click a column name → “Freeze columns up to here”." data-hint-delay="1.1" data-hint-touch="on">
-                  Ile kolumn
+                  Liczba zablokowanych kolumn
                   <input id="freezeColCount" type="number" min="1" max="10" step="1" inputmode="numeric" enterkeyhint="done" value="1" />
                   <span class="panel-hint" id="freezeColCountNote" hidden></span>
                 </label>
                 <div class="divider"></div>
-                <div class="field-subtitle" id="cellStyleOptionsTitle">Style komórek z pliku</div>
+                <div class="field-subtitle" id="cellStyleOptionsTitle">Formatowanie z pliku</div>
                 <label class="field checkbox" data-hint data-hint-pl="Koloruje tekst komórek tak, jak ustawiono w pliku Excel." data-hint-en="Colors cell text as set in the Excel file." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="showFontColors" type="checkbox" checked />
-                  Pokaż kolory czcionek
+                  Kolory czcionek
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Pokazuje tła (wypełnienia) komórek z pliku." data-hint-en="Shows cell background fills from the file." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="showCellFills" type="checkbox" checked />
-                  Pokaż wypełnienia komórek
+                  Wypełnienia
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Stosuje formatowanie tekstu z pliku: rodzinę i rozmiar czcionki, pogrubienie, kursywę, podkreślenie." data-hint-en="Applies text formatting from the file: font family and size, bold, italic, underline." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="showCellFonts" type="checkbox" checked />
-                  Pokaż formatowanie tekstu
+                  Czcionki i styl tekstu
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Rysuje obramowania komórek z pliku." data-hint-en="Draws cell borders from the file." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="showCellBorders" type="checkbox" checked />
-                  Pokaż obramowania
+                  Obramowania
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Pokazuje kolory czcionek i teł ustawione formatowaniem warunkowym (np. czerwony tekst dla przeterminowanych)." data-hint-en="Shows font/fill colors set by conditional formatting (e.g. red text for overdue)." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="showConditionalFormatting" type="checkbox" checked />
-                  Pokaż formatowanie warunkowe
+                  Formatowanie warunkowe
                 </label>
+                <div class="divider"></div>
+                <div class="field-subtitle" id="tableOptionsTitle">Tabela</div>
                 <label class="field checkbox" data-hint data-hint-pl="Szarym paskiem wyróżnia wiersze wykryte jako sekcje (np. pogrubione „Dział A” nad wierszami z kwotami). Domyślnie wyłączone." data-hint-en="Marks rows detected as section labels (e.g. a bold “Section A” above rows with amounts) with a grey band. Off by default." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="showSubheaders" type="checkbox" />
-                  Wyróżniaj podnagłówki
+                  Wyróżnione podnagłówki
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Odświeża podgląd formuł zależnych od dziś (TODAY) — np. „Długość dni" liczy do bieżącej daty, bez otwierania pliku w Excelu. Tylko podgląd, nie zapisuje. Komórki, które przez to POKAZUJĄ COŚ INNEGO niż Excel, dostają znacznik w rogu — najedź/tapnij, żeby zobaczyć starą wartość i datę zapisu pliku." data-hint-en="Refreshes preview of TODAY-based formulas (e.g. day counts to current date) without opening Excel. Preview only, not saved. Cells that therefore SHOW SOMETHING ELSE than Excel get a corner marker — hover/tap to see the old value and the file save date." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="recalcDates" type="checkbox" checked />
-                  Przeliczaj formuły z datą (na dziś)
+                  Formuły z datą liczone na dziś
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Zawija długi tekst na wiele linii zamiast ucinać (dotyczy wszystkich komórek)." data-hint-en="Wraps long text onto multiple lines instead of clipping (all cells)." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="wrapCells" type="checkbox" />
-                  Zawijaj tekst w komórkach
+                  Zawijaj tekst we wszystkich komórkach
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Dopasowuje szerokość kolumn do WIĘKSZOŚCI komórek (skrajnie długie teksty zostają przycięte, kolumny nie robią się ogromne). Wyłączone = kolumny mieszczą całą zawartość." data-hint-en="Fits column width to MOST cells (extremely long texts get clipped so columns don't get huge). Off = columns fit all content." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="smartColWidths" type="checkbox" checked />
-                  Inteligentne dopasowanie szerokości
+                  Inteligentna szerokość kolumn
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Rysuje tylko to, co widać na ekranie (jak Excel) — płynniejsze przewijanie i szybsze sortowanie/filtrowanie, a do obejrzenia są WSZYSTKIE wiersze, bez limitu. Wersja testowa: gdyby coś wyglądało źle, wyłącz. Przy scalonych komórkach i zawijaniu tekstu tabela działa jak dotąd." data-hint-en="Draws only what is on screen (like Excel) — smoother scrolling and faster sorting/filtering, and ALL rows are viewable, no limit. Beta: if anything looks off, turn it off. With merged cells or text wrapping the table works as before." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="virtRows" type="checkbox" />
@@ -626,7 +628,7 @@
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Wąski uchwyt przy lewej krawędzi ekranu, który wysuwa panel narzędzi. Bez niego panel otwiera przycisk „Narzędzia” nad tabelą." data-hint-en="Narrow handle at the left screen edge that slides the tools panel out. Without it, the “Tools” button above the table opens the panel." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="showPanelHandle" type="checkbox" checked />
-                  Pokaż uchwyt panelu
+                  Uchwyt panelu przy krawędzi
                 </label>
               </div>
             </details>
@@ -1627,14 +1629,14 @@
                   <button class="btn btn-sm ghost toggle-pill hidden" id="wideLongToggle" type="button" aria-pressed="false" data-hint-pl="Wide-to-Long: przekształca szeroką tabelę /| z powtarzającymi się blokami kolumn /| w długi układ — jeden wiersz = jeden blok. /| Przydatne do filtrowania i agregacji." data-hint-en="Wide-to-Long: turns a wide table /| with repeating column blocks /| into a long layout — one row per block. /| Useful for filtering and aggregation." data-hint-delay="1.1" data-hint-duration="8" data-hint-fade>
                     Wide-to-Long
                   </button>
-                  <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Użyj szerokości kolumn i wysokości wierszy zapisanych w pliku Excel (zamiast auto-dopasowania)" data-hint-en="Use column widths and row heights saved in the Excel file (instead of auto-fit)" data-hint-delay="1.1">
-                    Wymiary z Excela
+                  <button class="btn btn-sm ghost toggle-pill" id="excelLayoutToggle" type="button" aria-pressed="false" data-hint data-hint-pl="Arkusz jak w Excelu: szerokości kolumn i wysokości wierszy z pliku, zapisane powiększenie i miejsce otwarcia, zawijanie tytułów i scalonych komórek (zamiast auto-dopasowania)" data-hint-en="Sheet as in Excel: column widths and row heights from the file, saved zoom and start position, wrapping in titles and merged cells (instead of auto-fit)" data-hint-delay="1.1">
+                    Układ jak w Excelu
                   </button>
                   <button class="btn btn-sm ghost toggle-pill" id="rowsAboveHeaderToggle" type="button" aria-pressed="true" data-hint data-hint-pl="Pokaż arkusz od wiersza 1, jak w Excelu — tytuł, podsumowania i opisy nad nagłówkiem tabeli. Filtry i sortowanie działają na tabeli pod nagłówkiem." data-hint-en="Show the sheet from row 1, as in Excel — title, totals and notes above the table header. Filters and sorting work on the table below the header." data-hint-delay="1.1">
-                    Wiersze nad nagłówkiem: ON
+                    Wiersze nad nagłówkiem
                   </button>
                   <button class="btn btn-sm ghost toggle-pill" id="keyBarToggle" type="button" aria-pressed="true" hidden data-hint data-hint-pl="Pasek z cyframi i znakami (operatory szukania, znaki formuł) nad klawiaturą telefonu" data-hint-en="Bar with digits and symbols (search operators, formula characters) above the phone keyboard" data-hint-touch="on">
-                    Pasek cyfr: ON
+                    Pasek cyfr
                   </button>
                   <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
     </div>
@@ -1949,54 +1951,55 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20261102-01"></script>
-    <script defer src="app/render-budget.js?v=20261102-01"></script>
-    <script defer src="app/language.js?v=20261102-01"></script>
-    <script defer src="app/similar-names.js?v=20261102-01"></script>
-    <script defer src="app/analysis.js?v=20261102-01"></script>
-    <script defer src="app/smart-filters.js?v=20261102-01"></script>
-    <script defer src="app/excel-date-format.js?v=20261102-01"></script>
-    <script defer src="app/workbook.js?v=20261102-01"></script>
-    <script defer src="app/xlsx-patch.js?v=20261102-01"></script>
-    <script defer src="app/table.js?v=20261102-01"></script>
-    <script defer src="app/virt-rows.js?v=20261102-01"></script>
-    <script defer src="app/conditional-formatting.js?v=20261102-01"></script>
-    <script defer src="app/formula-engine.js?v=20261102-01"></script>
-    <script defer src="app/formula-calc.js?v=20261102-01"></script>
-    <script defer src="app/formula-explain.js?v=20261102-01"></script>
-    <script defer src="app/data-validation.js?v=20261102-01"></script>
-    <script defer src="app/derived-columns.js?v=20261102-01"></script>
-    <script defer src="app/formulas.js?v=20261102-01"></script>
-    <script defer src="app/edit-tools.js?v=20261102-01"></script>
-    <script defer src="app/cell-format.js?v=20261102-01"></script>
-    <script defer src="app/ui-controls.js?v=20261102-01"></script>
-    <script defer src="app/filter-bar.js?v=20261102-01"></script>
-    <script defer src="app/qs-history.js?v=20261102-01"></script>
-    <script defer src="app/undo.js?v=20261102-01"></script>
-    <script defer src="app/cell-notes.js?v=20261102-01"></script>
-    <script defer src="app/anonymize-core.js?v=20261102-01"></script>
-    <script defer src="app/anonymize-zip.js?v=20261102-01"></script>
-    <script defer src="app/anonymize-ui.js?v=20261102-01"></script>
-    <script defer src="app/drafts.js?v=20261102-01"></script>
-    <script defer src="app/transcribe.js?v=20261102-01"></script>
-    <script defer src="app/local-ai.js?v=20261102-01"></script>
-    <script defer src="app/nl-query.js?v=20261102-01"></script>
-    <script defer src="app/report.js?v=20261102-01"></script>
-    <script defer src="app/freeze-pane.js?v=20261102-01"></script>
-    <script defer src="app/app-frame.js?v=20261102-01"></script>
-    <script defer src="app/sheet-edit-ui.js?v=20261102-01"></script>
-    <script defer src="app/frame-compact.js?v=20261102-01"></script>
-    <script defer src="app/key-bar.js?v=20261102-01"></script>
-    <script defer src="app/cell-spill.js?v=20261102-01"></script>
-    <script defer src="app/autofill.js?v=20261102-01"></script>
-    <script defer src="app/move-cells.js?v=20261102-01"></script>
-    <script defer src="app/header-edit.js?v=20261102-01"></script>
-    <script defer src="app/formula-ui.js?v=20261102-01"></script>
+    <script defer src="app/core.js?v=20261102-02"></script>
+    <script defer src="app/render-budget.js?v=20261102-02"></script>
+    <script defer src="app/language.js?v=20261102-02"></script>
+    <script defer src="app/similar-names.js?v=20261102-02"></script>
+    <script defer src="app/analysis.js?v=20261102-02"></script>
+    <script defer src="app/smart-filters.js?v=20261102-02"></script>
+    <script defer src="app/excel-date-format.js?v=20261102-02"></script>
+    <script defer src="app/excel-fonts.js?v=20261102-02"></script>
+    <script defer src="app/workbook.js?v=20261102-02"></script>
+    <script defer src="app/xlsx-patch.js?v=20261102-02"></script>
+    <script defer src="app/table.js?v=20261102-02"></script>
+    <script defer src="app/virt-rows.js?v=20261102-02"></script>
+    <script defer src="app/conditional-formatting.js?v=20261102-02"></script>
+    <script defer src="app/formula-engine.js?v=20261102-02"></script>
+    <script defer src="app/formula-calc.js?v=20261102-02"></script>
+    <script defer src="app/formula-explain.js?v=20261102-02"></script>
+    <script defer src="app/data-validation.js?v=20261102-02"></script>
+    <script defer src="app/derived-columns.js?v=20261102-02"></script>
+    <script defer src="app/formulas.js?v=20261102-02"></script>
+    <script defer src="app/edit-tools.js?v=20261102-02"></script>
+    <script defer src="app/cell-format.js?v=20261102-02"></script>
+    <script defer src="app/ui-controls.js?v=20261102-02"></script>
+    <script defer src="app/filter-bar.js?v=20261102-02"></script>
+    <script defer src="app/qs-history.js?v=20261102-02"></script>
+    <script defer src="app/undo.js?v=20261102-02"></script>
+    <script defer src="app/cell-notes.js?v=20261102-02"></script>
+    <script defer src="app/anonymize-core.js?v=20261102-02"></script>
+    <script defer src="app/anonymize-zip.js?v=20261102-02"></script>
+    <script defer src="app/anonymize-ui.js?v=20261102-02"></script>
+    <script defer src="app/drafts.js?v=20261102-02"></script>
+    <script defer src="app/transcribe.js?v=20261102-02"></script>
+    <script defer src="app/local-ai.js?v=20261102-02"></script>
+    <script defer src="app/nl-query.js?v=20261102-02"></script>
+    <script defer src="app/report.js?v=20261102-02"></script>
+    <script defer src="app/freeze-pane.js?v=20261102-02"></script>
+    <script defer src="app/app-frame.js?v=20261102-02"></script>
+    <script defer src="app/sheet-edit-ui.js?v=20261102-02"></script>
+    <script defer src="app/frame-compact.js?v=20261102-02"></script>
+    <script defer src="app/key-bar.js?v=20261102-02"></script>
+    <script defer src="app/cell-spill.js?v=20261102-02"></script>
+    <script defer src="app/autofill.js?v=20261102-02"></script>
+    <script defer src="app/move-cells.js?v=20261102-02"></script>
+    <script defer src="app/header-edit.js?v=20261102-02"></script>
+    <script defer src="app/formula-ui.js?v=20261102-02"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20261102-01"></script>
-    <script defer src="app/launch-files.js?v=20261102-01"></script>
-    <script defer src="app/bootstrap.js?v=20261102-01"></script>
+    <script defer src="app/debug-loaders.js?v=20261102-02"></script>
+    <script defer src="app/launch-files.js?v=20261102-02"></script>
+    <script defer src="app/bootstrap.js?v=20261102-02"></script>
   </body>
 </html>

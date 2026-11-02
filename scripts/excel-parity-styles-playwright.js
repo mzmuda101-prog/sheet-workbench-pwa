@@ -10,6 +10,7 @@
 //   5. Scalona notatka z „Zawijaj tekst” zawija się, ma szare tło z palety (fgColor indexed=22 — SheetJS
 //      go gubił) i ramki: górną z kotwicy, dolną z ostatniego wiersza scalenia (SheetJS nie czytał ramek).
 //   6. Tabela Excela TableStyleLight1: pierwszy wiersz danych D9D9D9, drugi bez (wyrocznia: display format).
+//   8. Czcionka spoza systemu jak w Excelu na Macu (wyrocznia 2026-11-02): zwykła → Times, pogrubiona → Helvetica.
 //   7. Arkusz zapisany w 150% otwiera się w 150% (szerokości kolumn rosną razem z nim), powrót = 100%.
 //
 // Fixture generuje openpyxl (gradient jest pierwszym wypełnieniem w pliku).
@@ -68,6 +69,15 @@ async function run() {
   ok("scalona notatka zawija się i mieści", note && note.ws === "normal" && note.fits && note.align === "center", note);
   ok("scalona notatka: szare tło z palety (indexed 22)", note && /192, 192, 192/.test(note.bg), note && note.bg);
   ok("scalona notatka: ramka górna gruba, dolna z ostatniego wiersza", note && note.bt === "2px" && note.bb === "1px", note);
+
+  const fonts = await page.evaluate(() => {
+    const ff = (t) => { const td = [...document.querySelectorAll("#dataTable tbody td")].find((x) => x.textContent.trim() === t); return td && getComputedStyle(td).fontFamily; };
+    return { regular: ff("Osoba 001"), bold: ff("Osoba 002") };
+  });
+  ok("nieznana czcionka zwykła → szeryfowa (Times)", /Times/.test(fonts.regular || "") && !/Helvetica/.test(fonts.regular || ""), fonts);
+  ok("nieznana czcionka pogrubiona → bezszeryfowa (Helvetica)", /Helvetica/.test(fonts.bold || ""), fonts);
+  const pill = await page.evaluate(() => { const b = document.getElementById("excelLayoutToggle"); return { text: b.textContent.trim(), pressed: b.getAttribute("aria-pressed") }; });
+  ok("przełącznik „Układ jak w Excelu” bez „: ON”", pill.text === "Układ jak w Excelu" && pill.pressed === "true", pill);
 
   const widthAt100 = await page.evaluate(() => document.querySelector('#dataTable thead tr.header-row th[data-col-index="0"]').getBoundingClientRect().width);
   await page.evaluate(() => { sheetSelect.value = "Tabela"; loadBtn.click(); });

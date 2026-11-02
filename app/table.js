@@ -1904,37 +1904,9 @@ function getWorkbookDefaultFontSize(wb) {
 // (użyta, jeśli zainstalowana — np. Calibri na Windows), potem web-safe zamienniki
 // i rodzina ogólna. Dzięki temu na każdym systemie wygląd jest najbliższy Excelowi
 // bez ryzyka „braku" czcionki.
-function excelFontToCssStack(name) {
-  const n = String(name || "").trim();
-  if (!n) return "";
-  const FALLBACKS = {
-    "calibri": "'Segoe UI', Candara, Optima, sans-serif",
-    "calibri light": "'Segoe UI Light', 'Segoe UI', sans-serif",
-    "aptos": "'Segoe UI', sans-serif",
-    "aptos narrow": "'Segoe UI', sans-serif",
-    "arial": "Helvetica, 'Helvetica Neue', sans-serif",
-    "arial narrow": "'Arial Narrow', Arial, sans-serif",
-    "arial black": "Arial, sans-serif",
-    "helvetica": "'Helvetica Neue', Arial, sans-serif",
-    "tahoma": "Geneva, Verdana, sans-serif",
-    "verdana": "Geneva, sans-serif",
-    "segoe ui": "Candara, sans-serif",
-    "trebuchet ms": "'Lucida Grande', sans-serif",
-    "century gothic": "'Apple Gothic', sans-serif",
-    "times new roman": "Times, serif",
-    "times": "serif",
-    "cambria": "Georgia, serif",
-    "georgia": "'Times New Roman', serif",
-    "garamond": "'Apple Garamond', Georgia, serif",
-    "book antiqua": "Palatino, 'Palatino Linotype', serif",
-    "palatino linotype": "Palatino, serif",
-    "courier new": "Courier, monospace",
-    "consolas": "'Lucida Console', Monaco, monospace",
-    "lucida console": "Monaco, monospace",
-    "comic sans ms": "'Comic Sans', cursive",
-  };
-  const fallback = FALLBACKS[n.toLowerCase()] || "sans-serif";
-  return `"${n}", ${fallback}`;
+// Stos CSS dla czcionki z pliku — app/excel-fonts.js (wspólne z wątkiem roboczym).
+function excelFontToCssStack(name, bold = false, italic = false) {
+  return typeof swbExcelFontStack === "function" ? swbExcelFontStack(name, bold, italic) : (name ? `"${name}", sans-serif` : "");
 }
 
 function decodeXmlEntities(s) {
@@ -2031,7 +2003,11 @@ function excelGradientCss(gradient) {
     if (!hex) return null;
     parts.push(`${hex} ${Math.round((Number(st.position) || 0) * 100)}%`);
   }
-  const first = parts[0].split(" ")[0];
+  // kolor „zastępczy” (kontrast tekstu, zaznaczenie) = średnia stopni — przy fiolet→biały tekst ma być
+  // czarny jak w Excelu, a nie biały „bo pierwszy kolor jest ciemny”
+  const rgb = parts.map((p) => parseInt(p.slice(1, 7), 16));
+  const avg = (shift) => Math.round(rgb.reduce((a, v) => a + ((v >> shift) & 255), 0) / rgb.length);
+  const first = `#${[16, 8, 0].map((sh) => avg(sh).toString(16).padStart(2, "0")).join("")}`;
   if (gradient.type === "path") {
     const x = Math.round(((gradient.left || 0) + (gradient.right || 0)) * 50);
     const y = Math.round(((gradient.top || 0) + (gradient.bottom || 0)) * 50);
@@ -2057,6 +2033,12 @@ function extractCellStyle(cell, wb, xfStyle = null) {
   // inaczej KAŻDA komórka dostałaby kolor/rodzinę domyślną (psułoby też dark mode).
   const isDefaultFont = xfStyle ? xfStyle.fontId === 0 : false;
   const font = isDefaultFont ? null : rawFont;
+  // …chyba że domyślnej czcionki nie ma w systemie i Excel rysuje ją zastępczo (Times) — wtedy tylko
+  // rodzina, żeby układ tekstu był jak w Excelu (kolor/rozmiar dalej z aplikacji).
+  // komórka bez s= w pliku (brak xfStyle) też ma czcionkę domyślną skoroszytu (Fonts[0])
+  const defaultFontNode = isDefaultFont ? rawFont : (!xfStyle && cell ? (wb?.Styles?.Fonts || [])[0] : null);
+  const defaultFontName = defaultFontNode ? (defaultFontNode.name || defaultFontNode.Name || "") : "";
+  const defaultUnknown = !!defaultFontName && typeof swbIsKnownExcelFont === "function" && !swbIsKnownExcelFont(defaultFontName);
 
   const fillGradient = fill && fill.gradient ? excelGradientCss(fill.gradient) : null;
   const fillColor = fillGradient ? fillGradient.first : colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor, true);
@@ -2074,7 +2056,9 @@ function extractCellStyle(cell, wb, xfStyle = null) {
   const fontName = (font && (font.name || font.Name || font.rFont)) || "";
   const rawFontSize = font ? Number(font.sz ?? font.Sz ?? font.size ?? font.Size) : 0;
   const baseFontSize = getWorkbookDefaultFontSize(wb);
-  const fontFamily = fontName ? excelFontToCssStack(fontName) : "";
+  const fontFamily = fontName
+    ? excelFontToCssStack(fontName, !!(font.bold || font.b || font.Bold), !!(font.italic || font.i || font.Italic))
+    : (defaultUnknown ? excelFontToCssStack(defaultFontName) : "");
   const fontScale = rawFontSize > 0 && baseFontSize > 0 ? rawFontSize / baseFontSize : 0;
 
   const styleOut = {

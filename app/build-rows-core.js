@@ -143,10 +143,9 @@
     return sz > 0 ? sz : 11;
   }
 
-  function excelFontToCssStack(name) {
-    const n = String(name || "").trim();
-    if (!n) return "";
-    return `"${n}", sans-serif`;
+  // app/excel-fonts.js (importScripts w build-rows-worker.js) — jak table.js
+  function excelFontToCssStack(name, bold = false, italic = false) {
+    return typeof global.swbExcelFontStack === "function" ? global.swbExcelFontStack(name, bold, italic) : (name ? `"${name}", sans-serif` : "");
   }
 
   function resolveXfStyleFromIndex(sIdx, wb) {
@@ -189,7 +188,11 @@
       if (!hex) return null;
       parts.push(`${hex} ${Math.round((Number(st.position) || 0) * 100)}%`);
     }
-    const first = parts[0].split(" ")[0];
+    // kolor „zastępczy” (kontrast tekstu, zaznaczenie) = średnia stopni — przy fiolet→biały tekst ma być
+    // czarny jak w Excelu, a nie biały „bo pierwszy kolor jest ciemny”
+    const rgb = parts.map((p) => parseInt(p.slice(1, 7), 16));
+    const avg = (shift) => Math.round(rgb.reduce((a, v) => a + ((v >> shift) & 255), 0) / rgb.length);
+    const first = `#${[16, 8, 0].map((sh) => avg(sh).toString(16).padStart(2, "0")).join("")}`;
     if (gradient.type === "path") {
       const x = Math.round(((gradient.left || 0) + (gradient.right || 0)) * 50);
       const y = Math.round(((gradient.top || 0) + (gradient.bottom || 0)) * 50);
@@ -210,6 +213,9 @@
     const rawFont = (xfStyle && xfStyle.font) || cellS?.font || cellS?.Font || null;
     const isDefaultFont = xfStyle ? xfStyle.fontId === 0 : false;
     const font = isDefaultFont ? null : rawFont;
+    const defaultFontNode = isDefaultFont ? rawFont : (!xfStyle && cell ? (wb?.Styles?.Fonts || [])[0] : null); // jak table.js
+    const defaultFontName = defaultFontNode ? (defaultFontNode.name || defaultFontNode.Name || "") : "";
+    const defaultUnknown = !!defaultFontName && typeof global.swbIsKnownExcelFont === "function" && !global.swbIsKnownExcelFont(defaultFontName);
     const fillGradient = fill && fill.gradient ? excelGradientCss(fill.gradient) : null;
     const fillColor = fillGradient ? fillGradient.first : colorFromStyleNode(fill?.fgColor || fill?.FgColor || fill?.bgColor || fill?.BgColor, true);
     const fontColor = colorFromStyleNode(font?.color || font?.Color, true);
@@ -228,7 +234,9 @@
       fontColor,
       hasCustomFontColor,
       fontColorIsDefaultLike,
-      fontFamily: fontName ? excelFontToCssStack(fontName) : "",
+      fontFamily: fontName
+        ? excelFontToCssStack(fontName, !!(font.bold || font.b || font.Bold), !!(font.italic || font.i || font.Italic))
+        : (defaultUnknown ? excelFontToCssStack(defaultFontName) : ""),
       fontScale: rawFontSize > 0 && baseFontSize > 0 ? rawFontSize / baseFontSize : 0,
       bold: !!(font && (font.bold || font.b || font.Bold)),
       italic: !!(font && (font.italic || font.i || font.Italic)),
