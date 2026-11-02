@@ -36,7 +36,9 @@ const ENGINE = process.env.ENGINE || "chromium";
 const ROWS = parseInt(process.env.ROWS || "600", 10);
 const SAMPLE = parseInt(process.env.SAMPLE || "3000", 10);
 // VIRT=1 = to samo co VIRT_QUERY="&virt=1" (bez znaku & — ten w łańcuchu npm oznaczałby tło)
-const VIRT_QUERY = process.env.VIRT_QUERY || (process.env.VIRT === "1" ? "&virt=1" : "");
+// Bez VIRT=1 — jawnie STARE rysowanie (nowy silnik jest domyślny od 2026-11-02, a stary zostaje
+// jako zapas i dalej musi spełniać te same zachowania).
+const VIRT_QUERY = process.env.VIRT_QUERY || (process.env.VIRT === "1" ? "&virt=1" : "&virt=0");
 // SLEEP_SCALE (run-tests.mjs): skraca przerwy „odczekaj po kroku” w szybkim przebiegu;
 // powtórka porażki idzie ze skalą 1 (pełne przerwy). sleepFixed = przerwa, która MUSI
 // przeczekać timer aplikacji (debounce, opóźnienie podpowiedzi, bezczynność) — bez skali.

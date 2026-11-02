@@ -25,6 +25,8 @@ const sleepFixed = (ms) => new Promise((r) => setTimeout(r, ms)); // eslint-disa
 async function openWith(browser, { cost, manual, query = "" }) {
   const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1100, height: 850 } });
   await context.addInitScript(({ cost, manual }) => {
+    // limit wierszy dotyczy tylko STAREGO rysowania (nowy silnik, domyślny od 2026-11-02, pokazuje wszystkie)
+    localStorage.setItem("swb-virt-rows-v1", "0");
     if (sessionStorage.getItem("__rbInit")) return; // tylko przy pierwszym wejściu
     sessionStorage.setItem("__rbInit", "1");
     localStorage.setItem("introPlayed", "true");

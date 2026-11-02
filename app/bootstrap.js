@@ -359,9 +359,17 @@ if (wrapCellsEl) {
   });
 }
 if (virtRowsEl && typeof swbVirt !== "undefined") {
+  // „Limit wierszy” dotyczy tylko starego rysowania — przy nowym silniku widać wszystkie wiersze,
+  // więc pole tylko by myliło (dawniej: „nic nie robi”).
+  const syncMaxRowsField = () => {
+    const field = maxRowsEl && maxRowsEl.closest("label");
+    if (field) field.hidden = swbVirt.enabled();
+  };
   virtRowsEl.checked = swbVirt.enabled();
+  syncMaxRowsField();
   virtRowsEl.addEventListener("change", () => {
     swbVirt.setEnabled(virtRowsEl.checked);
+    syncMaxRowsField();
     if (swbVirt.isForcedByUrl()) toast(t("virtForcedByUrl"), "info");
     if (currentHeaders.length) renderActiveTable();
   });

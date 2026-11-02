@@ -34,7 +34,9 @@ async function run() {
   const context = await browser.newContext(MOBILE
     ? { serviceWorkers: "block", viewport: { width: 390, height: 844 }, deviceScaleFactor: 3, hasTouch: true, isMobile: ENGINE === chromium }
     : { serviceWorkers: "block", viewport: { width: 900, height: 800 } });
-  await context.addInitScript(() => localStorage.setItem("introPlayed", "true"));
+  // Szyba to optymalizacja STAREGO rysowania (nowy silnik, domyślny od 2026-11-02, ma zwykłe sticky —
+  // virt-frozen-playwright.js) — tu wymuszamy stary, który zostaje jako zapas (Widok → odznaczony silnik).
+  await context.addInitScript(() => { localStorage.setItem("introPlayed", "true"); localStorage.setItem("swb-virt-rows-v1", "0"); });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));

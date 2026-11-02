@@ -42,7 +42,10 @@ const swbVirt = (() => {
     } catch (_) {}
     return null;
   })();
-  let enabledPref = (() => { try { return localStorage.getItem(VIRT_PREF_KEY) === "1"; } catch (_) { return false; } })();
+  // Domyślnie WŁĄCZONY od 2026-11-02 (plan „jeden silnik”: scalenia, zawijanie, zablokowane kolumny
+  // i wymiary z Excela obsłużone; test Mateusza na iPhonie OK). Wyłączony tylko po świadomym
+  // odznaczeniu w Widoku (zapisane „0”).
+  let enabledPref = (() => { try { return localStorage.getItem(VIRT_PREF_KEY) !== "0"; } catch (_) { return true; } })();
 
   let st = null;           // stan zamontowanego okna (null = stary render)
   const heightCache = new Map(); // rowKey -> { h, f } (f = wysokość wymuszona przy pomiarze)
@@ -226,8 +229,9 @@ const swbVirt = (() => {
       const frag = document.createDocumentFragment();
       const nodes = [];
       for (let i = ns; i <= ne; i++) { const tr = buildRow(i); nodes.push(tr); frag.appendChild(tr); added.push(i); }
-      if (st.bottomSpacer.isConnected) { tbodyEl.insertBefore(frag, st.bottomSpacer); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
-      else { tbodyEl.appendChild(frag); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
+      if (st.bottomSpacer.isConnected) tbodyEl.insertBefore(frag, st.bottomSpacer);
+      else tbodyEl.appendChild(frag);
+      if (typeof swbSpill !== "undefined") swbSpill.scheduleRows(nodes);
       st.nodes = nodes;
     } else {
       // zdejmij to, co wyjeżdża (okna się nakładają, więc coś zawsze zostaje)
@@ -238,7 +242,8 @@ const swbVirt = (() => {
         const frag = document.createDocumentFragment();
         const fresh = [];
         for (let i = ns; i < st.s; i++) { const tr = buildRow(i); fresh.push(tr); frag.appendChild(tr); added.push(i); }
-        { tbodyEl.insertBefore(frag, st.nodes[0]); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
+        tbodyEl.insertBefore(frag, st.nodes[0]);
+        if (typeof swbSpill !== "undefined") swbSpill.scheduleRows(fresh);
         st.nodes = fresh.concat(st.nodes);
         st.s = ns;
       }
@@ -246,9 +251,11 @@ const swbVirt = (() => {
       const curE = st.s + st.nodes.length - 1;
       if (ne > curE) {
         const frag = document.createDocumentFragment();
-        for (let i = curE + 1; i <= ne; i++) { const tr = buildRow(i); st.nodes.push(tr); frag.appendChild(tr); added.push(i); }
-        if (st.bottomSpacer.isConnected) { tbodyEl.insertBefore(frag, st.bottomSpacer); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
-        else { tbodyEl.appendChild(frag); if (typeof swbSpill !== "undefined") swbSpill.schedule(); }
+        const fresh = [];
+        for (let i = curE + 1; i <= ne; i++) { const tr = buildRow(i); st.nodes.push(tr); frag.appendChild(tr); added.push(i); fresh.push(tr); }
+        if (st.bottomSpacer.isConnected) tbodyEl.insertBefore(frag, st.bottomSpacer);
+        else tbodyEl.appendChild(frag);
+        if (typeof swbSpill !== "undefined") swbSpill.scheduleRows(fresh);
       }
     }
     st.s = ns; st.e = ne;
@@ -284,6 +291,7 @@ const swbVirt = (() => {
     setSpacer("bottom", st.prefix[st.n] - st.prefix[ne + 1]);
     if (shift) tableWrapEl.scrollTop += shift;
     prunePool();
+    return shift;
   }
 
   // Typowa wysokość = mediana zmierzonych wierszy bez wymuszonej wysokości.
@@ -337,17 +345,18 @@ const swbVirt = (() => {
     }
     const a = indexAt(Math.max(0, modelTop));
     const anchor = (a >= st.s && a <= st.e) ? { i: a, domTop: st.topPx + (st.prefix[a] - st.prefix[st.s]) } : null;
-    place(ns, ne, anchor);
-    fillViewport();
+    const shift = place(ns, ne, anchor);
+    fillViewport(domTop + shift, clientH);
     afterWindowChange();
   }
 
   // Po pomiarze dorysowanych wierszy model się zmienia (np. przy zawijaniu wiersze są wyższe albo niższe
   // niż szacunek) — okno mogło przestać pokrywać ekran. Dopełniamy od razu, zamiast czekać na kolejne
   // zdarzenie scroll (inaczej przy dole zostawała pusta siatka: virt-guard 8 z zawijaniem).
-  function fillViewport() {
+  // Pozycję widoku dostajemy z update() (plus przesunięcia z place) — ponowny odczyt scrollTop po
+  // zapisach do DOM wymuszał drugie przeliczenie układu w każdej klatce (profil 2026-11-02).
+  function fillViewport(top, clientH) {
     for (let k = 0; k < 4; k++) {
-      const { top, clientH } = viewport();
       const covTop = st.topPx;
       const covBottom = st.topPx + (st.prefix[st.e + 1] - st.prefix[st.s]);
       const holeBelow = st.e < st.n - 1 && top + clientH > covBottom;
@@ -357,7 +366,7 @@ const swbVirt = (() => {
       const [ns, ne] = desiredRange(modelTop, clientH);
       const ai = indexAt(Math.max(0, modelTop));
       const anchor = (ai >= st.s && ai <= st.e) ? { i: ai, domTop: st.topPx + (st.prefix[ai] - st.prefix[st.s]) } : null;
-      place(Math.min(ns, holeAbove ? ns : st.s), Math.max(ne, holeBelow ? ne : st.e), anchor);
+      top += place(Math.min(ns, holeAbove ? ns : st.s), Math.max(ne, holeBelow ? ne : st.e), anchor);
     }
   }
 

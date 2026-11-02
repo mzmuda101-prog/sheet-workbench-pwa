@@ -20,7 +20,7 @@
 
 const swbSpill = (() => {
   if (typeof document === "undefined" || typeof tableEl === "undefined" || !tableEl) {
-    return { schedule() {}, invalidate() {}, refreshRow() {}, visibleWidth() { return 0; }, flush() {} };
+    return { schedule() {}, scheduleRows() {}, invalidate() {}, refreshRow() {}, visibleWidth() { return 0; }, flush() {} };
   }
   const NO_SPILL_ALIGN = new Set(["fill", "justify", "distributed"]);
   const ERROR_RE = /^#(?:N\/[AD]|DZIEL\/0!|DIV\/0!|ARG!|VALUE!|ADR!|REF!|NAZWA\?|NAME\?|LICZBA!|NUM!|ZERO!|NULL!|SPILL!|CALC!|ROZLANIE!|OBL!)$/;
@@ -28,6 +28,8 @@ const swbSpill = (() => {
   let widths = null; // szerokości kolumn widoku (px), indeks = data-col-index
   let fontPx = 13;
   let raf = 0;
+  let fullPending = false;       // przelicz wszystkie wiersze
+  const pendingRows = new Set(); // albo tylko te (nowy silnik dorysowuje kilka wierszy naraz)
 
   function measure() {
     const guide = tableEl.querySelector("thead tr.guide-row");
@@ -142,14 +144,30 @@ const swbSpill = (() => {
 
   function runAll() {
     raf = 0;
+    const full = fullPending;
+    const rows = full ? null : [...pendingRows];
+    fullPending = false;
+    pendingRows.clear();
     if (!widths && !measure()) return;
     const opts = context();
-    for (const tr of tableEl.querySelectorAll("tbody > tr[data-row-key], thead > tr.pre-row[data-row-key]")) {
-      spillRow(tr, rowOf(tr), opts);
+    if (full) {
+      for (const tr of tableEl.querySelectorAll("tbody > tr[data-row-key], thead > tr.pre-row[data-row-key]")) {
+        spillRow(tr, rowOf(tr), opts);
+      }
+      return;
     }
+    for (const tr of rows) if (tr.isConnected) spillRow(tr, rowOf(tr), opts);
   }
 
   function schedule() {
+    fullPending = true;
+    if (!raf) raf = requestAnimationFrame(runAll);
+  }
+  // Tylko podane wiersze (nowy silnik przy przewijaniu dokłada po kilka) — dawniej każde dorysowanie
+  // przeliczało wszystkie wiersze okna (profil 2026-11-02: ~70 ms na 60 klatek przewijania, CPU ×6).
+  function scheduleRows(trs) {
+    if (fullPending) return;
+    for (const tr of trs) pendingRows.add(tr);
     if (!raf) raf = requestAnimationFrame(runAll);
   }
   // nowy układ kolumn (render, zoom, zmiana szerokości, obrót ekranu) → zmierz od nowa
@@ -189,5 +207,5 @@ const swbSpill = (() => {
     runAll();
   }
 
-  return { schedule, invalidate, refreshRow, visibleWidth, flush };
+  return { schedule, scheduleRows, invalidate, refreshRow, visibleWidth, flush };
 })();
