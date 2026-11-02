@@ -62,7 +62,7 @@ const swbSpill = (() => {
   function clear(td) {
     if (!td._swbSpill) return;
     td._swbSpill = null;
-    td.classList.remove("cell-spill", "spill-right", "spill-center");
+    td.classList.remove("cell-spill", "spill-right", "spill-center", "spill-no-l", "spill-no-r");
     td.style.removeProperty("--spill-l");
     td.style.removeProperty("--spill-r");
     const span = td.firstElementChild;
@@ -77,6 +77,10 @@ const swbSpill = (() => {
     td._swbSpill = { key, align, L, R };
     td.classList.add("cell-spill");
     if (align !== "left") td.classList.add(align === "right" ? "spill-right" : "spill-center");
+    // Excel nie rysuje ramki komórki na krawędzi, przez którą przechodzi wylany tekst
+    // (wyrocznia: „<--- WYSZUKIWARKA” — Q38 ma prawą cienką ramkę, w Excelu jej nie widać)
+    if (R > 0) td.classList.add("spill-no-r");
+    if (L > 0) td.classList.add("spill-no-l");
     // tekst w <span> bez pointer-events: klik w pustą komórkę obok trafia w NIĄ, nie w tę
     // (clip-path rozszerza też obszar trafień, a ta komórka leży warstwą wyżej)
     const span = document.createElement("span");

@@ -11,6 +11,7 @@
 //      go gubił) i ramki: górną z kotwicy, dolną z ostatniego wiersza scalenia (SheetJS nie czytał ramek).
 //   6. Tabela Excela TableStyleLight1: pierwszy wiersz danych D9D9D9, drugi bez (wyrocznia: display format).
 //   8. Czcionka spoza systemu jak w Excelu na Macu (wyrocznia 2026-11-02): zwykła → Times, pogrubiona → Helvetica.
+//   9. Tekst w skali Excela na Macu: 1 pt = 1 px (Calibri 11 → 11 px), „Zawijaj tekst” w zwykłej komórce działa.
 //   7. Arkusz zapisany w 150% otwiera się w 150% (szerokości kolumn rosną razem z nim), powrót = 100%.
 //
 // Fixture generuje openpyxl (gradient jest pierwszym wypełnieniem w pliku).
@@ -76,6 +77,13 @@ async function run() {
   });
   ok("nieznana czcionka zwykła → szeryfowa (Times)", /Times/.test(fonts.regular || "") && !/Helvetica/.test(fonts.regular || ""), fonts);
   ok("nieznana czcionka pogrubiona → bezszeryfowa (Helvetica)", /Helvetica/.test(fonts.bold || ""), fonts);
+  const scale = await page.evaluate(() => {
+    const find = (t) => [...document.querySelectorAll("#dataTable tbody td")].find((x) => x.textContent.trim().startsWith(t));
+    const plain = find("x1"), wrapped = find("opis zawijany");
+    return { fs: plain && getComputedStyle(plain).fontSize, wrap: wrapped && getComputedStyle(wrapped).whiteSpace };
+  });
+  ok("tekst w skali Excela (11 pt = 11 px)", scale.fs === "11px", scale);
+  ok("„Zawijaj tekst” z pliku w zwykłej komórce", scale.wrap === "normal", scale);
   const pill = await page.evaluate(() => { const b = document.getElementById("excelLayoutToggle"); return { text: b.textContent.trim(), pressed: b.getAttribute("aria-pressed") }; });
   ok("przełącznik „Układ jak w Excelu” bez „: ON”", pill.text === "Układ jak w Excelu" && pill.pressed === "true", pill);
 

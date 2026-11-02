@@ -3606,7 +3606,7 @@ thead {
 thead th {
   background: var(--surface);
   text-align: left;
-  font-size: calc(12px * var(--table-zoom) * var(--cell-font-scale, 1));
+  font-size: calc(var(--th-font-base, 12px) * var(--table-zoom) * var(--cell-font-scale, 1));
   font-weight: 600;
   padding: calc(var(--th-pad-y, 9px) * var(--table-zoom)) calc(12px * var(--table-zoom));
   border-bottom: 1px solid var(--border);
@@ -3877,10 +3877,12 @@ thead .guide-row th {
   padding-left: calc(3px * var(--table-zoom));
   padding-right: calc(3px * var(--table-zoom));
 }
+/* kolumny do 100 px (tylko Układ jak w Excelu): margines jak w Excelu (~3 px) — przy 5 px „poprzed. tyg.”
+   w 67 px kończyło się „poprzed. t…”, a w Excelu mieści się w całości */
 #dataTable td.cell-tight,
 #dataTable th.cell-tight {
-  padding-left: calc(5px * var(--table-zoom));
-  padding-right: calc(5px * var(--table-zoom));
+  padding-left: calc(3px * var(--table-zoom));
+  padding-right: calc(3px * var(--table-zoom));
 }
 /* Nagłówek i wiersze nad nim z „Zawijaj tekst” w pliku (Wymiary z Excela) — w kilku liniach jak w Excelu */
 #dataTable thead th.th-wrap,
@@ -3911,7 +3913,8 @@ thead th .sort-arrow {
 tbody td {
   padding: calc(var(--cell-pad-y, 7px) * var(--table-zoom)) calc(12px * var(--table-zoom));
   border-bottom: 1px solid var(--border-subtle);
-  font-size: calc(12.5px * var(--table-zoom) * var(--cell-font-scale, 1));
+  /* --cell-font-base: przy „Układzie jak w Excelu” rozmiar domyślnej czcionki pliku w px (table.js) */
+  font-size: calc(var(--cell-font-base, 12.5px) * var(--table-zoom) * var(--cell-font-scale, 1));
   color: var(--ink);
   white-space: nowrap;
   overflow: hidden;
@@ -8797,7 +8800,7 @@ button.fx-label:focus-visible { background: var(--accent-light); color: var(--ac
 thead tr.pre-row > td {
   padding: calc(var(--cell-pad-y, 7px) * var(--table-zoom)) calc(12px * var(--table-zoom));
   border-bottom: 1px solid var(--border-subtle);
-  font-size: calc(12.5px * var(--table-zoom) * var(--cell-font-scale, 1));
+  font-size: calc(var(--cell-font-base, 12.5px) * var(--table-zoom) * var(--cell-font-scale, 1));
   font-weight: 400;
   color: var(--ink);
   text-align: left;
@@ -9366,3 +9369,7 @@ details.anon-sec[open] > summary::before { content: "▾ "; }
 /* „Ile kolumn” pod przełącznikiem blokady kolumn — tylko przy włączonej blokadzie */
 .freeze-count-field[hidden] { display: none; }
 .freeze-count-field input { max-width: 96px; }
+
+/* Wylany tekst przechodzi przez krawędź komórki — jak w Excelu bez ramki na tej krawędzi (cell-spill.js) */
+#dataTable td.cell-spill.spill-no-r { border-right-color: transparent !important; }
+#dataTable td.cell-spill.spill-no-l { border-left-color: transparent !important; }

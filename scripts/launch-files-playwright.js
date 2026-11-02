@@ -101,6 +101,19 @@ async function run() {
   check("4. udostępniony plik otwarty (kopia, bez uchwytu), cache wyczyszczony", s4.name === "Udostępniony.xlsx" && !s4.handle && !s4.left, s4);
   check("bez błędów strony (share)", errors2.length === 0, errors2);
 
+  // 5. Chrome otworzył aplikację „do pliku”, ale pliku nie przekazał (zapamiętane „Nie zezwalaj”) —
+  // zamiast pustego ekranu bez słowa: ostrzeżenie z podpowiedzią (zgłoszenie 2026-11-02, nagranie)
+  const ctx5 = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 900 } });
+  await ctx5.addInitScript(() => {
+    localStorage.setItem("introPlayed", "true");
+    if (window.LaunchQueue) window.LaunchQueue.prototype.setConsumer = function (fn) { window.__launchConsumer = fn; };
+  });
+  const r = await ctx5.newPage();
+  await r.goto(APP_URL + "?open=file", { waitUntil: "load" });
+  const warned = await r.waitForFunction(() => /bez pliku|without the file/.test(document.getElementById("toastContainer")?.textContent || ""), null, { timeout: 8000 }).then(() => true).catch(() => false);
+  check("5. otwarcie bez pliku → ostrzeżenie zamiast pustego ekranu", warned, "brak komunikatu");
+  await ctx5.close();
+
   await browser.close();
   if (fails.length) {
     console.error(`\n${fails.length} błędów`);

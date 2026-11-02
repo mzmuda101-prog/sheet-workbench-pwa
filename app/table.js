@@ -2146,9 +2146,8 @@ function applyCellStyle(td, style) {
   if (style.userWrap) td.classList.add("cell-wrap");
   if (style.horizontal) td.style.textAlign = style.horizontal;
   if (style.vertical) td.style.verticalAlign = style.vertical;
-  // Zawijanie tekstu NIE jest brane z pliku per komórka (dawało nieoczekiwane
-  // łamanie wierszy). Steruje nim globalny przełącznik „Zawijaj tekst" w Widoku
-  // (klasa #dataTable.wrap-cells), domyślnie wyłączony.
+  // Zawijanie z pliku per komórka: tylko przy „Układzie jak w Excelu” (buildTableRow — tam wysokości
+  // wierszy też są z pliku). Poza nim: przełącznik „Zawijaj tekst we wszystkich komórkach” (#dataTable.wrap-cells).
 
   if (cellStyleShowBorders && style.hasBorder && style.border && typeof style.border === "object") {
     const t = applyEdgeBorder(td, style.border.top || style.border.Top);
@@ -2662,10 +2661,14 @@ function buildTableRow(ctx, row, rowPos) {
     }
 
     if (row.cellStyles && row.cellStyles[i]) applyCellStyle(td, row.cellStyles[i]);
-    // Scalenie przy Wymiarach z Excela: „Zawijaj tekst” z pliku działa (scalony blok to zwykle
-    // notatka/opis na kilka wierszy — w jednej linii ucinał się „…”), ramki z krawędzi scalenia.
+    // Układ jak w Excelu: „Zawijaj tekst” z pliku działa w każdej komórce (2026-11-02, decyzja Mateusza:
+    // „jeśli to zbliży do Excela — włącz”). Wysokość wiersza zostaje z pliku, nadmiar się ucina jak
+    // w Excelu. Bez układu Excela zawijanie dalej tylko z przełącznika w Widoku / paska formatu.
+    // (nie przy przewijaniu wirtualnym — jak wysokości z pliku: zawinięte wiersze rozjeżdżały mu pozycje)
+    if (useExcelLayout && row.cellStyles && row.cellStyles[i] && row.cellStyles[i].wrapText
+      && (td.classList.contains("cell-merged") || !(typeof swbVirt !== "undefined" && swbVirt.enabled && swbVirt.enabled()))) td.classList.add("cell-wrap");
+    // scalenie: ramki z krawędzi scalenia (dół z ostatniego wiersza, prawa z ostatniej kolumny)
     if (useExcelLayout && td.classList.contains("cell-merged")) {
-      if (row.cellStyles && row.cellStyles[i] && row.cellStyles[i].wrapText) td.classList.add("cell-wrap");
       const anchor = mergeLayout && mergeLayout.anchors.get(mergeKey);
       if (anchor) applyMergeEdgeBorders(td, anchor.s, anchor.e);
     }
@@ -2907,6 +2910,17 @@ function renderTable(modelOrHeaders, maybeRows) {
   const rowHeaderWidth = Math.max(42, rowHeaderDigits * 8 + 18);
   // Offset dla sticky 1. kolumny danych (blokada kolumny) = szerokość kolumny numerów.
   if (tableWrapEl) tableWrapEl.style.setProperty("--row-head-w", `${rowHeaderWidth}px`);
+  // Układ jak w Excelu: tekst w skali Excela na Macu — 1 pt = 1 px przy 100% (wyrocznia 2026-11-02:
+  // „Czwartek” 12 pt ≈ 47 px w Excelu, w apce przy 12,5 px/11 pt było 52 px). Szerokości kolumn są
+  // już w pikselach Excela, więc dopiero teraz tekst mieści się tak jak tam (bez „poprze…”, „Niedzi…”).
+  // (nie przy przewijaniu wirtualnym — jego szacunek wysokości wierszy liczy na zwykły rozmiar, virt-guard 8)
+  const virtOn = typeof swbVirt !== "undefined" && swbVirt.enabled && swbVirt.enabled(); // render idzie przed mount()
+  const excelFontPx = useExcelLayout && workbook && !virtOn ? getWorkbookDefaultFontSize(workbook) : 0;
+  [tableEl, tableWrapEl].forEach((el) => {
+    if (!el) return;
+    if (excelFontPx > 0) { el.style.setProperty("--cell-font-base", `${excelFontPx}px`); el.style.setProperty("--th-font-base", `${excelFontPx}px`); }
+    else { el.style.removeProperty("--cell-font-base"); el.style.removeProperty("--th-font-base"); }
+  });
 
   const colgroup = document.createElement("colgroup");
   const rowHeadCol = document.createElement("col");

@@ -22,11 +22,14 @@ async function swbOpenExternal(file, handle = null) {
 }
 
 function swbInitFileLaunch() {
+  const open = new URLSearchParams(location.search).get("open");
+  let gotFile = false;
   if ("launchQueue" in window && window.LaunchParams && "files" in window.LaunchParams.prototype) {
     window.launchQueue.setConsumer(async (params) => {
       // jedno okno = jeden skoroszyt; przy kilku plikach Chrome i tak otwiera okno na każdy
       const handle = (params?.files || []).find((h) => h.kind === "file");
       if (!handle) return;
+      gotFile = true;
       try {
         await swbOpenExternal(await handle.getFile(), handle);
       } catch (e) {
@@ -35,8 +38,13 @@ function swbInitFileLaunch() {
       }
     });
   }
-  const open = new URLSearchParams(location.search).get("open");
   if (open) history.replaceState(null, "", location.pathname); // odświeżenie strony nie otwiera pliku drugi raz
+  // „Otwórz za pomocą” bez pliku (zgłoszenie 2026-11-02, nagranie): Chrome pyta „Otworzyć plik w …?”;
+  // gdy zapamięta odmowę albo okno pytania zniknie, uruchamia aplikację z ?open=file, ale BEZ pliku —
+  // był pusty ekran bez słowa. Teraz po chwili mówimy, co się stało i jak to naprawić.
+  if (open === "file") {
+    setTimeout(() => { if (!gotFile && !workbook) toast(t("openExternalNoFile"), "warning"); }, 4000);
+  }
   if (open === "shared") swbOpenSharedFile();
 }
 
