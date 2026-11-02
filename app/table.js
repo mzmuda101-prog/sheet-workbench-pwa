@@ -1852,6 +1852,34 @@ function isCustomAlignment(alignment) {
   return !isDefaultHorizontal || !isDefaultVertical || wrapText;
 }
 
+// Wspólna krawędź dwóch komórek to w Excelu JEDNA linia (plik zwykle zapisuje ją w obu: dół wiersza 1
+// i górę wiersza 2). Ramki rysujemy na każdej komórce osobno, więc bez tego linia wychodziła podwójnie
+// gruba (zgłoszenie 2026-11-02, „Obieg terenów”: medium+medium pod „1 Cykl”, thick+thick między cyklami).
+// Górną/lewą krawędź pomijamy, gdy sąsiad nad/po lewej ma na niej linię co najmniej tak samo grubą.
+const BORDER_EDGE_WEIGHT = { hair: 1, dotted: 1, dashDot: 1, dashDotDot: 1, dashed: 2, thin: 2, slantDashDot: 2, mediumDashDotDot: 3, mediumDashDot: 3, mediumDashed: 3, medium: 3, double: 4, thick: 4 };
+function borderEdgeWeight(edge) {
+  const s = edge && (edge.style || edge.Style);
+  return s && s !== "none" ? (BORDER_EDGE_WEIGHT[s] || 2) : 0;
+}
+function collapseSharedEdges(style, r, c, xfStyleAt) {
+  const b = style && style.hasBorder && style.border;
+  if (!b || typeof xfStyleAt !== "function") return style;
+  const top = b.top || b.Top;
+  const left = b.left || b.Left;
+  if (!borderEdgeWeight(top) && !borderEdgeWeight(left)) return style;
+  const edgeOf = (rr, cc, side) => {
+    if (rr < 0 || cc < 0) return null;
+    const xf = xfStyleAt(XLSX.utils.encode_cell({ r: rr, c: cc }));
+    return xf && xf.border ? (xf.border[side] || xf.border[side[0].toUpperCase() + side.slice(1)]) : null;
+  };
+  let out = null;
+  const wTop = borderEdgeWeight(top);
+  if (wTop && borderEdgeWeight(edgeOf(r - 1, c, "bottom")) >= wTop) out = { ...b, top: null, Top: null };
+  const wLeft = borderEdgeWeight(left);
+  if (wLeft && borderEdgeWeight(edgeOf(r, c - 1, "right")) >= wLeft) out = { ...(out || b), left: null, Left: null };
+  return out ? { ...style, border: out, hasBorder: hasCustomBorder(out) } : style;
+}
+
 function hasCustomBorder(border) {
   if (!border || typeof border !== "object") return false;
   const edges = [
@@ -2091,7 +2119,8 @@ function applyEdgeBorder(td, edge) {
   const node = edge.color || edge.Color;
   const hex = node && !node.auto ? colorFromStyleNode(node, true) : null;
   const color = hex && !isDarkNeutralColor(hex) ? hex : "var(--ink)";
-  const width = /^(medium|thick|mediumDashed|mediumDashDot|mediumDashDotDot)$/.test(borderStyle) ? 2 : 1;
+  // Excel: cienka 1 px, średnia 2 px, gruba 3 px
+  const width = borderStyle === "thick" ? 3 : /^(medium|mediumDashed|mediumDashDot|mediumDashDotDot)$/.test(borderStyle) ? 2 : 1;
   const line = /dash|dot/i.test(borderStyle) ? (/dot/i.test(borderStyle) && !/dash/i.test(borderStyle) ? "dotted" : "dashed") : (borderStyle === "double" ? "double" : "solid");
   return `${borderStyle === "double" ? 3 : width}px ${line} ${color}`;
 }
@@ -2182,10 +2211,15 @@ function applyMergeEdgeBorders(td, s, e) {
   }
 }
 
-// Paski wierszy tabel Excela („Formatuj jako tabelę”). Wbudowane style z kolorem N (1 = tekst,
-// 2–7 = akcenty 1–6): Light1–7, Light15–21, Medium1–7 — pasek = kolor N rozjaśniony (tekst 85%,
-// akcent 80%). Wyrocznia Excela (display format, „bazy” TableStyleLight1): pierwszy wiersz danych
-// D9D9D9, drugi bez, na zmianę. Inne style (ciemne, Medium8+) — bez pasków, jak dotąd.
+// Style tabel Excela („Formatuj jako tabelę”): paski wierszy i nagłówek. Wbudowane style z kolorem N
+// (1 = tekst, 2–7 = akcenty 1–6), wg rodzin:
+//   Light 1–7 i 15–21: pasek = kolor N rozjaśniony (tekst 85%, akcent 80%), nagłówek bez wypełnienia;
+//   Light 8–14: bez pasków, nagłówek w kolorze N;
+//   Medium 1–7: pasek jak Light, nagłówek w kolorze N;
+//   Medium 15–21: pasek szary (tło −15%), nagłówek w kolorze N.
+// Nagłówek w kolorze N = biały pogrubiony tekst. Wyrocznia Excela (display format): „bazy” Light1 →
+// pierwszy wiersz danych D9D9D9, drugi bez; „Obieg terenów” Medium19 → nagłówek 0F9ED5 (akcent 4 motywu
+// pliku) z białym pogrubionym tekstem, paski D9D9D9. Inne style (ciemne, Medium 8–14) — bez zmian.
 let _tableBandCache = { key: null, list: [] };
 function tableBandList() {
   const src = typeof currentTables === "object" && currentTables ? currentTables : null;
@@ -2196,21 +2230,26 @@ function tableBandList() {
   if (src && workbook) {
     const palette = swbThemeColors(workbook);
     Object.values(src).forEach((t) => {
-      if (!t || seen.has(t) || t.sheetName !== currentSheetName || !t.rowStripes) return;
+      if (!t || seen.has(t) || t.sheetName !== currentSheetName) return;
       seen.add(t);
       const m = /^TableStyle(Light|Medium)(\d+)$/.exec(t.styleName || "");
       if (!m) return;
       const num = Number(m[2]);
-      const ok = m[1] === "Light" ? (num <= 7 || (num >= 15 && num <= 21)) : num <= 7;
-      if (!ok) return;
+      const fam = Math.floor((num - 1) / 7); // 0: 1–7, 1: 8–14, 2: 15–21
+      if (fam > 2 || (m[1] === "Medium" && fam === 1)) return;
       const n = ((num - 1) % 7) + 1;
       const base = n === 1 ? palette[1] : palette[4 + n - 2];
+      let band = null;
+      if (t.rowStripes) {
+        if (m[1] === "Medium" && fam === 2) band = applyColorTint(palette[0], -0.15);
+        else if (!(m[1] === "Light" && fam === 1)) band = applyColorTint(base, n === 1 ? 0.85 : 0.8);
+      }
+      const header = m[1] === "Medium" || fam === 1 ? base : null;
       let range;
       try { range = XLSX.utils.decode_range(t.ref); } catch { return; }
       const first = range.s.r + (t.headerRows || 0);
       const last = range.e.r - (t.totalsRows || 0);
-      if (last < first) return;
-      list.push({ r0: first, r1: last, c0: range.s.c, c1: range.e.c, color: applyColorTint(base, n === 1 ? 0.85 : 0.8) });
+      list.push({ r0: first, r1: last, c0: range.s.c, c1: range.e.c, color: band, headerRow: t.headerRows ? range.s.r : -1, header });
     });
   }
   _tableBandCache = { key, src, list };
@@ -2219,10 +2258,28 @@ function tableBandList() {
 function tableBandColorAt(rowIndex0, colAbs) {
   const list = tableBandList();
   for (const b of list) {
-    if (rowIndex0 < b.r0 || rowIndex0 > b.r1 || colAbs < b.c0 || colAbs > b.c1) continue;
+    if (!b.color || rowIndex0 < b.r0 || rowIndex0 > b.r1 || colAbs < b.c0 || colAbs > b.c1) continue;
     return (rowIndex0 - b.r0) % 2 === 0 ? b.color : null;
   }
   return null;
+}
+function tableHeaderColorAt(rowIndex0, colAbs) {
+  const list = tableBandList();
+  for (const b of list) {
+    if (b.header && rowIndex0 === b.headerRow && colAbs >= b.c0 && colAbs <= b.c1) return b.header;
+  }
+  return null;
+}
+// Nagłówek tabeli Excela w kolorze stylu (komórka bez własnego wypełnienia): tło + biały pogrubiony tekst
+function applyTableHeaderStyle(cellEl, rowIndex0, colAbs) {
+  if (!cellStyleShowFills || cellEl.classList.contains("cell-has-fill")) return;
+  const color = tableHeaderColorAt(rowIndex0, colAbs);
+  if (!color) return;
+  cellEl.classList.add("cell-has-fill", "cell-table-head");
+  cellEl.style.background = color;
+  cellEl.style.setProperty("--cell-fill", color);
+  cellEl.style.color = isLightColor(color) ? "#000000" : "#FFFFFF";
+  cellEl.style.fontWeight = "700";
 }
 
 // Wiersze pod górnym wierszem scaleń wielowierszowych (do 500 wierszy na scalenie — bez kosztu
@@ -2672,6 +2729,7 @@ function buildTableRow(ctx, row, rowPos) {
       if (anchor) applyMergeEdgeBorders(td, anchor.s, anchor.e);
     }
     // pasek wiersza tabeli Excela — tylko pod komórką bez własnego wypełnienia (formatowanie warunkowe niżej nadpisze)
+    if (model.mode === "wide") applyTableHeaderStyle(td, row.rowIndex0, currentStartCol + i);
     if (cellStyleShowFills && model.mode === "wide" && !td.classList.contains("cell-has-fill")) {
       const band = tableBandColorAt(row.rowIndex0, currentStartCol + i);
       if (band) {
@@ -2775,7 +2833,7 @@ function collectPreHeaderRows(colCount) {
       if (v !== null && v !== undefined && v !== "") anyContent = true;
       values.push(v);
       display.push(shown == null ? "" : String(shown));
-      cellStyles.push(extractCellStyle(cell, workbook, xfStyleAt(ref)));
+      cellStyles.push(collapseSharedEdges(extractCellStyle(cell, workbook, xfStyleAt(ref)), r, currentStartCol + i, xfStyleAt));
     }
     rows.push({ rowIndex0: r, values, display, cellStyles, isPreRow: true });
   }
@@ -2831,6 +2889,7 @@ function appendPreHeaderRows(model, headers, narrowCols = null) {
       const text = p.display[i] || "";
       td.textContent = text;
       if (p.cellStyles[i]) applyCellStyle(td, p.cellStyles[i]);
+      applyTableHeaderStyle(td, p.rowIndex0, currentStartCol + i);
       // „Zawijaj tekst” z pliku w wierszach nad nagłówkiem (Wymiary z Excela) — jak nagłówek z th-wrap:
       // to tytuły i dopiski, którym Excel daje wysoki wiersz (np. „Aktualizacja 1.1: …” w 4 liniach).
       if (useExcelLayout && p.cellStyles[i] && p.cellStyles[i].wrapText) td.classList.add("cell-wrap");
@@ -2987,6 +3046,7 @@ function renderTable(modelOrHeaders, maybeRows) {
     // „Zawijaj tekst” z pliku w wierszu nagłówka (Excel: „ile ogl.” w dwóch liniach) — w treści
     // komórek dalej steruje przełącznik w Widoku, ale nagłówek ma w pliku wysokość na kilka linii
     if (useExcelLayout && currentHeaderStyles[i] && currentHeaderStyles[i].wrapText) th.classList.add("th-wrap");
+    if (model.mode === "wide") applyTableHeaderStyle(th, currentHeaderRow - 1, i + currentStartCol); // nagłówek tabeli Excela
     if (narrowCols.has(i)) th.classList.add(narrowCols.get(i));
 
     if (headerMergeLayout) {
@@ -3034,8 +3094,8 @@ function renderTable(modelOrHeaders, maybeRows) {
     canReuse, reuseMap: _rowNodeCache, nextRowNodes,
   };
   // Nowy silnik tabeli (virt-rows.js): w DOM tylko okno widocznych wierszy + zapas.
-  // Sam decyduje, czy może przejąć ten render (włączony, dość wierszy, bez scaleń
-  // i zawijania); jeśli nie — rysujemy wszystko po staremu.
+  // Sam decyduje, czy może przejąć ten render (włączony, dość wierszy, bez zawijania wszystkich
+  // komórek, scalenia do 300 wierszy — liczy ich układ dla całego arkusza); jeśli nie — po staremu.
   const virtual = typeof swbVirt !== "undefined" && swbVirt.mount(rowCtx, rows, envKey);
   if (!virtual) {
     const tbodyFragment = document.createDocumentFragment();
@@ -3083,7 +3143,7 @@ function buildRows(sheet, headerRow, wb) {
     const cell = sheet[ref];
     const v = cell ? cell.v : null;
     rawHeaders.push(v ? String(v).trim() : XLSX.utils.encode_col(c));
-    headerStyles.push(wb ? extractCellStyle(cell, wb, xfStyleAt(ref)) : null);
+    headerStyles.push(wb ? collapseSharedEdges(extractCellStyle(cell, wb, xfStyleAt(ref)), headerRow - 1, c, xfStyleAt) : null);
   }
   const headers = makeHeadersUnique(rawHeaders);
   const duplicateHeaderCount = rawHeaders.length - new Set(rawHeaders).size;
@@ -3143,7 +3203,7 @@ function buildRows(sheet, headerRow, wb) {
       }
       values.push(v);
       display.push(shown);
-      cellStyles.push(wb ? extractCellStyle(cell, wb, xfStyleAt(ref)) : null);
+      cellStyles.push(wb ? collapseSharedEdges(extractCellStyle(cell, wb, xfStyleAt(ref)), r, c, xfStyleAt) : null);
       if (v !== null && v !== "") any = true;
     }
     if (!any && !mergeRows.has(r)) continue;

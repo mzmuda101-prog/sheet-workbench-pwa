@@ -201,6 +201,31 @@
     return { css: `linear-gradient(${Math.round(90 + (Number(gradient.degree) || 0))}deg, ${parts.join(", ")})`, first };
   }
 
+  // kopia z table.js (wspólna krawędź = jedna linia, jak w Excelu)
+  const BORDER_EDGE_WEIGHT = { hair: 1, dotted: 1, dashDot: 1, dashDotDot: 1, dashed: 2, thin: 2, slantDashDot: 2, mediumDashDotDot: 3, mediumDashDot: 3, mediumDashed: 3, medium: 3, double: 4, thick: 4 };
+  function borderEdgeWeight(edge) {
+    const s = edge && (edge.style || edge.Style);
+    return s && s !== "none" ? (BORDER_EDGE_WEIGHT[s] || 2) : 0;
+  }
+  function collapseSharedEdges(style, r, c, xfStyleAt) {
+    const b = style && style.hasBorder && style.border;
+    if (!b || typeof xfStyleAt !== "function") return style;
+    const top = b.top || b.Top;
+    const left = b.left || b.Left;
+    if (!borderEdgeWeight(top) && !borderEdgeWeight(left)) return style;
+    const edgeOf = (rr, cc, side) => {
+      if (rr < 0 || cc < 0) return null;
+      const xf = xfStyleAt(XLSX.utils.encode_cell({ r: rr, c: cc }));
+      return xf && xf.border ? (xf.border[side] || xf.border[side[0].toUpperCase() + side.slice(1)]) : null;
+    };
+    let out = null;
+    const wTop = borderEdgeWeight(top);
+    if (wTop && borderEdgeWeight(edgeOf(r - 1, c, "bottom")) >= wTop) out = { ...b, top: null, Top: null };
+    const wLeft = borderEdgeWeight(left);
+    if (wLeft && borderEdgeWeight(edgeOf(r, c - 1, "right")) >= wLeft) out = { ...(out || b), left: null, Left: null };
+    return out ? { ...style, border: out, hasBorder: hasCustomBorder(out) } : style;
+  }
+
   function extractCellStyle(cell, wb, xfStyle = null) {
     const cellS = cell && cell.s && typeof cell.s === "object" ? cell.s : null;
     if (!cellS && !xfStyle) return null;
@@ -418,7 +443,7 @@
       const cell = sheet[ref];
       const v = cell ? cell.v : null;
       rawHeaders.push(v ? String(v).trim() : XLSX.utils.encode_col(c));
-      headerStyles.push(wb ? extractCellStyle(cell, wb, xfStyleAt(ref)) : null);
+      headerStyles.push(wb ? collapseSharedEdges(extractCellStyle(cell, wb, xfStyleAt(ref)), headerRow - 1, c, xfStyleAt) : null);
     }
     const headers = makeHeadersUnique(rawHeaders, lang);
     const duplicateHeaderCount = rawHeaders.length - new Set(rawHeaders).size;
@@ -457,7 +482,7 @@
         }
         values.push(v);
         display.push(shown);
-        cellStyles.push(wb ? extractCellStyle(cell, wb, xfStyleAt(ref)) : null);
+        cellStyles.push(wb ? collapseSharedEdges(extractCellStyle(cell, wb, xfStyleAt(ref)), r, c, xfStyleAt) : null);
         if (v !== null && v !== "") any = true;
       }
       if (!any && !mergeRows.has(r)) continue;

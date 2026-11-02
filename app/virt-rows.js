@@ -30,6 +30,7 @@ const VIRT_MIN_ROWS = 200;       // do tylu wierszy stary render i tak jest tani
 const VIRT_OVERSCAN = 1.0;       // zapas po każdej stronie, w wysokościach okna
 const VIRT_MARGIN = 0.8;         // dorysuj, gdy do krawędzi okna zostało mniej niż tyle ekranów
 const VIRT_POOL_MAX = 600;       // odłączone wiersze trzymane do ponownego użycia
+const VIRT_MAX_MERGE_ROWS = 300; // wyższe scalenie = okno musiałoby mieścić je całe — wtedy stary render
 const VIRT_IDLE_MS = 220;        // spoczynek po przewijaniu → wyrównanie driftu
 
 const swbVirt = (() => {
@@ -74,17 +75,55 @@ const swbVirt = (() => {
     return h || 0;
   }
 
-  function hasMerges(rows, colCount, model) {
-    if (model.mode !== "wide" || !Array.isArray(currentMerges) || !currentMerges.length) return false;
+  // Układ scaleń dla WSZYSTKICH wierszy (render dostaje go tylko dla pierwszych „limit” wierszy).
+  function mergeLayoutFor(rows, colCount, model) {
+    if (model.mode !== "wide" || !Array.isArray(currentMerges) || !currentMerges.length) return null;
     const m = computeMergeLayout(rows, colCount);
-    return !!(m && (m.anchors.size || m.covered.size));
+    return m && (m.anchors.size || m.covered.size) ? m : null;
+  }
+  function tooTallMerge(layout) {
+    if (!layout) return false;
+    for (const a of layout.anchors.values()) if (a.rowspan > VIRT_MAX_MERGE_ROWS) return true;
+    return false;
   }
 
-  function canVirtualize(rows, headers, model) {
+  // Scalenia (2026-11-02): wiersze scalenia rysujemy zawsze razem — okno rozszerza się do całego
+  // scalenia (spanStart/spanEnd), więc kotwica z rowspan nigdy nie znika spod przykrytych wierszy.
+  function canVirtualize(rows, headers, model, layout) {
     return enabled()
       && rows.length > VIRT_MIN_ROWS
       && !(tableEl && tableEl.classList.contains("wrap-cells"))
-      && !hasMerges(rows, headers.length, model);
+      && !tooTallMerge(layout);
+  }
+  function mergeSpans(layout, n) {
+    if (!layout) return null;
+    let any = false;
+    const start = new Int32Array(n);
+    const end = new Int32Array(n);
+    for (let i = 0; i < n; i++) { start[i] = i; end[i] = i; }
+    for (const [key, a] of layout.anchors) {
+      if (!(a.rowspan > 1)) continue;
+      const top = parseInt(key, 10);
+      const bottom = Math.min(n - 1, top + a.rowspan - 1);
+      for (let p = top; p <= bottom; p++) {
+        if (start[p] > top) start[p] = top;
+        if (end[p] < bottom) end[p] = bottom;
+        any = true;
+      }
+    }
+    return any ? { start, end } : null;
+  }
+  // Brzegi okna nie mogą przecinać scalenia (scalenia mogą się zazębiać — powtarzamy do skutku).
+  function clampToMerges(ns, ne) {
+    const sp = st && st.spans;
+    if (!sp) return [ns, ne];
+    for (let k = 0; k < 8; k++) {
+      const s2 = sp.start[ns];
+      const e2 = sp.end[ne];
+      if (s2 === ns && e2 === ne) break;
+      ns = s2; ne = e2;
+    }
+    return [ns, ne];
   }
 
   // ── wysokości i pozycje (prefix[i] = górna krawędź wiersza i w „modelu”) ──────
@@ -179,6 +218,7 @@ const swbVirt = (() => {
   // Ustawia DOM na wiersze [ns, ne]. anchor = { i, domTop } — wiersz, który ma zostać
   // dokładnie tam, gdzie był (y względem góry <tbody>), albo null (skok).
   function place(ns, ne, anchor) {
+    [ns, ne] = clampToMerges(ns, ne);
     const oldS = st.s; const oldE = st.e;
     const added = [];
     const overlap = st.nodes.length && ns <= oldE && ne >= oldS;
@@ -393,7 +433,8 @@ const swbVirt = (() => {
   // Wołane z renderTable() po zbudowaniu nagłówka, gdy <tbody> jest puste.
   // Zwraca true, gdy przejęliśmy render wierszy.
   function mount(ctx, rows, envKey) {
-    if (!tbodyEl || !tableWrapEl || !canVirtualize(rows, ctx.headers, ctx.model)) { unmount(); return false; }
+    const layout = mergeLayoutFor(rows, ctx.headers.length, ctx.model);
+    if (!tbodyEl || !tableWrapEl || !canVirtualize(rows, ctx.headers, ctx.model, layout)) { unmount(); return false; }
     ensureListeners();
     if (envKey !== heightEnv) {
       heightCache.clear();
@@ -413,7 +454,7 @@ const swbVirt = (() => {
     }
     // Wiersze dobudowywane w trakcie przewijania: w tym samym środowisku, więc zawsze
     // wolno użyć ponownie tych, które już raz narysowaliśmy (wracają przy przewinięciu w górę).
-    const buildCtx = { ...ctx, canReuse: true, reuseMap: ctx.nextRowNodes };
+    const buildCtx = { ...ctx, mergeLayout: layout || ctx.mergeLayout, canReuse: true, reuseMap: ctx.nextRowNodes };
     st = {
       rows, n, keys, keyIndex, fixed,
       prefix: new Float64Array(n + 1),
@@ -422,6 +463,7 @@ const swbVirt = (() => {
       colCount: ctx.headers.length,
       s: 0, e: -1, nodes: [], topPx: 0, drift: 0, bodyTop: 0,
       buildCtx,
+      spans: mergeSpans(layout, n),
     };
     st.topSpacer = makeSpacer("vr-top");
     st.bottomSpacer = makeSpacer("vr-bottom");

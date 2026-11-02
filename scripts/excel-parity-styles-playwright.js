@@ -9,12 +9,14 @@
 // Runda 3 (zrzut użytkownika — scalone notatki pod grafikiem):
 //   5. Scalona notatka z „Zawijaj tekst” zawija się, ma szare tło z palety (fgColor indexed=22 — SheetJS
 //      go gubił) i ramki: górną z kotwicy, dolną z ostatniego wiersza scalenia (SheetJS nie czytał ramek).
-//   6. Tabela Excela TableStyleLight1: pierwszy wiersz danych D9D9D9, drugi bez (wyrocznia: display format).
+//   6. Tabela Excela TableStyleMedium19: pierwszy wiersz danych D9D9D9, drugi bez; nagłówek w kolorze
+//      akcentu 4 z białym pogrubionym tekstem (wyrocznia: display format, „Obieg terenów”).
+//  10. Wspólna krawędź (dół B3 i góra B4, obie medium) rysowana raz — jak w Excelu.
 //   8. Czcionka spoza systemu jak w Excelu na Macu (wyrocznia 2026-11-02): zwykła → Times, pogrubiona → Helvetica.
 //   9. Tekst w skali Excela na Macu: 1 pt = 1 px (Calibri 11 → 11 px), „Zawijaj tekst” w zwykłej komórce działa.
 //   7. Arkusz zapisany w 150% otwiera się w 150% (szerokości kolumn rosną razem z nim), powrót = 100%.
 //
-// Fixture generuje openpyxl (gradient jest pierwszym wypełnieniem w pliku).
+// Fixture generuje openpyxl: .venv/bin/python scripts/fixtures/make-excel-parity-styles.py
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/), np. `npm run serve:test`.
 
 const { chromium, webkit } = require("playwright");
@@ -93,10 +95,17 @@ async function run() {
   await page.waitForTimeout(700);
   const tab = await page.evaluate(() => {
     const bg = (r) => getComputedStyle(document.querySelector(`#dataTable tbody tr[data-row-index="${r}"] td[data-col-index="1"]`)).backgroundColor;
-    return { zoom: zoomLevelEl.value, b2: bg(1), b3: bg(2), b4: bg(3), wB: document.querySelector('#dataTable thead tr.header-row th[data-col-index="1"]').getBoundingClientRect().width };
+    const cellB = (r) => document.querySelector(`#dataTable tbody tr[data-row-index="${r}"] td[data-col-index="1"]`);
+    const th = document.querySelector('#dataTable thead tr.header-row th[data-col-index="1"]');
+    return { head: th && [getComputedStyle(th).backgroundColor, getComputedStyle(th).color, getComputedStyle(th).fontWeight], accent4: swbThemeColors(workbook)[7],
+      b3bottom: getComputedStyle(cellB(2)).borderBottomWidth, b4top: getComputedStyle(cellB(3)).borderTopWidth,
+      zoom: zoomLevelEl.value, b2: bg(1), b3: bg(2), b4: bg(3), wB: document.querySelector('#dataTable thead tr.header-row th[data-col-index="1"]').getBoundingClientRect().width };
   });
   ok("tabela: pasek w 1. i 3. wierszu danych (D9D9D9)", /217, 217, 217/.test(tab.b2) && /217, 217, 217/.test(tab.b4), tab);
   ok("tabela: 2. wiersz danych bez paska", !/217, 217, 217/.test(tab.b3), tab);
+  const hex = (rgb) => "#" + (rgb.match(/\d+/g) || []).slice(0, 3).map((v) => (+v).toString(16).padStart(2, "0")).join("").toUpperCase();
+  ok("tabela: nagłówek w kolorze akcentu 4, biały pogrubiony", tab.head && hex(tab.head[0]) === String(tab.accent4).toUpperCase() && /255, 255, 255/.test(tab.head[1]) && tab.head[2] === "700", tab);
+  ok("wspólna krawędź medium narysowana raz", tab.b3bottom === "2px" && tab.b4top === "0px", tab);
   ok("arkusz w 150% z pliku", tab.zoom === "1.5", tab.zoom);
   ok("szerokość kolumny rośnie z zoomem (20 znaków × 1,5)", tab.wB > 170, tab.wB);
   await page.evaluate(() => { sheetSelect.value = "Style"; loadBtn.click(); });
