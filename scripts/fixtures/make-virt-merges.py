@@ -1,7 +1,8 @@
 """Generuje scripts/fixtures/virt-merges.xlsx (test virt-merges-playwright.js).
 
-400 wierszy danych (nowy silnik przejmuje od 200) ze scaleniami jak w grafikach:
+Arkusz „Grafik”: 400 wierszy danych (nowy silnik przejmuje od 200) ze scaleniami jak w grafikach:
 pionowe (2–4 wiersze) co 10 wierszy w kolumnie B, poziome (C:D) co 7 wierszy, blok 3×3 co 37 wierszy.
+Arkusz „Opisy”: 400 wierszy z opisami różnej długości w wąskiej kolumnie (zawijanie → różne wysokości).
 Uruchom: .venv/bin/python scripts/fixtures/make-virt-merges.py
 """
 import os
@@ -39,5 +40,12 @@ for r in range(5, 402, 7):  # poziome C:D
     merge(f"C{r}:D{r}", r, r, 3, 4, "Poziomo %d" % r)
 for r in range(20, 400, 37):  # blok 3×3 E:G… (E:F + 3 wiersze)
     merge(f"E{r}:F{r + 2}", r, r + 2, 5, 6, "Blok %d" % r)
+o = wb.create_sheet("Opisy")
+o.append(["Nr", "Opis", "Kwota"])
+words = "zebranie porządkowi dyżur sala brat otwierający nagłośnienie mikrofony scena grupa".split()
+for i in range(1, 401):
+    n = 2 + (i * 7) % 23  # 2–24 słów → 1–6 linii po zawinięciu
+    o.append([i, " ".join(words[(i + k) % len(words)] for k in range(n)), i * 3])
+o.column_dimensions["B"].width = 22
 wb.save(OUT)
 print("zapisano", OUT)

@@ -353,8 +353,8 @@ if (wrapCellsEl) {
   wrapCellsEl.addEventListener("change", () => {
     applyWrapCells();
     saveCellStylePreferences();
-    // Nowy silnik nie obsługuje (jeszcze) zmiennych wysokości z zawijania — przełączenie
-    // zmienia, który silnik rysuje tabelę, więc trzeba ją przerysować.
+    // Nowy silnik mierzy wysokości zawiniętych wierszy, ale ich pamięć zależy od zawijania
+    // (klucz środowiska w computeRenderEnvKey) — trzeba przerysować, żeby ją odświeżyć.
     if (typeof swbVirt !== "undefined" && swbVirt.enabled() && currentHeaders.length) renderActiveTable();
   });
 }

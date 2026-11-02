@@ -92,8 +92,7 @@ const swbVirt = (() => {
   function canVirtualize(rows, headers, model, layout) {
     return enabled()
       && rows.length > VIRT_MIN_ROWS
-      && !(tableEl && tableEl.classList.contains("wrap-cells"))
-      && !tooTallMerge(layout);
+      && !tooTallMerge(layout); // zawijanie wszystkich komórek też (2026-11-02): wysokości są mierzone
   }
   function mergeSpans(layout, n) {
     if (!layout) return null;
@@ -339,7 +338,27 @@ const swbVirt = (() => {
     const a = indexAt(Math.max(0, modelTop));
     const anchor = (a >= st.s && a <= st.e) ? { i: a, domTop: st.topPx + (st.prefix[a] - st.prefix[st.s]) } : null;
     place(ns, ne, anchor);
+    fillViewport();
     afterWindowChange();
+  }
+
+  // Po pomiarze dorysowanych wierszy model się zmienia (np. przy zawijaniu wiersze są wyższe albo niższe
+  // niż szacunek) — okno mogło przestać pokrywać ekran. Dopełniamy od razu, zamiast czekać na kolejne
+  // zdarzenie scroll (inaczej przy dole zostawała pusta siatka: virt-guard 8 z zawijaniem).
+  function fillViewport() {
+    for (let k = 0; k < 4; k++) {
+      const { top, clientH } = viewport();
+      const covTop = st.topPx;
+      const covBottom = st.topPx + (st.prefix[st.e + 1] - st.prefix[st.s]);
+      const holeBelow = st.e < st.n - 1 && top + clientH > covBottom;
+      const holeAbove = st.s > 0 && top < covTop;
+      if (!holeBelow && !holeAbove) return;
+      const modelTop = top - st.drift;
+      const [ns, ne] = desiredRange(modelTop, clientH);
+      const ai = indexAt(Math.max(0, modelTop));
+      const anchor = (ai >= st.s && ai <= st.e) ? { i: ai, domTop: st.topPx + (st.prefix[ai] - st.prefix[st.s]) } : null;
+      place(Math.min(ns, holeAbove ? ns : st.s), Math.max(ne, holeBelow ? ne : st.e), anchor);
+    }
   }
 
   // Nowe wiersze w oknie → te same stany co przy pełnym renderze (fokus, zakres).

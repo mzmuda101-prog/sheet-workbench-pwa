@@ -2539,6 +2539,10 @@ function computeRenderEnvKey(model, headers, useExcelLayout, limit, hasCfMap) {
     currentStartCol,
     tableViewMode,
     typeof currentHeaderRow === "number" ? currentHeaderRow : 0,
+    // wysokości wierszy zależą też od zawijania wszystkich komórek i powiększenia — nowy silnik
+    // trzyma pamięć zmierzonych wysokości per ten klucz (virt-rows heightEnv)
+    tableEl && tableEl.classList.contains("wrap-cells") ? 1 : 0,
+    zoomLevelEl ? zoomLevelEl.value : "1",
   ].join("\u001f");
 }
 
@@ -2971,11 +2975,8 @@ function renderTable(modelOrHeaders, maybeRows) {
   // Układ jak w Excelu: tekst w skali Excela na Macu — 1 pt = 1 px przy 100% (wyrocznia 2026-11-02:
   // „Czwartek” 12 pt ≈ 47 px w Excelu, w apce przy 12,5 px/11 pt było 52 px). Szerokości kolumn są
   // już w pikselach Excela, więc dopiero teraz tekst mieści się tak jak tam (bez „poprze…”, „Niedzi…”).
-  // (nie przy przewijaniu wirtualnym — jego szacunek wysokości wierszy liczy na zwykły rozmiar, virt-guard 8)
-  // Nowy silnik: skala Excela też (wysokości mierzy po narysowaniu); wyjątek — zawijanie wszystkich
-  // komórek przy włączonym silniku (przekazanie renderu staremu silnikowi, virt-guard 8)
-  const virtWrapHandoff = typeof swbVirt !== "undefined" && swbVirt.enabled && swbVirt.enabled() && tableEl.classList.contains("wrap-cells");
-  const excelFontPx = useExcelLayout && workbook && !virtWrapHandoff ? getWorkbookDefaultFontSize(workbook) : 0;
+  // Oba silniki (nowy mierzy wysokości wierszy po narysowaniu).
+  const excelFontPx = useExcelLayout && workbook ? getWorkbookDefaultFontSize(workbook) : 0;
   [tableEl, tableWrapEl].forEach((el) => {
     if (!el) return;
     if (excelFontPx > 0) { el.style.setProperty("--cell-font-base", `${excelFontPx}px`); el.style.setProperty("--th-font-base", `${excelFontPx}px`); }
