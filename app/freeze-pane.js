@@ -53,7 +53,9 @@
     && tbodyEl.rows.length > 0
     // Nowy silnik tabeli dorysowuje wiersze W TRAKCIE przewijania — szyba (kopia
     // kolumn z chwili startu) by się rozjeżdżała. Tam i tak w DOM jest ~kilkadziesiąt
-    // wierszy zamiast setek, więc zwykłe sticky wystarcza.
+    // wierszy zamiast setek, więc zwykłe sticky wystarcza. Zmierzone 2026-11-02 (telefon,
+    // CPU ×6, 3000 w.): w bok nowy silnik + sticky 149 ms vs stary + szyba 271 ms; w pionie
+    // blokada dokłada ~10–20% do kosztu dorysowywania. Poprawność: virt-frozen-playwright.js.
     && !tbodyEl.classList.contains("is-virtual")
     && !tbodyEl.querySelector("input.cell-editor, td[colspan], td[rowspan]");
 
