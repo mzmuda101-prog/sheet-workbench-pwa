@@ -22,7 +22,7 @@
 // - Wypełniacze mają w tle linie siatki: przy bardzo szybkim machnięciu, zanim
 //   dorysujemy wiersze, widać pustą siatkę (jak w Excelu), a nie białą dziurę.
 //
-// Przełącznik: Widok → „Nowy silnik tabeli (beta)” (zapamiętany na urządzeniu).
+// Przełącznik: Widok → „Nowy silnik tabeli” (domyślnie włączony, zapamiętany na urządzeniu).
 // `?virt=1` / `?virt=off` w adresie wymusza na tę sesję (testy, A/B).
 
 const VIRT_PREF_KEY = "swb-virt-rows-v1";
@@ -32,6 +32,13 @@ const VIRT_MARGIN = 0.8;         // dorysuj, gdy do krawędzi okna zostało mnie
 const VIRT_POOL_MAX = 600;       // odłączone wiersze trzymane do ponownego użycia
 const VIRT_MAX_MERGE_ROWS = 300; // wyższe scalenie = okno musiałoby mieścić je całe — wtedy stary render
 const VIRT_IDLE_MS = 220;        // spoczynek po przewijaniu → wyrównanie driftu
+// Zapas wg prędkości (2026-11-02, nagranie z szybkiego Maca: przy szybkim kółku/pasku tabela bywała
+// chwilowo pusta — przeglądarka przesuwa obraz, zanim skrypt dorysuje wiersze, a stały zapas 1 ekranu
+// był za mały na skoki 120 Hz). Z przodu: tyle, ile przejedzie się w VIRT_LOOKAHEAD_MS, do
+// VIRT_MAX_AHEAD ekranów; z tyłu zostaje VIRT_BEHIND. Wolne przewijanie = jak dotąd (1 ekran).
+const VIRT_LOOKAHEAD_MS = 250;
+const VIRT_MAX_AHEAD = 4;
+const VIRT_BEHIND = 0.6;
 
 const swbVirt = (() => {
   const urlForced = (() => {
@@ -57,7 +64,10 @@ const swbVirt = (() => {
   let idleTimer = 0;
   let lastUserInputAt = 0; // kółko / klawisz (zdarzenie scroll tuż po nim)
   let pointerHeld = false;  // przeciąganie paska przewijania trwa, póki przycisk wciśnięty
-  let hitBottom = false;   // przewijanie dotarło do samego dołu od ostatniego spoczynku (settle)
+  let hitBottom = false;
+  let velocity = 0;        // px/ms, + = w dół (onScroll)
+  let lastScrollTop = 0;
+  const stats = { checks: 0, misses: 0 };   // przewijanie dotarło do samego dołu od ostatniego spoczynku (settle)
   // W ruchu (palec na ekranie albo rozpęd po jego zdjęciu) NIE piszemy scrollTop —
   // na iOS każdy zapis zatrzymuje rozpęd. Rozpęd = zdarzenia scroll wciąż napływają.
   const inMotion = () => touchActive || performance.now() - lastScrollAt < VIRT_IDLE_MS;
@@ -313,9 +323,22 @@ const swbVirt = (() => {
     return { top: scrollTop - st.bodyTop, clientH };
   }
 
+  // Zapas przed i za oknem w ekranach — wg prędkości przewijania (velocity: px/ms, + = w dół).
+  function overscan(clientH) {
+    const fast = Math.abs(velocity) * VIRT_LOOKAHEAD_MS / clientH; // ile ekranów przejedzie się zaraz
+    // tylko przewijanie przez użytkownika — programowe skoki (panel analiz, przewinięcie do komórki)
+    // liczą pozycję celu z modelu i duży zapas z przodu je rozjeżdżał (virt-guard 7–9)
+    const byUser = pointerHeld || touchActive || performance.now() - lastUserInputAt < 500;
+    if (!byUser || fast < 0.5 || performance.now() - lastScrollAt > 150) return { up: VIRT_OVERSCAN, down: VIRT_OVERSCAN };
+    // słabsze urządzenia: mniejszy zapas (więcej wierszy naraz = dłuższa klatka)
+    const cap = typeof IS_LOW_POWER !== "undefined" && IS_LOW_POWER ? 2.5 : VIRT_MAX_AHEAD;
+    const ahead = Math.min(cap, Math.max(VIRT_OVERSCAN, 1 + fast));
+    return velocity > 0 ? { up: VIRT_BEHIND, down: ahead } : { up: ahead, down: VIRT_BEHIND };
+  }
   function desiredRange(modelTop, clientH) {
-    const ns = indexAt(modelTop - clientH * VIRT_OVERSCAN);
-    let ne = indexAt(modelTop + clientH * (1 + VIRT_OVERSCAN));
+    const o = overscan(clientH);
+    const ns = indexAt(modelTop - clientH * o.up);
+    let ne = indexAt(modelTop + clientH * (1 + o.down));
     return [ns, Math.min(st.n - 1, ne)];
   }
 
@@ -331,9 +354,13 @@ const swbVirt = (() => {
     const { top: domTop, clientH } = viewport();
     const covTop = st.topPx;
     const covBottom = st.topPx + (st.prefix[st.e + 1] - st.prefix[st.s]);
-    const margin = clientH * VIRT_MARGIN;
-    const needTop = st.s > 0 && domTop - margin < covTop;
-    const needBottom = st.e < st.n - 1 && domTop + clientH + margin > covBottom;
+    // licznik dla testów: ekran wyjechał poza narysowane wiersze (to widać jako chwilową pustkę)
+    stats.checks++;
+    if ((st.s > 0 && domTop < covTop) || (st.e < st.n - 1 && domTop + clientH > covBottom)) stats.misses++;
+    // przy szybkim ruchu dorysowujemy wcześniej — margines rośnie razem z zapasem z przodu
+    const o = overscan(clientH);
+    const needTop = st.s > 0 && domTop - clientH * Math.max(VIRT_MARGIN, o.up * 0.8) < covTop;
+    const needBottom = st.e < st.n - 1 && domTop + clientH + clientH * Math.max(VIRT_MARGIN, o.down * 0.8) > covBottom;
     if (!force && !needTop && !needBottom) return;
 
     const modelTop = domTop - st.drift;
@@ -410,7 +437,14 @@ const swbVirt = (() => {
 
   function onScroll() {
     if (!st) return;
-    lastScrollAt = performance.now();
+    // prędkość (wygładzona): ile px na ms i w którą stronę
+    const now = performance.now();
+    const top = tableWrapEl.scrollTop;
+    const dt = now - lastScrollAt;
+    if (dt > 0 && dt < 200) velocity = velocity * 0.5 + ((top - lastScrollTop) / dt) * 0.5;
+    else velocity = 0;
+    lastScrollTop = top;
+    lastScrollAt = now;
     // dół sprawdzany PRZED dorysowaniem (po nim wysokość treści się zmienia). Flaga trzyma się do
     // spoczynku (settle): dorysowanie samo przesuwa scrollTop (kotwica) i kolejne zdarzenie scroll
     // nie jest już „przy dole”, choć użytkownik nic nie zrobił.
@@ -557,7 +591,7 @@ const swbVirt = (() => {
   function renderedRange() { return st ? { s: st.s, e: st.e, n: st.n, drift: st.drift } : null; }
 
   return {
-    enabled, setEnabled, isForcedByUrl, isActive, mount, unmount, update,
+    enabled, setEnabled, isForcedByUrl, isActive, mount, unmount, update, stats,
     ensureRowRendered, ensureRowByIndex0, hasKey, indexOfKey, renderedRange,
   };
 })();
