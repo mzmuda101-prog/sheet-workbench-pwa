@@ -1645,9 +1645,8 @@ function excelFileRowHeight(row) {
   if (own) return Math.round(own * zoom);
   const pt = typeof currentSheetDefaultRowPt === "number" ? currentSheetDefaultRowPt : 0;
   if (!(pt > 0)) return 0;
-  // Przewijanie wirtualne (bardzo duże arkusze) liczy pozycje z wysokości wierszy — narzucona
-  // domyślna rozjeżdżała mu okno (virt-guard &virt=1). Tam zostają naturalne wysokości.
-  if (typeof swbVirt !== "undefined" && swbVirt.isActive && swbVirt.isActive()) return 0;
+  // Nowy silnik (przewijanie wirtualne) też dostaje tę wysokość (2026-11-02): traktuje ją jak szacunek
+  // i mierzy narysowane wiersze (virt-rows fixedHeightOf bierze tylko WŁASNE wysokości z pliku).
   if (Array.isArray(row.display) && row.display.some((d) => typeof d === "string" && d.includes("\n"))) return 0;
   return Math.max(18, Math.round(((pt * 96) / 72) * zoom));
 }
@@ -2666,7 +2665,7 @@ function buildTableRow(ctx, row, rowPos) {
     // w Excelu. Bez układu Excela zawijanie dalej tylko z przełącznika w Widoku / paska formatu.
     // (nie przy przewijaniu wirtualnym — jak wysokości z pliku: zawinięte wiersze rozjeżdżały mu pozycje)
     if (useExcelLayout && row.cellStyles && row.cellStyles[i] && row.cellStyles[i].wrapText
-      && (td.classList.contains("cell-merged") || !(typeof swbVirt !== "undefined" && swbVirt.enabled && swbVirt.enabled()))) td.classList.add("cell-wrap");
+      ) td.classList.add("cell-wrap");
     // scalenie: ramki z krawędzi scalenia (dół z ostatniego wiersza, prawa z ostatniej kolumny)
     if (useExcelLayout && td.classList.contains("cell-merged")) {
       const anchor = mergeLayout && mergeLayout.anchors.get(mergeKey);
@@ -2914,8 +2913,10 @@ function renderTable(modelOrHeaders, maybeRows) {
   // „Czwartek” 12 pt ≈ 47 px w Excelu, w apce przy 12,5 px/11 pt było 52 px). Szerokości kolumn są
   // już w pikselach Excela, więc dopiero teraz tekst mieści się tak jak tam (bez „poprze…”, „Niedzi…”).
   // (nie przy przewijaniu wirtualnym — jego szacunek wysokości wierszy liczy na zwykły rozmiar, virt-guard 8)
-  const virtOn = typeof swbVirt !== "undefined" && swbVirt.enabled && swbVirt.enabled(); // render idzie przed mount()
-  const excelFontPx = useExcelLayout && workbook && !virtOn ? getWorkbookDefaultFontSize(workbook) : 0;
+  // Nowy silnik: skala Excela też (wysokości mierzy po narysowaniu); wyjątek — zawijanie wszystkich
+  // komórek przy włączonym silniku (przekazanie renderu staremu silnikowi, virt-guard 8)
+  const virtWrapHandoff = typeof swbVirt !== "undefined" && swbVirt.enabled && swbVirt.enabled() && tableEl.classList.contains("wrap-cells");
+  const excelFontPx = useExcelLayout && workbook && !virtWrapHandoff ? getWorkbookDefaultFontSize(workbook) : 0;
   [tableEl, tableWrapEl].forEach((el) => {
     if (!el) return;
     if (excelFontPx > 0) { el.style.setProperty("--cell-font-base", `${excelFontPx}px`); el.style.setProperty("--th-font-base", `${excelFontPx}px`); }

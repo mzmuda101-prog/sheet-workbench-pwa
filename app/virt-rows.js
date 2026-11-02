@@ -51,6 +51,9 @@ const swbVirt = (() => {
   let touchActive = false;
   let lastScrollAt = 0;
   let idleTimer = 0;
+  let lastUserInputAt = 0; // kółko / klawisz (zdarzenie scroll tuż po nim)
+  let pointerHeld = false;  // przeciąganie paska przewijania trwa, póki przycisk wciśnięty
+  let hitBottom = false;   // przewijanie dotarło do samego dołu od ostatniego spoczynku (settle)
   // W ruchu (palec na ekranie albo rozpęd po jego zdjęciu) NIE piszemy scrollTop —
   // na iOS każdy zapis zatrzymuje rozpęd. Rozpęd = zdarzenia scroll wciąż napływają.
   const inMotion = () => touchActive || performance.now() - lastScrollAt < VIRT_IDLE_MS;
@@ -306,18 +309,47 @@ const swbVirt = (() => {
     if (typeof syncRangeHighlightInDom === "function") syncRangeHighlightInDom();
   }
 
-  // W spoczynku zerujemy drift: wypełniacz i scrollTop w tej samej klatce = bez ruchu na ekranie.
+  // Przewinięcie na sam dół (pasek przewijania, End, „machnięcie”), gdy wysokości dalszych wierszy
+  // są jeszcze tylko szacunkiem: model kończył się wcześniej niż prawdziwe wiersze i ostatnie ~60 wierszy
+  // dochodziło dopiero przy kolejnych próbach (RODO 563 w., 2026-11-02: dół → wiersz 504 zamiast 564).
+  // W spoczynku po dotarciu do dołu: dorysuj koniec, zmierz, wyzeruj drift i dociągnij widok do końca.
   function settle() {
-    if (!st || inMotion() || Math.abs(st.drift) < 0.5) return;
-    const d = st.drift;
-    setSpacer("top", st.topPx - d);
-    st.drift = st.topPx - st.prefix[st.s];
-    tableWrapEl.scrollTop -= d;
+    if (!st || inMotion()) return;
+    // …chyba że użytkownik zdążył odjechać w górę dalej niż o dwa ekrany (przesunięcia kotwicy są mniejsze)
+    const wantBottom = hitBottom
+      && tableWrapEl.scrollTop + tableWrapEl.clientHeight >= tableWrapEl.scrollHeight - 2 * tableWrapEl.clientHeight;
+    hitBottom = false;
+    if (wantBottom) {
+      const { clientH } = viewport();
+      for (let k = 0; k < 4 && st.e < st.n - 1; k++) {
+        const [ns] = desiredRange(st.prefix[st.n] - clientH, clientH);
+        place(ns, st.n - 1, null);
+      }
+    }
+    // W spoczynku zerujemy drift: wypełniacz i scrollTop w tej samej klatce = bez ruchu na ekranie.
+    if (Math.abs(st.drift) >= 0.5) {
+      const d = st.drift;
+      setSpacer("top", st.topPx - d);
+      st.drift = st.topPx - st.prefix[st.s];
+      tableWrapEl.scrollTop -= d;
+    }
+    if (wantBottom) {
+      const max = tableWrapEl.scrollHeight - tableWrapEl.clientHeight;
+      if (tableWrapEl.scrollTop < max - 1) tableWrapEl.scrollTop = max;
+      afterWindowChange();
+    }
   }
 
   function onScroll() {
     if (!st) return;
     lastScrollAt = performance.now();
+    // dół sprawdzany PRZED dorysowaniem (po nim wysokość treści się zmienia). Flaga trzyma się do
+    // spoczynku (settle): dorysowanie samo przesuwa scrollTop (kotwica) i kolejne zdarzenie scroll
+    // nie jest już „przy dole”, choć użytkownik nic nie zrobił.
+    // Tylko przewijanie przez użytkownika (kółko, pasek, klawisze, dotyk) — programowy skok do
+    // wiersza blisko końca (panel analiz, virt-guard 7) nie może zostać „dociągnięty” do dołu.
+    if ((pointerHeld || touchActive || performance.now() - lastUserInputAt < 500)
+      && tableWrapEl.scrollTop + tableWrapEl.clientHeight >= tableWrapEl.scrollHeight - 2) hitBottom = true;
     update(false);
     clearTimeout(idleTimer);
     idleTimer = setTimeout(settle, VIRT_IDLE_MS);
@@ -329,6 +361,13 @@ const swbVirt = (() => {
     listenersOn = true;
     tableWrapEl.addEventListener("scroll", onScroll, { passive: true });
     tableWrapEl.addEventListener("touchstart", () => { touchActive = true; }, { passive: true });
+    const userInput = () => { lastUserInputAt = performance.now(); };
+    tableWrapEl.addEventListener("wheel", userInput, { passive: true });
+    document.addEventListener("keydown", userInput, { passive: true }); // End, PageDown, Ctrl+↓
+    tableWrapEl.addEventListener("pointerdown", () => { pointerHeld = true; }, { passive: true }); // pasek przewijania
+    const release = () => { if (pointerHeld) { pointerHeld = false; clearTimeout(idleTimer); idleTimer = setTimeout(settle, VIRT_IDLE_MS); } };
+    window.addEventListener("pointerup", release, { passive: true });
+    window.addEventListener("pointercancel", release, { passive: true });
     const end = () => { touchActive = false; clearTimeout(idleTimer); idleTimer = setTimeout(settle, VIRT_IDLE_MS); };
     tableWrapEl.addEventListener("touchend", end, { passive: true });
     tableWrapEl.addEventListener("touchcancel", end, { passive: true });
