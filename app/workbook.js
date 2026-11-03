@@ -211,9 +211,15 @@ function setExcelLayoutEnabled(enabled) {
   excelLayoutToggleEl.textContent = next ? t("excelViewOn") : t("excelView");
 }
 
-function setEmptyState(title, subtitle) {
+// keys = [klucz tytułu, klucz podpisu] — po zmianie języka napis tłumaczy się sam (language.js);
+// bez kluczy = ekran startowy. inFile: plik otwarty (pusty arkusz / brak wyników) → bez przycisków
+// „Wybierz plik” / „Wypróbuj”, które dotyczą ekranu startowego.
+let emptyStateKeys = null;
+function setEmptyState(title, subtitle, keys = null) {
   emptyTitleEl.textContent = title;
   emptySubEl.textContent = subtitle;
+  emptyStateKeys = keys;
+  emptyStateEl.classList.toggle("in-file", !!keys);
   emptyStateEl.classList.remove("hidden");
   tableWrapEl.classList.add("hidden");
 }

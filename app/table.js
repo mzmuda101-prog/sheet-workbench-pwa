@@ -871,6 +871,7 @@ function swbMoveBlock(s, dr, dc) {
   // 2. formuły w tym arkuszu, które wskazują na blok (poza samym blokiem) — przepinamy po zapisie
   const deps = [];
   let otherSheets = 0;
+  const inDest = (r, c) => r >= s.r1 + dr && r <= s.r2 + dr && c >= s.c1 + dc && c <= s.c2 + dc;
   for (const name of workbook.SheetNames || []) {
     const sh = workbook.Sheets[name];
     if (!sh) continue;
@@ -878,6 +879,9 @@ function swbMoveBlock(s, dr, dc) {
       if (ref.charCodeAt(0) === 33 || !sh[ref] || !sh[ref].f) continue;
       const { r, c } = XLSX.utils.decode_cell(ref);
       if (name === currentSheetName && r >= s.r1 && r <= s.r2 && c >= box.c1 && c <= box.c2) continue;
+      // formuła w miejscu docelowym zostaje przykryta przeniesionym blokiem (jak w Excelu) — dawniej
+      // przepięta wracała na wierzch: wartość ginęła, a komórka dostawała odwołanie cykliczne
+      if (name === currentSheetName && inDest(r, c - currentStartCol)) continue;
       let moved = null;
       try {
         const res = FE.moveRefs(FE.parse(sh[ref].f, { lang: "en" }), box, dr, dc, (n) => (n == null ? name === currentSheetName : n === currentSheetName));
@@ -888,7 +892,6 @@ function swbMoveBlock(s, dr, dc) {
       deps.push({ r, c: c - currentStartCol, text: moved });
     }
   }
-  const inDest = (r, c) => r >= s.r1 + dr && r <= s.r2 + dr && c >= s.c1 + dc && c <= s.c2 + dc;
   // 3. źródło: pusto i bez formatu (poza częścią, którą zaraz przykryje cel)
   for (const sn of snaps) {
     if (inDest(sn.r, sn.c)) continue;
@@ -2935,17 +2938,31 @@ function renderTable(modelOrHeaders, maybeRows) {
   animateMatchPulseNextRender = false;
 
   updateSortControls();
+  // Pusty widok (arkusz bez danych / filtr bez trafień): zdejmij stary render — dawniej zostawał
+  // ukryty <tbody> i zamontowany nowy silnik ze starymi kluczami (strzałki, skoki z analiz
+  // i ResizeObserver dalej przewijały i dorysowywały wiersze poprzedniego widoku).
+  const dropStaleBody = () => {
+    if (typeof flushCellEditor === "function") flushCellEditor();
+    if (typeof swbVirt !== "undefined") swbVirt.unmount();
+    if (tbodyEl) tbodyEl.replaceChildren();
+  };
   if (!headers.length) {
+    dropStaleBody();
     setStatus(t("tableNoData"));
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
-    setEmptyState(DEFAULT_EMPTY_TITLE, defaultEmptySub());
+    // plik otwarty, a arkusz bez nagłówków = pusty arkusz, nie ekran startowy „Wczytaj plik”
+    if (typeof workbook !== "undefined" && workbook) setEmptyState(t("tableSheetEmpty"), t("tableSheetEmptyHint"), ["tableSheetEmpty", "tableSheetEmptyHint"]);
+    else setEmptyState(DEFAULT_EMPTY_TITLE, defaultEmptySub());
     updateCellStats();
     return;
   }
   if (!rows.length) {
+    dropStaleBody();
     setStatus(t("statusTableRowsEmpty"));
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
-    setEmptyState(t("tableNoResults"), t("tableNoResultsHint"));
+    // arkusz bez wierszy danych ≠ filtr bez trafień (dawniej „Zmień filtry” także w pustym arkuszu)
+    const keys = typeof baseRows !== "undefined" && !baseRows.length ? ["tableSheetEmpty", "tableSheetEmptyHint"] : ["tableNoResults", "tableNoResultsHint"];
+    setEmptyState(t(keys[0]), t(keys[1]), keys);
     updateCellStats();
     return;
   }

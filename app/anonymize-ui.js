@@ -101,6 +101,7 @@ const swbAnon = (() => {
       sharedStrings: "teksty komórek pliku", inSheet: "arkusz „{s}”",
       toastInPlace: "Zanonimizowano {n} komórek. Zapisz plik, żeby zmiany trafiły na dysk.",
       toastLeakOnSave: "Zapisano, ale oryginalne dane zostały jeszcze w {n} miejscach pliku (poza zakresem anonimizacji).",
+      toastCleanFailed: "Zapisano BEZ czyszczenia śladów anonimizacji (notatki, wykresy, tabele przestawne) — szczegóły w Logu. Zapisz jeszcze raz albo użyj „Zapisz kopię”.",
       fileSuffix: " — zanonimizowany",
       conf_high: "pewne", conf_medium: "prawdopodobne",
       sheetsN: "{n} ark.",
@@ -198,6 +199,7 @@ const swbAnon = (() => {
       sharedStrings: "file cell texts", inSheet: "sheet “{s}”",
       toastInPlace: "Anonymized {n} cells. Save the file to write the changes to disk.",
       toastLeakOnSave: "Saved, but original data is still in {n} places of the file (outside the anonymized scope).",
+      toastCleanFailed: "Saved WITHOUT cleaning anonymization traces (notes, charts, pivot tables) — see the Log. Save again or use “Save copy”.",
       fileSuffix: " — anonymized",
       conf_high: "certain", conf_medium: "likely",
       sheetsN: "{n} sheets",
@@ -597,6 +599,7 @@ const swbAnon = (() => {
       return out.bytes;
     } catch (err) {
       log(`Anonimizacja: czyszczenie śladów przy zapisie nie powiodło się (${err && err.message})`, "warning");
+      setTimeout(() => toast(tx("toastCleanFailed"), "error"), 400);
       return bytes;
     }
   }

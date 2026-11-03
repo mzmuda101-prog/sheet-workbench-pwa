@@ -3461,6 +3461,7 @@ details.panel[open] > summary {
 .draft-actions .btn { flex: none; }
 @media (pointer: coarse) { .draft-actions .btn { min-height: 42px; } }
 .draft-note { font-size: 11.5px; color: var(--muted); margin: 0; text-align: center; }
+.empty-state.in-file .empty-actions { display: none; }
 .empty-actions {
   display: flex;
   flex-wrap: wrap;

@@ -770,6 +770,8 @@ const I18N = {
     tableNoData: "Brak danych",
     tableNoResults: "Brak wyników",
     tableNoResultsHint: "Zmień filtry albo wybierz inny arkusz.",
+    tableSheetEmpty: "Arkusz bez danych",
+    tableSheetEmptyHint: "W tym arkuszu nie ma wierszy z danymi. Wybierz inny arkusz.",
     statusTableRows: "{rows}{limitNote}{mode}{focused}",
     statusRowsLimited: " · pokazano {shown}",
     statusTableRowsEmpty: "0 wierszy",
@@ -2070,6 +2072,8 @@ const I18N = {
     tableNoData: "No data",
     tableNoResults: "No results",
     tableNoResultsHint: "Change filters or choose another sheet.",
+    tableSheetEmpty: "No data in this sheet",
+    tableSheetEmptyHint: "This sheet has no data rows. Choose another sheet.",
     statusTableRows: "{rows}{limitNote}{mode}{focused}",
     statusRowsLimited: " · showing {shown}",
     statusTableRowsEmpty: "0 rows",
@@ -3895,7 +3899,11 @@ function applyStaticTranslations() {
   if (heroStatus) setStatus(copy.statusNoData);
 
   const emptyStateVisible = emptyStateEl && !emptyStateEl.classList.contains("hidden");
-  if (emptyStateVisible) setEmptyState(t("emptyTitle"), defaultEmptySub());
+  if (emptyStateVisible) {
+    // „Brak wyników” / pusty arkusz zostaje sobą (dawniej podmieniany na ekran startowy)
+    if (emptyStateKeys) setEmptyState(t(emptyStateKeys[0]), t(emptyStateKeys[1]), emptyStateKeys);
+    else setEmptyState(t("emptyTitle"), defaultEmptySub());
+  }
 
   setAttr("#sidebarScrim", "aria-label", copy.sidebarScrimAria);
   setAttr("#quickSearchPopup", "aria-label", copy.quickSearchDialogAria);

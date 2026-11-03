@@ -1118,6 +1118,9 @@ async function handleFile(file, fileHandle = null) {
     } catch {
       workbook = XLSX.read(data, { cellDates: true });
     }
+    // arkusz bez <dimension> (SheetJS, część generatorów) nie ma „!ref” — decode_range w wielu miejscach
+    // rzucał wyjątek i przełączenie na taki arkusz po cichu nie działało
+    (workbook.SheetNames || []).forEach((n) => { const ws = workbook.Sheets[n]; if (ws && !ws["!ref"]) ws["!ref"] = "A1"; });
     swbLocalizeFileDates(workbook); // daty z pliku: czas „ścienny”, nie północ UTC (przed formatowaniem tekstu)
     swbFillMissingCellText(workbook); // „dd.mm.yyyy” itp. — SSF nie umiał ich sformatować
     // Odzyskaj mapę indeksów stylów z surowego pliku (font/kolor/rozmiar jak w Excelu).

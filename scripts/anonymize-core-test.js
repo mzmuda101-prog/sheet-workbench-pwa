@@ -167,5 +167,21 @@ eq(A.profileColumn("Ulica", ["Długa", "Polna"].map((v) => ({ v }))).type, "addr
   eq(sa.replaceText("address", "ul. Długa 5/3", "generalize"), "ul. Długa", "uogólnienie → ulica bez numeru");
 }
 
+// ── polowanie na błędy 2026-11-03 ─────────────
+{
+  // remember() po freezeKnown() (autor notatki przy czyszczeniu zipa) nie może gasić znanych oryginałów
+  const sk = A.createSession({ seed: 3, methods: { person: "pseudo" } });
+  sk.remember("Remontex Hurt", "[FIRMA]");
+  sk.freezeKnown();
+  sk.remember("jkowal", "Osoba 009");
+  eq(sk.rewriteString("Dostawca Remontex Hurt sp."), "Dostawca [FIRMA] sp.", "znany oryginał zamieniany także po kolejnym remember()");
+  eq(sk.rewriteString("login jkowal"), "login Osoba 009", "nowy oryginał z remember() też zamieniany");
+  // skrót: samotny surogat (uszkodzone emoji) nie wywraca sesji
+  const sh = A.createSession({ seed: 3, methods: { person: "hash" } });
+  let threw = null;
+  try { sh.replaceText("person", "Jan Kowalski \ud83d", "hash"); } catch (e) { threw = e; }
+  ok(!threw, `skrót z samotnym surogatem — ${threw && threw.message}`);
+}
+
 console.log(`${fails ? "❌" : "✅"} anonymize-core: ${passes} ok, ${fails} błędów`);
 process.exit(fails ? 1 : 0);

@@ -851,7 +851,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261102-10";
+const APP_BUILD_VERSION = "20261103-01";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1305,7 +1305,9 @@ function scheduleFrozenColOffsets() {
 const FROZEN_MAX_SHARE = 0.75;
 function syncFrozenColOffsets() {
   const want = tableWrapEl && tableWrapEl.classList.contains("freeze-first-col") ? frozenColCount : 0;
-  const hr = theadEl ? theadEl.querySelector("tr.header-row") : null;
+  // rząd liter: zawsze jedna komórka na kolumnę (w rzędzie nagłówków scalenie „A:B” to jedna
+  // komórka z colSpan — przesunięcia kolejnych kolumn wychodziły o kolumnę za daleko)
+  const hr = theadEl ? (theadEl.querySelector("tr.guide-row") || theadEl.querySelector("tr.header-row")) : null;
   let eff = want;
   const lefts = [];
   if (want >= 1 && hr) {

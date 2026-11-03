@@ -61,7 +61,7 @@ function swbAnonRewriteAttr(xml, attrRe, fn) {
 function swbAnonRewriteQuoted(text, fn, splitList) {
   return text.replace(/"((?:[^"]|"")*)"/g, (all, inner) => {
     const raw = inner.replace(/""/g, '"');
-    const next = splitList ? raw.split(",").map((x) => { const t = x.trim(); const r = fn(t); return r === t ? x : x.replace(t, r); }).join(",") : fn(raw);
+    const next = splitList ? raw.split(",").map((x) => { const t = x.trim(); const r = fn(t); return r === t ? x : x.replace(t, () => r); }).join(",") : fn(raw);
     return next === raw ? all : `"${next.replace(/"/g, '""')}"`;
   });
 }
@@ -85,10 +85,20 @@ function swbAnonLeakRegex(terms) {
   for (let i = 0; i < esc.length; i += 400) out.push(new RegExp(`(?<![\\p{L}\\p{N}])(?:${esc.slice(i, i + 400).join("|")})(?![\\p{L}\\p{N}])`, "giu"));
   return out;
 }
+// Kody formatu nagłówka/stopki Excela („&B”, „&12”, „&"Arial,Bold"”, „&KFF0000”) — przyklejone do tekstu
+// zasłaniały nazwisko przed wykrywaniem i testem wycieków („&BJan Kowalski”).
+const SWB_ANON_HF_CODE_RE = /&(?:"[^"]*"|K[0-9A-Fa-f]{6}|\d+|[A-Za-z&])/g;
+function swbAnonRewriteHeaderFooter(s, rewrite) {
+  let out = "", pos = 0;
+  for (const m of s.matchAll(SWB_ANON_HF_CODE_RE)) { out += rewrite(s.slice(pos, m.index)) + m[0]; pos = m.index + m[0].length; }
+  return out + rewrite(s.slice(pos));
+}
 function swbAnonLeaksIn(text, res) {
   if (!res) return [];
   const found = new Set();
-  res.forEach((re) => { re.lastIndex = 0; for (const m of text.matchAll(re)) found.add(m[0]); });
+  const scan = (t) => res.forEach((re) => { re.lastIndex = 0; for (const m of t.matchAll(re)) found.add(m[0]); });
+  scan(text);
+  if (text.includes("&")) scan(text.replace(SWB_ANON_HF_CODE_RE, " "));
   return [...found];
 }
 
@@ -176,7 +186,7 @@ async function swbAnonCleanZip(bytes, session, opts = {}, ctx = {}) {
         const v1 = rewrite(v0);
         if (v1 === v0) return all;
         n++;
-        return `<c${attrs}>${inner.replace(vm[0], `<v>${swbAnonEncodeText(v1)}</v>`)}</c>`;
+        return `<c${attrs}>${inner.replace(vm[0], () => `<v>${swbAnonEncodeText(v1)}</v>`)}</c>`;
       });
       bump("formulaResults", n);
     }
@@ -192,14 +202,14 @@ async function swbAnonCleanZip(bytes, session, opts = {}, ctx = {}) {
         return `${a}${swbAnonEncodeText(f1)}${c}`;
       });
       bump("formulaConstants", n);
-      const dv = swbAnonRewriteTextNodes(xml, /(<(?:[\w]+:)?(?:formula1|formula2|f)>)([^<]*)(<\/(?:[\w]+:)?(?:formula1|formula2|f)>)/g, (s) => swbAnonRewriteQuoted(s, rewrite, true));
+      const dv = swbAnonRewriteTextNodes(xml, /(<(?:(?:[\w]+:)?formula[12]|xm:f)>)([^<]*)(<\/(?:(?:[\w]+:)?formula[12]|xm:f)>)/g, (s) => swbAnonRewriteQuoted(s, rewrite, true));
       xml = dv.xml;
-      const hl = swbAnonRewriteAttr(xml, /(<hyperlink\b[^>]*\b(?:display|tooltip|location)=")([^"]*)(")/g, rewrite);
+      const hl = swbAnonRewriteAttr(xml, /(<hyperlink\b[^>]*\b(?:display|tooltip)=")([^"]*)(")/g, rewrite);
       xml = hl.xml;
       bump("links", hl.count);
     }
     if (o.headersFooters !== "keep") {
-      const r = swbAnonRewriteTextNodes(xml, /(<(?:odd|even|first)(?:Header|Footer)>)([\s\S]*?)(<\/(?:odd|even|first)(?:Header|Footer)>)/g, (s) => (o.headersFooters === "clear" ? "" : rewrite(s)));
+      const r = swbAnonRewriteTextNodes(xml, /(<(?:odd|even|first)(?:Header|Footer)>)([\s\S]*?)(<\/(?:odd|even|first)(?:Header|Footer)>)/g, (s) => (o.headersFooters === "clear" ? "" : swbAnonRewriteHeaderFooter(s, (x) => (x ? rewrite(x) : x))));
       xml = r.xml;
       bump("headersFooters", r.count);
     }
@@ -210,7 +220,7 @@ async function swbAnonCleanZip(bytes, session, opts = {}, ctx = {}) {
       const relsPath = swbAnonRelsPathOf(path);
       const rels = await swbAnonText(zip, relsPath);
       if (rels) {
-        const r = swbAnonRewriteAttr(rels, /(<Relationship\b[^>]*\bTargetMode="External"[^>]*?\bTarget=")([^"]*)(")|(<Relationship\b[^>]*?\bTarget=")([^"]*)("[^>]*\bTargetMode="External")/g, (s) => {
+        const r = swbAnonRewriteAttr(rels, /(<Relationship\b(?=[^>]*\bTargetMode="External")[^>]*?\bTarget=")([^"]*)(")/g, (s) => {
           const dec = (() => { try { return decodeURIComponent(s); } catch { return s; } })();
           const out = rewrite(dec.replace(/^mailto:/i, ""));
           return out === dec.replace(/^mailto:/i, "") ? s : (/^mailto:/i.test(dec) ? `mailto:${out}` : out);

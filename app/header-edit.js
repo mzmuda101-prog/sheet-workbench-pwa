@@ -247,9 +247,11 @@ function swbOpenHeaderMenu(th, point) {
     { id: "hdr-sort-asc", label: t("hdrSortAsc"), run: () => swbHeaderSort(name, "asc") },
     { id: "hdr-sort-desc", label: t("hdrSortDesc"), run: () => swbHeaderSort(name, "desc") },
   ];
-  // Excel: Widok → Zablokuj okienka. N = pozycja kolumny w tabeli (komórka 0 to numery wierszy).
+  // Excel: Widok → Zablokuj okienka. N = liczba kolumn do tej włącznie — z numeru kolumny, nie z pozycji
+  // komórki (nagłówek scalony „A:B” to jedna komórka: pozycja wychodziła o kolumnę za mało).
   if (typeof setSheetFrozenCols === "function") {
-    const upTo = th.cellIndex;
+    const ci = parseInt(th.dataset.colIndex, 10);
+    const upTo = Number.isFinite(ci) ? ci + Math.max(1, th.colSpan || 1) : th.cellIndex;
     const frozenNow = getFrozenColCount();
     if (frozenNow !== upTo) items.push({ id: "hdr-freeze", label: t("hdrFreezeTo"), run: () => {
       if (upTo > FROZEN_COLS_MAX) { toast(t("hdrFreezeTooMany").replace("{max}", FROZEN_COLS_MAX), "info"); return; }

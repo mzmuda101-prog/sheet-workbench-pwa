@@ -546,7 +546,10 @@ const swbVirt = (() => {
     const [ns, ne] = desiredRange(modelTop, clientH);
     const a = indexAt(modelTop);
     const anchor = { i: a, domTop: st.prefix[a] };
-    st.buildCtx = ctx; // pierwszy przebieg: jak stary render (canReuse wg envKey)
+    // pierwszy przebieg: jak stary render (canReuse wg envKey), ale z układem scaleń CAŁEGO arkusza —
+    // ctx.mergeLayout liczy tylko pierwsze „Limit wierszy” (200); dalej okno rysowało scalenia jako
+    // zwykłe komórki, a te wracały potem z puli przy przewijaniu
+    st.buildCtx = { ...ctx, mergeLayout: layout || ctx.mergeLayout };
     place(ns, ne, anchor);
     st.buildCtx = buildCtx;
     return true;

@@ -68,7 +68,9 @@ const swbSpill = (() => {
     td.style.removeProperty("--spill-l");
     td.style.removeProperty("--spill-r");
     const span = td.firstElementChild;
-    if (span && span.classList.contains("spill-t")) td.textContent = span.textContent;
+    // tylko sam <span> — w komórce może już siedzieć otwarty edytor (dawniej textContent kasował
+    // pole w trakcie pisania: Shift+↓ na wylaną komórkę → edytor odłączony, wpis przepadał)
+    if (span && span.classList.contains("spill-t")) span.replaceWith(document.createTextNode(span.textContent));
   }
 
   function apply(td, align, L, R) {
