@@ -28,7 +28,7 @@ const swbAnon = (() => {
       everything: "Zamień każdą niepustą komórkę w zakresie (nie tylko wykryte dane)",
       pickColumns: "Kolumny do przeszukania",
       key: "Klucz spójności (opcjonalnie)",
-      keyHint: "To samo hasło = te same pseudonimy i fałszywe dane w każdym pliku i przy każdym uruchomieniu. Puste = za każdym razem losowo.",
+      keyHint: "To samo hasło = te same pseudonimy (z hasłem czterocyfrowe, np. „Osoba 4821”) i fałszywe dane w każdym pliku i przy każdym uruchomieniu. Puste = pseudonimy po kolei od 001, reszta za każdym razem losowo.",
       scan: "Skanuj", rescan: "Skanuj ponownie", scanning: "Przeszukiwanie… {done} / {total} komórek",
       found: "Przeszukano {cells} komórek ({sheets}). Do zmiany: {changes} komórek, {values} różnych wartości.",
       nothing: "Nie znaleziono danych osobowych w tym zakresie. Możesz dopisać własne słowa i wzorce albo wybrać „Zamień każdą niepustą komórkę”.",
@@ -126,7 +126,7 @@ const swbAnon = (() => {
       everything: "Replace every non-empty cell in scope (not only detected data)",
       pickColumns: "Columns to scan",
       key: "Consistency key (optional)",
-      keyHint: "Same password = same pseudonyms and fake data in every file and every run. Empty = random each time.",
+      keyHint: "Same password = same pseudonyms (four digits with a password, e.g. “Person 4821”) and fake data in every file and every run. Empty = pseudonyms numbered from 001, everything else random each time.",
       scan: "Scan", rescan: "Scan again", scanning: "Scanning… {done} / {total} cells",
       found: "Scanned {cells} cells ({sheets}). To change: {changes} cells, {values} distinct values.",
       nothing: "No personal data found in this scope. Add your own words and patterns or choose “Replace every non-empty cell”.",
@@ -384,12 +384,30 @@ const swbAnon = (() => {
   }
   const valueKey = (type, v) => `${type}|${SwbAnon.norm(v instanceof Date ? v.toISOString() : v)}`;
 
+  // Numery pseudonimów już w pliku (po wcześniejszym przebiegu) — nowa osoba nie dostanie tego samego.
+  // Pamięć na skoroszyt + stan danych: buildPlan leci przy każdej literze klucza.
+  let reservedCache = null;
+  function reservedPseudo() {
+    const stamp = typeof sheetDataStamp !== "undefined" ? sheetDataStamp : 0;
+    const lang = L();
+    if (reservedCache && reservedCache.wb === workbook && reservedCache.stamp === stamp && reservedCache.lang === lang) return reservedCache.out;
+    const values = [];
+    (workbook?.SheetNames || []).forEach((n) => {
+      const ws = workbook.Sheets[n];
+      if (ws) for (const ref in ws) { const c = ref.charCodeAt(0) !== 33 && ws[ref]; if (c && typeof c.v === "string") values.push(c.v); }
+    });
+    const out = SwbAnon.collectReservedPseudo(values, labels());
+    reservedCache = { wb: workbook, stamp, lang, out };
+    return out;
+  }
+
   // Plan: lista zmian {sheet, r, c, before, after:{value,type}|null(=wyczyść), type, original}
   function buildPlan() {
     const scanR = st.scan;
     if (!scanR) return null;
     const session = SwbAnon.createSession({
       seed: seedFromKey(), salt: st.key.trim() ? `k:${st.key.trim()}` : undefined,
+      keyed: !!st.key.trim(), reserved: reservedPseudo(),
       methods: st.methods, labels: labels(),
       rules: { terms: lines(st.rules.terms), patterns: lines(st.rules.patterns), exceptions: lines(st.rules.exceptions) },
     });

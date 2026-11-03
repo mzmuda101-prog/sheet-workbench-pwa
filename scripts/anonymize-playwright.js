@@ -145,6 +145,17 @@ async function run() {
     return { on, off };
   });
   ok("„?” można dołączyć ręcznie", toggled.on && !toggled.off, toggled);
+  // hasło spójności: czterocyfrowe pseudonimy wynikające z hasła (to samo hasło = te same, inne = inne)
+  const keyed = await page.evaluate(() => {
+    const prev = { key: swbAnon.state.key, m: swbAnon.state.methods.person };
+    swbAnon.state.methods.person = "pseudo";
+    const jan = (k) => { swbAnon.state.key = k; return swbAnon.buildPlan().changes.find((c) => c.before === "Jan Kowalski")?.after?.value; };
+    const a1 = jan("tajne"), a2 = jan("tajne"), b1 = jan("inne"), none = jan("");
+    swbAnon.state.key = prev.key; swbAnon.state.methods.person = prev.m;
+    return { a1, a2, b1, none };
+  });
+  ok("hasło: ten sam pseudonim przy tym samym haśle, inny przy innym, bez hasła po kolei",
+    /^Osoba \d{4}$/.test(keyed.a1 || "") && keyed.a1 === keyed.a2 && keyed.b1 !== keyed.a1 && /^Osoba 0\d\d$/.test(keyed.none || ""), keyed);
   // ── 4. odznaczenie wartości + wyjątek ──
   await page.evaluate(() => {
     const key = [...swbAnon.state.plan.values.values()].find((v) => v.value === "Kamil Testowy").key;

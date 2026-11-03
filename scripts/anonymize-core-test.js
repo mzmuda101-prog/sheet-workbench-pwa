@@ -183,5 +183,28 @@ eq(A.profileColumn("Ulica", ["Długa", "Polna"].map((v) => ({ v }))).type, "addr
   ok(!threw, `skrót z samotnym surogatem — ${threw && threw.message}`);
 }
 
+// ── pseudonimy z kluczem spójności (2026-11-03) ─────────────
+{
+  const run = (names, extra = {}) => {
+    const s = A.createSession({ seed: 9, salt: "k:tajne", keyed: true, methods: { person: "pseudo" }, labels: { person: "Osoba" }, ...extra });
+    return Object.fromEntries(names.map((n) => [n, s.replaceText("person", n, "pseudo")]));
+  };
+  const f1 = run(["Jan Kowalski", "Anna Nowak"]);
+  const f2 = run(["Piotr Zieliński", "Anna Nowak", "Jan Kowalski"]);
+  eq(f2["Jan Kowalski"], f1["Jan Kowalski"], "z kluczem: ta sama osoba = ten sam pseudonim w innym pliku (inna kolejność)");
+  eq(f2["Anna Nowak"], f1["Anna Nowak"], "z kluczem: druga osoba też");
+  ok(/^Osoba \d{4}$/.test(f1["Jan Kowalski"]), `z kluczem: cztery cyfry — ${f1["Jan Kowalski"]}`);
+  const other = A.createSession({ seed: 9, salt: "k:inne", keyed: true, methods: { person: "pseudo" }, labels: { person: "Osoba" } });
+  ok(other.replaceText("person", "Jan Kowalski", "pseudo") !== f1["Jan Kowalski"], "inny klucz = inny numer");
+  const many = run(Array.from({ length: 300 }, (_, i) => `${["Jan", "Anna", "Piotr", "Ewa", "Marek", "Ola"][i % 6]} ${"BCDFGHKLMNPRSTWZ"[i % 16]}${"aeiou"[(i >> 4) % 5]}${"bcdfgklmnprstwz"[(i >> 2) % 15]}owski`));
+  const byPseudo = new Map();
+  Object.entries(many).forEach(([n, ps]) => { if (!byPseudo.has(ps)) byPseudo.set(ps, new Set()); byPseudo.get(ps).add(n.split(" ")[1]); });
+  ok([...byPseudo.values()].every((sur) => sur.size === 1), "z kluczem: 300 osób — różne nazwiska nigdy pod jednym pseudonimem (kolizje rozwiązane)");
+  // bez klucza: po kolei, z pominięciem numerów już w pliku
+  const s0 = A.createSession({ seed: 9, methods: { person: "pseudo" }, labels: { person: "Osoba" }, reserved: A.collectReservedPseudo(["Osoba 001", "Osoba 002", "osoba003@example.com", "tekst"], { person: "Osoba" }) });
+  eq(s0.replaceText("person", "Jan Kowalski", "pseudo"), "Osoba 003", "bez klucza: numery z poprzedniego przebiegu pominięte");
+  eq(A.addressCellScore("Osoba 4821"), 0, "„Osoba 4821” to nie adres");
+}
+
 console.log(`${fails ? "❌" : "✅"} anonymize-core: ${passes} ok, ${fails} błędów`);
 process.exit(fails ? 1 : 0);

@@ -184,11 +184,14 @@ const SwbAnon = (() => {
 
   // Cała komórka wygląda na adres (dla profilu kolumny): 1 = z prefiksem/kodem, 0.7 = „Długa 5”.
   // Numer z zerami wiodącymi („Osoba 010”) to nie numer domu.
+  const PSEUDO_LABEL_RE = /^(?:osoba|person|adres|address|miejscowość|town|ukryte|hidden)\s+\d{3,4}$/iu;
   function addressCellScore(v) {
     const s = String(v ?? "").trim();
     if (!s || s.length > 90) return 0;
     const m = s.match(ADDR_RE_CELL);
     if (!m || /^0\d/.test(m[2])) return 0;
+    // pseudonim z kluczem („Osoba 4821”, „Person 4821”) to nie ulica z numerem
+    if (PSEUDO_LABEL_RE.test(s)) return 0;
     return RE_ADDR_PREFIX_START.test(s) || /\d{2}-\d{3}/.test(s) ? 1 : 0.7;
   }
   // Nazwa ulicy z komórki-adresu (bez prefiksu i numeru) — do oceny różnorodności kolumny.
@@ -560,7 +563,8 @@ const SwbAnon = (() => {
   const asciiFold = (s) => fold(s).replace(/[^a-z0-9]+/g, "");
 
   // ── Sesja ───────────────────────────────────────────────────────────────
-  // opts: { seed, methods:{type→method}, rules, dateShiftDays, labels:{type→"Osoba"}, generalize }
+  // opts: { seed, methods:{type→method}, rules, dateShiftDays, labels:{type→"Osoba"}, generalize,
+  //         keyed (sól z klucza spójności), reserved:{type→Set(numerów już w pliku)} }
   function createSession(opts = {}) {
     const seed = opts.seed ?? ((Math.random() * 2 ** 32) >>> 0);
     const salt = opts.salt ?? `${seed}:${Math.random()}`;
@@ -631,11 +635,27 @@ const SwbAnon = (() => {
       return `${sur}|`;
     }
 
+    // Numer pseudonimu. Z kluczem spójności (opts.keyed): numer = skrót (klucz, typ, osoba) w 1000–9999,
+    // więc ta sama osoba ma ten sam numer w KAŻDYM pliku i przebiegu (dawniej licznik wg kolejności:
+    // Jan był „Osoba 002” w jednym pliku, a „Osoba 001” w drugim). Zajęty numer → następny wg tego
+    // samego skrótu (rzadko; wtedy zgodność tylko dla osób, które się nie zderzyły).
+    // Bez klucza: 001, 002… po kolei, z pominięciem numerów już obecnych w pliku (opts.reserved —
+    // drugi przebieg „w miejscu” dawał nowej osobie „Osoba 001” obok istniejącej „Osoba 001”).
+    const keyed = !!opts.keyed;
+    const reserved = opts.reserved || {};
+    const usedNums = {};
+    const isUsed = (type, n) => (usedNums[type] && usedNums[type].has(n)) || (reserved[type] && reserved[type].has(n));
     function pseudoNumber(type, key) {
       const k = `${type}|${key}`;
       if (!pseudoMap.has(k)) {
-        pseudoCounters[type] = (pseudoCounters[type] || 0) + 1;
-        pseudoMap.set(k, pseudoCounters[type]);
+        let n;
+        if (keyed) {
+          for (let i = 0; ; i++) { n = 1000 + (fnv(`${salt}|${type}|${key}|${i}`) % 9000); if (!isUsed(type, n) || i > 50) break; }
+        } else {
+          do { pseudoCounters[type] = (pseudoCounters[type] || 0) + 1; n = pseudoCounters[type]; } while (isUsed(type, n));
+        }
+        (usedNums[type] ||= new Set()).add(n);
+        pseudoMap.set(k, n);
       }
       return pseudoMap.get(k);
     }
@@ -1003,6 +1023,21 @@ const SwbAnon = (() => {
     };
   }
 
+  // Numery pseudonimów już obecnych w pliku („Osoba 007”, „osoba007@example.com”) — dla
+  // createSession({ reserved }). labels: {type→"Osoba"} jak w sesji. values: dowolne wartości komórek.
+  function collectReservedPseudo(values, labels = {}) {
+    const out = {};
+    const res = TYPES.map((type) => [type, new RegExp(`^${escapeRe(labels[type] || type.toUpperCase())} (\\d{3,4})$`, "iu")]);
+    for (const v of values) {
+      if (typeof v !== "string" || v.length > 40) continue;
+      const t = v.trim();
+      const mail = /^osoba(\d{3,4})@example\.com$/i.exec(t);
+      if (mail) (out.email ||= new Set()).add(Number(mail[1]));
+      for (const [type, re] of res) { const m = re.exec(t); if (m) (out[type] ||= new Set()).add(Number(m[1])); }
+    }
+    return out;
+  }
+
   // Szukanie wycieków: które z oryginałów zostały w tekście (bez wielkości liter).
   function findLeaks(text, terms) {
     const low = String(text).toLocaleLowerCase("pl");
@@ -1015,7 +1050,7 @@ const SwbAnon = (() => {
     TYPES, METHODS, DEFAULT_METHODS, norm, fold,
     validators: { peselValid, nipValid, regonValid, ibanValid, luhnValid, idCardValid, passportValid, kwValid },
     resetLearned: () => { LEARNED = { first: new Map(), sur: new Set() }; },
-    findInText, compileRules, headerHint, profileColumn, personCellScore, addressCellScore, parsePerson, createSession, findLeaks, sha256Hex,
+    findInText, compileRules, headerHint, profileColumn, personCellScore, addressCellScore, parsePerson, createSession, findLeaks, sha256Hex, collectReservedPseudo,
   };
 })();
 
