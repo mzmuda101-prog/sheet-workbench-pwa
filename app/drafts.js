@@ -95,6 +95,8 @@ const swbDrafts = (() => {
       data: {
         edits: pendingEdits, sheet: currentSheetName || "", changes: count,
         headerRow: headerRowEl?.value || "", autoHeader: !!autoHeaderRowEl?.checked,
+        // anonimizacja „w miejscu” bez zapisu: po odzyskaniu zapis dalej czyści ślady
+        anon: typeof swbAnon !== "undefined" ? swbAnon.draftState() : null,
       },
       handle: currentFileHandle || null,
     };
@@ -191,7 +193,7 @@ const swbDrafts = (() => {
     });
     // to, co pójdzie do zapisu — obiekty prosto ze szkicu (IndexedDB zachowuje daty)
     pendingEdits = {};
-    Object.entries(edits || {}).forEach(([sn, cells]) => { pendingEdits[sn] = { ...cells }; });
+    Object.entries(edits || {}).forEach(([sn, cells]) => { Object.assign(pendingSheetEdits(sn), cells); });
     if (typeof bumpSheetDataStamp === "function") bumpSheetDataStamp();
   }
 
@@ -216,6 +218,7 @@ const swbDrafts = (() => {
       await handleFile(new File([bytes], rec.fileName, { type: XLSX_MIME }), handle);
       if (!workbook) return false;
       applyEdits(rec.data?.edits);
+      if (rec.data?.anon && typeof swbAnon !== "undefined") swbAnon.restoreDraftState(rec.data.anon);
     } finally { suspended--; }
     sessionId = rec.id;
     storedBytes = null;

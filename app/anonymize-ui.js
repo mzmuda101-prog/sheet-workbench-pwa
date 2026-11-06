@@ -95,6 +95,7 @@ const swbAnon = (() => {
       warnRevisions: "Plik ma historię zmian współdzielenia — może zawierać stare wartości.",
       warnExternalLinks: "Plik ma łącza do innych plików — ścieżki mogą zawierać nazwę użytkownika.",
       warnEmbedded: "Plik ma makra albo osadzone obiekty — ich treści apka nie sprawdza.",
+      warnUnresolvedSheets: "Nie udało się odczytać wszystkich arkuszy pliku — test szczelności ich nie objął. Nie udostępniaj tego pliku jako zanonimizowanego.",
       cleaned: "Wyczyszczone ślady: {list}.",
       cl_metadata: "właściwości pliku", cl_authors: "autorzy", cl_formulaResults: "wyniki formuł", cl_formulaConstants: "stałe w formułach",
       cl_links: "łącza i listy", cl_headersFooters: "nagłówki/stopki", cl_notes: "notatki", cl_notesRemoved: "usunięte notatki",
@@ -102,6 +103,8 @@ const swbAnon = (() => {
       sharedStrings: "teksty komórek pliku", inSheet: "arkusz „{s}”",
       toastInPlace: "Zanonimizowano {n} komórek. Zapisz plik, żeby zmiany trafiły na dysk.",
       toastLeakOnSave: "Zapisano, ale oryginalne dane zostały jeszcze w {n} miejscach pliku (poza zakresem anonimizacji).",
+      toastDraftAnon: "Ten szkic był anonimizowany w otwartym pliku. Przy zapisie apka wyczyści metadane i nieużywane teksty, ale pamięć zamian przepadła — przed udostępnieniem uruchom anonimizację jeszcze raz.",
+      toastCleanRestored: "Zapisano szkic po anonimizacji: ślady wyczyszczone bez pamięci zamian z poprzedniej sesji — sprawdź notatki albo uruchom anonimizację jeszcze raz.",
       toastCleanFailed: "Zapisano BEZ czyszczenia śladów anonimizacji (notatki, wykresy, tabele przestawne) — szczegóły w Logu. Zapisz jeszcze raz albo użyj „Zapisz kopię”.",
       fileSuffix: " — zanonimizowany",
       conf_high: "pewne", conf_medium: "prawdopodobne",
@@ -193,6 +196,7 @@ const swbAnon = (() => {
       warnRevisions: "The file has shared-workbook revision history — it may hold old values.",
       warnExternalLinks: "The file links to other files — paths may contain a user name.",
       warnEmbedded: "The file has macros or embedded objects — the app doesn't check their content.",
+      warnUnresolvedSheets: "Some sheets of the file could not be read — the leak test didn't cover them. Don't share this file as anonymized.",
       cleaned: "Cleaned traces: {list}.",
       cl_metadata: "file properties", cl_authors: "authors", cl_formulaResults: "formula results", cl_formulaConstants: "formula constants",
       cl_links: "links and lists", cl_headersFooters: "headers/footers", cl_notes: "notes", cl_notesRemoved: "removed notes",
@@ -200,6 +204,8 @@ const swbAnon = (() => {
       sharedStrings: "file cell texts", inSheet: "sheet “{s}”",
       toastInPlace: "Anonymized {n} cells. Save the file to write the changes to disk.",
       toastLeakOnSave: "Saved, but original data is still in {n} places of the file (outside the anonymized scope).",
+      toastDraftAnon: "This draft was anonymized in the open file. Saving will clean metadata and unused text, but the replacement memory is gone — run anonymization again before sharing.",
+      toastCleanRestored: "Saved a draft after anonymization: traces cleaned without the previous session's replacement memory — check notes or run anonymization again.",
       toastCleanFailed: "Saved WITHOUT cleaning anonymization traces (notes, charts, pivot tables) — see the Log. Save again or use “Save copy”.",
       fileSuffix: " — anonymized",
       conf_high: "certain", conf_medium: "likely",
@@ -696,11 +702,10 @@ const swbAnon = (() => {
   // traces/noClean — warianty do testów (szukanie, który krok czyszczenia psuje plik)
   async function buildCopyBytes(plan, traces = st.traces, noClean = false) {
     const merged = {};
-    Object.entries(pendingEdits || {}).forEach(([sn, cells]) => { merged[sn] = { ...cells }; });
+    Object.entries(pendingEdits || {}).forEach(([sn, cells]) => { Object.assign(pendingSheetEdits(sn, merged), cells); });
     plan.changes.forEach((ch) => {
       const ref = XLSX.utils.encode_cell({ r: ch.r, c: ch.c });
-      if (!merged[ch.sheet]) merged[ch.sheet] = {};
-      const prev = merged[ch.sheet][ref];
+      const prev = pendingSheetEdits(ch.sheet, merged)[ref];
       let payload = payloadOf(ch.after);
       if (prev && (prev.fmt || "note" in prev)) {
         const keep = {};
@@ -753,6 +758,7 @@ const swbAnon = (() => {
         out = await swbAnonCleanZip(out ? out.bytes : bytes, x.session, x.opts, { personMethod: x.session.methods.person, headerCells: x.headerCells, protectedCells: x.protectedCells });
       }
       if (out.report.leaks.length) setTimeout(() => toast(tx("toastLeakOnSave", { n: out.report.leaks.length }), "warning"), 400);
+      else if (chain.some((x) => x.restored)) setTimeout(() => toast(tx("toastCleanRestored"), "warning"), 400);
       swbAnon.lastReport = out.report;
       return out.bytes;
     } catch (err) {
@@ -1657,8 +1663,8 @@ const swbAnon = (() => {
     if (report) {
       const cl = Object.entries(report.cleaned).map(([k, n]) => `${tx(`cl_${k}`)} (${fmtN(n)})`);
       if (cl.length) sec.appendChild(el("p", "field-note", tx("cleaned", { list: cl.join(", ") })));
-      if (!report.leaks.length) sec.appendChild(el("p", "anon-ok", tx("leakOk", { parts: fmtN(report.partsChecked || 0) })));
-      else sec.appendChild(renderLeaks(report.leaks));
+      if (report.leaks.length) sec.appendChild(renderLeaks(report.leaks));
+      else if (!report.warnings.includes("unresolvedSheets")) sec.appendChild(el("p", "anon-ok", tx("leakOk", { parts: fmtN(report.partsChecked || 0) })));
       if (report.structural && report.structural.length) {
         // nazwy i nagłówki: nie wliczane do testu, zwinięte — do przejrzenia
         const det = el("details", "anon-struct");
@@ -1756,7 +1762,21 @@ const swbAnon = (() => {
   if (restoreBtn) restoreBtn.addEventListener("click", () => openRestore());
   syncPanel();
 
-  return { open, close: closeModal, scan, buildPlan, buildCopyBytes, state: st, cleanOnSave, syncPanel, openRestore, restoreFromKey, computeRisk, applyCommand, lastReport: null, lastBytes: null };
+  // Szkic (drafts.js): po anonimizacji „w miejscu” zapis ma dalej czyścić ślady poza komórkami.
+  // Pamięci zamian nie zapisujemy (oryginały obok pseudonimów w IndexedDB) — po odzyskaniu
+  // czyści nowa sesja: metadane, nieużywane napisy, wykrywane dane — z ostrzeżeniem.
+  function draftState() {
+    const c = swbAnonPendingCleanup;
+    if (!c || c.workbook !== workbook) return null;
+    return { opts: { ...c.opts }, methods: { ...c.session.methods } };
+  }
+  function restoreDraftState(saved) {
+    if (!saved || !saved.opts || typeof SwbAnon === "undefined") return;
+    swbAnonPendingCleanup = { session: SwbAnon.createSession({ methods: saved.methods || {} }), opts: { ...saved.opts }, workbook, restored: true, prev: null };
+    setTimeout(() => toast(tx("toastDraftAnon"), "warning"), 600);
+  }
+
+  return { open, close: closeModal, draftState, restoreDraftState, scan, buildPlan, buildCopyBytes, state: st, cleanOnSave, syncPanel, openRestore, restoreFromKey, computeRisk, applyCommand, lastReport: null, lastBytes: null };
 })();
 
 function swbAnonSyncLanguage() { swbAnon.syncPanel(); }

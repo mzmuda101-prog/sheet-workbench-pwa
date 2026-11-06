@@ -1099,7 +1099,7 @@ function swbEnsureSheetRef(sheet, r, c) {
 // a wyczyszczenie zostawia sam format i notatkę.
 function recordPendingEdit(sheetName, cellRef, payload) {
   if (!sheetName) return;
-  if (!pendingEdits[sheetName]) pendingEdits[sheetName] = {};
+  pendingSheetEdits(sheetName);
   const prev = pendingEdits[sheetName][cellRef];
   if (prev && (prev.fmt || "note" in prev)) {
     const keep = {};

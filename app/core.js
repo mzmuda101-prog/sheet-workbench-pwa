@@ -765,6 +765,14 @@ let originalFileBytes = null;
 // Zarejestrowane edycje komórek do naniesienia przy zapisie:
 // { [sheetName]: { [cellRef]: { v, t } | null } }  (null = usunięcie komórki)
 let pendingEdits = {};
+// Edycje jednego arkusza (tworzy wpis). Nazwa arkusza pochodzi z pliku: „__proto__” jako
+// zwykłe przypisanie podmieniałoby prototyp pendingEdits (fantomowe komórki w innych arkuszach).
+function pendingSheetEdits(sheetName, target = pendingEdits) {
+  if (!Object.prototype.hasOwnProperty.call(target, sheetName)) {
+    Object.defineProperty(target, sheetName, { value: {}, writable: true, enumerable: true, configurable: true });
+  }
+  return target[sheetName];
+}
 // Uchwyt pliku z File System Access API (jeśli plik otwarto przez showOpenFilePicker
 // lub zapisano przez showSaveFilePicker). Pozwala nadpisać oryginał w miejscu.
 // null = plik wczytany przez <input>/drag-drop (brak uchwytu) lub przeglądarka bez FSA.
@@ -851,7 +859,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261106-02";
+const APP_BUILD_VERSION = "20261106-03";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;

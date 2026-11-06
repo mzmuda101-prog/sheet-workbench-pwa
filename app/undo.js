@@ -125,7 +125,7 @@ function undoApplyStep(step) {
       inverse.changes.unshift({ ...ch, snap: undoSnapshot(step.sheet, ch.cellRef, ch.rowIndex0, col, rowMap) });
       if (ch.snap.cell) sheet[ch.cellRef] = { ...ch.snap.cell };
       else delete sheet[ch.cellRef];
-      if (!pendingEdits[step.sheet]) pendingEdits[step.sheet] = {};
+      pendingSheetEdits(step.sheet);
       if (ch.snap.pendingHas) pendingEdits[step.sheet][ch.cellRef] = ch.snap.pending;
       else delete pendingEdits[step.sheet][ch.cellRef];
       const row = rowMap ? rowMap.get(ch.rowIndex0) : null;

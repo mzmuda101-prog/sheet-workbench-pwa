@@ -132,7 +132,7 @@ function swbNotesRepaintRef(ref) {
 }
 
 function swbNotesRecord(sheetName, ref, note) {
-  if (!pendingEdits[sheetName]) pendingEdits[sheetName] = {};
+  pendingSheetEdits(sheetName);
   const cur = pendingEdits[sheetName][ref];
   if (cur === null) pendingEdits[sheetName][ref] = { clear: true, note };
   else if (cur === undefined) pendingEdits[sheetName][ref] = { note };

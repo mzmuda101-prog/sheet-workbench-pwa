@@ -102,6 +102,32 @@ function swbAnonLeaksIn(text, res) {
   return [...found];
 }
 
+// Części SpreadsheetML z prefiksem (OpenXML SDK: <x:sst><x:si>, <x:c>) → przestrzeń domyślna.
+// Wszystkie wzorce czyszczenia i testu szczelności zakładają nazwy bez prefiksu — bez tego
+// oryginały zostawały w sharedStrings, a test i tak pokazywał „czysto”. Deklaracja xmlns:x
+// zostaje (mogą się do niej odwoływać inne miejsca); pomijamy część z inną przestrzenią domyślną.
+const SWB_ANON_MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+function swbAnonUnprefixMain(xml) {
+  const m = xml.match(new RegExp(`\\bxmlns:([\\w.-]+)="${SWB_ANON_MAIN_NS.replace(/[./]/g, "\\$&")}"`));
+  if (!m) return null;
+  const defaults = [...xml.matchAll(/\bxmlns="([^"]*)"/g)].map((d) => d[1]);
+  if (defaults.some((d) => d !== SWB_ANON_MAIN_NS)) return null;
+  const p = m[1];
+  let out = xml.replace(new RegExp(`<(\\/?)${p}:`, "g"), "<$1");
+  if (!defaults.length) out = out.replace(m[0], `xmlns="${SWB_ANON_MAIN_NS}" ${m[0]}`);
+  return out === xml ? null : out;
+}
+async function swbAnonUnprefixZip(zip) {
+  let n = 0;
+  for (const p of Object.keys(zip.files)) {
+    if (zip.files[p].dir || !/^xl\/.*\.xml$/i.test(p)) continue;
+    const xml = await swbAnonText(zip, p);
+    const out = xml && swbAnonUnprefixMain(xml);
+    if (out) { zipWriteUtf8Xml(zip, p, out); n++; }
+  }
+  return n;
+}
+
 // session: sesja z SwbAnon.createSession (z wypełnioną pamięcią zamian), opts: jak wyżej,
 // ctx: { personMethod, scopeSheets:Set|null }. Zwraca { bytes, report }.
 async function swbAnonCleanZip(bytes, session, opts = {}, ctx = {}) {
@@ -111,7 +137,11 @@ async function swbAnonCleanZip(bytes, session, opts = {}, ctx = {}) {
   const bump = (what, n = 1) => { if (n > 0) report.cleaned[what] = (report.cleaned[what] || 0) + n; };
   const rewrite = (s) => session.rewriteString(s);
   const personMethod = ctx.personMethod || session.methods.person || "pseudo";
+  await swbAnonUnprefixZip(zip);
   const sheetPaths = await resolveSheetPaths(zip);
+  // test szczelności nie może być „czysty”, gdy nie znalazł arkuszy, które plik wymienia
+  const wbSheets = ((await swbAnonText(zip, "xl/workbook.xml")) || "").match(/<sheet\b/g) || [];
+  if (wbSheets.length > Object.keys(sheetPaths).length) report.warnings.push("unresolvedSheets");
   const pathToSheet = Object.fromEntries(Object.entries(sheetPaths).map(([n, p]) => [p, n]));
   let ct = await swbAnonText(zip, "[Content_Types].xml");
 

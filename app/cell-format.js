@@ -76,7 +76,7 @@ function cfmtMerge(prev, delta) {
 
 // Zapis delty do pendingEdits (z zachowaniem wartości, jeśli była edytowana).
 function cfmtRecord(sheetName, ref, delta) {
-  if (!pendingEdits[sheetName]) pendingEdits[sheetName] = {};
+  pendingSheetEdits(sheetName);
   const cur = pendingEdits[sheetName][ref];
   if (cur === null) pendingEdits[sheetName][ref] = { clear: true, fmt: cfmtMerge(null, delta) };
   else if (cur === undefined) pendingEdits[sheetName][ref] = { fmt: cfmtMerge(null, delta) };

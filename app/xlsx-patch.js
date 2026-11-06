@@ -65,12 +65,13 @@ async function resolveSheetPaths(zip) {
   const rels = parser.parseFromString(await relsFile.async("string"), "application/xml");
 
   const idToTarget = {};
-  Array.from(rels.getElementsByTagName("Relationship")).forEach((r) => {
+  // localName zamiast tagName: OpenXML SDK pisze <x:sheet>, getElementsByTagName("sheet") go nie widzi
+  Array.from(rels.getElementsByTagNameNS("*", "Relationship")).forEach((r) => {
     idToTarget[r.getAttribute("Id")] = r.getAttribute("Target");
   });
 
   const map = {};
-  Array.from(wb.getElementsByTagName("sheet")).forEach((s) => {
+  Array.from(wb.getElementsByTagNameNS("*", "sheet")).forEach((s) => {
     const name = s.getAttribute("name");
     const rid =
       s.getAttributeNS(OOXML_REL_NS, "id") || s.getAttribute("r:id");

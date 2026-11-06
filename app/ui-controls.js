@@ -1636,7 +1636,10 @@ function exportSeparator() {
 // Cudzysłów, gdy wartość zawiera separator, cudzysłów, nową linię albo spacje na brzegach
 // (Excel inaczej by je zjadł).
 function escapeCsvField(value, sep) {
-  const raw = String(value ?? "");
+  let raw = String(value ?? "");
+  // tekst z pliku zaczynający się od = + - @ Excel/Numbers wczytałby z CSV jako formułę
+  // (np. =HYPERLINK z danymi sąsiednich komórek) — apostrof jak w Excelu; liczby („-12,5”) bez zmian
+  if (/^[=+\-@\t\r]/.test(raw) && !/^[+-]?([\d\s.,]+%?)?$/.test(raw)) raw = `'${raw}`;
   if (raw.includes(sep) || /["\r\n]/.test(raw) || raw !== raw.trim()) {
     return `"${raw.replace(/"/g, '""')}"`;
   }
