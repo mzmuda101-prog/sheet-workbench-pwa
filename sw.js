@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20261106-04";
+const CACHE_VERSION = "20261106-05";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -198,6 +198,9 @@ self.addEventListener("fetch", (event) => {
 
   const reqUrl = new URL(request.url);
   const sameOrigin = reqUrl.origin === self.location.origin;
+  // silnik AI (~27 MB wasm, lib/transformers): Transformers.js trzyma go we własnym cache (useWasmCache),
+  // kopia w cache wersji aplikacji byłaby pobierana od nowa po każdym wydaniu
+  if (sameOrigin && /\/lib\/transformers\/[^/]+\.wasm$/i.test(reqUrl.pathname)) return;
 
   if (request.mode === "navigate") {
     // Sieć najpierw (świeży index.html, gdy jest zasięg), ale z LIMITEM czasu. Bez niego
