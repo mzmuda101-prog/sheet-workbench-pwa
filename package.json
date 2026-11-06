@@ -101,16 +101,16 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mzmuda101-prog/excel-workbench-pwa.git"
+    "url": "git+https://github.com/mzmuda101-prog/sheet-workbench-pwa.git"
   },
   "keywords": [],
   "author": "",
   "license": "MIT",
   "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/mzmuda101-prog/excel-workbench-pwa/issues"
+    "url": "https://github.com/mzmuda101-prog/sheet-workbench-pwa/issues"
   },
-  "homepage": "https://github.com/mzmuda101-prog/excel-workbench-pwa#readme",
+  "homepage": "https://github.com/mzmuda101-prog/sheet-workbench-pwa#readme",
   "devDependencies": {
     "esbuild": "^0.28.1",
     "playwright": "^1.60.0"

@@ -3876,15 +3876,17 @@ thead .guide-row th {
   touch-action: none; /* przejmij gest — bez tego dotyk przewija tabelę zamiast resize */
 }
 /* Wiersze z wymuszoną wysokością — przytnij zawartość zamiast rozpychać */
-/* Wąska (≤ 64 px) i średnia (≤ 100 px) kolumna z Excela: mniejszy odstęp, jak w Excelu (table.js narrowCols) */
-#dataTable td.cell-narrow,
+/* Wąska (≤ 64 px) i średnia (≤ 100 px) kolumna z Excela: mniejszy odstęp, jak w Excelu (table.js narrowCols).
+   Także w szybie zamrożonych kolumn (.fz-clone, freeze-pane.js) — bez tego przy przewijaniu kopia
+   miała 12 px zamiast 3 px: tekst skakał w prawo i „Zakres A-01” ucinało się do „Zakres A…” (2026-11-06) */
+:is(#dataTable, .fz-clone) td.cell-narrow,
 #dataTable th.cell-narrow {
   padding-left: calc(3px * var(--table-zoom));
   padding-right: calc(3px * var(--table-zoom));
 }
 /* kolumny do 100 px (tylko Układ jak w Excelu): margines jak w Excelu (~3 px) — przy 5 px „poprzed. tyg.”
    w 67 px kończyło się „poprzed. t…”, a w Excelu mieści się w całości */
-#dataTable td.cell-tight,
+:is(#dataTable, .fz-clone) td.cell-tight,
 #dataTable th.cell-tight {
   padding-left: calc(3px * var(--table-zoom));
   padding-right: calc(3px * var(--table-zoom));
@@ -3968,11 +3970,11 @@ tbody td.cell-recalced::after {
    W zamrożonej kolumnie wygrywa sticky (osobna, silniejsza reguła przy .fz-off) — sticky
    też trzyma absolutne dziecko. */
 #dataTable td.cell-has-note,
-.flip-ghost-table td.cell-has-note {
+:is(.fz-clone, .flip-ghost-table) td.cell-has-note {
   position: relative;
 }
 #dataTable td.cell-has-note::before,
-.flip-ghost-table td.cell-has-note::before {
+:is(.fz-clone, .flip-ghost-table) td.cell-has-note::before {
   content: "";
   position: absolute;
   top: 0;
@@ -3985,7 +3987,7 @@ tbody td.cell-recalced::after {
   pointer-events: none;
 }
 #dataTable td.cell-has-note.cell-recalced::after,
-.flip-ghost-table td.cell-has-note.cell-recalced::after { right: 9px; }
+:is(.fz-clone, .flip-ghost-table) td.cell-has-note.cell-recalced::after { right: 9px; }
 
 /* Treść notatki w podpowiedzi komórki — pierwszy plan (to po nią user najechał). */
 .cell-tooltip-usernote {
@@ -9194,7 +9196,7 @@ html:not(.force-glass) .sidebar details.panel {
 /* Tekst wylewa się na puste komórki obok, jak w Excelu (cell-spill.js). clip-path przycina
    do pustych sąsiadów (--spill-l/--spill-r) i robi z komórki osobną warstwę malowaną po
    tłach sąsiadów — tekst leży na ich wypełnieniu/zaznaczeniu, jak w Excelu. */
-:is(#dataTable, .flip-ghost-table):not(.wrap-cells) td.cell-spill {
+:is(#dataTable, .fz-clone, .flip-ghost-table):not(.wrap-cells) td.cell-spill {
   overflow: visible;
   text-overflow: clip;
   /* nad pozycjonowanymi sąsiadami (aktywna komórka z uchwytem, notatka) — inaczej ich
@@ -9205,14 +9207,14 @@ html:not(.force-glass) .sidebar details.panel {
 }
 /* do prawej / wyśrodkowane: flex przy za długim tekście wystaje na stronę POCZĄTKU
    (do prawej → widać koniec tekstu) albo równo na obie (środek), czego zwykły tekst nie umie */
-:is(#dataTable, .flip-ghost-table):not(.wrap-cells) td.cell-spill > .spill-t {
+:is(#dataTable, .fz-clone, .flip-ghost-table):not(.wrap-cells) td.cell-spill > .spill-t {
   display: flex;
   white-space: nowrap;
   pointer-events: none; /* wylany tekst nie zabiera kliknięć pustym komórkom obok */
   margin-left: calc(0px - var(--spill-l, 0px));
 }
-:is(#dataTable, .flip-ghost-table):not(.wrap-cells) td.spill-right > .spill-t { justify-content: flex-end; }
-:is(#dataTable, .flip-ghost-table):not(.wrap-cells) td.spill-center > .spill-t {
+:is(#dataTable, .fz-clone, .flip-ghost-table):not(.wrap-cells) td.spill-right > .spill-t { justify-content: flex-end; }
+:is(#dataTable, .fz-clone, .flip-ghost-table):not(.wrap-cells) td.spill-center > .spill-t {
   justify-content: center;
   /* symetrycznie — środek zostaje na swojej komórce; zajęty bok obcina clip-path */
   margin-left: calc(0px - max(var(--spill-l, 0px), var(--spill-r, 0px)));
@@ -9400,5 +9402,5 @@ details.anon-sec[open] > summary::before { content: "▾ "; }
 .freeze-count-field input { max-width: 96px; }
 
 /* Wylany tekst przechodzi przez krawędź komórki — jak w Excelu bez ramki na tej krawędzi (cell-spill.js) */
-#dataTable td.cell-spill.spill-no-r { border-right-color: transparent !important; }
-#dataTable td.cell-spill.spill-no-l { border-left-color: transparent !important; }
+:is(#dataTable, .fz-clone) td.cell-spill.spill-no-r { border-right-color: transparent !important; }
+:is(#dataTable, .fz-clone) td.cell-spill.spill-no-l { border-left-color: transparent !important; }

@@ -204,6 +204,25 @@ async function run() {
   });
   check("po spoczynku klik w zamrożoną kolumnę działa jak zawsze", tapAfter === true || tapAfter === "TD", tapAfter);
 
+  // 7. kopia ma te same odstępy i znaczniki co prawdziwe komórki: reguły z `#dataTable` nie
+  // obejmowały .fz-clone — w wąskiej kolumnie z Excela (cell-narrow/cell-tight, 3 px) kopia
+  // miała 12 px i przy przewijaniu „Zakres A-01” skakało w prawo i ucinało się (2026-11-06).
+  const sameStyle = await page.evaluate(() => {
+    document.activeElement?.blur(); // fokus w zamrożonej kolumnie (krok wyżej) = bez szyby
+    // zamrożona kolumna danych to cells[1]; każda klasa w innym wierszu
+    const marks = [[20, ["cell-narrow"]], [21, ["cell-tight", "cell-has-note"]]];
+    const rows = [...document.querySelectorAll("#dataTable tbody tr")];
+    marks.forEach(([r, m]) => rows[r].cells[1].classList.add(...m));
+    window.__freezePane.start();
+    const cloneRows = document.querySelector(".fz-pane tbody")?.rows;
+    const sig = (td) => { const s = getComputedStyle(td); return `${s.paddingLeft}/${s.paddingRight}/${getComputedStyle(td, "::before").content}`; };
+    const out = marks.map(([r]) => ({ real: sig(rows[r].cells[1]), clone: cloneRows ? sig(cloneRows[r].cells[1]) : null }));
+    window.__freezePane.stop();
+    marks.forEach(([r, m]) => rows[r].cells[1].classList.remove(...m));
+    return out;
+  });
+  check("szyba: wąska kolumna i notatka — ten sam odstęp i trójkącik co w tabeli", sameStyle.every((s) => s.real === s.clone), sameStyle);
+
   // 6b. scalenia → brak szyby
   const merged = await page.evaluate(async () => {
     const td = document.querySelector("#dataTable tbody tr:nth-child(3) td:nth-child(4)");
