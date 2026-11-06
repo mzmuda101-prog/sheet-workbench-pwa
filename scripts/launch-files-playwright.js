@@ -95,10 +95,14 @@ async function run() {
     return { url: res.url, redirected: res.redirected };
   });
   check("4. POST na share-target → przekierowanie na ?open=shared", shared.redirected && /\?open=shared$/.test(shared.url), shared);
+  // pytanie przed otwarciem (POST może wysłać też obca strona — audyt 6.11)
+  const asked = [];
+  q.once("dialog", (d) => { asked.push(d.message()); d.accept(); });
   await q.goto(APP_URL + "?open=shared", { waitUntil: "load" });
   await q.waitForFunction(() => typeof currentFileName === "string" && currentFileName === "Udostępniony.xlsx", null, { timeout: 20000 }).catch(() => {});
   const s4 = await q.evaluate(async () => ({ name: currentFileName, handle: currentFileHandle, left: (await caches.keys()).includes("excel-wb-share") ? !!(await (await caches.open("excel-wb-share")).match("./__shared-file")) : false }));
   check("4. udostępniony plik otwarty (kopia, bez uchwytu), cache wyczyszczony", s4.name === "Udostępniony.xlsx" && !s4.handle && !s4.left, s4);
+  check("4. pytanie przed otwarciem z nazwą pliku", asked.length === 1 && asked[0].includes("Udostępniony.xlsx"), asked);
   check("bez błędów strony (share)", errors2.length === 0, errors2);
 
   // 5. Chrome otworzył aplikację „do pliku”, ale pliku nie przekazał (zapamiętane „Nie zezwalaj”) —

@@ -57,6 +57,10 @@ async function swbOpenSharedFile() {
     const name = decodeURIComponent(res.headers.get("X-File-Name") || "") || "arkusz.xlsx";
     const blob = await res.blob();
     await caches.delete(SWB_SHARE_CACHE);
+    // Udostępnienie przychodzi POST-em, który może wysłać też dowolna strona (formularz z plikiem),
+    // a service worker nie odróżni go od systemowego „Udostępnij” — bez pytania obca strona
+    // otwierała w aplikacji swój plik pod dowolną nazwą (audyt bezpieczeństwa 6.11).
+    if (!window.confirm(t("openSharedConfirm", { name }))) return;
     await swbOpenExternal(new File([blob], name, { type: blob.type || XLSX_MIME }));
   } catch (e) {
     log(String(e?.message || e), "error");
