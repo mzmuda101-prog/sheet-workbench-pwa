@@ -489,10 +489,17 @@ const swbAnon = (() => {
     }
     return out;
   }
+  // typ kolumny z profilu/polecenia po nazwie nagłówka — tylko WŁASNE klucze (nagłówek „constructor”
+  // czy „__proto__” nie może zwrócić czegoś z Object.prototype)
+  function headerModeOf(header) {
+    if (!header) return null;
+    const k = SwbAnonTools.fold(header);
+    return Object.prototype.hasOwnProperty.call(st.headerModes, k) ? st.headerModes[k] : null;
+  }
   function colMode(col) {
     const m = st.colModes[colKey(col)];
     if (m) return m;
-    const hm = col.header && st.headerModes[SwbAnonTools.fold(col.header)];
+    const hm = headerModeOf(col.header);
     if (hm && hm !== "auto") return hm;
     if (st.everything) return col.profile.type || "custom";
     return col.profile.type || "auto";
@@ -572,7 +579,7 @@ const swbAnon = (() => {
         // kolumna osób rozpoznana automatycznie: komórka, która nie wygląda na imię/nazwisko
         // („Porządkowi”, „STARSI”, „Data”) czeka na decyzję użytkownika; „Gr3 P. Król” ma osobę
         // w środku — zamieniamy tylko ją (kod grupy zostaje)
-        const auto = !st.colModes[colKey(col)] && !(col.header && st.headerModes[SwbAnonTools.fold(col.header)]) && !st.everything;
+        const auto = !st.colModes[colKey(col)] && !headerModeOf(col.header) && !st.everything;
         let low = wholeType === "person" && auto && typeof x.v === "string" && SwbAnon.personCellScore(x.v) === 0;
         if (low && hitsOf(col, x).some((h) => h.type === "person")) { wholeType = null; low = false; }
         if (wholeType) {
@@ -1137,9 +1144,12 @@ const swbAnon = (() => {
     const changes = [];
     const skipped = [];
     data.changes.forEach((ch) => {
-      const ws = workbook.Sheets[ch.sheet];
       const ref = XLSX.utils.encode_cell({ r: ch.r, c: ch.c });
-      if (!ws) { skipped.push(`${ch.sheet}!${ref}`); return; }
+      // nazwa arkusza z pliku klucza (niezaufana): tylko arkusze tego skoroszytu — „__proto__” czy
+      // „constructor” dałyby Object.prototype i zapis do niego (jak znalezisko audytu z 2026-11-06)
+      const own = Object.prototype.hasOwnProperty.call(workbook.Sheets, ch.sheet) && (workbook.SheetNames || []).includes(ch.sheet);
+      const ws = own ? workbook.Sheets[ch.sheet] : null;
+      if (!ws || ch.r > 1048575 || ch.c > 16383) { skipped.push(`${ch.sheet}!${ref}`); return; }
       const cell = ws[ref];
       const cur = cell && cell.t !== "z" ? cell.v : null;
       if (!T().sameValue(cur, ch.after)) { skipped.push(`${ch.sheet}!${ref}`); return; }

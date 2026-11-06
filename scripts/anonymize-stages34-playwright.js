@@ -163,6 +163,18 @@ async function run() {
   const undone = await page.evaluate(() => ({ a2: workbook.Sheets.Lista.A2.v, cleanup: !!swbAnonPendingCleanup }));
   ok("Cofnij przywracanie: znów pseudonim i czyszczenie", /^Osoba/.test(undone.a2) && undone.cleanup, undone);
 
+  // ── 5b. złośliwy klucz: arkusz „__proto__” / „constructor” nie zapisuje do Object.prototype ──
+  const proto = await page.evaluate(async () => {
+    const txt = await SwbAnonTools.encryptReverseKey([
+      { sheet: "__proto__", r: 0, c: 0, before: "WSTRZYK", after: null },
+      { sheet: "constructor", r: 1, c: 1, before: "WSTRZYK", after: null },
+    ], "Klucz-Zly-2026");
+    const data = await SwbAnonTools.decryptReverseKey(txt, "Klucz-Zly-2026");
+    swbAnon.restoreFromKey(data);
+    return { a1: ({}).A1, b2: ({}).B2, own: Object.prototype.hasOwnProperty.call(Object.prototype, "A1") };
+  });
+  ok("złośliwy klucz nie zapisuje do Object.prototype", proto.a1 === undefined && proto.b2 === undefined && !proto.own, proto);
+
   // ── 6. AI ✦ w wolnym tekście (atrapa modelu) ──
   await page.evaluate(() => {
     window.__aiCalls = 0;
