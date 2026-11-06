@@ -1,4 +1,5 @@
-// anonymize-ui.js — okno „Anonimizacja danych” (etapy 1–2, 2026-10-31).
+// anonymize-ui.js — okno „Anonimizacja danych” (etapy 1–2, 2026-10-31; 3–4 2026-11-06: profile,
+// polecenie tekstem, raport ryzyka k-anonimowości, klucz odwracania — logika w anonymize-tools.js).
 //
 // Przebieg: zakres (zaznaczenie / kolumny / arkusz / cały plik) → Skanuj → raport typów
 // i kolumn z metodą do wyboru → ręczne korekty (odznaczanie wartości, wyjątki, własne słowa
@@ -214,6 +215,109 @@ const swbAnon = (() => {
       label_postcode: "ZIP", label_dob: "DATE", label_plate: "PLATE", label_kw: "LR",
     },
   };
+  // Etapy 3–4 (2026-11-06): profile, polecenie tekstem, raport ryzyka, klucz odwracania.
+  Object.assign(TXT.pl, {
+    profileSec: "Profil i polecenie",
+    profile: "Profil", profileCurrent: "— bieżące ustawienia —", profileBuiltin: "Wbudowane", profileOwn: "Moje profile",
+    profileSave: "Zapisz jako profil…", profileDelete: "Usuń profil", profileExport: "Eksportuj profile", profileImport: "Importuj profile…",
+    profileNamePrompt: "Nazwa profilu (np. „RODO — wysyłka do kontrahenta”):",
+    profileSaved: "Zapisano profil „{name}”.", profileDeleted: "Usunięto profil „{name}”.", profileApplied: "Profil „{name}”: ustawienia wczytane.",
+    profileImported: "Zaimportowano profile: {n}.", profileImportBad: "To nie jest plik profili anonimizacji.", profileExportNone: "Nie masz jeszcze własnych profili.",
+    profileHint: "Profil pamięta metody, ślady, reguły, wynik i typy kolumn po nazwie nagłówka — ten sam plik co miesiąc w kilka sekund. Hasła profil nie zapisuje.",
+    pr_rodo_share: "RODO — wysyłka do kontrahenta", prd_rodo_share: "Osoby → pseudonimy, numery zamaskowane, daty urodzenia do roku, adresy do miejscowości, notatki usunięte.",
+    pr_test_data: "Dane do testów (realistyczne)", prd_test_data: "Wszystko podmienione na fałszywe dane z poprawnymi sumami, daty przesunięte — plik wygląda jak prawdziwy.",
+    pr_max: "Maksymalnie bezpiecznie", prd_max: "Znaczniki [TYP] albo usunięcie, daty do roku, notatki i stopki usunięte.",
+    command: "Polecenie tekstem", commandPh: "np. PESEL zamaskuj, nazwiska na pseudonimy, daty do miesiąca, notatki usuń",
+    commandApply: "Zastosuj", commandEmpty: "Wpisz polecenie.",
+    cmdUnderstood: "Zrozumiałem:", cmdUnknown: "Nie zrozumiałem: {list}. Ustaw to ręcznie niżej albo napisz inaczej (np. „telefony maskuj”).",
+    cmdNothing: "Nic nie zrozumiałem z tego polecenia. Przykład: „PESEL zamaskuj, nazwiska na pseudonimy, daty do miesiąca”.",
+    cmdRest: "pozostałe ({n})", cmdDateMonth: "daty do miesiąca", cmdDateYear: "daty do roku",
+    cmdColumn: "kolumna „{h}” → {m}", cmdScope: "zakres: {v}", cmdOutput: "wynik: {v}",
+    tr_notes: "notatki", tr_metadata: "właściwości pliku", tr_headersFooters: "nagłówki i stopki",
+    trv_remove: "usuń", trv_keep: "zostaw", trv_anonymize: "anonimizuj", trv_clear: "wyczyść", trv_true: "wyczyść", trv_false: "zostaw",
+    risk: "Ryzyko rozpoznania osoby (po anonimizacji)",
+    riskNone: "Brak cech pośrednich (data urodzenia, kod pocztowy, miejscowość, płeć, wiek, stanowisko…) w zakresie — raport nie ma czego liczyć.",
+    riskOk: "{where}: każda kombinacja cech ({cols}) występuje co najmniej {k}× w {n} wierszach — nikt nie wyróżnia się sam.",
+    riskBad: "{where}: {u} z {n} wierszy ({p}%) ma UNIKALNĄ kombinację cech: {cols}. Ktoś, kto zna te cechy, rozpozna tę osobę mimo pseudonimu.",
+    riskSmall: "{where}: nikt nie jest unikalny, ale {s} wierszy ma kombinację wspólną z najwyżej {k} osobami ({cols}).",
+    riskDrop: "Najwięcej daje „{c}” — bez tej cechy unikalnych zostaje {u}. Uogólnij ją (np. data do roku, kod do 62-xxx) albo usuń kolumnę.",
+    riskExamples: "Przykłady unikalnych kombinacji: {list}",
+    rkOpt: "Zapisz klucz odwracania (plik zaszyfrowany hasłem)",
+    rkHint: "Klucz pozwala później przywrócić oryginalne wartości komórek (pseudonimizacja w rozumieniu RODO). Zawiera oryginalne dane — trzymaj go osobno od zanonimizowanego pliku. Bez hasła nie da się go otworzyć.",
+    rkPass: "Hasło klucza (min. 8 znaków)", rkPass2: "Powtórz hasło",
+    rkWeak: "Hasło klucza musi mieć co najmniej 8 znaków.", rkMismatch: "Hasła klucza się różnią.",
+    rkSaved: "Zapisano klucz odwracania: {name} ({n} komórek).", rkFailed: "Nie udało się zapisać klucza odwracania ({msg}).",
+    rkSuffix: " — klucz odwracania",
+    restoreOpen: "Przywróć z klucza…",
+    restoreTitle: "Przywróć oryginalne dane z klucza",
+    restoreIntro: "Otwórz zanonimizowany plik, wybierz plik klucza i wpisz jego hasło. Wrócą oryginalne wartości komórek; komórki zmienione po anonimizacji zostaną bez zmian. Notatek, wykresów i właściwości pliku klucz nie przywraca.",
+    restoreFile: "Plik klucza", restorePass: "Hasło", restoreRun: "Przywróć",
+    restoreBadPassword: "Złe hasło albo uszkodzony plik klucza.", restoreBadFile: "To nie jest plik klucza anonimizacji.", restoreNoCrypto: "Ta przeglądarka nie ma szyfrowania WebCrypto.",
+    restoreNoFile: "Wybierz plik klucza.",
+    restoreDone: "Przywrócono {n} komórek.", restoreSkipped: "Pominięto {n} — ich wartość zmieniła się po anonimizacji albo nie ma arkusza: {list}",
+    restoreNothing: "Żadna komórka nie pasuje do klucza — to chyba inny plik.",
+    restoreOtherFile: "Klucz utworzono dla pliku „{f}” ({d}).",
+    aiSec: "✦ Wolny tekst (AI na urządzeniu)",
+    aiIntro: "Kolumny ze zdaniami ({cols}) mogą zawierać nazwiska i adresy wpisane w tekst, których reguły nie łapią. Asystent AI przeczyta {n} tekstów na tym urządzeniu i zaproponuje fragmenty — niczego nie zmienia sam; propozycje są niżej na liście wartości ze znakiem ✦, do zaznaczenia.",
+    aiRun: "✦ Szukaj osób i adresów w zdaniach", aiRunAgain: "✦ Szukaj ponownie", aiStop: "Zatrzymaj",
+    aiReason: "Wyszukiwanie osób i adresów w wolnym tekście potrzebuje asystenta AI na urządzeniu.",
+    aiProgress: "Czytanie tekstów… {done} / {total}",
+    aiDone: "AI zaproponowało {n} fragmentów ({m} nowych). Zaznacz na liście wartości (✦) te, które mają zostać ukryte.",
+    aiNone: "AI nie znalazło dodatkowych danych osobowych w tych tekstach.",
+    aiFailed: "Asystent AI nie odpowiedział poprawnie ({msg}) — reguły działają dalej bez niego.",
+    aiHint: "✦ ({n}) — propozycje AI z wolnego tekstu. Zaznacz te, które mają zostać ukryte; reszta zostaje bez zmian.",
+  });
+  Object.assign(TXT.en, {
+    profileSec: "Profile and command",
+    profile: "Profile", profileCurrent: "— current settings —", profileBuiltin: "Built-in", profileOwn: "My profiles",
+    profileSave: "Save as profile…", profileDelete: "Delete profile", profileExport: "Export profiles", profileImport: "Import profiles…",
+    profileNamePrompt: "Profile name (e.g. “GDPR — sending to a contractor”):",
+    profileSaved: "Saved profile “{name}”.", profileDeleted: "Deleted profile “{name}”.", profileApplied: "Profile “{name}”: settings loaded.",
+    profileImported: "Imported profiles: {n}.", profileImportBad: "This is not an anonymization profiles file.", profileExportNone: "You have no profiles of your own yet.",
+    profileHint: "A profile remembers methods, traces, rules, the result and column types by header name — the same monthly file in seconds. It never stores the password.",
+    pr_rodo_share: "GDPR — sending to a contractor", prd_rodo_share: "People → pseudonyms, numbers masked, birth dates to year, addresses to town, notes removed.",
+    pr_test_data: "Test data (realistic)", prd_test_data: "Everything replaced with fake data with valid checksums, dates shifted — the file looks real.",
+    pr_max: "Maximum safety", prd_max: "[TYPE] tags or removal, dates to year, notes and footers removed.",
+    command: "Command in words", commandPh: "e.g. mask PESEL, names to pseudonyms, dates to month, remove notes",
+    commandApply: "Apply", commandEmpty: "Type a command.",
+    cmdUnderstood: "Understood:", cmdUnknown: "Not understood: {list}. Set it by hand below or rephrase (e.g. “mask phones”).",
+    cmdNothing: "Nothing understood in this command. Example: “mask PESEL, names to pseudonyms, dates to month”.",
+    cmdRest: "others ({n})", cmdDateMonth: "dates to month", cmdDateYear: "dates to year",
+    cmdColumn: "column “{h}” → {m}", cmdScope: "scope: {v}", cmdOutput: "result: {v}",
+    tr_notes: "notes", tr_metadata: "file properties", tr_headersFooters: "headers and footers",
+    trv_remove: "remove", trv_keep: "keep", trv_anonymize: "anonymize", trv_clear: "clear", trv_true: "clear", trv_false: "keep",
+    risk: "Re-identification risk (after anonymization)",
+    riskNone: "No indirect traits (birth date, postal code, town, sex, age, job…) in scope — nothing to compute.",
+    riskOk: "{where}: every combination of traits ({cols}) appears at least {k}× in {n} rows — nobody stands out alone.",
+    riskBad: "{where}: {u} of {n} rows ({p}%) have a UNIQUE combination of traits: {cols}. Someone who knows these traits will recognize the person despite the pseudonym.",
+    riskSmall: "{where}: nobody is unique, but {s} rows share their combination with at most {k} people ({cols}).",
+    riskDrop: "“{c}” contributes most — without it {u} stay unique. Generalize it (e.g. date to year, code to 62-xxx) or remove the column.",
+    riskExamples: "Examples of unique combinations: {list}",
+    rkOpt: "Save a reversal key (password-encrypted file)",
+    rkHint: "The key lets you restore the original cell values later (pseudonymization under GDPR). It holds the original data — keep it apart from the anonymized file. It can't be opened without the password.",
+    rkPass: "Key password (min. 8 characters)", rkPass2: "Repeat password",
+    rkWeak: "The key password needs at least 8 characters.", rkMismatch: "The key passwords differ.",
+    rkSaved: "Saved the reversal key: {name} ({n} cells).", rkFailed: "Couldn't save the reversal key ({msg}).",
+    rkSuffix: " — reversal key",
+    restoreOpen: "Restore from key…",
+    restoreTitle: "Restore original data from a key",
+    restoreIntro: "Open the anonymized file, choose the key file and type its password. The original cell values come back; cells changed after anonymization stay as they are. The key doesn't restore notes, charts or file properties.",
+    restoreFile: "Key file", restorePass: "Password", restoreRun: "Restore",
+    restoreBadPassword: "Wrong password or damaged key file.", restoreBadFile: "This is not an anonymization key file.", restoreNoCrypto: "This browser has no WebCrypto encryption.",
+    restoreNoFile: "Choose a key file.",
+    restoreDone: "Restored {n} cells.", restoreSkipped: "Skipped {n} — their value changed after anonymization or the sheet is missing: {list}",
+    restoreNothing: "No cell matches the key — it's probably a different file.",
+    restoreOtherFile: "The key was made for “{f}” ({d}).",
+    aiSec: "✦ Free text (on-device AI)",
+    aiIntro: "Columns with sentences ({cols}) may hold names and addresses typed into text that rules don't catch. The AI assistant reads {n} texts on this device and suggests fragments — it changes nothing by itself; suggestions appear in the value list below marked ✦, to tick.",
+    aiRun: "✦ Find people and addresses in sentences", aiRunAgain: "✦ Search again", aiStop: "Stop",
+    aiReason: "Finding people and addresses in free text needs the on-device AI assistant.",
+    aiProgress: "Reading texts… {done} / {total}",
+    aiDone: "AI suggested {n} fragments ({m} new). Tick the ones to hide in the value list (✦).",
+    aiNone: "AI found no extra personal data in these texts.",
+    aiFailed: "The AI assistant didn't answer correctly ({msg}) — rules keep working without it.",
+    aiHint: "✦ ({n}) — AI suggestions from free text. Tick the ones to hide; the rest stays unchanged.",
+  });
   const L = () => (typeof currentLang !== "undefined" && currentLang === "en" ? "en" : "pl");
   function tx(key, vars = {}) {
     const s = TXT[L()][key] ?? TXT.pl[key] ?? key;
@@ -229,7 +333,13 @@ const swbAnon = (() => {
     rules: { terms: "", exceptions: "", patterns: "" },
     output: "copy", traces: { ...SWB_ANON_ZIP_DEFAULTS }, search: "",
     scan: null, seed: null, plan: null, showAllCols: false,
+    // etapy 3–4
+    dateGeneralize: null, headerModes: {}, command: "", cmdResult: null, profileId: "",
+    keyOn: false, keyPass: "", keyPass2: "",
+    // etap 5: propozycje AI (typ|wartość → {type, value}); aiStamp unieważnia pamięć trafień
+    aiTerms: new Map(), aiStamp: 0, aiBusy: false, aiMsg: "",
   };
+  const PROFILES_KEY = "swb-anon-profiles-v1";
   function loadPrefs() {
     try {
       const p = JSON.parse(localStorage.getItem(PREF_KEY) || "null");
@@ -239,10 +349,11 @@ const swbAnon = (() => {
       if (p.output === "copy" || p.output === "inplace") st.output = p.output;
       if (p.traces) Object.assign(st.traces, p.traces);
       if (p.scope) st.scope = p.scope;
+      if (p.dateGeneralize === "month" || p.dateGeneralize === "year") st.dateGeneralize = p.dateGeneralize;
     } catch { /* brak pamięci — domyślne */ }
   }
   function savePrefs() {
-    try { localStorage.setItem(PREF_KEY, JSON.stringify({ methods: st.methods, rules: st.rules, output: st.output, traces: st.traces, scope: st.scope })); } catch { /* bez pamięci */ }
+    try { localStorage.setItem(PREF_KEY, JSON.stringify({ methods: st.methods, rules: st.rules, output: st.output, traces: st.traces, scope: st.scope, dateGeneralize: st.dateGeneralize })); } catch { /* bez pamięci */ }
   }
   const lines = (s) => String(s || "").split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
   const labels = () => {
@@ -350,7 +461,9 @@ const swbAnon = (() => {
           const cells = seg.cells;
           const dataCells = cells.filter((x) => !x.above);
           const profile = SwbAnon.profileColumn(header, dataCells.slice(0, 2000), compiled);
-          cells.forEach((x) => { x.hits = typeof x.v === "string" ? SwbAnon.findInText(x.v, compiled, header) : typeof x.v === "number" && Number.isInteger(x.v) && x.v > 999999 ? SwbAnon.findInText(String(x.v), compiled, header) : []; });
+          // liczba: PESEL 2000–2009 zapisany liczbą ma 10 cyfr (zero z przodu zgubione) — szukamy w 11-cyfrowej formie
+          const numText = (n) => { const t = String(n); return t.length === 10 && SwbAnon.validators.peselValid(`0${t}`) ? `0${t}` : t; };
+          cells.forEach((x) => { x.hits = typeof x.v === "string" ? SwbAnon.findInText(x.v, compiled, header) : typeof x.v === "number" && Number.isInteger(x.v) && x.v > 999999 ? SwbAnon.findInText(numText(x.v), compiled, header) : []; });
           result.cols.push({ sheet: p.name, c, table: key, header, profile, cells, letter: XLSX.utils.encode_col(c) });
         }
       }
@@ -379,6 +492,8 @@ const swbAnon = (() => {
   function colMode(col) {
     const m = st.colModes[colKey(col)];
     if (m) return m;
+    const hm = col.header && st.headerModes[SwbAnonTools.fold(col.header)];
+    if (hm && hm !== "auto") return hm;
     if (st.everything) return col.profile.type || "custom";
     return col.profile.type || "auto";
   }
@@ -407,7 +522,7 @@ const swbAnon = (() => {
     if (!scanR) return null;
     const session = SwbAnon.createSession({
       seed: seedFromKey(), salt: st.key.trim() ? `k:${st.key.trim()}` : undefined,
-      keyed: !!st.key.trim(), reserved: reservedPseudo(),
+      keyed: !!st.key.trim(), reserved: reservedPseudo(), dateGeneralize: st.dateGeneralize || undefined,
       methods: st.methods, labels: labels(),
       rules: { terms: lines(st.rules.terms), patterns: lines(st.rules.patterns), exceptions: lines(st.rules.exceptions) },
     });
@@ -423,12 +538,18 @@ const swbAnon = (() => {
     });
     // imiona/nazwiska spoza słownika poznane z kolumn osób → wykryj je też w wolnym tekście
     const learnedAny = session.learned.first.size || session.learned.sur.size;
+    const aiList = [...st.aiTerms.values()];
     const hitsOf = (col, x) => {
-      if (!learnedAny || typeof x.v !== "string") return x.hits;
-      if (!x.hits2) x.hits2 = session.findInText(x.v, col.header);
-      return x.hits2;
+      let base = x.hits;
+      if (learnedAny && typeof x.v === "string") {
+        if (!x.hits2) x.hits2 = session.findInText(x.v, col.header);
+        base = x.hits2;
+      }
+      if (!aiList.length || typeof x.v !== "string") return base;
+      if (x.hitsAiStamp !== st.aiStamp || x.hitsAiBase !== base) { x.hitsAi = SwbAnonTools.aiHits(x.v, aiList, base); x.hitsAiStamp = st.aiStamp; x.hitsAiBase = base; }
+      return x.hitsAi;
     };
-    scanR.cols.forEach((col) => col.cells.forEach((x) => { delete x.hits2; }));
+    scanR.cols.forEach((col) => col.cells.forEach((x) => { delete x.hits2; delete x.hitsAiBase; }));
     const changes = [];
     const values = new Map(); // valueKey → {type, value, count, conf}
     const typeCounts = {};
@@ -436,8 +557,9 @@ const swbAnon = (() => {
     const note = (type, value, conf) => {
       const k = valueKey(type, value);
       const e = values.get(k);
-      if (e) e.count++; else values.set(k, { key: k, type, value, count: 1, conf });
-      if (conf === "low" && !st.included.has(k)) return false;
+      // ta sama wartość wykryta regułą i przez AI: pewniejsze wygrywa
+      if (e) { e.count++; if (e.conf === "ai" && conf !== "ai") e.conf = conf; } else values.set(k, { key: k, type, value, count: 1, conf });
+      if ((conf === "low" || conf === "ai") && !st.included.has(k)) return false;
       typeCounts[type] = (typeCounts[type] || 0) + 1;
       return !st.excluded.has(k);
     };
@@ -450,7 +572,7 @@ const swbAnon = (() => {
         // kolumna osób rozpoznana automatycznie: komórka, która nie wygląda na imię/nazwisko
         // („Porządkowi”, „STARSI”, „Data”) czeka na decyzję użytkownika; „Gr3 P. Król” ma osobę
         // w środku — zamieniamy tylko ją (kod grupy zostaje)
-        const auto = !st.colModes[colKey(col)] && !st.everything;
+        const auto = !st.colModes[colKey(col)] && !(col.header && st.headerModes[SwbAnonTools.fold(col.header)]) && !st.everything;
         let low = wholeType === "person" && auto && typeof x.v === "string" && SwbAnon.personCellScore(x.v) === 0;
         if (low && hitsOf(col, x).some((h) => h.type === "person")) { wholeType = null; low = false; }
         if (wholeType) {
@@ -505,7 +627,8 @@ const swbAnon = (() => {
     return cell;
   }
 
-  function applyInPlace(plan) {
+  // opts.restore — przywracanie z klucza: bez czyszczenia śladów przy zapisie (to są znowu dane oryginalne).
+  function applyInPlace(plan, opts = {}) {
     if (typeof swbEditGuard === "function" && !swbEditGuard()) return false;
     if (typeof undoCloseStep === "function") undoCloseStep();
     const bySheet = new Map();
@@ -543,7 +666,10 @@ const swbAnon = (() => {
     }
     bumpSheetDataStamp();
     if (typeof swbNotesInvalidate === "function") swbNotesInvalidate();
-    const cleanup = { session: plan.session, opts: { ...st.traces }, workbook, headerCells: st.scan && st.scan.headerCells, protectedCells: st.scan && st.scan.protectedCells };
+    // Drugi przebieg „w miejscu” przed zapisem: czyszczenie pierwszego zostaje w łańcuchu (prev) —
+    // dawniej nowe nadpisywało stare i ślady 1. przebiegu (notatki, wykresy, pivot) zostawały w pliku.
+    const prevCleanup = swbAnonPendingCleanup && swbAnonPendingCleanup.workbook === workbook ? swbAnonPendingCleanup : null;
+    const cleanup = opts.restore ? null : { session: plan.session, opts: { ...st.traces }, workbook, headerCells: st.scan && st.scan.headerCells, protectedCells: st.scan && st.scan.protectedCells, prev: prevCleanup };
     if (group.length && typeof undoStack !== "undefined") {
       const cur = group.find((s) => s.sheet === currentSheetName) || group[0];
       const all = [cur, ...group.filter((s) => s !== cur)];
@@ -556,7 +682,7 @@ const swbAnon = (() => {
     setDirtyState(true);
     renderActiveTable();
     scheduleViewRefresh({ analyses: true, filterBadge: true });
-    log(`Anonimizacja: zmieniono ${plan.changes.length} komorek w ${bySheet.size} arkuszach`, "success");
+    log(`Anonimizacja: ${opts.restore ? "przywrócono z klucza" : "zmieniono"} ${plan.changes.length} komorek w ${bySheet.size} arkuszach`, "success");
     return true;
   }
 
@@ -585,10 +711,12 @@ const swbAnon = (() => {
   async function saveCopy(bytes) {
     const base = typeof workbookBaseName === "function" ? workbookBaseName() : "plik";
     const ext = currentFileName && /\.xlsm$/i.test(currentFileName) ? "xlsm" : "xlsx";
-    const name = `${base}${tx("fileSuffix")}.${ext}`;
+    return saveFile(bytes, `${base}${tx("fileSuffix")}.${ext}`, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fsaSaveTypes(ext));
+  }
+  async function saveFile(bytes, name, mime, types) {
     if (canFSA) {
       try {
-        const handle = await window.showSaveFilePicker({ suggestedName: name, types: fsaSaveTypes(ext) });
+        const handle = await window.showSaveFilePicker({ suggestedName: name, types });
         const w = await handle.createWritable();
         await w.write(new Blob([bytes]));
         await w.close();
@@ -597,7 +725,7 @@ const swbAnon = (() => {
         if (err && err.name === "AbortError") return null;
       }
     }
-    const blob = new Blob([bytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = new Blob([bytes], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = name;
@@ -611,7 +739,12 @@ const swbAnon = (() => {
     const c = swbAnonPendingCleanup;
     if (!c || c.workbook !== workbook || typeof swbAnonCleanZip !== "function") return bytes;
     try {
-      const out = await swbAnonCleanZip(bytes, c.session, c.opts, { personMethod: c.session.methods.person, headerCells: c.headerCells, protectedCells: c.protectedCells });
+      const chain = [];
+      for (let x = c; x && x.workbook === workbook && chain.length < 20; x = x.prev) chain.unshift(x);
+      let out = null;
+      for (const x of chain) {
+        out = await swbAnonCleanZip(out ? out.bytes : bytes, x.session, x.opts, { personMethod: x.session.methods.person, headerCells: x.headerCells, protectedCells: x.protectedCells });
+      }
       if (out.report.leaks.length) setTimeout(() => toast(tx("toastLeakOnSave", { n: out.report.leaks.length }), "warning"), 400);
       swbAnon.lastReport = out.report;
       return out.bytes;
@@ -681,11 +814,432 @@ const swbAnon = (() => {
     document.body.appendChild(modal);
   }
 
+  // ── Etap 3: profile ────────────────────────────────────────────────
+  const T = () => SwbAnonTools;
+  function loadProfiles() {
+    try { const a = JSON.parse(localStorage.getItem(PROFILES_KEY) || "[]"); return Array.isArray(a) ? a.map((p) => T().sanitizeProfile(p)).filter((p) => p && p.name) : []; } catch { return []; }
+  }
+  function saveProfiles(list) {
+    try { localStorage.setItem(PROFILES_KEY, JSON.stringify(list)); } catch { /* bez pamięci */ }
+  }
+  const presetName = (p) => tx(`pr_${p.id.replace(/-/g, "_")}`);
+  // Profil z bieżących ustawień okna (bez hasła). Typy kolumn zapisywane po nazwie nagłówka.
+  function currentAsProfile(name) {
+    const columns = { ...st.headerModes };
+    if (st.scan) st.scan.cols.forEach((col) => { const m = st.colModes[colKey(col)]; if (m && col.header) columns[T().fold(col.header)] = m; });
+    return T().sanitizeProfile({ name, methods: st.methods, traces: st.traces, rules: st.rules, output: st.output, scope: st.scope, dateGeneralize: st.dateGeneralize, everything: st.everything, columns, command: st.command });
+  }
+  function applyProfile(p) {
+    st.methods = { ...SwbAnon.DEFAULT_METHODS, ...p.methods };
+    st.traces = { ...SWB_ANON_ZIP_DEFAULTS, ...p.traces };
+    if (p.rules) st.rules = { terms: "", exceptions: "", patterns: "", ...p.rules };
+    if (p.output) st.output = p.output;
+    if (p.scope && p.scope !== "selection") st.scope = p.scope;
+    st.dateGeneralize = p.dateGeneralize || null;
+    st.everything = !!p.everything;
+    st.headerModes = { ...(p.columns || {}) };
+    st.colModes = {};
+    savePrefs();
+  }
+  function profileById(id) {
+    if (!id) return null;
+    if (id.startsWith("b:")) { const b = T().PRESETS.find((x) => x.id === id.slice(2)); return b ? { ...b, name: presetName(b) } : null; }
+    const own = loadProfiles();
+    const i = Number(id.slice(2));
+    return own[i] || null;
+  }
+  function onProfilePick(id) {
+    st.profileId = id;
+    const p = profileById(id);
+    if (!p) { render(); return; }
+    applyProfile(p);
+    if (p.command) st.command = p.command;
+    st.cmdResult = null;
+    if (st.scan) st.plan = buildPlan();
+    render();
+    toast(tx("profileApplied", { name: p.name }), "success");
+  }
+  function saveAsProfile() {
+    const name = String(window.prompt(tx("profileNamePrompt"), "") || "").trim().slice(0, 80);
+    if (!name) return;
+    const list = loadProfiles().filter((p) => p.name !== name);
+    list.push(currentAsProfile(name));
+    saveProfiles(list);
+    st.profileId = `u:${list.length - 1}`;
+    render();
+    toast(tx("profileSaved", { name }), "success");
+  }
+  function deleteProfile() {
+    if (!st.profileId.startsWith("u:")) return;
+    const list = loadProfiles();
+    const i = Number(st.profileId.slice(2));
+    const p = list[i];
+    if (!p) return;
+    list.splice(i, 1);
+    saveProfiles(list);
+    st.profileId = "";
+    render();
+    toast(tx("profileDeleted", { name: p.name }), "success");
+  }
+  async function exportProfiles() {
+    const list = loadProfiles();
+    if (!list.length) { toast(tx("profileExportNone"), "warning"); return; }
+    const text = T().exportProfiles(list);
+    await saveFile(new TextEncoder().encode(text), "profile-anonimizacji.json", "application/json", [{ description: "JSON", accept: { "application/json": [".json"] } }]);
+  }
+  function importProfiles() {
+    const inp = document.createElement("input");
+    inp.type = "file"; inp.accept = ".json,application/json";
+    inp.addEventListener("change", async () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      try {
+        const { profiles } = T().importProfiles(await f.text());
+        const list = loadProfiles();
+        profiles.forEach((p) => { const k = list.findIndex((x) => x.name === p.name); if (k >= 0) list[k] = p; else list.push(p); });
+        saveProfiles(list);
+        render();
+        toast(tx("profileImported", { n: fmtN(profiles.length) }), "success");
+      } catch { toast(tx("profileImportBad"), "warning"); }
+    });
+    inp.click();
+  }
+
+  // ── Etap 3: polecenie tekstem ─────────────────────────────────────
+  function applyCommand() {
+    const text = st.command.trim();
+    if (!text) { toast(tx("commandEmpty"), "warning"); return; }
+    const headers = st.scan ? st.scan.cols.filter((c) => c.header).map((c) => ({ key: colKey(c), header: c.header })) : (currentHeaders || []).map((h, i) => ({ key: `h:${i}`, header: h })).filter((h) => h.header);
+    const r = T().parseCommand(text, { headers });
+    Object.assign(st.methods, r.methods);
+    Object.assign(st.traces, r.traces);
+    if (r.output) st.output = r.output;
+    if (r.scope && r.scope !== st.scope) { st.scope = r.scope; st.scan = null; st.plan = null; }
+    if (r.dateGeneralize) st.dateGeneralize = r.dateGeneralize;
+    r.columns.forEach((c) => {
+      // z komendy przed skanem (klucz „h:i”) — po nazwie nagłówka, jak profil
+      if (st.scan && !c.key.startsWith("h:")) st.colModes[c.key] = c.mode; else st.headerModes[T().fold(c.header)] = c.mode;
+      if (c.method && c.mode === "custom") st.methods.custom = c.method;
+    });
+    st.cmdResult = r;
+    st.profileId = "";
+    savePrefs();
+    if (st.scan) st.plan = buildPlan();
+    render();
+  }
+  // Zrozumiane polecenie → krótka lista („PESEL → Maskuj; Osoba → Pseudonim; daty do miesiąca”).
+  function describeCommand(r) {
+    const byMethod = new Map();
+    const parts = [];
+    r.understood.forEach((u) => {
+      if (u.kind === "method") { if (!byMethod.has(u.method)) byMethod.set(u.method, []); if (!byMethod.get(u.method).includes(u.type)) byMethod.get(u.method).push(u.type); }
+      else if (u.kind === "trace") parts.push(`${tx(`tr_${u.trace}`)} → ${tx(`trv_${u.value}`)}`);
+      else if (u.kind === "column") parts.push(tx("cmdColumn", { h: u.header, m: u.mode === "skip" ? tx("colSkip") : u.mode === "custom" ? tx(`m_${u.method}`) : tx(`t_${u.mode}`) }));
+      else if (u.kind === "scope") parts.push(tx("cmdScope", { v: tx(`scope${u.scope[0].toUpperCase()}${u.scope.slice(1)}`) }));
+      else if (u.kind === "output") parts.push(tx("cmdOutput", { v: tx(u.output === "copy" ? "outCopy" : "outInPlace").split(/[—(]/)[0].trim() }));
+    });
+    const methodParts = [...byMethod].map(([m, types]) => `${types.length > 6 ? tx("cmdRest", { n: types.length }) : types.map((t) => tx(`t_${t}`)).join(", ")} → ${tx(`m_${m}`)}`);
+    if (r.dateGeneralize) methodParts.push(tx(r.dateGeneralize === "month" ? "cmdDateMonth" : "cmdDateYear"));
+    return [...methodParts, ...parts];
+  }
+  function renderProfileSection() {
+    const sec = section(tx("profileSec"), "anon-profile-sec");
+    const row = el("div", "anon-profile-row");
+    const sel = el("select", "anon-select anon-profile-select");
+    sel.id = "anonProfile";
+    sel.setAttribute("aria-label", tx("profile"));
+    const o0 = el("option", null, tx("profileCurrent")); o0.value = ""; sel.appendChild(o0);
+    const g1 = el("optgroup"); g1.label = tx("profileBuiltin");
+    T().PRESETS.forEach((p) => { const o = el("option", null, presetName(p)); o.value = `b:${p.id}`; o.title = tx(`prd_${p.id.replace(/-/g, "_")}`); g1.appendChild(o); });
+    sel.appendChild(g1);
+    const own = loadProfiles();
+    if (own.length) {
+      const g2 = el("optgroup"); g2.label = tx("profileOwn");
+      own.forEach((p, i) => { const o = el("option", null, p.name); o.value = `u:${i}`; g2.appendChild(o); });
+      sel.appendChild(g2);
+    }
+    sel.value = st.profileId;
+    sel.addEventListener("change", () => onProfilePick(sel.value));
+    const mk = (label, fn, id) => { const b = el("button", "btn btn-sm ghost", label); b.type = "button"; if (id) b.id = id; b.addEventListener("click", fn); return b; };
+    const btns = el("div", "anon-profile-btns");
+    btns.append(mk(tx("profileSave"), saveAsProfile, "anonProfileSave"));
+    if (st.profileId.startsWith("u:")) btns.append(mk(tx("profileDelete"), deleteProfile, "anonProfileDelete"));
+    btns.append(mk(tx("profileExport"), exportProfiles, "anonProfileExport"), mk(tx("profileImport"), importProfiles, "anonProfileImport"));
+    row.append(sel);
+    sec.append(row, btns);
+    const pid = st.profileId.startsWith("b:") ? st.profileId.slice(2).replace(/-/g, "_") : null;
+    sec.appendChild(el("p", "field-note", pid ? tx(`prd_${pid}`) : tx("profileHint")));
+    // polecenie
+    const cmd = el("div", "anon-cmd");
+    const lab = el("label", "anon-sub", tx("command")); lab.htmlFor = "anonCommand";
+    const inp = el("input", "anon-cmd-input"); inp.type = "text"; inp.id = "anonCommand"; inp.placeholder = tx("commandPh"); inp.value = st.command; inp.autocomplete = "off"; inp.enterKeyHint = "done";
+    inp.addEventListener("input", () => { st.command = inp.value; });
+    inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); applyCommand(); } });
+    const go = el("button", "btn btn-sm", tx("commandApply")); go.type = "button"; go.id = "anonCommandApply"; go.addEventListener("click", applyCommand);
+    const line = el("div", "anon-cmd-line"); line.append(inp, go);
+    cmd.append(lab, line);
+    if (st.cmdResult) {
+      const r = st.cmdResult;
+      const box = el("div", "anon-cmd-result"); box.id = "anonCommandResult"; box.setAttribute("aria-live", "polite");
+      const parts = describeCommand(r);
+      if (parts.length) {
+        box.appendChild(el("span", "anon-cmd-head", tx("cmdUnderstood")));
+        const ul = el("ul", "anon-cmd-list");
+        parts.forEach((t) => ul.appendChild(el("li", null, t)));
+        box.appendChild(ul);
+      }
+      if (r.unknown.length) box.appendChild(el("p", parts.length ? "anon-warn" : "anon-warn", parts.length ? tx("cmdUnknown", { list: r.unknown.map((x) => `„${x}”`).join(", ") }) : tx("cmdNothing")));
+      cmd.appendChild(box);
+    }
+    sec.appendChild(cmd);
+    return sec;
+  }
+
+  // ── Etap 4: raport ryzyka ─────────────────────────────────────────
+  // Dla każdego arkusza/tabeli: kolumny z cechami pośrednimi → k-anonimowość PO zamianach.
+  function computeRisk(plan) {
+    if (!st.scan || !plan) return [];
+    const after = new Map(plan.changes.map((ch) => [`${ch.sheet}|${ch.r}|${ch.c}`, ch.after ? ch.after.value : null]));
+    const groups = new Map();
+    st.scan.cols.forEach((col) => {
+      const mode = colMode(col);
+      if (mode === "skip") return;
+      const type = mode !== "auto" ? mode : col.profile.type;
+      if (!T().isQuasiColumn(col.header, type)) return;
+      const k = `${col.sheet}|${col.table || ""}`;
+      if (!groups.has(k)) groups.set(k, { sheet: col.sheet, table: col.table, cols: [] });
+      groups.get(k).cols.push(col);
+    });
+    const out = [];
+    for (const g of groups.values()) {
+      const rowsSet = new Set();
+      const vals = g.cols.map((col) => { const m = new Map(); col.cells.forEach((x) => { if (!x.above) { m.set(x.r, x.v); rowsSet.add(x.r); } }); return m; });
+      if (rowsSet.size < 5) continue;
+      const records = [...rowsSet].map((r) => g.cols.map((col, i) => { const k = `${col.sheet}|${r}|${col.c}`; return after.has(k) ? after.get(k) : vals[i].get(r) ?? null; }));
+      const names = g.cols.map((c) => c.header || c.letter);
+      out.push({ where: `${st.scan.sheets > 1 ? `${g.sheet}${g.table ? " › " : ""}` : ""}${g.table || (st.scan.sheets > 1 ? "" : g.sheet)}`, ...T().riskReport(records, names) });
+    }
+    return out;
+  }
+  function renderRisk(plan) {
+    const sec = section(tx("risk"), "anon-risk");
+    sec.id = "anonRisk";
+    const rs = computeRisk(plan);
+    if (!rs.length) { sec.appendChild(el("p", "field-note", tx("riskNone"))); return sec; }
+    const show = (v) => (v instanceof Date ? toDisplay(v) : v === "" ? "∅" : String(v));
+    rs.forEach((r) => {
+      const cols = r.columns.join(" + ");
+      if (r.unique) {
+        sec.appendChild(el("p", "anon-warn", tx("riskBad", { where: r.where, u: fmtN(r.unique), n: fmtN(r.total), p: fmtN(Math.round((r.unique / r.total) * 1000) / 10), cols })));
+        const best = r.drop[0];
+        if (best && best.unique < r.unique) sec.appendChild(el("p", "field-note", tx("riskDrop", { c: best.name, u: fmtN(best.unique) })));
+        if (r.examples.length) sec.appendChild(el("p", "field-note anon-risk-ex", tx("riskExamples", { list: r.examples.slice(0, 3).map((e) => `(${e.map(show).join(" · ")})`).join(", ") })));
+      } else if (r.small) {
+        sec.appendChild(el("p", "anon-warn", tx("riskSmall", { where: r.where, s: fmtN(r.small), k: r.smallK, cols })));
+      } else {
+        sec.appendChild(el("p", "anon-ok", tx("riskOk", { where: r.where, cols, k: r.minK, n: fmtN(r.total) })));
+      }
+    });
+    return sec;
+  }
+
+  // ── Etap 4: klucz odwracania ──────────────────────────────────────
+  function keyProblem() {
+    if (!st.keyOn) return null;
+    if (st.keyPass.length < 8) return "rkWeak";
+    if (st.keyPass !== st.keyPass2) return "rkMismatch";
+    return null;
+  }
+  async function saveReverseKey(plan) {
+    try {
+      const base = typeof workbookBaseName === "function" ? workbookBaseName() : "plik";
+      const text = await T().encryptReverseKey(plan.changes.map((ch) => ({ sheet: ch.sheet, r: ch.r, c: ch.c, before: ch.before, after: ch.after ? ch.after.value : null })), st.keyPass, { file: currentFileName || base });
+      const name = await saveFile(new TextEncoder().encode(text), `${base}${tx("rkSuffix")}.json`, "application/json", [{ description: "JSON", accept: { "application/json": [".json"] } }]);
+      if (name) toast(tx("rkSaved", { name, n: fmtN(plan.changes.length) }), "success");
+      return name;
+    } catch (err) {
+      toast(tx("rkFailed", { msg: (err && err.message) || "?" }), "error");
+      return null;
+    }
+  }
+  function renderKeyOption(out) {
+    const box = el("div", "anon-key-opt");
+    box.appendChild(check(tx("rkOpt"), st.keyOn, (v) => { st.keyOn = v; renderResults(); }, tx("rkHint")));
+    if (st.keyOn) {
+      const mkPass = (label, k, id) => {
+        const f = el("label", "field");
+        f.appendChild(el("span", null, tx(label)));
+        const i = el("input"); i.type = "password"; i.autocomplete = "new-password"; i.id = id; i.value = st[k];
+        i.addEventListener("input", () => { st[k] = i.value; });
+        f.appendChild(i);
+        return f;
+      };
+      const grid = el("div", "anon-key-pass");
+      grid.append(mkPass("rkPass", "keyPass", "anonKeyPass"), mkPass("rkPass2", "keyPass2", "anonKeyPass2"));
+      box.append(grid, el("p", "field-note", tx("rkHint")));
+    }
+    out.appendChild(box);
+  }
+
+  // ── Etap 4: przywracanie z klucza ─────────────────────────────────
+  let restoreModal = null;
+  function openRestore() {
+    if (!workbook) { toast(tx("noFile"), "warning"); return; }
+    if (!restoreModal) {
+      restoreModal = el("div", "modal hidden anon-modal anon-restore-modal");
+      restoreModal.id = "anonRestoreModal";
+      restoreModal.setAttribute("role", "dialog"); restoreModal.setAttribute("aria-modal", "true"); restoreModal.setAttribute("aria-labelledby", "anonRestoreTitle");
+      restoreModal.addEventListener("click", (e) => { if (e.target === restoreModal) restoreModal.classList.add("hidden"); });
+      restoreModal.addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); restoreModal.classList.add("hidden"); } });
+      document.body.appendChild(restoreModal);
+    }
+    const content = el("div", "modal-content anon-content");
+    const head = el("div", "modal-head");
+    const title = el("div", "modal-title", tx("restoreTitle")); title.id = "anonRestoreTitle";
+    const close = el("button", "modal-close"); close.type = "button"; close.setAttribute("aria-label", tx("cancel"));
+    close.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+    close.addEventListener("click", () => restoreModal.classList.add("hidden"));
+    head.append(title, close);
+    const body = el("div", "anon-body");
+    body.appendChild(el("p", "field-note", tx("restoreIntro")));
+    const fField = el("label", "field"); fField.appendChild(el("span", null, tx("restoreFile")));
+    const fInp = el("input"); fInp.type = "file"; fInp.accept = ".json,application/json"; fInp.id = "anonRestoreFile"; fField.appendChild(fInp);
+    const pField = el("label", "field"); pField.appendChild(el("span", null, tx("restorePass")));
+    const pInp = el("input"); pInp.type = "password"; pInp.autocomplete = "off"; pInp.id = "anonRestorePass"; pField.appendChild(pInp);
+    const result = el("div", "anon-restore-result"); result.id = "anonRestoreResult"; result.setAttribute("aria-live", "polite");
+    body.append(fField, pField, result);
+    const actions = el("div", "modal-actions anon-actions");
+    const cancel = el("button", "btn ghost", tx("cancel")); cancel.type = "button"; cancel.addEventListener("click", () => restoreModal.classList.add("hidden"));
+    const go = el("button", "btn", tx("restoreRun")); go.type = "button"; go.id = "anonRestoreRun";
+    go.addEventListener("click", async () => {
+      result.replaceChildren();
+      const f = fInp.files && fInp.files[0];
+      if (!f) { result.appendChild(el("p", "anon-warn", tx("restoreNoFile"))); return; }
+      go.disabled = true;
+      try {
+        const data = await T().decryptReverseKey(await f.text(), pInp.value);
+        pInp.value = "";
+        result.append(...restoreFromKey(data));
+      } catch (err) {
+        const code = err && err.message;
+        result.appendChild(el("p", "anon-warn", tx(code === "badPassword" ? "restoreBadPassword" : code === "noCrypto" ? "restoreNoCrypto" : "restoreBadFile")));
+      } finally { go.disabled = false; }
+    });
+    pInp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go.click(); } });
+    actions.append(cancel, go);
+    content.append(head, body, actions);
+    restoreModal.replaceChildren(content);
+    restoreModal.classList.remove("hidden");
+  }
+  // Zwraca elementy raportu. Przywraca tylko komórki, które wciąż mają wartość z anonimizacji.
+  function restoreFromKey(data) {
+    const nodes = [];
+    const changes = [];
+    const skipped = [];
+    data.changes.forEach((ch) => {
+      const ws = workbook.Sheets[ch.sheet];
+      const ref = XLSX.utils.encode_cell({ r: ch.r, c: ch.c });
+      if (!ws) { skipped.push(`${ch.sheet}!${ref}`); return; }
+      const cell = ws[ref];
+      const cur = cell && cell.t !== "z" ? cell.v : null;
+      if (!T().sameValue(cur, ch.after)) { skipped.push(`${ch.sheet}!${ref}`); return; }
+      if (T().sameValue(cur, ch.before)) return;
+      const v = ch.before;
+      changes.push({ sheet: ch.sheet, r: ch.r, c: ch.c, before: cur, after: v == null ? null : { value: v, type: v instanceof Date ? "date" : typeof v === "number" ? "number" : "string" } });
+    });
+    if (data.file && currentFileName && T().fold(data.file) !== T().fold(currentFileName)) nodes.push(el("p", "field-note", tx("restoreOtherFile", { f: data.file, d: (data.created || "").slice(0, 10) })));
+    if (!changes.length) { nodes.push(el("p", "anon-warn", tx("restoreNothing"))); return nodes; }
+    if (!applyInPlace({ changes, session: null }, { restore: true })) return nodes;
+    nodes.push(el("p", "anon-ok", tx("restoreDone", { n: fmtN(changes.length) })));
+    if (skipped.length) nodes.push(el("p", "field-note", tx("restoreSkipped", { n: fmtN(skipped.length), list: skipped.slice(0, 12).join(", ") + (skipped.length > 12 ? ` +${skipped.length - 12}` : "") })));
+    toast(tx("restoreDone", { n: fmtN(changes.length) }), "success");
+    return nodes;
+  }
+
+  // ── Etap 5: AI ✦ w wolnym tekście ─────────────────────────────────
+  // Teksty z kolumn ze zdaniami (bez kolumn pominiętych i „całej komórki” — tam i tak wszystko znika).
+  function freeTexts() {
+    if (!st.scan) return { cols: [], texts: [] };
+    const cols = st.scan.cols.filter((col) => {
+      const mode = colMode(col);
+      if (mode === "skip" || (mode !== "auto" && mode !== "custom")) return false;
+      return SwbAnonTools.isFreeTextColumn(col.header, col.cells.slice(0, 300).map((x) => x.v));
+    });
+    const seen = new Set();
+    const texts = [];
+    cols.forEach((col) => col.cells.forEach((x) => {
+      if (typeof x.v !== "string" || x.v.trim().length < 12 || !/\p{L}{3}/u.test(x.v)) return;
+      const k = SwbAnon.norm(x.v);
+      if (seen.has(k)) return;
+      seen.add(k);
+      texts.push(x.v);
+    }));
+    // najpierw teksty z wyrazem z wielkiej litery w środku zdania (podejrzane o nazwisko)
+    const score = (t) => (/[^.!?]\s+\p{Lu}\p{Ll}{2,}/u.test(t) ? 1 : 0);
+    texts.sort((a, b) => score(b) - score(a));
+    return { cols, texts: texts.slice(0, 120) };
+  }
+  let aiAbort = null;
+  async function runAi() {
+    if (typeof LocalAI === "undefined") return;
+    if (st.aiBusy) { if (aiAbort) aiAbort.abort(); return; }
+    const { texts } = freeTexts();
+    if (!texts.length) return;
+    if (!(await LocalAI.ensure({ reason: tx("aiReason") }))) return;
+    st.aiBusy = true; st.aiMsg = "";
+    aiAbort = typeof AbortController !== "undefined" ? new AbortController() : null;
+    renderResults();
+    const before = st.aiTerms.size;
+    let found = 0;
+    const BATCH = 6;
+    try {
+      for (let i = 0; i < texts.length; i += BATCH) {
+        if (aiAbort && aiAbort.signal.aborted) break;
+        R.status.textContent = tx("aiProgress", { done: fmtN(i), total: fmtN(texts.length) });
+        const chunk = texts.slice(i, i + BATCH);
+        const { value, problem } = await LocalAI.json({ ...SwbAnonTools.aiPrompt(chunk), maxTokens: 300, signal: aiAbort && aiAbort.signal, validate: (j) => (j && (Array.isArray(j.znalezione) || Array.isArray(j.found)) ? "" : "no-list") });
+        if (!value) { if (i === 0) throw new Error(problem || "invalid"); continue; }
+        const exc = new Set(lines(st.rules.exceptions).map(SwbAnon.norm));
+        SwbAnonTools.parseAiAnswer(chunk, value).forEach((h) => {
+          if (exc.has(SwbAnon.norm(h.value))) return;
+          found++;
+          const k = `${h.type}|${SwbAnon.norm(h.value)}`;
+          if (!st.aiTerms.has(k)) st.aiTerms.set(k, { type: h.type, value: h.value });
+        });
+      }
+      const fresh = st.aiTerms.size - before;
+      st.aiMsg = found ? tx("aiDone", { n: fmtN(found), m: fmtN(fresh) }) : tx("aiNone");
+    } catch (err) {
+      if (!(err && err.name === "AbortError")) st.aiMsg = tx("aiFailed", { msg: (err && err.message) || "?" });
+    } finally {
+      st.aiBusy = false; aiAbort = null;
+      R.status.textContent = "";
+      st.aiStamp++;
+      st.plan = buildPlan();
+      renderResults();
+    }
+  }
+  function renderAiSection() {
+    if (typeof LocalAI === "undefined" || !st.scan) return null;
+    const { cols, texts } = freeTexts();
+    if (!texts.length && !st.aiTerms.size) return null;
+    const sec = section(tx("aiSec"), "anon-ai");
+    sec.id = "anonAi";
+    sec.appendChild(el("p", "field-note", tx("aiIntro", { cols: cols.map((c) => `„${c.header || c.letter}”`).slice(0, 4).join(", ") + (cols.length > 4 ? "…" : ""), n: fmtN(texts.length) })));
+    const b = el("button", "btn btn-sm", st.aiBusy ? tx("aiStop") : st.aiTerms.size ? tx("aiRunAgain") : tx("aiRun"));
+    b.type = "button"; b.id = "anonAiRun";
+    b.addEventListener("click", runAi);
+    sec.appendChild(b);
+    if (st.aiMsg) { const m = el("p", /nie odpowiedział|didn't answer/.test(st.aiMsg) ? "anon-warn" : "field-note", st.aiMsg); m.id = "anonAiMsg"; sec.appendChild(m); }
+    return sec;
+  }
+
   function render() {
     if (!modal) return;
     R.title.textContent = tx("title");
     R.cancel.textContent = tx("cancel");
     R.body.replaceChildren();
+    R.body.appendChild(renderProfileSection());
 
     // Zakres
     const sScope = section(tx("scope"));
@@ -846,18 +1400,22 @@ const swbAnon = (() => {
         const items = [...plan.values.values()].filter((v) => !q || SwbAnon.norm(v.value instanceof Date ? v.value.toISOString() : v.value).includes(q) || SwbAnon.norm(tx(`t_${v.type}`)).includes(q))
           .sort((a, b) => (a.conf === "low") - (b.conf === "low") || b.count - a.count);
         const lows = items.filter((v) => v.conf === "low").length;
+        const ais = items.filter((v) => v.conf === "ai").length;
         if (lows) list.appendChild(el("div", "anon-low-hint", tx("lowHint", { n: fmtN(lows) })));
-        // najpierw do decyzji („?”), potem reszta
-        items.sort((a, b) => (b.conf === "low") - (a.conf === "low") || b.count - a.count);
+        if (ais) list.appendChild(el("div", "anon-low-hint anon-ai-hint", tx("aiHint", { n: fmtN(ais) })));
+        // najpierw do decyzji („?”, „✦”), potem reszta
+        const pend = (v) => v.conf === "low" || v.conf === "ai";
+        items.sort((a, b) => pend(b) - pend(a) || b.count - a.count);
         items.slice(0, 200).forEach((v) => {
           const lab = el("label", "anon-value");
-          const isOn = (x) => !st.excluded.has(x.key) && (x.conf !== "low" || st.included.has(x.key));
+          const isOn = (x) => !st.excluded.has(x.key) && (!pend(x) || st.included.has(x.key));
           const inp = el("input"); inp.type = "checkbox"; inp.checked = isOn(v);
           inp.addEventListener("change", () => {
-            if (inp.checked) { st.excluded.delete(v.key); if (v.conf === "low") st.included.add(v.key); } else { st.excluded.add(v.key); st.included.delete(v.key); }
+            if (inp.checked) { st.excluded.delete(v.key); if (pend(v)) st.included.add(v.key); } else { st.excluded.add(v.key); st.included.delete(v.key); }
             refreshPlanKeepValues();
           });
           if (v.conf === "low") lab.classList.add("is-low");
+          if (v.conf === "ai") lab.classList.add("is-ai");
           const txt = el("span", "anon-value-text", v.value instanceof Date ? toDisplay(v.value) : String(v.value));
           lab.append(inp, el("span", `anon-tag t-${v.type}`, tx(`t_${v.type}`)), txt, el("span", "anon-count", `${fmtN(v.count)}×`));
           if (v.conf === "medium") lab.classList.add("is-medium");
@@ -867,12 +1425,15 @@ const swbAnon = (() => {
         list._items = items;
       };
       search.addEventListener("input", () => { st.search = search.value; drawValues(); });
-      allB.addEventListener("click", () => { (list._items || []).forEach((v) => { st.excluded.delete(v.key); if (v.conf === "low") st.included.add(v.key); }); refreshPlanKeepValues(); drawValues(); });
+      allB.addEventListener("click", () => { (list._items || []).forEach((v) => { st.excluded.delete(v.key); if (v.conf === "low" || v.conf === "ai") st.included.add(v.key); }); refreshPlanKeepValues(); drawValues(); });
       noneB.addEventListener("click", () => { (list._items || []).forEach((v) => { st.excluded.add(v.key); st.included.delete(v.key); }); refreshPlanKeepValues(); drawValues(); });
       drawValues();
       sec.append(bar, list);
       R.results.appendChild(sec);
     }
+
+    const aiSec = renderAiSection();
+    if (aiSec) R.results.appendChild(aiSec);
 
     // własne reguły
     const rules = el("details", "anon-sec anon-rules");
@@ -895,6 +1456,7 @@ const swbAnon = (() => {
       sec.appendChild(renderPreview(plan));
       R.results.appendChild(sec);
     }
+    if (plan.changes.length) R.results.appendChild(renderRisk(plan));
 
     // wynik + ślady
     const out = section(tx("output"));
@@ -907,6 +1469,7 @@ const swbAnon = (() => {
       radios.appendChild(lab);
     });
     out.appendChild(radios);
+    renderKeyOption(out);
     out.appendChild(el("div", "anon-sub", tx("traces")));
     const tr = el("div", "anon-traces");
     tr.appendChild(check(tx("trMeta"), st.traces.metadata, (v) => { st.traces.metadata = v; savePrefs(); }));
@@ -928,6 +1491,8 @@ const swbAnon = (() => {
     st.plan = buildPlan();
     const prev = R.results.querySelector(".anon-preview");
     if (prev) prev.replaceWith(renderPreview(st.plan));
+    const risk = R.results.querySelector("#anonRisk");
+    if (risk && st.plan.changes.length) risk.replaceWith(renderRisk(st.plan));
     const sum = R.results.querySelector(".anon-summary");
     if (sum) sum.textContent = tx("found", { cells: fmtN(st.scan.cells), sheets: tx("sheetsN", { n: st.scan.sheets }), changes: fmtN(st.plan.changes.length), values: fmtN(st.plan.values.size) });
     R.run.disabled = !st.plan.changes.length;
@@ -1104,6 +1669,8 @@ const swbAnon = (() => {
   async function run() {
     if (!st.plan) { toast(tx("needScan"), "warning"); return; }
     if (!st.plan.changes.length) return;
+    const kp = keyProblem();
+    if (kp) { toast(tx(kp), "warning"); const f = modal.querySelector("#anonKeyPass"); if (f) f.focus(); return; }
     // świeży plan tuż przed wykonaniem — ten sam, który widać w podglądzie
     const plan = buildPlan();
     st.plan = plan;
@@ -1113,6 +1680,7 @@ const swbAnon = (() => {
     if (st.output === "inplace") {
       if (!applyInPlace(plan)) return;
       toast(tx("toastInPlace", { n: fmtN(plan.changes.length) }), "success");
+      if (st.keyOn) await saveReverseKey(plan);
       st.scan = null; st.plan = null;
       render();
       renderReport({ changed: plan.changes.length, inPlace: true, links });
@@ -1131,6 +1699,7 @@ const swbAnon = (() => {
       R.status.textContent = "";
       if (savedName === null) { R.run.disabled = false; return; }
       log(`Anonimizacja: zapisano kopie ${savedName} (${plan.changes.length} komorek)`, "success");
+      if (st.keyOn) await saveReverseKey(plan);
       renderReport({ changed: plan.changes.length, savedName, report, links });
     } catch (err) {
       R.status.textContent = "";
@@ -1146,6 +1715,7 @@ const swbAnon = (() => {
     if (opts.scope) st.scope = opts.scope;
     else if (typeof getSelectionRectangle === "function" && getSelectionRectangle() && getSelectionRectangle().colCount * getSelectionRectangle().rowCount > 1) st.scope = "selection";
     st.scan = null; st.plan = null; st.seed = null; R.report = null;
+    if (st.aiWorkbook !== workbook) { st.aiTerms = new Map(); st.aiMsg = ""; st.aiWorkbook = workbook; }
     render();
     modal.classList.remove("hidden");
     // fokus tylko przy klawiaturze — na dotyku zakres wyglądał na „wciśnięty” (obwódka fokusu)
@@ -1164,15 +1734,19 @@ const swbAnon = (() => {
     if (h) h.textContent = tx("panelHint");
     const b = document.getElementById("anonOpenBtn");
     if (b) b.textContent = tx("open");
+    const rb = document.getElementById("anonRestoreBtn");
+    if (rb) rb.textContent = tx("restoreOpen");
     if (modal && !modal.classList.contains("hidden")) render();
   }
 
   loadPrefs();
   const openBtn = document.getElementById("anonOpenBtn");
   if (openBtn) openBtn.addEventListener("click", () => open());
+  const restoreBtn = document.getElementById("anonRestoreBtn");
+  if (restoreBtn) restoreBtn.addEventListener("click", () => openRestore());
   syncPanel();
 
-  return { open, close: closeModal, scan, buildPlan, buildCopyBytes, state: st, cleanOnSave, syncPanel, lastReport: null, lastBytes: null };
+  return { open, close: closeModal, scan, buildPlan, buildCopyBytes, state: st, cleanOnSave, syncPanel, openRestore, restoreFromKey, computeRisk, applyCommand, lastReport: null, lastBytes: null };
 })();
 
 function swbAnonSyncLanguage() { swbAnon.syncPanel(); }

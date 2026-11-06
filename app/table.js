@@ -870,7 +870,7 @@ function swbMoveBlock(s, dr, dc) {
   }
   // 2. formuły w tym arkuszu, które wskazują na blok (poza samym blokiem) — przepinamy po zapisie
   const deps = [];
-  let otherSheets = 0;
+  const farDeps = []; // inne arkusze i kolumny poza widokiem — zapis prosto do arkusza (Excel też je przepina)
   const inDest = (r, c) => r >= s.r1 + dr && r <= s.r2 + dr && c >= s.c1 + dc && c <= s.c2 + dc;
   for (const name of workbook.SheetNames || []) {
     const sh = workbook.Sheets[name];
@@ -882,13 +882,13 @@ function swbMoveBlock(s, dr, dc) {
       // formuła w miejscu docelowym zostaje przykryta przeniesionym blokiem (jak w Excelu) — dawniej
       // przepięta wracała na wierzch: wartość ginęła, a komórka dostawała odwołanie cykliczne
       if (name === currentSheetName && inDest(r, c - currentStartCol)) continue;
-      let moved = null;
+      let moved = null, movedAst = null;
       try {
         const res = FE.moveRefs(FE.parse(sh[ref].f, { lang: "en" }), box, dr, dc, (n) => (n == null ? name === currentSheetName : n === currentSheetName));
-        if (res.changed) moved = "=" + FE.serialize(res.ast, { lang });
+        if (res.changed) { moved = "=" + FE.serialize(res.ast, { lang }); movedAst = res.ast; }
       } catch { moved = null; }
       if (!moved) continue;
-      if (name !== currentSheetName || c - currentStartCol < 0 || c - currentStartCol >= model.headers.length) { otherSheets += 1; continue; }
+      if (name !== currentSheetName || c - currentStartCol < 0 || c - currentStartCol >= model.headers.length) { farDeps.push({ sheet: name, ref, r, c, ast: movedAst }); continue; }
       deps.push({ r, c: c - currentStartCol, text: moved });
     }
   }
@@ -914,6 +914,9 @@ function swbMoveBlock(s, dr, dc) {
   }
   // 5. formuły zależne idą za blokiem
   deps.forEach((d) => swbFormulaCommitAt(d.r, d.c, d.text, { silent: true }));
+  // 6. formuły w innych arkuszach (i w kolumnach poza widokiem) — prosto w arkuszu; razem z krokiem
+  // bieżącego arkusza jedno Cofnij (krok zbiorczy jak przy anonimizacji). Lista 3.11: dawniej tylko ostrzeżenie.
+  if (farDeps.length) swbMoveFarDeps(farDeps);
   setDirtyState(true);
   renderActiveTable();
   if (typeof scheduleViewRefresh === "function") scheduleViewRefresh({ analyses: true, filterBadge: true });
@@ -927,10 +930,58 @@ function swbMoveBlock(s, dr, dc) {
     if (h > 1 || w > 1) setSelectedCell(botKey, s.c2 + dc, { scroll: false });
   }
   toast(t("cellsMoved", { count: h * w }), "success");
-  if (deps.length) toast(t("cutFormulasFollowed", { count: deps.length }), "info");
-  if (otherSheets) toast(t("cutOtherSheetsWarn", { count: otherSheets }), "warning");
-  log(`Przeniesiono ${h * w} kom. o (${dr}, ${dc}); przepięte formuły: ${deps.length}`, "success");
+  if (deps.length + farDeps.length) toast(t("cutFormulasFollowed", { count: deps.length + farDeps.length }), "info");
+  log(`Przeniesiono ${h * w} kom. o (${dr}, ${dc}); przepięte formuły: ${deps.length} + ${farDeps.length} w innych arkuszach/poza widokiem`, "success");
   return true;
+}
+
+// Formuły poza bieżącym widokiem (inne arkusze, kolumny poza zakresem tabeli) przepięte przy
+// przeniesieniu bloku: zapis w arkuszu + pendingEdits, wartość przeliczona; Cofnij = jeden krok
+// zbiorczy z bieżącym arkuszem.
+function swbMoveFarDeps(list) {
+  const FE = typeof FormulaEngine !== "undefined" ? FormulaEngine : null;
+  if (!FE) return;
+  if (typeof undoCloseStep === "function") undoCloseStep(); // zmiany bieżącego arkusza → krok na stosie
+  const cur = typeof undoStack !== "undefined" ? undoStack[undoStack.length - 1] : null;
+  const curOk = cur && cur.workbook === workbook && cur.sheet === currentSheetName && !cur.group;
+  const bySheet = new Map();
+  for (const d of list) {
+    const ws = workbook.Sheets[d.sheet];
+    if (!ws) continue;
+    if (!bySheet.has(d.sheet)) bySheet.set(d.sheet, { workbook, sheet: d.sheet, changes: [] });
+    const step = bySheet.get(d.sheet);
+    const col = d.c - (d.sheet === currentSheetName ? currentStartCol : 0);
+    if (typeof undoSnapshot === "function") step.changes.push({ cellRef: d.ref, rowIndex0: d.r, col, absCol: d.c, snap: undoSnapshot(d.sheet, d.ref, d.r, col, null) });
+    const fileF = FE.serialize(d.ast, { file: true });
+    let value = null;
+    try { value = FE.evaluate(d.ast, fcContext(d.sheet, d.r, d.c)); if (value === FE.UNSUPPORTED) value = null; } catch { value = null; }
+    const prev = ws[d.ref];
+    const cell = { f: fileF };
+    if (prev && prev.s) cell.s = prev.s;
+    if (prev && prev.z) cell.z = prev.z;
+    if (prev && prev.c) cell.c = prev.c;
+    let payload;
+    if (value == null) {
+      if (prev) { cell.t = prev.t; cell.v = prev.v; if (prev.w != null) cell.w = prev.w; } else { cell.t = "s"; cell.v = ""; }
+      payload = { f: fileF, t: "n", v: null };
+    } else {
+      fcStore(cell, value);
+      payload = cell.t === "e" ? { f: fileF, t: "e", err: cell.v } : { f: fileF, t: cell.t === "d" ? "n" : cell.t, v: cell.v instanceof Date ? FE.jsDateToSerial(cell.v) : cell.v };
+    }
+    ws[d.ref] = cell;
+    recordPendingEdit(d.sheet, d.ref, payload);
+    if (typeof swbFormulaCellChanged === "function") swbFormulaCellChanged(d.sheet, d.ref);
+    if (typeof swbFormulaTouched === "function") swbFormulaTouched(d.sheet, d.r, d.c);
+  }
+  bumpSheetDataStamp();
+  const far = [...bySheet.values()].filter((st) => st.changes.length);
+  if (!far.length || typeof undoStack === "undefined") return;
+  if (curOk) undoStack.pop();
+  const group = curOk ? [cur, ...far] : far;
+  undoStack.push({ workbook, sheet: currentSheetName, group, changes: group.flatMap((st) => st.changes) });
+  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  redoStack = [];
+  updateUndoButtons();
 }
 
 function parseTsvClipboard(text) {

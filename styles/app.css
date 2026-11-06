@@ -3638,7 +3638,7 @@ thead th {
     box-shadow: 0 1px 0 var(--border);
     border-bottom: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
   }
-  .table-wrap.freeze-first-col tbody td:nth-child(2) {
+  .table-wrap.freeze-first-col tbody td[data-col-index="0"] {
     box-shadow: 1px 0 0 color-mix(in srgb, var(--ink) 12%, transparent);
   }
 }
@@ -3655,8 +3655,10 @@ thead th {
    przełączenie klasy na kontenerze wymusza przeliczenie stylów CAŁEJ tabeli
    (tysiące komórek), a na iOS scroll potrafi oscylować wokół zera przy gumowaniu
    krawędzi — czyli kilka takich przeliczeń pod palcem. Zysk nie wart ryzyka. */
+/* 1. kolumna danych po NUMERZE kolumny (data-col-index), nie nth-child: wiersz pod scaleniem
+   pionowym nie ma komórki A (przykrywa ją rowspan) — nth-child(2) przyklejał wtedy kolumnę B. */
 .table-wrap.freeze-first-col tbody td:first-child,
-.table-wrap.freeze-first-col tbody td:nth-child(2) {
+.table-wrap.freeze-first-col tbody td[data-col-index="0"] {
   position: sticky;
   z-index: 4;
   /* Pełne, nieprzezroczyste tło — BEZ backdrop-filter.
@@ -3671,7 +3673,7 @@ thead th {
   background: var(--surface);
 }
 .table-wrap.freeze-first-col tbody td:first-child { left: 0; }
-.table-wrap.freeze-first-col tbody td:nth-child(2) {
+.table-wrap.freeze-first-col tbody td[data-col-index="0"] {
   left: var(--row-head-w, 44px);
   box-shadow: 6px 0 8px -6px rgba(20, 30, 20, 0.16); /* delikatny cień odcinający zamrożoną kolumnę */
 }
@@ -3702,13 +3704,15 @@ thead th {
 }
 
 .table-wrap.freeze-first-col thead th:first-child,
-.table-wrap.freeze-first-col thead th:nth-child(2) {
+.table-wrap.freeze-first-col thead tr.guide-row > th:nth-child(2),
+.table-wrap.freeze-first-col thead tr.header-row > th[data-col-index="0"] {
   position: sticky;
   z-index: 9; /* nad zwykłym sticky thead, bo to też zamrożona kolumna (róg) */
   background: var(--surface);
 }
 .table-wrap.freeze-first-col thead th:first-child { left: 0; }
-.table-wrap.freeze-first-col thead th:nth-child(2) { left: var(--row-head-w, 44px); }
+.table-wrap.freeze-first-col thead tr.guide-row > th:nth-child(2),
+.table-wrap.freeze-first-col thead tr.header-row > th[data-col-index="0"] { left: var(--row-head-w, 44px); }
 
 /* „Szyba" zamrożonej kolumny NA CZAS PRZEWIJANIA (app/freeze-pane.js): zamiast ~400
    przyklejonych komórek (każda = osobna warstwa kompozytora) jedna przyklejona warstwa
@@ -3731,8 +3735,8 @@ thead th {
    dają position: relative, a reguła z #id była silniejsza od blokady — komórka z notatką
    zostawała z `left` ze sticky i wjeżdżała na sąsiednią kolumnę (2026-11-01). Bez wierszy-
    wypełniaczy nowego silnika i bez komórek w trybie szyby. N kolumn: core.js frozenColsCss. */
-.table-wrap.freeze-first-col #dataTable tbody tr:not(.vr-spacer) > td:nth-child(-n+2):not(.fz-off),
-.table-wrap.freeze-first-col #dataTable thead tr.pre-row > td:nth-child(-n+2) { position: sticky; }
+.table-wrap.freeze-first-col #dataTable tbody tr:not(.vr-spacer) > td:is(:first-child, [data-col-index="0"]):not(.fz-off),
+.table-wrap.freeze-first-col #dataTable thead tr.pre-row > td:is(:first-child, [data-col-index="0"]) { position: sticky; }
 .fz-pane {
   position: sticky;
   left: 0;
@@ -8819,12 +8823,12 @@ thead tr.pre-row > td.row-head {
 /* ostatni wiersz nad nagłówkiem: wyraźna granica „tu zaczyna się tabela” */
 thead tr.pre-row + tr.header-row th { border-top: 1px solid var(--border); }
 .table-wrap.freeze-first-col thead tr.pre-row > td.row-head,
-.table-wrap.freeze-first-col thead tr.pre-row > td.row-head + td {
+.table-wrap.freeze-first-col thead tr.pre-row > td[data-col-index="0"] {
   position: sticky;
   z-index: 5;
 }
 .table-wrap.freeze-first-col thead tr.pre-row > td.row-head { left: 0; }
-.table-wrap.freeze-first-col thead tr.pre-row > td.row-head + td { left: var(--row-head-w, 44px); background: var(--surface); }
+.table-wrap.freeze-first-col thead tr.pre-row > td[data-col-index="0"] { left: var(--row-head-w, 44px); background: var(--surface); }
 /* Przyklejony rząd liter (A, B, C…) i narożnik muszą być NIEPRZEZROCZYSTE: --panel w ciemnym
    motywie ma 75% krycia, więc przewijane wiersze prześwitywały przez litery (widoczne
    zwłaszcza z wierszami nad nagłówkiem). Panel kładziemy na pełnym --surface. */
@@ -9300,6 +9304,9 @@ details.anon-sec[open] > summary::before { content: "▾ "; }
 .anon-value:has(input:not(:checked)) .anon-value-text { color: var(--muted); text-decoration: line-through; }
 .anon-value.is-medium .anon-value-text::after { content: " ?"; color: var(--muted); }
 .anon-value.is-low .anon-value-text::after { content: " ?"; color: var(--warning); font-weight: 700; }
+.anon-value.is-ai .anon-value-text::after { content: " ✦"; color: var(--accent-h); font-weight: 700; }
+.anon-ai-hint { color: var(--accent-h); background: var(--accent-light); }
+.anon-ai .btn { justify-self: start; }
 .anon-low-hint { font-size: 12px; line-height: 1.4; color: var(--warning); background: var(--warning-bg); border-radius: 8px; padding: 6px 8px; margin: 2px 2px 4px; }
 .anon-more { font-size: 12px; color: var(--muted); padding: 4px 6px; }
 .anon-rules textarea { width: 100%; resize: vertical; font: inherit; font-size: 13px; }
@@ -9324,6 +9331,27 @@ details.anon-sec[open] > summary::before { content: "▾ "; }
 .anon-actions { align-items: center; flex-wrap: wrap; }
 .anon-status { flex: 1 1 140px; font-size: 12px; color: var(--muted); min-width: 0; }
 .anon-status:empty { flex-basis: 0; }
+/* etapy 3–4: profil, polecenie, ryzyko, klucz odwracania */
+.anon-profile-sec { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.anon-profile-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.anon-profile-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.anon-cmd { display: grid; gap: 6px; min-width: 0; }
+.anon-cmd-line { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.anon-cmd-input { flex: 1; min-width: 0; min-height: 32px; font-size: 13px; }
+.anon-cmd-result { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); border-radius: 8px; padding: 6px 8px; background: var(--accent-light); border: 1px solid var(--accent-border); }
+.anon-cmd-result p { margin: 0; font-size: 12.5px; }
+.anon-cmd-head { font-weight: 600; color: var(--ink); }
+.anon-cmd-list { margin: 0; padding-left: 18px; overflow-wrap: anywhere; }
+.anon-risk p { margin: 0; font-size: 13px; line-height: 1.4; }
+.anon-risk .field-note { font-weight: 400; }
+.anon-risk-ex { overflow-wrap: anywhere; }
+.anon-key-opt { display: grid; gap: 6px; padding: 8px 0 2px; }
+.anon-key-pass { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; padding-left: 24px; }
+.anon-key-pass input { width: 100%; }
+.anon-restore-modal .anon-content { width: min(520px, 100%); }
+.anon-restore-modal .field input[type="file"], .anon-restore-modal .field input[type="password"] { width: 100%; }
+.anon-restore-result { display: grid; gap: 6px; font-size: 13px; overflow-wrap: anywhere; }
+.anon-restore-result p { margin: 0; }
 @media (hover: hover) {
   .anon-seg-btn:not([aria-checked="true"]):hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
   .anon-value:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }

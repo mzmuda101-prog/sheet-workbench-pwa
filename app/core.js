@@ -851,7 +851,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261103-02";
+const APP_BUILD_VERSION = "20261106-01";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1275,24 +1275,40 @@ function getFrozenColCount() {
 function isFrozenCellIndex(cellIndex) {
   return cellIndex <= getFrozenColCount() && getFrozenColCount() > 0;
 }
+// to samo dla komórki — po numerze kolumny (data-col-index), nie pozycji w wierszu: w wierszu ze
+// scaleniem (rowspan z góry / colspan) pozycja ≠ kolumna (lista 3.11)
+function isFrozenCell(td) {
+  const n = getFrozenColCount();
+  if (!n || !td) return false;
+  if (td.classList && td.classList.contains("row-head")) return true;
+  const k = Number(td.dataset && td.dataset.colIndex);
+  return Number.isFinite(k) && td.dataset.colIndex !== "" ? k < n : td.cellIndex <= n;
+}
 function setFrozenColCount(n) {
   frozenColCount = Math.max(1, Math.min(FROZEN_COLS_MAX, Math.round(Number(n)) || 1));
   scheduleFrozenColOffsets();
 }
+// Komórki wybieramy po NUMERZE KOLUMNY (data-col-index), nie po pozycji w wierszu (nth-child):
+// w wierszu pod scaleniem pionowym brakuje komórek przykrytych rowspanem, a scalenie poziome to
+// jedna komórka na kilka kolumn — nth-child przyklejał wtedy złą kolumnę (lista 3.11). Rząd liter
+// ma zawsze jedną komórkę na kolumnę, więc tam nth-child zostaje.
 function frozenColsCss(n) {
   if (n < 2) return "";
   const W = ".table-wrap.freeze-first-col";
-  let css = `${W} tbody td:nth-child(2){box-shadow:none}\n`;
+  const at = (k) => `[data-col-index="${k}"]`;
+  let css = `${W} tbody td${at(0)}{box-shadow:none}\n`;
   for (let c = 3; c <= n + 1; c++) {
+    const k = c - 2;
     const L = `left:var(--fz-left-${c})`;
-    css += `${W} tbody td:nth-child(${c}),${W} thead th:nth-child(${c}),${W} thead tr.pre-row>td:nth-child(${c}){position:sticky;${L};background:var(--surface)}\n`
-      + `${W} tbody td:nth-child(${c}){z-index:4}${W} thead th:nth-child(${c}){z-index:9}${W} thead tr.pre-row>td:nth-child(${c}){z-index:5}\n`
+    css += `${W} tbody td${at(k)},${W} thead tr.guide-row>th:nth-child(${c}),${W} thead tr.header-row>th${at(k)},${W} thead tr.pre-row>td${at(k)}{position:sticky;${L};background:var(--surface)}\n`
+      + `${W} tbody td${at(k)}{z-index:4}${W} thead tr.guide-row>th:nth-child(${c}),${W} thead tr.header-row>th${at(k)}{z-index:9}${W} thead tr.pre-row>td${at(k)}{z-index:5}\n`
       // szyba (freeze-pane.js): prawdziwe komórki i kopia bez sticky — jak .fz-off w app.css
-      + `${W} tbody td.fz-off:nth-child(${c}),${W} .fz-clone tbody td:nth-child(${c}){position:relative;left:auto}\n`;
+      + `${W} tbody td.fz-off${at(k)},${W} .fz-clone tbody td${at(k)}{position:relative;left:auto}\n`;
   }
-  css += `${W} #dataTable tbody tr:not(.vr-spacer)>td:nth-child(-n+${n + 1}):not(.fz-off),${W} #dataTable thead tr.pre-row>td:nth-child(-n+${n + 1}){position:sticky}\n`; // jak w app.css (notatka/uchwyt)
-  css += `${W} tbody td:nth-child(${n + 1}):not(.fz-off){box-shadow:6px 0 8px -6px rgba(20,30,20,.16)}\n`
-    + `@media (pointer: coarse){${W} tbody td:nth-child(${n + 1}):not(.fz-off){box-shadow:1px 0 0 color-mix(in srgb,var(--ink) 12%,transparent)}}\n`;
+  const all = Array.from({ length: n }, (_, k) => at(k)).join(",");
+  css += `${W} #dataTable tbody tr:not(.vr-spacer)>td:is(${all}):not(.fz-off),${W} #dataTable thead tr.pre-row>td:is(${all}){position:sticky}\n`; // jak w app.css (notatka/uchwyt)
+  css += `${W} tbody td${at(n - 1)}:not(.fz-off){box-shadow:6px 0 8px -6px rgba(20,30,20,.16)}\n`
+    + `@media (pointer: coarse){${W} tbody td${at(n - 1)}:not(.fz-off){box-shadow:1px 0 0 color-mix(in srgb,var(--ink) 12%,transparent)}}\n`;
   return css;
 }
 function scheduleFrozenColOffsets() {
@@ -1344,8 +1360,10 @@ function syncFrozenColOffsets() {
 function keepCellClearOfFrozen(el, scrollLeftBefore) {
   const n = getFrozenColCount();
   if (!n || !el || el.tagName !== "TD" || !el.parentElement) return;
-  if (el.cellIndex <= n) { tableWrapEl.scrollLeft = scrollLeftBefore; return; }
-  const last = el.parentElement.cells[n];
+  if (isFrozenCell(el)) { tableWrapEl.scrollLeft = scrollLeftBefore; return; }
+  // ostatnia zamrożona kolumna z rzędu liter (zawsze 1:1) — w wierszu ze scaleniem cells[n] to inna kolumna
+  const guide = theadEl && theadEl.querySelector("tr.guide-row");
+  const last = (guide && guide.cells[n]) || el.parentElement.cells[n];
   if (!last) return;
   const hidden = last.getBoundingClientRect().right - el.getBoundingClientRect().left;
   if (hidden > 0) tableWrapEl.scrollLeft -= hidden;

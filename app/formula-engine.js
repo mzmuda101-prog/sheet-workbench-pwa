@@ -753,17 +753,31 @@
   }
 
   // ── daty (system 1900, dni od 1899-12-30) ──────────────────────────────────
+  // Błąd roku 1900 jak w Excelu (zgodność z Lotus 1-2-3): Excel liczy NIEISTNIEJĄCY 29.02.1900
+  // (seria 60), więc serie 1–59 to 1.01–28.02.1900 o dzień „później” niż prawdziwy kalendarz,
+  // a seria 0 to „0.01.1900”. Od 1.03.1900 (seria 61) wszystko się zgadza. Dzień tygodnia Excel
+  // liczy z serii (DZIEŃ.TYG(1) = 1, niedziela), nie z kalendarza.
   const DAY_MS = 86400000;
   const EPOCH = Date.UTC(1899, 11, 30);
-  function dateSerial(y, m, d) { return (Date.UTC(y, m - 1, d) - EPOCH) / DAY_MS; }
+  const excelFix = (s) => (s < 61 && s >= 1 ? s - 1 : s); // seria z prawdziwego kalendarza → Excela
+  function dateSerial(y, m, d) {
+    // od pierwszego dnia miesiąca + (d − 1): DATA(1900;2;29) = 60, jak w Excelu
+    const first = excelFix((Date.UTC(y, m - 1, 1) - EPOCH) / DAY_MS);
+    return first + d - 1;
+  }
   function serialToParts(s) {
-    const d = new Date(EPOCH + Math.floor(s) * DAY_MS);
-    return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), wd: d.getUTCDay() };
+    const n = Math.floor(s);
+    const wd = ((n % 7) + 6) % 7; // seria 0 = sobota, 1 = niedziela (Excel)
+    if (n === 60) return { y: 1900, m: 2, d: 29, wd };
+    if (n === 0) return { y: 1900, m: 1, d: 0, wd };
+    const d = new Date(EPOCH + (n >= 1 && n < 60 ? n + 1 : n) * DAY_MS);
+    return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate(), wd };
   }
   function jsDateToSerial(d) {
-    return (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()) - EPOCH) / DAY_MS;
+    const s = (Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()) - EPOCH) / DAY_MS;
+    return s >= 1 && s < 61 ? s - 1 : s;
   }
-  function daysInMonth(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); }
+  function daysInMonth(y, m) { return new Date(Date.UTC(y, m, 0)).getUTCDate(); } // EOMONTH/EDATE w Excelu: luty 1900 = 28 dni (wyrocznia 2026-11-06)
 
   // ── kryteria (LICZ.JEŻELI, SUMA.WARUNKÓW…) ─────────────────────────────────
   function wildcardRe(pattern) {
@@ -1187,10 +1201,15 @@
     const isSub = typeof ctx.formula === "function"
       ? (sh, r, c) => /\b(?:_xlfn\.)?(?:SUBTOTAL|AGGREGATE)\s*\(/i.test(ctx.formula(sh, r, c) || "")
       : null;
+    // Wiersze ukryte (Excel): 1–11 pomijają wiersze odfiltrowane, 101–111 także ukryte ręcznie.
+    // ctx.rowHidden(arkusz, wiersz) → 0 widoczny, 1 ukryty ręcznie, 2 ukryty filtrem (formula-calc.js).
+    const hiddenSkip = typeof ctx.rowHidden === "function"
+      ? (sh, r) => { const h = ctx.rowHidden(sh, r); return code > 100 ? h > 0 : h === 2; }
+      : null;
     const parts = args.slice(1).map((a) => {
-      if (!isSub || !isRange(a)) return a;
+      if ((!isSub && !hiddenSkip) || !isRange(a)) return a;
       const fr = new Range(a.ctx, a.sheet, a.r1, a.c1, a.r2, a.c2);
-      fr.at = (i, j) => (isSub(a.sheet, a.r1 + i, a.c1 + j) ? null : Range.prototype.at.call(fr, i, j));
+      fr.at = (i, j) => ((hiddenSkip && hiddenSkip(a.sheet, a.r1 + i)) || (isSub && isSub(a.sheet, a.r1 + i, a.c1 + j)) ? null : Range.prototype.at.call(fr, i, j));
       return fr;
     });
     return FN[fn](parts, ctx);
@@ -1419,8 +1438,10 @@
     if (isErr(y)) return y; if (isErr(m)) return m; if (isErr(d)) return d;
     y = Math.trunc(y); m = Math.trunc(m); d = Math.trunc(d);
     if (y < 1900) y += 1900;
-    const s = (Date.UTC(y, m - 1, d) - EPOCH) / DAY_MS;
-    return s < 0 ? ERR["#NUM!"] : s;
+    // miesiące poza 1–12 przechodzą na rok (DATA(2024;14;1) = 1.02.2025), dni liczone od 1. dnia miesiąca
+    const y2 = y + Math.floor((m - 1) / 12), m2 = ((((m - 1) % 12) + 12) % 12) + 1;
+    const s = dateSerial(y2, m2, d);
+    return s < 0 || y2 > 9999 ? ERR["#NUM!"] : s;
   };
   const datePart = (f) => (args, ctx) => {
     const v = scalar(args[0], ctx);

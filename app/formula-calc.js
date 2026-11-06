@@ -79,6 +79,15 @@ function fcContext(sheetName, r, c) {
         }
         return b;
       },
+      // SUMY.CZĘŚCIOWE: 0 widoczny, 1 ukryty ręcznie, 2 ukryty filtrem (wiersz w zakresie autofiltru)
+      rowHidden: (sh, rr) => {
+        const ws = workbook.Sheets[sh];
+        const row = ws && ws["!rows"] && ws["!rows"][rr];
+        if (!row || !row.hidden) return 0;
+        const af = ws["!autofilter"] && ws["!autofilter"].ref;
+        if (af) { try { const g = XLSX.utils.decode_range(af); if (rr > g.s.r && rr <= g.e.r) return 2; } catch { /* zły ref */ } }
+        return 1;
+      },
       sheetFor: fcSheetFor,
       now: () => FC.jsDateToSerial(new Date()),
       structured: FC.makeStructuredResolver(fcTables()),

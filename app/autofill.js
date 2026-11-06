@@ -466,7 +466,7 @@ const swbFillHandle = (() => {
     if (elStart.parentElement) elStart.remove();
   }
 
-  const inFrozenCol = (td) => isFrozenCellIndex(td.cellIndex);
+  const inFrozenCol = (td) => (typeof isFrozenCell === "function" ? isFrozenCell(td) : isFrozenCellIndex(td.cellIndex));
 
   // Środek kwadracika = narożnik ramki (środek jej 2-pikselowej kreski), nie zewnętrzny róg
   // komórki: clientWidth/Height pomijają obramowanie dolne komórki.

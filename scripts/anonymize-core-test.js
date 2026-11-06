@@ -206,5 +206,104 @@ eq(A.profileColumn("Ulica", ["Długa", "Polna"].map((v) => ({ v }))).type, "addr
   eq(A.addressCellScore("Osoba 4821"), 0, "„Osoba 4821” to nie adres");
 }
 
-console.log(`${fails ? "❌" : "✅"} anonymize-core: ${passes} ok, ${fails} błędów`);
-process.exit(fails ? 1 : 0);
+// ── PESEL 2000–2009 zapisany liczbą (zero z przodu zgubione) ──────────────
+{
+  const sp = A.createSession({ seed: 3 });
+  const m = sp.replaceWholeCell("pesel", 2270803624, "mask");
+  eq(m.value, "********624", "PESEL-liczba: maska z 11 znaków");
+  const f = sp.replaceWholeCell("pesel", 2270803624, "fake");
+  const fs = typeof f.value === "number" ? String(f.value).padStart(11, "0") : f.value;
+  ok(/^\d{11}$/.test(fs) && V.peselValid(fs), `PESEL-liczba: fałszywy ma 11 cyfr i dobrą sumę — ${f.value}`);
+  ok(typeof f.value === "string" ? f.value[0] === "0" : String(f.value).length === 11, "PESEL-liczba: liczbą tylko bez zera z przodu");
+  ok(sp.leakTerms.has("2270803624"), "PESEL-liczba: test szczelności szuka też formy bez zera");
+  ok(types("02270803624").includes("pesel:02270803624"), "11-cyfrowa forma wykrywana");
+}
+
+// ── odmiany: ta sama osoba = ten sam pseudonim (lista 3.11) ───────────────
+{
+  const so = A.createSession({ seed: 1, methods: { person: "pseudo" }, labels: { person: "Osoba" } });
+  const ps = (t) => so.replaceText("person", t, "pseudo");
+  const jan = ps("Jan Kowalski");
+  ["Janem Kowalskim", "Jana Kowalskiego", "Janowi Kowalskiemu", "Kowalskiego Jana"].forEach((t) => eq(ps(t), jan, `odmiana „${t}” = Jan Kowalski`));
+  const anna = ps("Anna Nowak");
+  ["Anną Nowak", "Anny Nowak", "Annie Nowak"].forEach((t) => eq(ps(t), anna, `odmiana „${t}” = Anna Nowak`));
+  eq(ps("Marii Wiśniewskiej"), ps("Maria Wiśniewska"), "odmiana -skiej/-ii");
+  eq(ps("Adama Mickiewicza"), ps("Adam Mickiewicz"), "odmiana -wicza");
+  ok(ps("Paweł Nowak") !== anna && ps("Anna Kowalska") !== jan, "różne osoby o tym samym nazwisku nadal osobno");
+  eq(ps("Pawła Nowaka"), ps("Paweł Nowak"), "odmiana imienia z wstawnym e i nazwiska -a");
+}
+
+// ── etap 3: polecenie tekstem + profile (anonymize-tools.js) ─────────────
+const T = require("../app/anonymize-tools.js");
+{
+  const r = T.parseCommand("PESEL zamaskuj, nazwiska na pseudonimy, daty do miesiąca");
+  eq(r.methods.pesel, "mask", "polecenie: PESEL zamaskuj");
+  eq(r.methods.person, "pseudo", "polecenie: nazwiska na pseudonimy");
+  eq(r.methods.dob, "generalize", "polecenie: daty → uogólnij");
+  eq(r.dateGeneralize, "month", "polecenie: do miesiąca");
+  eq(r.unknown.length, 0, "polecenie z planu w całości zrozumiane");
+  const r2 = T.parseCommand("adresy e-mail i telefony maskuj, resztę zostaw");
+  eq(r2.methods.email, "mask", "„adresy e-mail” to e-mail, nie adres");
+  eq(r2.methods.phone, "mask", "telefony maskuj");
+  eq(r2.methods.address, "keep", "resztę zostaw → adres zostaje");
+  eq(r2.methods.pesel, "keep", "resztę zostaw → PESEL zostaje");
+  const r3 = T.parseCommand("notatki usuń; metadane wyczyść; nagłówki i stopki usuń");
+  eq(r3.traces.notes, "remove", "notatki usuń");
+  eq(r3.traces.metadata, true, "metadane wyczyść");
+  eq(r3.traces.headersFooters, "clear", "nagłówki i stopki usuń");
+  eq(Object.keys(r3.methods).length, 0, "ślady nie zmieniają metod danych");
+  const r4 = T.parseCommand("kolumnę Uwagi usuń, kolumna „Telefon” zostaw, kolumna Klient to osoby", { headers: [{ key: "u", header: "Uwagi" }, { key: "t", header: "Telefon" }, { key: "k", header: "Klient" }] });
+  eq(r4.columns.find((c) => c.key === "u")?.mode, "custom", "kolumnę Uwagi usuń → cała komórka");
+  eq(r4.columns.find((c) => c.key === "u")?.method, "remove", "… metoda usuń");
+  eq(r4.columns.find((c) => c.key === "t")?.mode, "skip", "kolumna Telefon zostaw → pomiń");
+  eq(r4.columns.find((c) => c.key === "k")?.mode, "person", "kolumna Klient to osoby");
+  const r5 = T.parseCommand("imiona i nazwiska, adresy na fałszywe, cały plik, nowa kopia");
+  eq(r5.methods.person, "fake", "rodzaj bez metody czeka na następną klauzulę (osoby)");
+  eq(r5.methods.address, "fake", "… i adresy");
+  eq(r5.scope, "file", "cały plik"); eq(r5.output, "copy", "nowa kopia");
+  const r6 = T.parseCommand("zrób coś fajnego, PESEL usuń");
+  eq(r6.unknown.length, 1, "niezrozumiała część zgłoszona"); eq(r6.methods.pesel, "remove", "reszta działa");
+  eq(T.parseCommand("Mask emails, fake names, dates to year").dateGeneralize, "year", "polecenie po angielsku");
+  eq(T.parseCommand("telefony przesuń").methods.phone, undefined, "przesunięcie tylko dla dat");
+  // profile
+  const prof = T.sanitizeProfile({ name: "Miesięczny", methods: { person: "fake", pesel: "zle" }, traces: { notes: "remove", metadata: "tak" }, key: "tajne", columns: { "Uwagi Klienta": "skip", X: "zly" }, dateGeneralize: "month" });
+  eq(prof.methods.person, "fake", "profil: znana metoda"); eq(prof.methods.pesel, undefined, "profil: zła metoda odrzucona");
+  eq(prof.traces.metadata, undefined, "profil: zły typ śladu odrzucony"); eq(prof.key, undefined, "profil nigdy nie ma hasła");
+  eq(prof.columns["uwagi klienta"], "skip", "profil: kolumny po złożonej nazwie nagłówka"); eq(prof.columns.x, undefined, "profil: zły typ kolumny odrzucony");
+  const back = T.importProfiles(T.exportProfiles([prof, { name: "" }]));
+  eq(back.profiles.length, 1, "eksport/import: pusty profil pominięty"); eq(back.profiles[0].name, "Miesięczny", "eksport/import: nazwa");
+  let bad = false; try { T.importProfiles("{\"a\":1}"); } catch { bad = true; } ok(bad, "import: obcy JSON odrzucony");
+  ok(T.PRESETS.every((p) => T.sanitizeProfile({ ...p, name: p.id }).methods.person), "wbudowane profile są poprawne");
+  // dokładność uogólniania dat w sesji
+  const sm = A.createSession({ seed: 1, dateGeneralize: "month" });
+  eq(sm.replaceWholeCell("dob", new Date(Date.UTC(1985, 2, 12)), "generalize").value, "1985-03", "data urodzenia do miesiąca");
+  eq(A.createSession({ seed: 1 }).replaceWholeCell("dob", new Date(Date.UTC(1985, 2, 12)), "generalize").value, 1985, "domyślnie do roku");
+  eq(sm.replaceText("dob", "12.03.1985", "generalize"), "03.1985", "data tekstem do miesiąca");
+  eq(A.createSession({ seed: 1 }).replaceText("dob", "1985-03-12", "generalize"), "1985", "data ISO tekstem do roku");
+}
+
+// ── etap 4: ryzyko + klucz odwracania ───────────────────────────────────
+(async () => {
+  const recs = [["62-200", 1985, "K"], ["62-200", 1985, "K"], ["62-200", 1985, "K"], ["00-950", 1990, "M"], ["00-950", 1991, "M"], ["", "", ""]];
+  const rr = T.riskReport(recs, ["Kod", "Rok", "Płeć"]);
+  eq(rr.total, 5, "ryzyko: pusty wiersz pominięty");
+  eq(rr.unique, 2, "ryzyko: dwie unikalne kombinacje");
+  eq(rr.minK, 1, "ryzyko: k = 1");
+  eq(rr.drop[0].name, "Rok", "ryzyko: najwięcej daje rok (bez niego 0 unikalnych)");
+  eq(rr.drop[0].unique, 0, "ryzyko: bez roku nikt nie jest unikalny");
+  ok(T.isQuasiColumn("Płeć", null) && T.isQuasiColumn("Cokolwiek", "postcode") && !T.isQuasiColumn("Kwota", null), "cechy pośrednie po nagłówku i typie");
+  const changes = [{ sheet: "A", r: 1, c: 1, before: "Jan Kowalski", after: "Osoba 001" }, { sheet: "A", r: 2, c: 3, before: new Date(Date.UTC(1985, 2, 12)), after: 1985 }, { sheet: "A", r: 3, c: 2, before: 44051401359, after: null }];
+  const keyText = await T.encryptReverseKey(changes, "dlugiehaslo", { file: "x.xlsx" });
+  ok(!keyText.includes("Kowalski") && !keyText.includes("x.xlsx"), "klucz: plik nie zdradza danych ani nazwy pliku");
+  const dec = await T.decryptReverseKey(keyText, "dlugiehaslo");
+  eq(dec.changes.length, 3, "klucz: wszystkie zmiany");
+  eq(dec.changes[0].before, "Jan Kowalski", "klucz: tekst");
+  ok(dec.changes[1].before instanceof Date && dec.changes[1].before.getTime() === Date.UTC(1985, 2, 12), "klucz: data wraca jako data");
+  eq(dec.changes[2].before, 44051401359, "klucz: liczba wraca jako liczba"); eq(dec.changes[2].after, null, "klucz: pusta po anonimizacji");
+  let e1 = null; try { await T.decryptReverseKey(keyText, "zlehaslo1"); } catch (e) { e1 = e.message; } eq(e1, "badPassword", "klucz: złe hasło");
+  let e2 = null; try { await T.encryptReverseKey(changes, "krotkie"); } catch (e) { e2 = e.message; } eq(e2, "weakPassword", "klucz: hasło < 8 znaków odrzucone");
+  let e3 = null; try { await T.decryptReverseKey("{}", "x"); } catch (e) { e3 = e.message; } eq(e3, "badFile", "klucz: obcy plik");
+  ok(T.sameValue(1985, "1985") && T.sameValue(null, "") && !T.sameValue("Osoba 001", "Osoba 002"), "sameValue");
+  console.log(`${fails ? "❌" : "✅"} anonymize-core: ${passes} ok, ${fails} błędów`);
+  process.exit(fails ? 1 : 0);
+})();

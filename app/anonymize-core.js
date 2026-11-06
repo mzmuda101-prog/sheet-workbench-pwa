@@ -261,6 +261,34 @@ const SwbAnon = (() => {
     }
     return cands.some((c) => FIRST.has(c) || LEARNED.first.has(c));
   }
+  // Forma podstawowa imienia (do klucza osoby): janem/jana/janowi → jan, annie/anną/anny → anna.
+  function firstLemma(w) {
+    const n = norm(w);
+    if (isFirst(n)) return n;
+    if (NOT_FIRST_INFL.has(n)) return null;
+    for (const suf of ["owi", "iem", "em", "ie", "a", "u", "y", "i", "ę", "ą", "o"]) {
+      if (!n.endsWith(suf) || n.length - suf.length < 2) continue;
+      const stem = n.slice(0, -suf.length);
+      const cands = [stem, `${stem}a`, stem.replace(/(\p{L})$/u, "e$1")];
+      if (suf === "ie") cands.push(stem.replace(/n$/, "na"));
+      if (suf === "i" || suf === "ii") cands.push(`${stem}a`.replace(/ia$/, "ia"));
+      const hit = cands.find((c) => FIRST.has(c) || LEARNED.first.has(c));
+      if (hit) return hit;
+    }
+    return null;
+  }
+  // Forma podstawowa nazwiska (do klucza osoby): kowalskiego/kowalskim/kowalską/kowalskiej → kowalski
+  // (płeć rozróżnia imię w kluczu), mickiewicza → mickiewicz, nowakiem/nowaka → nowak (gdy znane).
+  function surnameLemma(w) {
+    const n = norm(w);
+    let m = n.match(/^(.+(?:sk|ck|dzk))(?:i|a|iego|iemu|im|ą|iej|ich)$/u);
+    if (m) return `${m[1]}i`;
+    m = n.match(/^(.+(?:wicz|czyk|czuk))(?:a|owi|em|iem|u|ów)$/u);
+    if (m) return m[1];
+    if (knownSurname(n)) return n;
+    for (const suf of ["owi", "iem", "em", "a", "u", "ą", "ej", "y"]) if (n.endsWith(suf) && n.length - suf.length >= 3 && knownSurname(n.slice(0, -suf.length))) return n.slice(0, -suf.length);
+    return n;
+  }
   // Nazwisko w odmianie: -skiego/-skiemu/-skim/-ską/-skiej, -wicza/-wiczem, -czyka…, albo poznane z pliku.
   const SURNAME_INFL = /(?:sk|ck|dzk)(?:i|a|iego|iemu|im|ą|iej|ich)$|wicz(?:a|owi|em|u|ów)?$|czyk(?:a|owi|iem|u)?$|czuk(?:a|owi|iem|u)?$/i;
   function surnameInfl(w) {
@@ -563,7 +591,7 @@ const SwbAnon = (() => {
   const asciiFold = (s) => fold(s).replace(/[^a-z0-9]+/g, "");
 
   // ── Sesja ───────────────────────────────────────────────────────────────
-  // opts: { seed, methods:{type→method}, rules, dateShiftDays, labels:{type→"Osoba"}, generalize,
+  // opts: { seed, methods:{type→method}, rules, dateShiftDays, labels:{type→"Osoba"}, dateGeneralize ("year"|"month"),
   //         keyed (sól z klucza spójności), reserved:{type→Set(numerów już w pliku)} }
   function createSession(opts = {}) {
     const seed = opts.seed ?? ((Math.random() * 2 ** 32) >>> 0);
@@ -606,8 +634,10 @@ const SwbAnon = (() => {
       p.surnameIdx.forEach((i) => { const w = p.tokens[i].replace(/[.,]$/, ""); if (w.length >= 3 && /^\p{Lu}/u.test(w)) learned.sur.add(norm(w)); });
       if (p.first) learned.realFirst.add(norm(p.first));
       if (p.firstIdx < 0 || !p.surnameIdx.length) return;
-      const surJoined = p.surnameIdx.map((i) => norm(p.tokens[i].replace(/[.,]$/, ""))).join(" ");
-      const k2 = `${norm(p.first)}|${surJoined[0]}`;
+      const rawJoined = p.surnameIdx.map((i) => norm(p.tokens[i].replace(/[.,]$/, ""))).join(" ");
+      // wartość = nazwisko w formie podstawowej (jak w personKey), klucz = imię + pierwsza litera
+      const surJoined = p.surnameIdx.map((i) => surnameLemma(p.tokens[i].replace(/[.,]$/, ""))).sort().join(" ");
+      const k2 = `${firstLemma(p.first) || norm(p.first)}|${rawJoined[0]}`;
       const prev2 = surByFirstIni.get(k2);
       if (prev2 === undefined) surByFirstIni.set(k2, surJoined);
       else if (prev2 !== surJoined) surByFirstIni.set(k2, null);
@@ -618,10 +648,20 @@ const SwbAnon = (() => {
       else if (prev !== norm(p.first)) fullByInitial.set(k, null); // dwie osoby — niejednoznaczne
     }
 
+    // Klucz osoby z form podstawowych: „Janem Kowalskim”, „Jana Kowalskiego” i „Jan Kowalski” to ta
+    // sama osoba (ten sam pseudonim). Odmienione imię parsePerson bierze za nazwisko — tu je odzyskujemy.
     function personKey(text) {
-      const p = parsePerson(text);
-      if (!p) return `raw:${norm(text)}`;
-      let sur = p.surnameIdx.map((i) => norm(p.tokens[i].replace(/[.,]$/, ""))).sort().join(" ");
+      const p0 = parsePerson(text);
+      if (!p0) return `raw:${norm(text)}`;
+      let p = p0;
+      if (p0.firstIdx < 0 && p0.initialIdx < 0 && p0.surnameIdx.length >= 2) {
+        const j = p0.surnameIdx.findIndex((i) => firstLemma(p0.tokens[i].replace(/[.,]$/, "")) && !knownSurname(p0.tokens[i].replace(/[.,]$/, "")));
+        if (j >= 0) {
+          const idx = p0.surnameIdx[j];
+          p = { ...p0, firstIdx: idx, first: firstLemma(p0.tokens[idx].replace(/[.,]$/, "")), surnameIdx: p0.surnameIdx.filter((_, k) => k !== j) };
+        }
+      } else if (p0.firstIdx >= 0) p = { ...p0, first: firstLemma(p0.first) || p0.first };
+      let sur = p.surnameIdx.map((i) => surnameLemma(p.tokens[i].replace(/[.,]$/, ""))).sort().join(" ");
       if (!sur && p.surInitialIdx >= 0 && p.firstIdx >= 0) {
         const ini = norm(p.tokens[p.surInitialIdx])[0];
         sur = surByFirstIni.get(`${norm(p.first)}|${ini}`) || `${ini}.`;
@@ -863,6 +903,14 @@ const SwbAnon = (() => {
       if (type === "ip") return str.replace(/\.\d+$/, ".0");
       if (type === "person") return label("person");
       if (type === "email") { const at = str.indexOf("@"); return at > 0 ? `***${str.slice(at)}` : "***"; }
+      if (type === "dob") {
+        // data zapisana tekstem: „12.03.1985”, „1985-03-12” → rok albo „03.1985” / „1985-03”
+        const g = opts.dateGeneralize || "year";
+        let mm = str.match(/^\s*(\d{1,2})[./-](\d{1,2})[./-](\d{4})\s*$/);
+        if (mm) return g === "month" ? `${mm[2].padStart(2, "0")}.${mm[3]}` : mm[3];
+        mm = str.match(/^\s*(\d{4})-(\d{1,2})-(\d{1,2})\s*$/);
+        if (mm) return g === "month" ? `${mm[1]}-${mm[2].padStart(2, "0")}` : mm[1];
+      }
       return `[${label(type)}]`;
     }
 
@@ -926,6 +974,7 @@ const SwbAnon = (() => {
         if (p) p.surnameIdx.forEach((i) => { const w = p.tokens[i].replace(/[.,]$/, ""); if (w.length >= 4) leakTerms.add(w); });
       }
       if (/^[\d\s+()-]+$/.test(v) && digits(v).length >= 7) leakTerms.add(digits(v));
+      if (type === "pesel" && /^0\d{10}$/.test(digits(v))) leakTerms.add(digits(v).slice(1));
     }
 
     // Wartość CAŁEJ komórki w kolumnie typu `type` (np. kolumna „Właściciel”).
@@ -935,13 +984,27 @@ const SwbAnon = (() => {
       if (m === "keep") return null;
       if (value instanceof Date) {
         if (m === "shift") return { value: new Date(value.getTime() + dateShiftDays * 86400000), type: "date" };
-        if (m === "generalize" || m === "mask") return { value: type === "dob" ? value.getFullYear() : `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`, type: type === "dob" ? "number" : "string" };
+        if (m === "generalize" || m === "mask") {
+          // dokładność: opts.dateGeneralize „year”/„month” (polecenie „daty do miesiąca”); domyślnie data urodzenia → rok, inne → rok-miesiąc
+          const g = opts.dateGeneralize || (type === "dob" ? "year" : "month");
+          return g === "year" ? { value: value.getFullYear(), type: "number" } : { value: `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`, type: "string" };
+        }
         if (m === "remove") return { value: null, type: null };
         if (m === "fake") { const r = rng(`date:${value.getTime()}`, seed); return { value: new Date(value.getTime() + Math.round((r() - 0.5) * 2 * 365) * 86400000), type: "date" }; }
         const out = replaceText(type, value.toISOString().slice(0, 10), m);
         return { value: out, type: "string" };
       }
       if (typeof value === "number") {
+        // PESEL urodzonych 2000–2009 zapisany LICZBĄ traci zero z przodu (02270803624 → 2270803624):
+        // zamieniamy pełne 11 cyfr; liczbą zostaje tylko wynik bez zera z przodu
+        if (type === "pesel" && Number.isInteger(value) && value > 0) {
+          const s11 = String(value).padStart(11, "0");
+          if (s11.length === 11 && peselValid(s11)) {
+            const r = replaceWholeCell(type, s11, m);
+            if (r && typeof r.value === "string" && /^\d{11}$/.test(r.value) && r.value[0] !== "0") return { value: Number(r.value), type: "number" };
+            return r;
+          }
+        }
         const s = Number.isInteger(value) ? String(value) : String(value);
         if (m === "remove") return { value: null, type: null };
         if (m === "generalize" && !["pesel", "nip", "regon", "phone", "iban", "card"].includes(type)) {

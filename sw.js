@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20261103-02";
+const CACHE_VERSION = "20261106-01";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -51,6 +51,7 @@ const SHELL_ASSETS = [
   `./app/key-bar.js?v=${ASSET_V}`,
   `./app/cell-notes.js?v=${ASSET_V}`,
   `./app/anonymize-core.js?v=${ASSET_V}`,
+  `./app/anonymize-tools.js?v=${ASSET_V}`,
   `./app/anonymize-zip.js?v=${ASSET_V}`,
   `./app/anonymize-ui.js?v=${ASSET_V}`,
   `./app/autofill.js?v=${ASSET_V}`,
