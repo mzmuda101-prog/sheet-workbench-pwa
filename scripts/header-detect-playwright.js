@@ -13,6 +13,7 @@
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
 
 const pw = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const ENGINE = process.env.ENGINE || "chromium";
 const fs = require("fs");
 const path = require("path");
@@ -132,6 +133,7 @@ async function run() {
     const p4 = await ctx4.newPage();
     p4.on("pageerror", (e) => errors.push("pageerror(4): " + e.message));
     p4.on("dialog", (d) => d.accept()); // „niezapisane zmiany” przy wczytaniu kolejnego pliku
+    await autoAnswerAppDialogs(p4); // własne okna aplikacji (app-dialog.js)
     await p4.goto(APP_URL, { waitUntil: "load" });
     await p4.evaluate(() => { document.getElementById("heroSplash")?.remove(); return loadSampleFile(); });
     await p4.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });

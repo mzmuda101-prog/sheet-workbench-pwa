@@ -12,6 +12,7 @@
 // ENGINE=webkit (Safari/iPad).
 
 const { chromium, webkit } = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const path = require("path");
 
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
@@ -41,6 +42,7 @@ async function run() {
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
   let promptAnswer = "";
   page.on("dialog", (d) => (d.type() === "prompt" ? d.accept(promptAnswer) : d.accept()));
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
   await openFile(page);
 
   const failures = [];
@@ -70,6 +72,7 @@ async function run() {
   // 1–2. zapis z paska filtrów
   ok("pasek ma „☆ Zapisz widok”", await page.locator("#activeFilters .af-save-view").isVisible());
   promptAnswer = "Projekt wg roku";
+  await page.evaluate((a) => { window.__appDialogText = a; }, promptAnswer);
   await page.click("#activeFilters .af-save-view");
   await sleep(300);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("swb-saved-views-v1") || "[]"));
@@ -110,6 +113,7 @@ async function run() {
     (await barSave.isVisible()) && (await page.locator('#activeFilters .af-chip[data-filter="sort"]').isVisible()));
   await page.evaluate(() => quickSearchEl.blur());
   promptAnswer = "Alfabetycznie";
+  await page.evaluate((a) => { window.__appDialogText = a; }, promptAnswer);
   await barSave.click();
   await sleep(300);
   const two = await page.evaluate(() => JSON.parse(localStorage.getItem("swb-saved-views-v1") || "[]").map((v) => v.name));

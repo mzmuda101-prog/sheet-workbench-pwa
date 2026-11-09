@@ -60,7 +60,7 @@ async function swbOpenSharedFile() {
     // Udostępnienie przychodzi POST-em, który może wysłać też dowolna strona (formularz z plikiem),
     // a service worker nie odróżni go od systemowego „Udostępnij” — bez pytania obca strona
     // otwierała w aplikacji swój plik pod dowolną nazwą (audyt bezpieczeństwa 6.11).
-    if (!window.confirm(t("openSharedConfirm", { name }))) return;
+    if (!(await appConfirm(t("openSharedConfirm", { name }), { title: t("openSharedTitle"), okLabel: t("openSharedOk") }))) return;
     await swbOpenExternal(new File([blob], name, { type: blob.type || XLSX_MIME }));
   } catch (e) {
     log(String(e?.message || e), "error");

@@ -11,6 +11,7 @@
 // „Opuścić stronę?”). Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
 
 const { chromium, webkit } = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const path = require("path");
 
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
@@ -27,6 +28,7 @@ async function run() {
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("dialog", (d) => d.accept());
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
 
   await page.goto(APP_URL, { waitUntil: "load" });
   await page.evaluate(() => { document.getElementById("heroSplash")?.remove(); try { ensureXlsxLibs && ensureXlsxLibs(false); } catch {} });
@@ -124,7 +126,7 @@ async function run() {
   });
   await step("obrót (orientationchange)", async () => { await page.evaluate(() => window.dispatchEvent(new Event("orientationchange"))); });
   await step("język PL → EN → PL", async () => { await page.evaluate(() => document.querySelector('#langSwitch [data-lang="en"]').click()); await sleep(200); await page.evaluate(() => document.querySelector('#langSwitch [data-lang="pl"]').click()); });
-  await step("motyw jasny ⇄ ciemny", async () => { await page.evaluate(() => { themeToggle.click(); themeToggle.click(); }); });
+  await step("motyw jasny ⇄ ciemny", async () => { await page.evaluate(() => { toggleThemeQuick(); toggleThemeQuick(); }); });
   await step("tryb czytania wł./wył.", async () => { await page.evaluate(() => { readingToggle?.click(); readingToggle?.click(); }); });
   await step("przerysowanie tabeli (sort/filtr)", rerender);
   await step("szukanie i wyczyszczenie", async () => { await page.fill("#quickSearch", "a"); await sleep(400); await page.fill("#quickSearch", ""); await sleep(400); });
@@ -180,14 +182,15 @@ async function run() {
   try {
     upd = await page.evaluate(async () => {
       window.__stay = "ta sama strona";
-      let asked = "";
-      window.confirm = (msg) => { asked = msg; return false; };
+      window.__appDialogMode = "dismiss"; // własne okno „Zapisz / Nie zapisuj / Anuluj” → Anuluj
+      window.__appDialogLog = [];
       await hardRefreshApp();
       const btn = document.getElementById("appUpdateBtn");
       btn?.classList.remove("hidden");
       btn?.click();
       await new Promise((r) => setTimeout(r, 300));
-      return { asked: /niezapisane zmiany/.test(asked), busy: !!btn?.classList.contains("is-busy") };
+      const log = window.__appDialogLog;
+      return { asked: log.length === 2 && /niezapisane zmiany/.test(log[0].msg) && log[0].buttons.join("/") === "Zapisz/Nie zapisuj/Anuluj", busy: !!btn?.classList.contains("is-busy") };
     });
     await sleep(800);
     upd.still = await page.evaluate(() => window.__stay);
@@ -196,7 +199,7 @@ async function run() {
   }
   check("„Aktualizuj” przy niezapisanych zmianach pyta, „Anuluj” nie przeładowuje", upd.asked && !upd.busy && upd.still === "ta sama strona", JSON.stringify(upd));
   if (!upd.reloaded) {
-    await page.evaluate(() => { window.confirm = () => true; document.getElementById("appUpdateBtn")?.classList.add("hidden"); });
+    await page.evaluate(() => { window.__appDialogMode = "accept"; document.getElementById("appUpdateBtn")?.classList.add("hidden"); });
     await verify("po anulowanej aktualizacji");
   }
 

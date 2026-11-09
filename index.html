@@ -18,7 +18,10 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20261031-logo" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=20261106-05" />
+    <link rel="stylesheet" href="styles/app.css?v=v1.00.00" />
+    <!-- Motyw PRZED pierwszym malowaniem (bez mignięcia jasnego tła w trybie ciemnym). Plik, nie
+         skrypt w treści — CSP pozwala tylko na script-src 'self'. Brak klucza = motyw systemu. -->
+    <script src="app/theme-early.js?v=v1.00.00"></script>
   </head>
   <body>
     <!-- Intro splash -->
@@ -69,7 +72,7 @@
           <button class="hero-save" id="heroSaveBtn" type="button" hidden data-hint data-hint-pl="Zapisz zmiany w pliku (Ctrl/⌘+S)" data-hint-en="Save changes to the file (Ctrl/⌘+S)" data-hint-delay="0.8" data-hint-touch="on">
             <span class="hero-save-label">Zapisz</span><span class="hero-save-count" id="heroSaveCount" hidden></span>
           </button>
-          <button class="app-menu-btn" id="appMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="appMenu" aria-label="Menu aplikacji" data-hint data-hint-pl="Język, motyw, odświeżenie, inne aplikacje" data-hint-en="Language, theme, refresh, other apps" data-hint-delay="0.8">
+          <button class="app-menu-btn" id="appMenuBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="appMenu" aria-label="Menu aplikacji" data-hint data-hint-pl="Język, motyw, skróty, kopia ustawień, wersja" data-hint-en="Language, theme, shortcuts, settings backup, version" data-hint-delay="0.8">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
           </button>
           <!-- Menu ⋯ — rzadko używane rzeczy, które dotąd stały na wierzchu (7 kontrolek
@@ -86,10 +89,21 @@
             </div>
             <div class="app-menu-row">
               <span class="app-menu-label" id="appMenuThemeLabel">Motyw</span>
-              <button class="theme-toggle" id="themeToggle" aria-label="Zmień motyw" data-hint data-hint-pl="Zmień motyw jasny / ciemny" data-hint-en="Switch light / dark theme" data-hint-delay="1.1"></button>
+            </div>
+            <!-- Motyw w 3 stanach (kontrakt UX): Systemowy = brak zapisanej preferencji, śledzi system na żywo. -->
+            <div class="theme-seg" id="themeSeg" role="radiogroup" aria-labelledby="appMenuThemeLabel">
+              <button class="theme-seg-btn" type="button" role="radio" aria-checked="true" data-theme-pref="system">Systemowy</button>
+              <button class="theme-seg-btn" type="button" role="radio" aria-checked="false" data-theme-pref="light">Jasny</button>
+              <button class="theme-seg-btn" type="button" role="radio" aria-checked="false" data-theme-pref="dark">Ciemny</button>
             </div>
             <button class="app-menu-item" id="aiMenuItem" type="button" data-local-ai-settings data-hint data-hint-pl="Model AI działający na tym urządzeniu — plik nie wychodzi z przeglądarki" data-hint-en="AI model running on this device — the file never leaves the browser" data-hint-delay="1.1">
               <span class="app-menu-item-text" id="aiMenuText">Asystent AI…</span><span aria-hidden="true">✦</span>
+            </button>
+            <button class="app-menu-item" id="shortcutsMenuItem" type="button">
+              <span class="app-menu-item-text" id="shortcutsMenuText">Skróty klawiszowe</span><kbd class="app-menu-kbd" id="shortcutsMenuKbd" aria-hidden="true">Ctrl /</kbd>
+            </button>
+            <button class="app-menu-item" id="settingsBackupItem" type="button">
+              <span class="app-menu-item-text" id="settingsBackupText">Kopia ustawień…</span><span aria-hidden="true">⇅</span>
             </button>
             <button class="app-menu-item" id="brandRefresh" type="button" data-hint data-hint-pl="Odśwież aplikację i cache" data-hint-en="Refresh the app and cache" data-hint-delay="1.1">
               <span class="app-menu-item-text" id="brandRefreshText">Odśwież aplikację</span><span aria-hidden="true">↻</span>
@@ -106,8 +120,11 @@
             <div class="app-menu-state hero-badges">
               <span class="hero-badge pwa-badge" data-hint-pl=" Progressive Web App (PWA) to nowoczesna strona internetowa, która działa i wygląda jak klasyczna aplikacja mobilna lub desktopowa. " data-hint-en="Progressive Web App(PWA) is a modern website that works and looks like a classic mobile or desktop application." data-hint-delay="1" data-hint-touch>PWA</span>
               <span class="hero-badge network-badge" id="networkBadge" aria-live="polite" data-hint data-hint-delay="1.1" data-hint-touch>Online</span>
-              <span class="app-menu-build" id="appMenuBuild"></span>
             </div>
+            <!-- Wersja widoczna na dole menu (kontrakt UX); klik kopiuje, „Co nowego” po aktualizacji. -->
+            <button class="app-menu-item app-menu-version" id="appMenuVersion" type="button">
+              <span class="app-menu-item-text" id="appMenuBuild">Wersja</span><span class="app-menu-version-copy" aria-hidden="true">⧉</span>
+            </button>
           </div>
         </div>
       </header>
@@ -618,13 +635,13 @@
                   <input id="wrapCells" type="checkbox" />
                   Zawijaj tekst we wszystkich komórkach
                 </label>
-                <label class="field checkbox" data-hint data-hint-pl="Dopasowuje szerokość kolumn do WIĘKSZOŚCI komórek (skrajnie długie teksty zostają przycięte, kolumny nie robią się ogromne). Wyłączone = kolumny mieszczą całą zawartość." data-hint-en="Fits column width to MOST cells (extremely long texts get clipped so columns don't get huge). Off = columns fit all content." data-hint-delay="1.1" data-hint-touch="on">
+                <label class="field checkbox" data-hint data-hint-pl="Inteligentna szerokość kolumn: dopasowuje szerokość kolumn do WIĘKSZOŚCI komórek (skrajnie długie teksty zostają przycięte, kolumny nie robią się ogromne). Wyłączone = kolumny mieszczą całą zawartość." data-hint-en="Smart column widths: fits column width to MOST cells (extremely long texts get clipped so columns don't get huge). Off = columns fit all content." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="smartColWidths" type="checkbox" checked />
-                  Inteligentna szerokość kolumn
+                  Węższe kolumny przy długich tekstach
                 </label>
-                <label class="field checkbox" data-hint data-hint-pl="Rysuje tylko to, co widać na ekranie (jak Excel) — płynniejsze przewijanie i szybsze sortowanie/filtrowanie, a do obejrzenia są WSZYSTKIE wiersze, bez limitu. Domyślnie włączony; gdyby coś wyglądało źle, wyłącz — tabela wróci do dawnego rysowania (z limitem wierszy)." data-hint-en="Draws only what is on screen (like Excel) — smoother scrolling and faster sorting/filtering, and ALL rows are viewable, no limit. On by default; if anything looks off, turn it off — the table goes back to the old drawing (with a row limit)." data-hint-delay="1.1" data-hint-touch="on">
+                <label class="field checkbox" data-hint data-hint-pl="Nowy silnik tabeli (wirtualizacja): rysuje tylko to, co widać na ekranie (jak Excel) — płynniejsze przewijanie i szybsze sortowanie/filtrowanie, a do obejrzenia są WSZYSTKIE wiersze, bez limitu. Domyślnie włączony; gdyby coś wyglądało źle, wyłącz — tabela wróci do dawnego rysowania (z limitem wierszy)." data-hint-en="New table engine (virtualisation): draws only what is on screen (like Excel) — smoother scrolling and faster sorting/filtering, and ALL rows are viewable, no limit. On by default; if anything looks off, turn it off — the table goes back to the old drawing (with a row limit)." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="virtRows" type="checkbox" checked />
-                  Nowy silnik tabeli
+                  Płynne przewijanie (wszystkie wiersze)
                 </label>
                 <label class="field checkbox" data-hint data-hint-pl="Wąski uchwyt przy lewej krawędzi ekranu, który wysuwa panel narzędzi. Bez niego panel otwiera przycisk „Narzędzia” nad tabelą." data-hint-en="Narrow handle at the left screen edge that slides the tools panel out. Without it, the “Tools” button above the table opens the panel." data-hint-delay="1.1" data-hint-touch="on">
                   <input id="showPanelHandle" type="checkbox" checked />
@@ -1164,55 +1181,8 @@
                 </svg>
               </summary>
               <div class="panel-body">
-                <div class="shortcut-hint">
-                <div class="shortcut-row"><kbd data-shortcut-text="clickKey">Klik</kbd> <span data-shortcut-text="clickCell">zaznacz jedną komórkę (aktywną); kolejny klik resetuje zaznaczenie</span></div>
-                <div class="shortcut-row"><kbd data-shortcut-text="arrows">Strzałki</kbd> <span data-shortcut-text="arrowFocus">ruszasz tym, co masz zaznaczone — wierszem albo pojedynczą komórką</span></div>
-                <div class="shortcut-row"><kbd>←</kbd> <kbd>→</kbd> <span data-shortcut-text="arrowRowScroll">przy zaznaczonym wierszu przewijają tabelę w bok (wiersz zostaje zaznaczony)</span></div>
-                <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd data-shortcut-text="spaceKey">Spacja</kbd> <span data-shortcut-text="toggleSelectionKind">przełącza zaznaczenie: cały wiersz ↔ sama komórka (bez myszy)</span></div>
-                <div class="shortcut-row"><kbd>Esc</kbd> <span data-shortcut-text="clearRowFocus">Zwiń zaznaczenie do komórki, a potem odznacz fokus</span></div>
-                <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd data-shortcut-text="clickKey">Klik</kbd> <span data-shortcut-text="showCellSelection">= zaznacz prostokąt od aktywnej komórki do klikniętej</span></div>
-                <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd data-shortcut-text="arrows">Strzałki</kbd> <span>=</span> <span data-shortcut-text="moveCellSelection">rozszerz zaznaczenie od aktywnej komórki</span></div>
-                <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd>Esc</kbd> <span data-shortcut-text="clearCellSelection">Odznacz wszystko (zaznaczenie i fokus)</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>F</kbd> <span data-shortcut-text="quickSearch">Szybkie szukanie</span></div>
-                <div class="shortcut-row"><kbd>/</kbd> <span data-shortcut-text="quickSearchSlash">Szybkie szukanie (bez aktywnej komórki / poza polem)</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Z</kbd> <span data-shortcut-text="undoShortcut">Cofnij zmianę w arkuszu (edycja, wklejenie, wypełnianie, narzędzia edycji)</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>V</kbd> <span data-shortcut-text="pasteShortcut">Wklej z formatowaniem źródła (liczby, daty, kolory, obramowanie) — jak w Excelu</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>V</kbd> <span data-shortcut-text="pasteValuesShortcut">Wklej same wartości — wygląd komórki docelowej zostaje (też w menu komórki)</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>Z</kbd> <span data-shortcut-text="redoShortcut">Ponów (także Ctrl + Y)</span></div>
-                <div class="shortcut-row"><kbd>Ctrl</kbd> <span>+</span> <kbd>D</kbd> <span data-shortcut-text="fillDownShortcut">Wypełnij w dół — kopia górnej komórki (sama komórka: kopia z komórki nad nią)</span></div>
-                <div class="shortcut-row"><kbd>Ctrl</kbd> <span>+</span> <kbd>R</kbd> <span data-shortcut-text="fillRightShortcut">Wypełnij w prawo — kopia lewej komórki</span></div>
-                <div class="shortcut-row"><kbd>⠿</kbd> <span data-shortcut-text="fillHandleShortcut">Kwadracik w rogu zaznaczenia: przeciągnij = seria (1, 2, 3…, daty, pon./wt., Kw1→Kw2), z Ctrl/Alt = kopia; dwuklik = do końca danych obok</span></div>
-                <div class="shortcut-row"><kbd>Enter</kbd> <span data-shortcut-text="quickSearchEnter">w oknie szukania = Szukaj (zawsze, gdy popup otwarty)</span></div>
-                <div class="shortcut-row"><kbd>↓</kbd> <kbd>↑</kbd> <span data-shortcut-text="quickSearchArrows">w szukaniu = nawigacja po podglądzie wyników</span></div>
-                <div class="shortcut-row"><kbd data-shortcut-text="spaceKey">Spacja</kbd> <span data-shortcut-text="qsSpaceToggle">przełącza pola wyboru w oknie szukania (np. „Operatory wyszukiwania")</span></div>
-                <div class="shortcut-row"><kbd>Tab</kbd> <span data-shortcut-text="qsTabCycle">krąży po kontrolkach okna szukania — lista wyników jest poza nim (wchodzisz w nią ↓)</span></div>
-                <div class="shortcut-row"><kbd>Esc</kbd> <span data-shortcut-text="qsEscBack">zamyka okno szukania i oddaje fokus tam, skąd je otwarto</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Enter</kbd> <span data-shortcut-text="filter">Filtruj</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>E</kbd> <span data-shortcut-text="exportCsv">Eksport CSV</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>S</kbd> <span data-shortcut-text="saveInPlace">Zapisz (w miejscu lub jako)</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Alt</kbd> <span>+</span> <kbd>S</kbd> <span data-shortcut-text="saveAs">Zapisz jako</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Shift</kbd> <span>+</span> <kbd>X</kbd> <span data-shortcut-text="resetFilters">Reset filtrów</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Alt</kbd> <span>+</span> <kbd>R</kbd> <span data-shortcut-text="resetSortShortcut">Reset sortowania (kolejność z pliku)</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Alt</kbd> <span>+</span> <kbd>W</kbd> <span data-shortcut-text="resetWidths">Reset szerokości</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Alt</kbd> <span>+</span> <kbd>K</kbd> <span data-shortcut-text="columns">Kolumny</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Alt</kbd> <span>+</span> <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <span data-shortcut-text="regionJump">Skok do panelu / paska szukania / tabeli</span></div>
-                <div class="shortcut-row"><kbd>F6</kbd> <span data-shortcut-text="regionCycle">To samo cyklicznie (Shift+F6 wstecz) — alias dla dużych klawiatur</span></div>
-                <div class="shortcut-row"><kbd>Tab</kbd> <span data-shortcut-text="gridTabEnter">wchodzi do tabeli na aktywną komórkę — dalej ruszasz strzałkami, bez klikania</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>/</kbd> <span data-shortcut-text="theme">Motyw</span></div>
-                <div class="shortcut-row"><kbd>Esc</kbd> <span data-shortcut-text="closeModalPanel">Zamknij modal / panel</span></div>
-              </div>
-              <div class="shortcut-hint">
-                <div class="shortcut-section-title" data-shortcut-text="editingTitle">Edycja komórki</div>
-                <div class="shortcut-row"><kbd>Enter</kbd> <span data-shortcut-text="editOpen">Dwuklik, Enter lub zacznij pisać — otwórz edytor komórki</span></div>
-                <div class="shortcut-row"><kbd>Enter</kbd> <span>/</span> <kbd>Shift</kbd> <span>+</span> <kbd>Enter</kbd> <span data-shortcut-text="editCommitVertical">zatwierdź i w dół / w górę</span></div>
-                <div class="shortcut-row"><kbd>Tab</kbd> <span>/</span> <kbd>Shift</kbd> <span>+</span> <kbd>Tab</kbd> <span data-shortcut-text="editCommitHorizontal">zatwierdź i w prawo / w lewo</span></div>
-                <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd data-shortcut-text="arrows">Strzałki</kbd> <span data-shortcut-text="editMoveArrows">zatwierdź i przejdź do sąsiedniej komórki w kierunku strzałki</span></div>
-                <div class="shortcut-row"><kbd>←</kbd> <kbd>→</kbd> <span data-shortcut-text="editCaret">ruch kursora w tekście (jak w edytorze)</span></div>
-                <div class="shortcut-row"><kbd>Esc</kbd> <span data-shortcut-text="editCancel">anuluj edycję (przywróć poprzednią wartość)</span></div>
-                <div class="shortcut-row"><kbd>Shift</kbd> <span>+</span> <kbd>F2</kbd> <span data-shortcut-text="noteEditShortcut">dodaj albo edytuj notatkę zaznaczonej komórki (jak w Excelu); w oknie Ctrl/⌘ + Enter zapisuje</span></div>
-                <div class="shortcut-row"><kbd>Ctrl/⌘</kbd> <span>+</span> <kbd>Alt</kbd> <span>+</span> <kbd>N</kbd> <span data-shortcut-text="noteNextShortcut">następna notatka w widoku (z Shift — poprzednia); alias F8 / Shift + F8. W oknie notatki to samo robią strzałki ‹ ›</span></div>
-                <div class="shortcut-row"><kbd class="shortcut-note-kbd" aria-hidden="true"></kbd> <span data-shortcut-text="noteMarkerInfo">czerwony trójkącik w rogu = komórka ma notatkę: najedź albo tapnij, żeby przeczytać; prawy klik / przytrzymanie → Dodaj, Edytuj, Usuń notatkę</span></div>
-              </div>
+                <!-- Skróty rysuje app/shortcuts.js z JEDNEGO rejestru (to samo okno co Ctrl/⌘+/). -->
+                <div id="shortcutRegistryList"></div>
               <div class="shortcut-hint">
                 <div class="shortcut-section-title" data-shortcut-text="searchOperatorsTitle">Operatory wyszukiwania</div>
                 <div class="shortcut-row"><kbd>||</kbd> <span><strong data-shortcut-text="orStrong">LUB</strong> <span data-shortcut-text="searchOperatorOrRest">— wiersz zawiera przynajmniej jeden z wyrazów</span><br><em class="shortcut-example" data-shortcut-text="searchOperatorOrExample">np. „Kowalski || Nowak"</em></span></div>
@@ -1262,7 +1232,7 @@
 
         <!-- ====== MAIN ====== -->
         <main class="main">
-          <button class="sidebar-handle" id="panelHandle" type="button" aria-label="Zwiń/rozwiń panel" data-hint data-hint-pl="Wysuń albo schowaj sidebar" data-hint-en="Open or hide the sidebar" data-hint-delay="1.1" data-hint-touch="on">
+          <button class="sidebar-handle" id="panelHandle" type="button" aria-label="Zwiń/rozwiń panel" data-hint data-hint-pl="Wysuń albo schowaj panel narzędzi" data-hint-en="Open or hide the tools panel" data-hint-delay="1.1" data-hint-touch="on">
             ‹
           </button>
           <section class="panel table-panel">
@@ -1434,6 +1404,13 @@
                 <button class="btn ghost" id="loadSampleBtn" type="button" data-hint data-hint-pl="Wczyta lokalnie wygenerowany przykładowy arkusz — bez wysyłania czegokolwiek" data-hint-en="Loads a locally generated sample sheet — nothing is uploaded" data-hint-delay="1.1" data-hint-touch="on">
                   Wypróbuj na przykładowym pliku
                 </button>
+              </div>
+              <!-- S10: co da się zrobić po otwarciu — klik pokazuje rezultat na przykładzie -->
+              <div class="empty-examples" id="emptyExamples" role="group" aria-labelledby="emptyExamplesCap">
+                <div class="empty-examples-cap" id="emptyExamplesCap">Zobacz na przykładzie</div>
+                <button class="empty-example" type="button" data-example="open"><span class="empty-example-title" data-ex-text="exOpenTitle">Znajdź otwarte cykle</span><span class="empty-example-sub" data-ex-text="exOpenSub">tryb auto „w toku” — sprawy bez daty końca</span></button>
+                <button class="empty-example" type="button" data-example="anon"><span class="empty-example-title" data-ex-text="exAnonTitle">Ukryj dane osobowe</span><span class="empty-example-sub" data-ex-text="exAnonSub">pseudonimy zamiast nazwisk, kopia gotowa do wysłania</span></button>
+                <button class="empty-example" type="button" data-example="report"><span class="empty-example-title" data-ex-text="exReportTitle">Zbuduj zestawienie</span><span class="empty-example-sub" data-ex-text="exReportSub">jedna kartka A4: liczby, wnioski i wykres</span></button>
               </div>
             </div>
 
@@ -1940,7 +1917,7 @@
     </div>
 
     <!-- Toasts -->
-    <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+    <div class="toast-container" id="toastContainer"></div>
     <div class="cell-tooltip hidden" id="cellTooltip" role="status" aria-live="polite"></div>
     <div class="cursor-hint" id="cursorHint" aria-hidden="true">
       <div class="cursor-hint-scaler">
@@ -1952,56 +1929,60 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=20261106-05"></script>
-    <script defer src="app/render-budget.js?v=20261106-05"></script>
-    <script defer src="app/language.js?v=20261106-05"></script>
-    <script defer src="app/similar-names.js?v=20261106-05"></script>
-    <script defer src="app/analysis.js?v=20261106-05"></script>
-    <script defer src="app/smart-filters.js?v=20261106-05"></script>
-    <script defer src="app/excel-date-format.js?v=20261106-05"></script>
-    <script defer src="app/excel-fonts.js?v=20261106-05"></script>
-    <script defer src="app/workbook.js?v=20261106-05"></script>
-    <script defer src="app/xlsx-patch.js?v=20261106-05"></script>
-    <script defer src="app/table.js?v=20261106-05"></script>
-    <script defer src="app/virt-rows.js?v=20261106-05"></script>
-    <script defer src="app/conditional-formatting.js?v=20261106-05"></script>
-    <script defer src="app/formula-engine.js?v=20261106-05"></script>
-    <script defer src="app/formula-calc.js?v=20261106-05"></script>
-    <script defer src="app/formula-explain.js?v=20261106-05"></script>
-    <script defer src="app/data-validation.js?v=20261106-05"></script>
-    <script defer src="app/derived-columns.js?v=20261106-05"></script>
-    <script defer src="app/formulas.js?v=20261106-05"></script>
-    <script defer src="app/edit-tools.js?v=20261106-05"></script>
-    <script defer src="app/cell-format.js?v=20261106-05"></script>
-    <script defer src="app/ui-controls.js?v=20261106-05"></script>
-    <script defer src="app/filter-bar.js?v=20261106-05"></script>
-    <script defer src="app/qs-history.js?v=20261106-05"></script>
-    <script defer src="app/undo.js?v=20261106-05"></script>
-    <script defer src="app/cell-notes.js?v=20261106-05"></script>
-    <script defer src="app/anonymize-core.js?v=20261106-05"></script>
-    <script defer src="app/anonymize-tools.js?v=20261106-05"></script>
-    <script defer src="app/anonymize-zip.js?v=20261106-05"></script>
-    <script defer src="app/anonymize-ui.js?v=20261106-05"></script>
-    <script defer src="app/drafts.js?v=20261106-05"></script>
-    <script defer src="app/transcribe.js?v=20261106-05"></script>
-    <script defer src="app/local-ai.js?v=20261106-05"></script>
-    <script defer src="app/nl-query.js?v=20261106-05"></script>
-    <script defer src="app/report.js?v=20261106-05"></script>
-    <script defer src="app/freeze-pane.js?v=20261106-05"></script>
-    <script defer src="app/app-frame.js?v=20261106-05"></script>
-    <script defer src="app/sheet-edit-ui.js?v=20261106-05"></script>
-    <script defer src="app/frame-compact.js?v=20261106-05"></script>
-    <script defer src="app/key-bar.js?v=20261106-05"></script>
-    <script defer src="app/cell-spill.js?v=20261106-05"></script>
-    <script defer src="app/autofill.js?v=20261106-05"></script>
-    <script defer src="app/move-cells.js?v=20261106-05"></script>
-    <script defer src="app/header-edit.js?v=20261106-05"></script>
-    <script defer src="app/formula-ui.js?v=20261106-05"></script>
+    <script defer src="app/core.js?v=v1.00.00"></script>
+    <script defer src="app/render-budget.js?v=v1.00.00"></script>
+    <script defer src="app/language.js?v=v1.00.00"></script>
+    <script defer src="app/app-dialog.js?v=v1.00.00"></script>
+    <script defer src="app/similar-names.js?v=v1.00.00"></script>
+    <script defer src="app/analysis.js?v=v1.00.00"></script>
+    <script defer src="app/smart-filters.js?v=v1.00.00"></script>
+    <script defer src="app/excel-date-format.js?v=v1.00.00"></script>
+    <script defer src="app/excel-fonts.js?v=v1.00.00"></script>
+    <script defer src="app/workbook.js?v=v1.00.00"></script>
+    <script defer src="app/xlsx-patch.js?v=v1.00.00"></script>
+    <script defer src="app/table.js?v=v1.00.00"></script>
+    <script defer src="app/virt-rows.js?v=v1.00.00"></script>
+    <script defer src="app/conditional-formatting.js?v=v1.00.00"></script>
+    <script defer src="app/formula-engine.js?v=v1.00.00"></script>
+    <script defer src="app/formula-calc.js?v=v1.00.00"></script>
+    <script defer src="app/formula-explain.js?v=v1.00.00"></script>
+    <script defer src="app/data-validation.js?v=v1.00.00"></script>
+    <script defer src="app/derived-columns.js?v=v1.00.00"></script>
+    <script defer src="app/formulas.js?v=v1.00.00"></script>
+    <script defer src="app/edit-tools.js?v=v1.00.00"></script>
+    <script defer src="app/cell-format.js?v=v1.00.00"></script>
+    <script defer src="app/ui-controls.js?v=v1.00.00"></script>
+    <script defer src="app/filter-bar.js?v=v1.00.00"></script>
+    <script defer src="app/qs-history.js?v=v1.00.00"></script>
+    <script defer src="app/undo.js?v=v1.00.00"></script>
+    <script defer src="app/cell-notes.js?v=v1.00.00"></script>
+    <script defer src="app/anonymize-core.js?v=v1.00.00"></script>
+    <script defer src="app/anonymize-tools.js?v=v1.00.00"></script>
+    <script defer src="app/anonymize-zip.js?v=v1.00.00"></script>
+    <script defer src="app/anonymize-ui.js?v=v1.00.00"></script>
+    <script defer src="app/drafts.js?v=v1.00.00"></script>
+    <script defer src="app/session-resume.js?v=v1.00.00"></script>
+    <script defer src="app/shortcuts.js?v=v1.00.00"></script>
+    <script defer src="app/app-settings.js?v=v1.00.00"></script>
+    <script defer src="app/transcribe.js?v=v1.00.00"></script>
+    <script defer src="app/local-ai.js?v=v1.00.00"></script>
+    <script defer src="app/nl-query.js?v=v1.00.00"></script>
+    <script defer src="app/report.js?v=v1.00.00"></script>
+    <script defer src="app/freeze-pane.js?v=v1.00.00"></script>
+    <script defer src="app/app-frame.js?v=v1.00.00"></script>
+    <script defer src="app/sheet-edit-ui.js?v=v1.00.00"></script>
+    <script defer src="app/frame-compact.js?v=v1.00.00"></script>
+    <script defer src="app/key-bar.js?v=v1.00.00"></script>
+    <script defer src="app/cell-spill.js?v=v1.00.00"></script>
+    <script defer src="app/autofill.js?v=v1.00.00"></script>
+    <script defer src="app/move-cells.js?v=v1.00.00"></script>
+    <script defer src="app/header-edit.js?v=v1.00.00"></script>
+    <script defer src="app/formula-ui.js?v=v1.00.00"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=20261106-05"></script>
-    <script defer src="app/launch-files.js?v=20261106-05"></script>
-    <script defer src="app/bootstrap.js?v=20261106-05"></script>
+    <script defer src="app/debug-loaders.js?v=v1.00.00"></script>
+    <script defer src="app/launch-files.js?v=v1.00.00"></script>
+    <script defer src="app/bootstrap.js?v=v1.00.00"></script>
   </body>
 </html>

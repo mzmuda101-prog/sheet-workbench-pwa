@@ -338,7 +338,7 @@ function swbFillRange(model, src, dir, toEnd, { mode = "series", invert = false,
     setDirtyState(true);
     renderActiveTable();
     if (typeof scheduleViewRefresh === "function") scheduleViewRefresh({ analyses: true, filterBadge: true });
-    if (!quiet) toast(t(mode === "copy" ? "cellsFilled" : "cellsFilledSeries", { count: changed }), "success");
+    if (!quiet) toast(t(mode === "copy" ? "cellsFilled" : "cellsFilledSeries", { count: changed }), "success", swbUndoToastOpts());
     if (typeof sheetEditUi !== "undefined") sheetEditUi.sync();
     log(`Wypelniono ${changed} komorek (${mode}, ${dir})`, "success");
   } else if (!quiet) {

@@ -15,6 +15,7 @@
 //   9. komentarz wątkowy (Excel 365): tylko do odczytu, polskie znaki (SheetJS gubi UTF-8).
 
 const pw = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -37,6 +38,7 @@ async function run() {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("dialog", (d) => d.accept());
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
   const failures = [];
   const ok = (name, cond, got) => { if (!cond) failures.push(`${name} — dostałem: ${JSON.stringify(got)}`); };
 
@@ -252,6 +254,7 @@ print(json.dumps({ws.title: {c.coordinate: [c.comment.text, c.comment.author] fo
   const page2 = await context.newPage();
   page2.on("pageerror", (e) => errors.push(e.message));
   page2.on("dialog", (d) => d.accept());
+  await autoAnswerAppDialogs(page2); // własne okna aplikacji (app-dialog.js)
   await page2.goto(APP_URL, { waitUntil: "load" });
   await page2.evaluate(() => document.getElementById("heroSplash")?.remove());
   await page2.waitForSelector("#draftRecovery .btn.primary", { timeout: 10000 });

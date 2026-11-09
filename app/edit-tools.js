@@ -538,7 +538,7 @@ function finishEditTool(changed) {
   if (changed > 0) {
     setDirtyState(true);
     renderActiveTable();
-    toast(t("editToolApplied", { count: changed }), "success");
+    toast(t("editToolApplied", { count: changed }), "success", swbUndoToastOpts());
     log(`Narzedzia edycji: zmieniono ${changed} komorek`, "success");
   } else {
     toast(t("editToolNoChange"), "info");

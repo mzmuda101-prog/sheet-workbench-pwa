@@ -13,6 +13,7 @@
 //      odrzucony, po zaznaczeniu propozycja trafia do planu.
 
 const { chromium, webkit } = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -52,6 +53,8 @@ async function run() {
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
   page.on("dialog", (d) => (d.type() === "prompt" ? d.accept("Test miesięczny") : d.accept()));
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
+  await page.addInitScript(() => { window.__appDialogText = "Test miesięczny"; }); // nazwa profilu w oknie z polem
   await page.goto(APP_URL, { waitUntil: "load" });
   await page.evaluate(() => { document.getElementById("heroSplash")?.remove(); });
   const failures = [];

@@ -188,7 +188,11 @@ function undoRedo(direction) {
     if (currentDisplayModel?.mode === "wide" && currentDisplayModel.rows.some((r) => getRowSelectionKey(r) === rowKey)) {
       setFocusedCell(rowKey, first.col, { scroll: true });
     }
-    toast(t(direction === "undo" ? "undoDone" : "redoDone", { count }), "info");
+    // po Cofnij z dymka (albo Ctrl+Z) — w dymku od razu „Ponów”, po Ponów — „Cofnij”
+    toast(t(direction === "undo" ? "undoDone" : "redoDone", { count }), "info", {
+      action: t(direction === "undo" ? "redoAction" : "undoAction"),
+      onAction: () => (direction === "undo" ? redoLast() : undoLast()),
+    });
   } else {
     toast(t(direction === "undo" ? "undoDoneSheet" : "redoDoneSheet", { count, sheet: step.sheet }), "info");
   }
@@ -198,6 +202,24 @@ function undoRedo(direction) {
 
 function undoLast() { return undoRedo("undo"); }
 function redoLast() { return undoRedo("redo"); }
+
+// Opcje dymka „Cofnij” po operacji zbiorczej (wklejenie, Zamień wszystkie, Wypełnij, Wyczyść,
+// przeniesienie…) — kontrakt UX: odwracalne robimy BEZ pytania, a w dymku dajemy Cofnij.
+// Przycisk cofa TYLKO ten krok: jeśli w międzyczasie doszła inna zmiana (albo krok już
+// cofnięto Ctrl+Z), nie ruszamy cudzej pracy, tylko mówimy, że tego już nie da się tu cofnąć.
+function swbUndoToastOpts() {
+  undoCloseStep();
+  const step = undoStack[undoStack.length - 1] || null;
+  if (!step) return null;
+  return {
+    action: t("undoAction"),
+    onAction: () => {
+      undoCloseStep();
+      if (undoStack[undoStack.length - 1] === step) undoLast();
+      else toast(t("undoStepGone"), "info");
+    },
+  };
+}
 
 function updateUndoButtons() {
   const canUndo = undoStack.some((s) => s.workbook === workbook);

@@ -895,11 +895,44 @@ function attachResizeHandlers() {
   tableEl.addEventListener("pointercancel", onUp);
 }
 
+// Motyw w 3 stanach (kontrakt UX 2026-11-07): Systemowy / Jasny / Ciemny.
+// Systemowy = USUNIĘTY klucz + nasłuch prefers-color-scheme na żywo (zmiana trybu w systemie
+// przełącza apkę od razu). Pierwsze malowanie ustawia już app/theme-early.js w <head>.
+const themeSysMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+function getThemePref() {
+  let pref = null;
+  try { pref = localStorage.getItem(THEME_KEY); } catch { /* tryb prywatny */ }
+  return pref === "dark" || pref === "light" ? pref : "system";
+}
 function initTheme() {
-  const saved = localStorage.getItem(THEME_KEY);
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const theme = saved || (prefersDark ? "dark" : "light");
-  setTheme(theme, false);
+  applyThemePref(getThemePref(), false);
+  const onSys = () => { if (getThemePref() === "system") applyThemePref("system", false); };
+  if (themeSysMq) {
+    if (themeSysMq.addEventListener) themeSysMq.addEventListener("change", onSys);
+    else if (themeSysMq.addListener) themeSysMq.addListener(onSys); // stare Safari
+  }
+}
+function applyThemePref(pref, persist = true) {
+  const theme = pref === "system" ? (themeSysMq && themeSysMq.matches ? "dark" : "light") : pref;
+  rootEl.setAttribute("data-theme", theme);
+  if (persist) {
+    try {
+      if (pref === "system") localStorage.removeItem(THEME_KEY);
+      else localStorage.setItem(THEME_KEY, pref);
+    } catch { /* bez pamięci — motyw działa do końca sesji */ }
+  }
+  // Segment pokazuje ZAPISANY wybór, nie bieżący wygląd (Systemowy w ciemnym systemie = Systemowy).
+  if (themeSegEl) {
+    themeSegEl.querySelectorAll("[data-theme-pref]").forEach((b) => {
+      const on = b.dataset.themePref === pref;
+      b.setAttribute("aria-checked", on ? "true" : "false");
+      b.tabIndex = on ? 0 : -1;
+    });
+  }
+}
+// Szybki przełącznik (Ctrl/⌘+Alt+/) — jak dawniej zapisuje jasny/ciemny na stałe.
+function toggleThemeQuick() {
+  applyThemePref(rootEl.getAttribute("data-theme") === "dark" ? "light" : "dark");
 }
 
 function initIntroSplash() {
@@ -967,61 +1000,6 @@ function initIntroSplash() {
   }
 }
 
-function createThemeIcon(isDark) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", "18");
-  svg.setAttribute("height", "18");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "2");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-
-  if (isDark) {
-    // Sun icon for dark mode active (click to switch to light)
-    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    circle.setAttribute("cx", "12");
-    circle.setAttribute("cy", "12");
-    circle.setAttribute("r", "5");
-    svg.appendChild(circle);
-
-    const rays = [
-      { x1: "12", y1: "1", x2: "12", y2: "3" },
-      { x1: "12", y1: "21", x2: "12", y2: "23" },
-      { x1: "4.22", y1: "4.22", x2: "5.64", y2: "5.64" },
-      { x1: "18.36", y1: "18.36", x2: "19.78", y2: "19.78" },
-      { x1: "1", y1: "12", x2: "3", y2: "12" },
-      { x1: "21", y1: "12", x2: "23", y2: "12" },
-      { x1: "4.22", y1: "19.78", x2: "5.64", y2: "18.36" },
-      { x1: "18.36", y1: "5.64", x2: "19.78", y2: "4.22" },
-    ];
-
-    rays.forEach(ray => {
-      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
-      Object.entries(ray).forEach(([attr, val]) => line.setAttribute(attr, val));
-      svg.appendChild(line);
-    });
-  } else {
-    // Moon icon for light mode active (click to switch to dark)
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", "M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z");
-    svg.appendChild(path);
-  }
-
-  return svg;
-}
-
-function setTheme(theme, persist = true) {
-  rootEl.setAttribute("data-theme", theme);
-  themeToggle.setAttribute("aria-pressed", theme === "dark" ? "true" : "false");
-  if (persist) localStorage.setItem(THEME_KEY, theme);
-  
-  // Clear existing content and append safe SVG element
-  themeToggle.textContent = "";
-  themeToggle.appendChild(createThemeIcon(theme === "dark"));
-}
-
 function updateNetworkBadge() {
   if (!networkBadgeEl) return;
   const isOnline = navigator.onLine;
@@ -1037,18 +1015,39 @@ function updateNetworkBadge() {
 
 // Przeładowanie (Aktualizuj / Odśwież aplikację) przy niezapisanych zmianach: najpierw pytamy.
 // Na iPhonie/iPadzie Safari NIE pokazuje „Opuścić stronę?” — praca przepadała bez słowa
-// (to samo znalezione i naprawione w Documents Workbench 2026-10-01). Po „OK” przeglądarka
+// (to samo znalezione i naprawione w Documents Workbench 2026-10-01). Po wyborze przeglądarka
 // nie pyta drugi raz (beforeunload w bootstrap.js patrzy na tę flagę).
+// Od 2026-11-07 własne okno „Zapisz / Nie zapisuj / Anuluj” (kontrakt UX). „Nie zapisuj” nie
+// straszy utratą pracy: zmiany i tak zostają w szkicu (drafts.js) — zapisujemy go TERAZ, przed
+// przeładowaniem, i po starcie wracają z karty „Niezapisana praca”.
 let reloadConfirmed = false;
-function confirmReloadWithUnsaved() {
+async function confirmReloadWithUnsaved() {
   if (!hasUnsavedChanges || reloadConfirmed) return true;
-  if (!window.confirm(t("reloadUnsavedWarn"))) return false;
+  const draftsOn = typeof swbDrafts !== "undefined" && !!originalFileBytes;
+  const choice = await appDialog({
+    title: t("reloadUnsavedTitle"),
+    message: t(draftsOn ? "reloadUnsavedDraftMsg" : "reloadUnsavedMsg"),
+    className: "app-dialog-unsaved",
+    actions: [
+      { label: t("dlgSave"), value: "save", kind: "primary" },
+      { label: t("dlgDontSave"), value: "discard", kind: draftsOn ? "secondary" : "danger" },
+      { label: t("dlgCancel"), value: null, kind: "secondary" },
+    ],
+  });
+  if (choice === "save" && !(await appSaveBeforeLeaving())) return false;
+  if (choice === null) return false;
+  if (choice === "discard" && draftsOn) {
+    try { swbDrafts.saveImmediately(); await swbDrafts._flush(); } catch { /* szkic to zabezpieczenie, nie warunek */ }
+  }
   reloadConfirmed = true;
   return true;
 }
 
 async function hardRefreshApp() {
-  if (!confirmReloadWithUnsaved()) return;
+  if (!(await confirmReloadWithUnsaved())) {
+    if (brandRefreshBtn) { brandRefreshBtn.classList.remove("is-busy"); brandRefreshBtn.removeAttribute("aria-busy"); }
+    return;
+  }
   // Sygnał NATYCHMIAST po kliknięciu. Wcześniej toast leciał dopiero PO czyszczeniu
   // cache i registration.update() — a to na telefonie potrafi trwać sekundę i dłużej,
   // więc klik wyglądał, jakby przycisk go nie złapał.
@@ -2369,10 +2368,10 @@ async function saveWorkbook() {
     const handleName = currentFileHandle.name || currentFileName || "";
     const ext = handleName.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
     if (currentFileHandle !== saveInPlaceConfirmedHandle) {
-      if (!window.confirm(t("saveInPlaceWarn"))) return;
+      if (!(await appConfirm(t("saveInPlaceWarn"), { title: t("saveInPlaceTitle"), okLabel: t("saveInPlaceOk") }))) return;
       saveInPlaceConfirmedHandle = currentFileHandle;
     }
-    if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
+    if (ext === "xlsm" && !(await confirmXlsmSave())) return;
     try {
       if (!(await ensureWritePermission(currentFileHandle))) {
         toast(t("savePermissionDenied"), "warning");
@@ -2490,7 +2489,7 @@ async function saveWorkbookAs() {
       // Format = ten, który podaliśmy pickerowi (zgodny z plikiem bazowym).
       // Nie czytamy handle.name, bo mobilne pickery potrafią dolepić zły sufiks.
       const ext = defaultExt;
-      if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
+      if (ext === "xlsm" && !(await confirmXlsmSave())) return;
       await writeWorkbookToHandle(handle, ext);
       currentFileHandle = handle;
       saveInPlaceConfirmedHandle = handle; // user świadomie wybrał tę lokalizację — kolejny Ctrl/⌘+S nie pyta ponownie
@@ -2514,8 +2513,13 @@ async function saveWorkbookAs() {
     name = `${name}.xlsx`;
   }
   const ext = name.toLowerCase().endsWith(".xlsm") ? "xlsm" : "xlsx";
-  if (ext === "xlsm" && !window.confirm(t("xlsmConfirm"))) return;
+  if (ext === "xlsm" && !(await confirmXlsmSave())) return;
   await downloadWorkbook(name, ext);
+}
+
+// Zapis .xlsm: makra mogą przepaść — pytanie z wyraźnym skutkiem (własne okno, nie confirm()).
+function confirmXlsmSave() {
+  return appConfirm(t("xlsmConfirm"), { title: t("xlsmConfirmTitle"), okLabel: t("dlgSave") });
 }
 
 // Otwarcie pliku przez File System Access API — daje uchwyt do zapisu w miejscu.
@@ -4226,13 +4230,13 @@ if (sortRulesListEl) {
 }
 
 if (saveSortPresetBtn) {
-  saveSortPresetBtn.addEventListener("click", () => {
+  saveSortPresetBtn.addEventListener("click", async () => {
     normalizeSortState();
     if (!multiSortState.length) {
       toast(t("noSortsToSave"), "warning");
       return;
     }
-    const name = window.prompt(t("presetNamePrompt"), "");
+    const name = await appPrompt(t("presetNamePrompt"), "", { title: t("presetSaveTitle"), maxLength: 60, validate: (v) => (v ? "" : t("dlgNameEmpty")) });
     if (!name || !name.trim()) return;
     const trimmed = name.trim();
     const presets = loadSortPresets().filter((preset) => preset.name !== trimmed);
@@ -5508,10 +5512,23 @@ updateNetworkBadge();
 window.addEventListener("online", updateNetworkBadge);
 window.addEventListener("offline", updateNetworkBadge);
 
-themeToggle.addEventListener("click", () => {
-  const next = rootEl.getAttribute("data-theme") === "dark" ? "light" : "dark";
-  setTheme(next);
-});
+if (themeSegEl) {
+  themeSegEl.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-theme-pref]");
+    if (b) applyThemePref(b.dataset.themePref);
+  });
+  // strzałki w grupie radiowej (jak w każdym segmencie systemowym)
+  themeSegEl.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const btns = Array.from(themeSegEl.querySelectorAll("[data-theme-pref]"));
+    const i = btns.findIndex((b) => b.getAttribute("aria-checked") === "true");
+    const next = btns[(i + (e.key === "ArrowRight" ? 1 : -1) + btns.length) % btns.length];
+    e.preventDefault();
+    e.stopPropagation();
+    applyThemePref(next.dataset.themePref);
+    next.focus();
+  });
+}
 
 if (brandRefreshBtn) {
   brandRefreshBtn.addEventListener("click", () => {

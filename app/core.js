@@ -183,7 +183,7 @@ const clearAllBtn = document.getElementById("clearAllBtn");
 const applyPickBtn = document.getElementById("applyPickBtn");
 const closePickerBtn = document.getElementById("closePicker");
 
-const themeToggle = document.getElementById("themeToggle");
+const themeSegEl = document.getElementById("themeSeg");
 const langSwitchEl = document.getElementById("langSwitch");
 const langSwitchIndicatorEl = langSwitchEl?.querySelector(".lang-switch-indicator") || null;
 const langButtons = Array.from(document.querySelectorAll(".lang-button"));
@@ -859,7 +859,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "20261106-05";
+const APP_BUILD_VERSION = "v1.00.00";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1001,43 +1001,131 @@ const CELL_ACTIONS_ENABLED = (() => {
 // drugim — kolejne PODMIENIA treść poprzedniego. Na telefonie stos toastów u góry zasłaniał
 // szukanie i przyciski (film z iPhone'a 2026-10-31: trzy „Cofnięto zmianę (1 kom.)”).
 // Ostrzeżenia i błędy zostają osobno — każde niesie inną informację, której nie wolno zgubić.
+//
+// Wspólny kontrakt UX z Documents Workbench (2026-11-07, wzorzec: Smart Kalkulator):
+//   toast(msg, type, { action, onAction, duration })
+//   - czas wg rodzaju: info/success 2,8 s, warning/error 5 s, z akcją ≥ 6 s;
+//   - opts.action + opts.onAction → przycisk w dymku (np. „Cofnij”, „Pokaż”);
+//   - ✕ przy ostrzeżeniu/błędzie i przy dymku z akcją;
+//   - role="status" (info/success) albo role="alert" (błąd/ostrzeżenie); ikona ma opis dla czytnika;
+//   - najechanie myszą / fokus w dymku wstrzymuje znikanie (żeby zdążyć kliknąć akcję).
+// Fokus NIE przeskakuje sam do dymku (zabrałby go z tabeli w trakcie pracy) — przycisk akcji
+// jest zwykłym przyciskiem, osiągalnym Tabem; dymek bez akcji nie jest w kolejności Tab.
 const TOAST_MERGE_TYPES = new Set(["success", "info"]);
-let _lastMergeToast = null; // { el, label, type, timer, at }
+let _lastMergeToast = null; // { el, type, at, api }
 const TOAST_MERGE_MS = 2000;
+const TOAST_MS = { info: 2800, success: 2800, warning: 5000, error: 5000 };
+const TOAST_ACTION_MS = 6000;
 
-function toast(msg, type = "info") {
+function toastDuration(type, opts, hasAction) {
+  if (opts && Number(opts.duration) > 0) return Number(opts.duration);
+  const base = TOAST_MS[type] || TOAST_MS.info;
+  return hasAction ? Math.max(base, TOAST_ACTION_MS) : base;
+}
+
+function toast(msg, type = "info", opts = null) {
+  if (!TOAST_MS[type]) type = "info";
+  const hasAction = !!(opts && opts.action && typeof opts.onAction === "function");
   const last = _lastMergeToast;
   if (TOAST_MERGE_TYPES.has(type) && last && last.type === type && last.el.isConnected && !last.el.classList.contains("out")
     && performance.now() - last.at < TOAST_MERGE_MS) {
-    last.label.textContent = msg;
     last.at = performance.now();
-    clearTimeout(last.timer);
-    last.timer = scheduleToastOut(last.el);
-    return;
+    last.api.update(msg, opts, hasAction);
+    return last.api;
   }
+
   const toastEl = document.createElement("div");
   toastEl.className = `toast ${type}`;
+  toastEl.setAttribute("role", type === "error" || type === "warning" ? "alert" : "status");
+  toastEl.setAttribute("aria-atomic", "true");
 
   const icon = document.createElement("div");
   icon.className = "toast-icon";
+  icon.setAttribute("aria-hidden", "true");
   icon.textContent = type === "success" ? "✓" : type === "error" ? "!" : type === "warning" ? "!" : "i";
 
-  const label = document.createElement("div");
-  label.textContent = msg;
+  const body = document.createElement("div");
+  body.className = "toast-body";
+  // opis ikony dla czytnika ekranu („Błąd: …”) — wizualnie niesie go kolor i znak w kółku
+  const kind = document.createElement("span");
+  kind.className = "visually-hidden";
+  const label = document.createElement("span");
+  label.className = "toast-msg";
+  body.append(kind, label);
+  toastEl.append(icon, body);
 
-  toastEl.appendChild(icon);
-  toastEl.appendChild(label);
-  toastContainerEl.appendChild(toastEl);
+  let timer = 0;
+  let closed = false;
+  let duration = 0;
+  let actionBtn = null;
+  let closeBtn = null;
 
-  const timer = scheduleToastOut(toastEl);
-  if (TOAST_MERGE_TYPES.has(type)) _lastMergeToast = { el: toastEl, label, type, timer, at: performance.now() };
-}
-
-function scheduleToastOut(toastEl) {
-  return setTimeout(() => {
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    clearTimeout(timer);
     toastEl.classList.add("out");
     setTimeout(() => toastEl.remove(), 200);
-  }, 2800);
+    if (_lastMergeToast && _lastMergeToast.el === toastEl) _lastMergeToast = null;
+  };
+  const arm = (ms) => { clearTimeout(timer); timer = setTimeout(close, ms); };
+
+  const render = (text, o, withAction) => {
+    label.textContent = text;
+    kind.textContent = `${t(`toastKind_${type}`)}: `;
+    if (actionBtn) { actionBtn.remove(); actionBtn = null; }
+    if (withAction) {
+      actionBtn = document.createElement("button");
+      actionBtn.type = "button";
+      actionBtn.className = "toast-action";
+      actionBtn.textContent = o.action;
+      actionBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        close();
+        try { o.onAction(); } catch (err) { console.error(err); }
+      }, { once: true });
+      toastEl.insertBefore(actionBtn, closeBtn);
+    }
+    const needClose = withAction || type === "warning" || type === "error";
+    if (needClose && !closeBtn) {
+      closeBtn = document.createElement("button");
+      closeBtn.type = "button";
+      closeBtn.className = "toast-close";
+      closeBtn.setAttribute("aria-label", t("toastClose"));
+      closeBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      closeBtn.addEventListener("click", (e) => { e.stopPropagation(); close(); });
+      toastEl.appendChild(closeBtn);
+    } else if (!needClose && closeBtn) {
+      closeBtn.remove();
+      closeBtn = null;
+    }
+    toastEl.classList.toggle("has-action", withAction);
+    duration = toastDuration(type, o, withAction);
+    arm(duration);
+  };
+
+  // wstrzymanie znikania pod kursorem / przy fokusie w dymku (np. Tab do „Cofnij”).
+  // Kursor: dopiero RUCH nad dymkiem, nie mouseenter — dymek, który pojawił się pod
+  // nieruchomym kursorem, też dostaje mouseenter i wisiał wtedy bez końca, zasłaniając
+  // przyciski pod spodem (transcribe-view, 2026-11-09).
+  let hold = 0;
+  let pointerHold = false;
+  const holdOn = () => { hold++; clearTimeout(timer); };
+  const holdOff = () => { hold = Math.max(0, hold - 1); if (!hold && !closed) arm(Math.min(duration, 2000)); };
+  toastEl.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse" && !pointerHold) { pointerHold = true; holdOn(); } });
+  toastEl.addEventListener("mouseleave", () => { if (pointerHold) { pointerHold = false; holdOff(); } });
+  toastEl.addEventListener("focusin", holdOn);
+  toastEl.addEventListener("focusout", holdOff);
+
+  const api = {
+    el: toastEl,
+    close,
+    update(text, o, withAction) { if (!closed) render(text, o, withAction); },
+  };
+  render(msg, opts, hasAction);
+  toastContainerEl.appendChild(toastEl);
+  if (TOAST_MERGE_TYPES.has(type)) _lastMergeToast = { el: toastEl, type, at: performance.now(), api };
+  return api;
 }
 
 function isQuickSearchPopupOpen() {

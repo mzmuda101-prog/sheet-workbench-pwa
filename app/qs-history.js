@@ -113,11 +113,14 @@ function swbCurrentViewName() {
   return hit ? hit.name : "";
 }
 
-function swbSaveCurrentView() {
+async function swbSaveCurrentView() {
   if (!currentHeaders.length) return false;
   const vs = captureViewState();
   if (!swbViewHasContent(vs)) { toast(t("viewsNothing"), "info"); return false; }
-  const name = String(window.prompt(t("viewsNamePrompt"), afShort(describeViewState(vs), 40)) || "").trim().slice(0, 60);
+  // własne okno zamiast prompt() (kontrakt UX) — domyślna nazwa = opis widoku
+  const name = String(await appPrompt(t("viewsNamePrompt"), afShort(describeViewState(vs), 40), {
+    title: t("viewsSaveTitle"), maxLength: 60, validate: (v) => (v ? "" : t("dlgNameEmpty")),
+  }) || "").trim().slice(0, 60);
   if (!name) return false;
   const { v, filter, sort } = vs; // liczby wierszy nie — zależą od pliku
   const low = name.toLowerCase();

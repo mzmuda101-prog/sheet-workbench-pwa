@@ -7,6 +7,7 @@
 //   ENGINE=webkit MOBILE=1 VERBOSE=1 …
 // UWAGA: WebKit blokuje część portów („restricted network port”, np. 4190) — używaj 4175.
 const playwright = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const path = require("path");
 
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
@@ -51,6 +52,7 @@ async function main() {
   page.on("pageerror", (e) => record("pageerror", (e.stack || e.message).split("\n").slice(0, 4).join(" | ")));
   page.on("console", (m) => { if (m.type() === "error") record("console", m.text().slice(0, 400)); });
   page.on("dialog", (d) => d.dismiss().catch(() => {}));
+  await autoAnswerAppDialogs(page); // własne okna aplikacji: „OK”/„Nie zapisuj” jak dawne confirm() = true
   page.on("download", (d) => d.cancel().catch(() => {}));
 
   await page.goto(APP_URL, { waitUntil: "load" });

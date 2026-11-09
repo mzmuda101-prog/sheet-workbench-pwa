@@ -595,7 +595,7 @@ function cfmtClearContents() {
     setDirtyState(true);
     renderActiveTable();
     scheduleViewRefresh({ analyses: true, filterBadge: true });
-    toast(t("cellsCleared", { count: changed }), "success");
+    toast(t("cellsCleared", { count: changed }), "success", swbUndoToastOpts());
     if (typeof sheetEditUi !== "undefined") sheetEditUi.sync();
   }
   return changed;

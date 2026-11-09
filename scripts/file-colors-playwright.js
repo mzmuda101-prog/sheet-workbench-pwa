@@ -82,13 +82,13 @@ async function run() {
 
   // 6. ciemny motyw: ciemne kolory czcionek z pliku rozjaśnione na tle bez wypełnienia
   const dark = await p.evaluate(async () => {
-    setTheme("dark", false);
+    applyThemePref("dark", false);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const td = (n, c) => document.querySelector(`#dataTable tbody tr[data-row-index="${n - 1}"] td[data-col-index="${c}"]`);
     // jasność postrzegana: oklch(L …) wprost, rgb(…) przez wzór luminancji
     const lumOf = (el) => { const c = getComputedStyle(el).color; const o = /^oklch\(([\d.]+)/.exec(c); if (o) return +o[1]; const [r, g, b] = c.match(/[\d.]+/g).map(Number); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
     const out = { navy: lumOf(td(9, 1)), green: lumOf(td(4, 1)), filledKept: getComputedStyle(td(2, 0)).color };
-    setTheme("light", false);
+    applyThemePref("light", false);
     await new Promise((r) => requestAnimationFrame(r));
     out.navyLight = getComputedStyle(td(9, 1)).color;
     return out;

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "20261106-05";
+const CACHE_VERSION = "v1.00.00";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -21,6 +21,8 @@ const SHELL_ASSETS = [
   "./assets/fonts/space-grotesk-latin-ext.woff2",
   `./app/core.js?v=${ASSET_V}`,
   `./app/language.js?v=${ASSET_V}`,
+  `./app/app-dialog.js?v=${ASSET_V}`,
+  `./app/theme-early.js?v=${ASSET_V}`,
   `./app/similar-names.js?v=${ASSET_V}`,
   `./app/analysis.js?v=${ASSET_V}`,
   `./app/analysis-heavy.js?v=${ASSET_V}`, // leniwy (analysis.js) — offline od pierwszego startu
@@ -30,6 +32,9 @@ const SHELL_ASSETS = [
   `./app/qs-history.js?v=${ASSET_V}`,
   `./app/undo.js?v=${ASSET_V}`,
   `./app/drafts.js?v=${ASSET_V}`,
+  `./app/session-resume.js?v=${ASSET_V}`,
+  `./app/shortcuts.js?v=${ASSET_V}`,
+  `./app/app-settings.js?v=${ASSET_V}`,
   `./app/excel-date-format.js?v=${ASSET_V}`,
   `./app/excel-fonts.js?v=${ASSET_V}`,
   `./app/workbook.js?v=${ASSET_V}`,

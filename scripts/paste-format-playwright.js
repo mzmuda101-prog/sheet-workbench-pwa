@@ -14,6 +14,7 @@
 //   6. format trafia do zapisu (pendingEdits[...].fmt), menu ma obie pozycje.
 
 const playwright = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const path = require("path");
 
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
@@ -30,6 +31,7 @@ async function run() {
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("dialog", (d) => d.accept());
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
   const results = [];
   const check = (name, ok, detail = "") => results.push({ name, ok: !!ok, detail: typeof detail === "string" ? detail : JSON.stringify(detail) });
 

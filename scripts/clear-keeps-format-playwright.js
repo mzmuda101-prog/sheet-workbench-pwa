@@ -12,6 +12,7 @@
 //   5. wyczyszczony wiersz nie staje się „pełnym” wierszem (zaślepka liczy się jako pusta).
 
 const pw = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -34,6 +35,7 @@ async function run() {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("dialog", (d) => d.accept());
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
   const failures = [];
   const ok = (name, cond, got) => { if (!cond) failures.push(`${name} — dostałem: ${JSON.stringify(got)}`); };
 

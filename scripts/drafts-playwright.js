@@ -9,6 +9,7 @@
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/). ENGINE=webkit (Safari/iPad).
 
 const { chromium, webkit } = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const path = require("path");
 
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
@@ -25,6 +26,7 @@ async function openPage(context) {
   const page = await context.newPage();
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("dialog", (d) => (d.type() === "confirm" && !confirmAnswer ? d.dismiss() : d.accept(d.defaultValue())));
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
   await page.goto(APP_URL, { waitUntil: "load" });
   await page.evaluate(() => { document.getElementById("heroSplash")?.remove(); try { ensureXlsxLibs(false); } catch {} });
   await sleep(400);
@@ -124,11 +126,15 @@ async function run() {
 
   // ── 2. otwarcie innego pliku przy niezapisanych zmianach pyta ──────────────
   confirmAnswer = false;
+  await page.evaluate(() => { window.__appDialogMode = "dismiss"; window.__appDialogLog = []; });
   await page.evaluate(() => loadSampleFile());
   await sleep(800);
   const kept = await page.evaluate(() => ({ name: currentFileName, dirty: hasUnsavedChanges }));
+  const asked = await page.evaluate(() => (window.__appDialogLog || []).map((d) => d.buttons.join("/")));
   check("inny plik przy niezapisanych zmianach: pyta, „Anuluj” zostawia pracę", kept.name === "stress-test-workbench.xlsx" && kept.dirty, JSON.stringify(kept));
+  check("pytanie ma układ Zapisz / Nie zapisuj / Anuluj", asked[0] === "Zapisz/Nie zapisuj/Anuluj", JSON.stringify(asked));
   confirmAnswer = true;
+  await page.evaluate(() => { window.__appDialogMode = "accept"; });
 
   // ── 3. zapis kasuje szkic ──────────────────────────────────────────────────
   if (ENGINE_NAME === "chromium") {
@@ -148,9 +154,18 @@ async function run() {
   await backgroundAndKill(page);
   page = await openPage(context);
   c = await cards(page);
+  // „Odrzuć” bez pytania (kontrakt UX 2026-11-07): karta znika od razu, w dymku „Cofnij”
   await page.click("#draftRecovery .btn:not(.primary)");
   await sleep(500);
-  check("„Odrzuć” (po potwierdzeniu) usuwa szkic i kartę", c.length === 1 && (await dbCount(page)) === 0 && (await page.evaluate(() => document.getElementById("draftRecovery").hidden)), JSON.stringify(c));
+  const gone = await page.evaluate(() => document.getElementById("draftRecovery").hidden);
+  const undoBtn = await page.evaluate(() => [...document.querySelectorAll(".toast")].find((x) => /szkic/i.test(x.textContent))?.querySelector(".toast-action")?.textContent);
+  check("„Odrzuć”: karta znika od razu, w dymku „Cofnij”, szkic jeszcze cały", c.length === 1 && gone && undoBtn === "Cofnij" && (await dbCount(page)) === 1, JSON.stringify({ c, gone, undoBtn }));
+  await page.evaluate(() => [...document.querySelectorAll(".toast")].find((x) => /szkic/i.test(x.textContent))?.querySelector(".toast-action")?.click());
+  await sleep(700);
+  check("„Cofnij” przywraca kartę szkicu", await page.evaluate(() => !document.getElementById("draftRecovery").hidden && document.querySelectorAll("#draftRecovery .draft-card").length === 1));
+  await page.click("#draftRecovery .btn:not(.primary)");
+  await sleep(7200); // szkic znika, gdy dymek z „Cofnij” zgaśnie
+  check("„Odrzuć” bez „Cofnij” usuwa szkic i kartę", (await dbCount(page)) === 0 && (await page.evaluate(() => document.getElementById("draftRecovery").hidden)));
 
   // ── 5. otwarcie innego pliku z „OK” porzuca też szkic ──────────────────────
   await loadFile(page);

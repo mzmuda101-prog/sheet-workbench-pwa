@@ -3470,6 +3470,51 @@ details.panel[open] > summary {
   margin-top: 14px;
 }
 
+/* S10: przykłady pod przyciskami pustego ekranu */
+.empty-examples {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: min(620px, 100%);
+  margin: 18px auto 0;
+}
+.empty-examples-cap {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+}
+.empty-example {
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color var(--t), background var(--t);
+}
+.empty-example-title { font-size: 13px; font-weight: 650; color: var(--accent); }
+.empty-example-sub { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
+.empty-example:disabled { opacity: .6; cursor: progress; }
+.empty-example:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.empty-example:active { background: var(--accent-light); }
+@media (hover: hover) {
+  .empty-example:hover { border-color: var(--accent-border); background: var(--accent-light); }
+}
+.empty-state.in-file .empty-examples { display: none; }
+@media (max-width: 560px) {
+  .empty-examples { grid-template-columns: 1fr; }
+}
+
 /* ===================================================
    TABLE SKELETON (smart loading)
    Stałe kości w HTML — zero pętli JS. Shimmer tylko CSS
@@ -5396,6 +5441,45 @@ kbd {
   flex-shrink: 0;
 }
 
+/* ── Własne okno pytania (app-dialog.js) zamiast confirm()/prompt() ── */
+.modal.app-dialog { z-index: 250; } /* nad modalami (150) i ładowaniem (200), pod dymkami (300) */
+.app-dialog-box { width: min(440px, 100%); }
+.app-dialog-body {
+  flex: 1 1 auto;
+  padding: 10px 16px 14px;
+  display: grid;
+  gap: 10px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.app-dialog-msg {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.app-dialog-field { margin: 0; }
+.app-dialog-error { font-size: 12.5px; color: var(--danger); }
+.app-dialog-error[hidden] { display: none; }
+.app-dialog-actions { flex-wrap: wrap; }
+.app-dialog .btn.danger { color: var(--danger); }
+@media (hover: hover) {
+  .app-dialog .btn.ghost.danger:hover:not(:disabled) { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+}
+/* Telefon: przyciski jeden pod drugim, główny na górze (kciuk), cała szerokość. */
+@media (max-width: 520px) {
+  .modal.app-dialog { align-items: flex-end; padding: 12px 12px max(12px, env(safe-area-inset-bottom)); }
+  .app-dialog-actions { flex-direction: column; align-items: stretch; }
+  .app-dialog-actions .btn { width: 100%; min-height: 44px; }
+}
+/* Lista w oknie (Co nowego, kopia ustawień, skróty). */
+.app-dialog-list { margin: 0; padding-left: 18px; display: grid; gap: 6px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.app-dialog-checks { display: grid; gap: 4px; }
+.app-dialog-checks .field.checkbox { margin: 0; padding: 6px 8px; border-radius: var(--r-xs); }
+.app-dialog-checks .field.checkbox small { color: var(--muted); font-weight: 500; margin-left: 4px; }
+
 /* ===================================================
    LOADING OVERLAY
    =================================================== */
@@ -5686,6 +5770,50 @@ html.low-power .loading-overlay.is-file {
 .toast.info    .toast-icon { background: var(--info-bg); color: var(--info); }
 .toast.warning { border-color: color-mix(in srgb, var(--warning) 55%, var(--glass-border)); }
 .toast.warning .toast-icon { background: var(--warning-bg); color: var(--warning); }
+
+/* Akcja („Cofnij”, „Pokaż”…) i ✕ w dymku — kontrakt UX wspólny z Documents Workbench. */
+.toast-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast.has-action, .toast:has(.toast-close) { padding-right: 8px; }
+.toast-action {
+  flex: none;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-light);
+  color: var(--accent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.toast-close {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  margin-left: -2px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.toast-action:focus-visible,
+.toast-close:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent); }
+@media (hover: hover) {
+  .toast-action:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .toast-close:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+}
+@media (pointer: coarse) {
+  /* palec: większe pole trafienia bez powiększania samego dymka */
+  .toast-action { min-height: 36px; }
+  .toast-close { width: 36px; height: 36px; }
+}
 
 .cursor-hint {
   position: fixed;
@@ -7286,6 +7414,47 @@ body.tr-active .toast-container {
   padding: 6px 8px 4px;
 }
 .app-menu-build { margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Motyw: Systemowy / Jasny / Ciemny (segment na całą szerokość menu) */
+.theme-seg {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  margin: -2px 8px 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  background: var(--panel);
+}
+.theme-seg-btn {
+  min-height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--r-full);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.theme-seg-btn[aria-checked="true"] { background: var(--accent); color: var(--on-accent); }
+.theme-seg-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 32%, transparent); }
+@media (hover: hover) {
+  .theme-seg-btn:not([aria-checked="true"]):hover { color: var(--ink); background: var(--accent-light); }
+}
+@media (pointer: coarse) { .theme-seg-btn { min-height: 38px; } }
+.app-menu-kbd { font-size: 10.5px; padding: 1px 6px; color: var(--muted); }
+.app-menu-version .app-menu-item-text { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.app-menu-version-copy { font-size: 12px; }
+/* okno „Skróty i pomoc” */
+.sc-dialog .app-dialog-box { width: min(560px, 100%); max-height: min(82dvh, 720px); }
+.sc-palette { display: grid; gap: 8px; min-height: 0; }
+.sc-search { padding-left: 11px; }
+.sc-list .shortcut-hint { margin-top: 4px; }
+.sc-list h3.shortcut-section-title { margin: 0 0 2px; }
+.sc-empty, .sc-more { margin: 0; font-size: 12px; color: var(--muted); }
 @media (pointer: coarse) {
   .app-menu-item { min-height: 44px; }
 }
@@ -7412,6 +7581,14 @@ body.tr-active .toast-container {
 /* Opcja „Pokaż uchwyt panelu” wyłączona: zamknięty uchwyt znika (otwarty — przycisk
    „Schowaj panel” na telefonie — zostaje, bo zamyka panel). */
 :root.no-panel-handle:not(.sidebar-open) .sidebar-handle { display: none; }
+/* S6: telefon — uchwyt chowa się za krawędź przy przewijaniu tabeli i edycji (app-frame.js) */
+@media (max-width: 768px) and (pointer: coarse) {
+  :root:not(.sidebar-open) .sidebar-handle.is-quiet {
+    transform: translate(-100%, -50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+}
 
 /* ── poprawki z adnotacji Mateusza (iPhone, jasny motyw, 2026-09-28) ── */
 

@@ -169,7 +169,7 @@ async function run() {
     return {
       open: !m.hidden, left: r.left, right: r.right, top: r.top, bottom: r.bottom, vw: innerWidth, vh: innerHeight,
       links: [...m.querySelectorAll("a[href]")].map((a) => a.href),
-      hasLang: !!m.querySelector("#langSwitch"), hasTheme: !!m.querySelector("#themeToggle"), hasRefresh: !!m.querySelector("#brandRefresh"),
+      hasLang: !!m.querySelector("#langSwitch"), hasTheme: m.querySelectorAll("#themeSeg [data-theme-pref]").length === 3, hasRefresh: !!m.querySelector("#brandRefresh"),
     };
   });
   check("5. menu ⋯ otwiera się w całości na ekranie", menu.open && menu.left >= 0 && menu.right <= menu.vw && menu.bottom <= menu.vh, JSON.stringify(menu));

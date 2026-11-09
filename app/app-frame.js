@@ -298,7 +298,8 @@ const appFrame = (() => {
       placeMenu();
       // wskaźnik PL/EN liczy się z offsetLeft przycisków — w ukrytym menu było 0
       if (typeof updateLangSwitchIndicator === "function") updateLangSwitchIndicator();
-      if (buildEl && typeof APP_BUILD_VERSION !== "undefined") buildEl.textContent = APP_BUILD_VERSION;
+      if (typeof swbSyncVersionItem === "function") swbSyncVersionItem();
+      else if (buildEl && typeof APP_BUILD_VERSION !== "undefined") buildEl.textContent = APP_BUILD_VERSION;
       if (opts.focusFirst) { const first = menuItems()[0]; if (first) first.focus(); }
     } else if (opts.returnFocus) {
       menuBtn.focus();
@@ -417,6 +418,72 @@ const appFrame = (() => {
     handleOpt.addEventListener("change", () => {
       applyHandleOpt(handleOpt.checked);
       try { localStorage.setItem(PANEL_HANDLE_KEY, handleOpt.checked ? "1" : "0"); } catch (_) {}
+    });
+  }
+
+  // ── S6 (audyt QoL 2026-11-06): uchwyt na telefonie nie zasłania tabeli ─────
+  // Zamknięty uchwyt stoi przy lewej krawędzi na środku ekranu — na 390 px wchodził na kolumnę
+  // numerów wierszy. Na wąskim dotyku chowamy go (wysuwa się za krawędź) podczas przewijania
+  // tabeli i edycji komórki, a wraca ~1,2 s po ostatnim ruchu. Ta sama droga jest zawsze pod
+  // przyciskiem „Narzędzia” na pasku. Klasa siedzi na SAMYM uchwycie (nie na <html>), żeby
+  // przewijanie nie przeliczało stylów całej strony.
+  const handleEl = document.getElementById("panelHandle");
+  const phoneMq = typeof matchMedia === "function" ? matchMedia("(max-width: 768px) and (pointer: coarse)") : null;
+  if (handleEl && phoneMq) {
+    let quietTimer = 0;
+    let editing = false;
+    const setQuiet = (on) => { if (handleEl.classList.contains("is-quiet") !== on) handleEl.classList.toggle("is-quiet", on); };
+    const onScroll = () => {
+      if (!phoneMq.matches || rootEl.classList.contains("sidebar-open")) return;
+      setQuiet(true);
+      clearTimeout(quietTimer);
+      quietTimer = setTimeout(() => { if (!editing) setQuiet(false); }, 1200);
+    };
+    const scroller = typeof tableWrapEl !== "undefined" ? tableWrapEl : document.getElementById("tableWrap");
+    if (scroller) scroller.addEventListener("scroll", onScroll, { passive: true });
+    document.addEventListener("focusin", (e) => {
+      if (!phoneMq.matches) return;
+      const el = e.target;
+      editing = !!(el && el.matches && el.matches("input.cell-editor, #formulaInput, #quickSearch, #nameBox"));
+      if (editing) { clearTimeout(quietTimer); setQuiet(true); }
+    });
+    document.addEventListener("focusout", () => {
+      if (!editing) return;
+      editing = false;
+      clearTimeout(quietTimer);
+      quietTimer = setTimeout(() => setQuiet(false), 400);
+    });
+  }
+
+  // ── S10: przykłady na pustym ekranie („Co potrafisz zrobić po otwarciu?”) ──
+  // Klik = przykładowy plik + od razu właściwa funkcja, żeby zobaczyć rezultat, a nie opis.
+  const examples = document.getElementById("emptyExamples");
+  if (examples) {
+    examples.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-example]");
+      if (!b || b.disabled) return;
+      b.disabled = true;
+      try {
+        if (!workbook || currentFileName !== t("sampleFileName")) await loadSampleFile(); // cudzy plik: confirmDiscardChanges zapyta
+        const ok = await new Promise((resolve) => {
+          const t0 = performance.now();
+          const tick = () => (typeof currentDisplayModel !== "undefined" && currentDisplayModel && currentDisplayModel.rows && currentDisplayModel.rows.length ? resolve(true)
+            : performance.now() - t0 > 8000 ? resolve(false) : setTimeout(tick, 80));
+          tick();
+        });
+        if (!ok) return;
+        const kind = b.dataset.example;
+        if (kind === "open") {
+          if (quickSearchEl) quickSearchEl.value = "@wtoku";
+          applyQuickSearch();
+        } else if (kind === "anon" && typeof swbAnon !== "undefined") {
+          swbAnon.open();
+        } else if (kind === "report" && typeof openReport === "function") {
+          openReport();
+        }
+      } finally {
+        b.disabled = false;
+      }
     });
   }
 

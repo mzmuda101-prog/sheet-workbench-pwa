@@ -844,9 +844,13 @@ document.addEventListener("keydown", (e) => {
       return;
     }
   }
-  if (meta && e.key === "/") {
+  // Ctrl/⌘+/ — okno „Skróty i pomoc” (kontrakt UX; e.code, bo „/” na różnych układach to różne
+  // klawisze). Ctrl/⌘+Alt+/ — szybki przełącznik jasny ↔ ciemny (dawniej był pod samym Ctrl/⌘+/).
+  if (meta && e.code === "Slash" && !e.shiftKey) {
     e.preventDefault();
-    themeToggle.click();
+    if (e.altKey) toggleThemeQuick();
+    else if (typeof swbOpenShortcuts === "function") swbOpenShortcuts();
+    return;
   }
   if (meta && e.shiftKey && e.key.toLowerCase() === "f") {
     e.preventDefault();
@@ -996,13 +1000,13 @@ if ("serviceWorker" in navigator) {
     appUpdateBtn.classList.remove("hidden");
     appUpdateBtn.textContent = t("updateNow");
     // podpowiedź daje statyczny data-hint-pl/en w HTML (cursor-hint), nie natywny title
-    toast(t("updateAvailable"), "info");
+    toast(t("updateAvailable"), "info", { action: t("updateNow"), onAction: () => appUpdateBtn.click() });
   };
 
   if (appUpdateBtn) {
-    appUpdateBtn.addEventListener("click", () => {
+    appUpdateBtn.addEventListener("click", async () => {
       if (appUpdateBtn.classList.contains("is-busy")) return; // drugi klik w trakcie = nic
-      if (!confirmReloadWithUnsaved()) return;
+      if (!(await confirmReloadWithUnsaved())) return;
       // Najpierw WIDOCZNA zmiana stanu (spinner + tekst + blokada), dopiero potem
       // robota. Aktywacja nowego workera i przeładowanie trwają kilkaset ms do paru
       // sekund — bez tego klik wyglądał, jakby przycisk go nie zarejestrował.

@@ -872,8 +872,8 @@ const swbAnon = (() => {
     render();
     toast(tx("profileApplied", { name: p.name }), "success");
   }
-  function saveAsProfile() {
-    const name = String(window.prompt(tx("profileNamePrompt"), "") || "").trim().slice(0, 80);
+  async function saveAsProfile() {
+    const name = String(await appPrompt(tx("profileNamePrompt"), "", { title: tx("profileSave"), maxLength: 80, validate: (v) => (v ? "" : t("dlgNameEmpty")) }) || "").trim().slice(0, 80);
     if (!name) return;
     const list = loadProfiles().filter((p) => p.name !== name);
     list.push(currentAsProfile(name));
@@ -888,11 +888,17 @@ const swbAnon = (() => {
     const i = Number(st.profileId.slice(2));
     const p = list[i];
     if (!p) return;
+    const before = list.slice();
+    const prevId = st.profileId;
     list.splice(i, 1);
     saveProfiles(list);
     st.profileId = "";
     render();
-    toast(tx("profileDeleted", { name: p.name }), "success");
+    // usunięcie bez pytania, ale z „Cofnij” (kontrakt UX: operacje odwracalne)
+    toast(tx("profileDeleted", { name: p.name }), "success", {
+      action: t("undoAction"),
+      onAction: () => { saveProfiles(before); st.profileId = prevId; render(); },
+    });
   }
   async function exportProfiles() {
     const list = loadProfiles();

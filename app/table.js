@@ -929,7 +929,7 @@ function swbMoveBlock(s, dr, dc) {
     setFocusedCell(topKey, s.c1 + dc, { scroll: false });
     if (h > 1 || w > 1) setSelectedCell(botKey, s.c2 + dc, { scroll: false });
   }
-  toast(t("cellsMoved", { count: h * w }), "success");
+  toast(t("cellsMoved", { count: h * w }), "success", swbUndoToastOpts());
   if (deps.length + farDeps.length) toast(t("cutFormulasFollowed", { count: deps.length + farDeps.length }), "info");
   log(`Przeniesiono ${h * w} kom. o (${dr}, ${dc}); przepięte formuły: ${deps.length} + ${farDeps.length} w innych arkuszach/poza widokiem`, "success");
   return true;
@@ -1080,7 +1080,7 @@ async function pasteClipboardToSelection(opts = {}) {
     renderActiveTable();
     toast(got.source === "app"
       ? t("cellsPastedApp", { count: changed })
-      : t("cellsPasted", { count: changed }), "success");
+      : t("cellsPasted", { count: changed }), "success", swbUndoToastOpts());
     log(`Wklejono ${changed} komorek ze schowka (${got.source})`, "success");
   } else {
     toast(t("editToolNoChange"), "info");

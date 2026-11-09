@@ -13,6 +13,7 @@
 //   6. tryb EN: angielskie nazwy w widoku, wpis „#DIV/0!” = błąd, „#DZIEL/0!” = tekst.
 
 const pw = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
@@ -53,6 +54,7 @@ async function openApp(browser, lang) {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("dialog", (d) => d.accept());
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
   await page.goto(APP_URL, { waitUntil: "load" });
   await page.evaluate(() => { document.getElementById("heroSplash")?.remove(); return ensureXlsxLibs(false); });
   await page.setInputFiles("#fileInput", FILE);

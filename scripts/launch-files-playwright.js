@@ -10,6 +10,7 @@
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
 
 const playwright = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 
 const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
 const SLEEP_SCALE = Math.min(1, Math.max(0.1, Number(process.env.SLEEP_SCALE || 1)));
@@ -46,6 +47,7 @@ async function run() {
     }
   });
   const p = await ctx.newPage();
+  await autoAnswerAppDialogs(p);
   const errors = [];
   p.on("pageerror", (e) => errors.push(e.message));
   await p.goto(APP_URL + "?open=file", { waitUntil: "load" });
@@ -65,8 +67,7 @@ async function run() {
   check("2. plik otwarty z uchwytem (Zapisz do oryginału) i tabelą", s2.name === "Z-Findera.xlsx" && s2.handle, s2);
   check("2. ?open=file znika z adresu (odświeżenie nie otwiera drugi raz)", s2.url === "", s2.url);
 
-  await p.evaluate(() => setDirtyState(true));
-  p.once("dialog", (d) => d.dismiss());
+  await p.evaluate(() => { setDirtyState(true); window.__appDialogMode = "dismiss"; });
   await launch("Drugi.xlsx");
   await sleep(300);
   const s3 = await p.evaluate(() => currentFileName);
@@ -78,6 +79,7 @@ async function run() {
   const ctx2 = await browser.newContext({ viewport: { width: 400, height: 800 } });
   await ctx2.addInitScript(() => localStorage.setItem("introPlayed", "true"));
   const q = await ctx2.newPage();
+  await autoAnswerAppDialogs(q);
   const errors2 = [];
   q.on("pageerror", (e) => errors2.push(e.message));
   await q.goto(APP_URL, { waitUntil: "load" });
@@ -96,13 +98,12 @@ async function run() {
   });
   check("4. POST na share-target → przekierowanie na ?open=shared", shared.redirected && /\?open=shared$/.test(shared.url), shared);
   // pytanie przed otwarciem (POST może wysłać też obca strona — audyt 6.11)
-  const asked = [];
-  q.once("dialog", (d) => { asked.push(d.message()); d.accept(); });
   await q.goto(APP_URL + "?open=shared", { waitUntil: "load" });
   await q.waitForFunction(() => typeof currentFileName === "string" && currentFileName === "Udostępniony.xlsx", null, { timeout: 20000 }).catch(() => {});
   const s4 = await q.evaluate(async () => ({ name: currentFileName, handle: currentFileHandle, left: (await caches.keys()).includes("excel-wb-share") ? !!(await (await caches.open("excel-wb-share")).match("./__shared-file")) : false }));
   check("4. udostępniony plik otwarty (kopia, bez uchwytu), cache wyczyszczony", s4.name === "Udostępniony.xlsx" && !s4.handle && !s4.left, s4);
-  check("4. pytanie przed otwarciem z nazwą pliku", asked.length === 1 && asked[0].includes("Udostępniony.xlsx"), asked);
+  const asked = await q.evaluate(() => (window.__appDialogLog || []).map((d) => d.msg));
+  check("4. pytanie przed otwarciem z nazwą pliku (własne okno)", asked.length === 1 && asked[0].includes("Udostępniony.xlsx"), asked);
   check("bez błędów strony (share)", errors2.length === 0, errors2);
 
   // 5. Chrome otworzył aplikację „do pliku”, ale pliku nie przekazał (zapamiętane „Nie zezwalaj”) —

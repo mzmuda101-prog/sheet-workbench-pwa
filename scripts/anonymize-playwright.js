@@ -17,6 +17,7 @@
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/), np. `npm run serve:test`.
 
 const { chromium, webkit } = require("playwright");
+const { autoAnswerAppDialogs } = require("./app-dialog-auto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -117,6 +118,7 @@ async function run() {
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("dialog", (d) => d.accept());
+  await autoAnswerAppDialogs(page); // własne okna aplikacji (app-dialog.js)
   page.on("console", (m) => { if (m.type() === "error") errors.push("console: " + m.text()); });
   await page.goto(APP_URL, { waitUntil: "load" });
   await page.evaluate(() => { document.getElementById("heroSplash")?.remove(); });

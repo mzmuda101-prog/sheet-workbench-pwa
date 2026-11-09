@@ -238,10 +238,24 @@ const swbDrafts = (() => {
     return true;
   }
 
-  async function discard(id, name) {
-    if (!window.confirm(t("draftDiscardConfirm", { name }))) return;
-    await delRec(id);
+  // „Odrzuć” bez pytania (kontrakt UX: operacja odwracalna → dymek z „Cofnij”). Karta znika
+  // od razu, a szkic kasujemy dopiero, gdy dymek zgaśnie bez „Cofnij” — do tego czasu leży
+  // nietknięty w IndexedDB (zamknięcie karty w tej chwili = szkic zostaje, bezpieczniej).
+  const pendingDiscard = new Map(); // id → timer
+  function discard(id, name) {
+    if (pendingDiscard.has(id)) return;
+    const timer = setTimeout(() => { pendingDiscard.delete(id); delRec(id).catch(() => {}); }, 6500);
+    pendingDiscard.set(id, timer);
     renderRecovery();
+    toast(t("draftDiscarded", { name }), "info", {
+      action: t("undoAction"),
+      duration: 6000,
+      onAction: () => {
+        clearTimeout(pendingDiscard.get(id));
+        pendingDiscard.delete(id);
+        renderRecovery();
+      },
+    });
   }
 
   // ── karta na ekranie startowym ─────────────────────────────────────────────
@@ -262,7 +276,7 @@ const swbDrafts = (() => {
     const host = document.getElementById("draftRecovery");
     if (!host) return;
     if (workbook) { host.replaceChildren(); host.hidden = true; return; }
-    const recs = await recoverable();
+    const recs = (await recoverable()).filter((r) => !pendingDiscard.has(r.id));
     if (job !== renderJob || workbook) return;
     host.replaceChildren();
     host.hidden = !recs.length;
@@ -305,7 +319,7 @@ const swbDrafts = (() => {
     const origHandleFile = window.handleFile;
     window.handleFile = async function handleFileDrafts(...args) {
       if (!suspended) {
-        if (!confirmDiscardChanges()) return;
+        if (!(await confirmDiscardChanges())) return;
         await dropOwn();
         sessionId = newDraftId();
       }
@@ -323,9 +337,11 @@ const swbDrafts = (() => {
 })();
 
 // Inny plik przy niezapisanych zmianach: pytamy (dawniej Sheet podmieniał plik bez słowa —
-// zmienione komórki przepadały; Documents Workbench pytał od zawsze).
-function confirmDiscardChanges() {
-  return !workbook || !hasUnsavedChanges || window.confirm(t("openDiscardWarn"));
+// zmienione komórki przepadały; Documents Workbench pytał od zawsze). Od 2026-11-07 własne
+// okno „Zapisz / Nie zapisuj / Anuluj” zamiast systemowego OK/Anuluj.
+async function confirmDiscardChanges() {
+  if (!workbook || !hasUnsavedChanges) return true;
+  return appResolveUnsaved({ title: t("openDiscardTitle"), message: t("openDiscardWarn") });
 }
 
 document.addEventListener("DOMContentLoaded", () => swbDrafts.init());
