@@ -1562,6 +1562,7 @@ async function loadSampleFile() {
   const file = new File([buffer], t("sampleFileName"), {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
+  if (typeof swbRecent !== "undefined") swbRecent.skipNextOpen(); // przykład nie trafia do „Ostatnio otwierane”
   const opened = await handleFile(file);
   // Auto-wykryj wiersz nagłówka (pomija wiersze KPI) i od razu wczytaj arkusz do tabeli.
   if (opened && workbook) {
@@ -2306,6 +2307,7 @@ async function writeWorkbookToHandle(handle, ext) {
   const writable = await handle.createWritable();
   await writable.write(new Blob([data]));
   await writable.close();
+  if (typeof swbRecent !== "undefined") swbRecent.noteSaved(handle.name, data, handle); // „Ostatnio otwierane” = zapisana wersja
 }
 
 // Pobranie pliku (fallback dla przeglądarek bez FSA, np. iOS Safari / Firefox).
@@ -2326,6 +2328,7 @@ async function downloadWorkbook(name, ext, opts = {}) {
   // Nie od razu: Safari (iPhone/iPad — zapis bez File System Access) potrafi przerwać
   // pobieranie, gdy adres zniknie w tym samym zadaniu co kliknięcie (jak w Documents Workbench).
   setTimeout(() => URL.revokeObjectURL(url), 30000);
+  if (typeof swbRecent !== "undefined") swbRecent.noteSaved(name, data, null);
   markSavedAfterBuild();
   toast(t(opts.toastKey || "fileSaved"), opts.toastType || "success");
   log(`Zapisano plik: ${name}`, "success");

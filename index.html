@@ -18,10 +18,10 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20261031-logo" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=v1.00.00" />
+    <link rel="stylesheet" href="styles/app.css?v=v1.00.01" />
     <!-- Motyw PRZED pierwszym malowaniem (bez mignięcia jasnego tła w trybie ciemnym). Plik, nie
          skrypt w treści — CSP pozwala tylko na script-src 'self'. Brak klucza = motyw systemu. -->
-    <script src="app/theme-early.js?v=v1.00.00"></script>
+    <script src="app/theme-early.js?v=v1.00.01"></script>
   </head>
   <body>
     <!-- Intro splash -->
@@ -1405,6 +1405,8 @@
                   Wypróbuj na przykładowym pliku
                 </button>
               </div>
+              <!-- Ostatnio otwierane (recent-files.js) — lokalne kopie, tylko na tym urządzeniu -->
+              <div class="recent-files" id="recentFiles" role="group" aria-labelledby="recentCap" hidden></div>
               <!-- S10: co da się zrobić po otwarciu — klik pokazuje rezultat na przykładzie -->
               <div class="empty-examples" id="emptyExamples" role="group" aria-labelledby="emptyExamplesCap">
                 <div class="empty-examples-cap" id="emptyExamplesCap">Zobacz na przykładzie</div>
@@ -1929,60 +1931,61 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=v1.00.00"></script>
-    <script defer src="app/render-budget.js?v=v1.00.00"></script>
-    <script defer src="app/language.js?v=v1.00.00"></script>
-    <script defer src="app/app-dialog.js?v=v1.00.00"></script>
-    <script defer src="app/similar-names.js?v=v1.00.00"></script>
-    <script defer src="app/analysis.js?v=v1.00.00"></script>
-    <script defer src="app/smart-filters.js?v=v1.00.00"></script>
-    <script defer src="app/excel-date-format.js?v=v1.00.00"></script>
-    <script defer src="app/excel-fonts.js?v=v1.00.00"></script>
-    <script defer src="app/workbook.js?v=v1.00.00"></script>
-    <script defer src="app/xlsx-patch.js?v=v1.00.00"></script>
-    <script defer src="app/table.js?v=v1.00.00"></script>
-    <script defer src="app/virt-rows.js?v=v1.00.00"></script>
-    <script defer src="app/conditional-formatting.js?v=v1.00.00"></script>
-    <script defer src="app/formula-engine.js?v=v1.00.00"></script>
-    <script defer src="app/formula-calc.js?v=v1.00.00"></script>
-    <script defer src="app/formula-explain.js?v=v1.00.00"></script>
-    <script defer src="app/data-validation.js?v=v1.00.00"></script>
-    <script defer src="app/derived-columns.js?v=v1.00.00"></script>
-    <script defer src="app/formulas.js?v=v1.00.00"></script>
-    <script defer src="app/edit-tools.js?v=v1.00.00"></script>
-    <script defer src="app/cell-format.js?v=v1.00.00"></script>
-    <script defer src="app/ui-controls.js?v=v1.00.00"></script>
-    <script defer src="app/filter-bar.js?v=v1.00.00"></script>
-    <script defer src="app/qs-history.js?v=v1.00.00"></script>
-    <script defer src="app/undo.js?v=v1.00.00"></script>
-    <script defer src="app/cell-notes.js?v=v1.00.00"></script>
-    <script defer src="app/anonymize-core.js?v=v1.00.00"></script>
-    <script defer src="app/anonymize-tools.js?v=v1.00.00"></script>
-    <script defer src="app/anonymize-zip.js?v=v1.00.00"></script>
-    <script defer src="app/anonymize-ui.js?v=v1.00.00"></script>
-    <script defer src="app/drafts.js?v=v1.00.00"></script>
-    <script defer src="app/session-resume.js?v=v1.00.00"></script>
-    <script defer src="app/shortcuts.js?v=v1.00.00"></script>
-    <script defer src="app/app-settings.js?v=v1.00.00"></script>
-    <script defer src="app/transcribe.js?v=v1.00.00"></script>
-    <script defer src="app/local-ai.js?v=v1.00.00"></script>
-    <script defer src="app/nl-query.js?v=v1.00.00"></script>
-    <script defer src="app/report.js?v=v1.00.00"></script>
-    <script defer src="app/freeze-pane.js?v=v1.00.00"></script>
-    <script defer src="app/app-frame.js?v=v1.00.00"></script>
-    <script defer src="app/sheet-edit-ui.js?v=v1.00.00"></script>
-    <script defer src="app/frame-compact.js?v=v1.00.00"></script>
-    <script defer src="app/key-bar.js?v=v1.00.00"></script>
-    <script defer src="app/cell-spill.js?v=v1.00.00"></script>
-    <script defer src="app/autofill.js?v=v1.00.00"></script>
-    <script defer src="app/move-cells.js?v=v1.00.00"></script>
-    <script defer src="app/header-edit.js?v=v1.00.00"></script>
-    <script defer src="app/formula-ui.js?v=v1.00.00"></script>
+    <script defer src="app/core.js?v=v1.00.01"></script>
+    <script defer src="app/render-budget.js?v=v1.00.01"></script>
+    <script defer src="app/language.js?v=v1.00.01"></script>
+    <script defer src="app/app-dialog.js?v=v1.00.01"></script>
+    <script defer src="app/similar-names.js?v=v1.00.01"></script>
+    <script defer src="app/analysis.js?v=v1.00.01"></script>
+    <script defer src="app/smart-filters.js?v=v1.00.01"></script>
+    <script defer src="app/excel-date-format.js?v=v1.00.01"></script>
+    <script defer src="app/excel-fonts.js?v=v1.00.01"></script>
+    <script defer src="app/workbook.js?v=v1.00.01"></script>
+    <script defer src="app/xlsx-patch.js?v=v1.00.01"></script>
+    <script defer src="app/table.js?v=v1.00.01"></script>
+    <script defer src="app/virt-rows.js?v=v1.00.01"></script>
+    <script defer src="app/conditional-formatting.js?v=v1.00.01"></script>
+    <script defer src="app/formula-engine.js?v=v1.00.01"></script>
+    <script defer src="app/formula-calc.js?v=v1.00.01"></script>
+    <script defer src="app/formula-explain.js?v=v1.00.01"></script>
+    <script defer src="app/data-validation.js?v=v1.00.01"></script>
+    <script defer src="app/derived-columns.js?v=v1.00.01"></script>
+    <script defer src="app/formulas.js?v=v1.00.01"></script>
+    <script defer src="app/edit-tools.js?v=v1.00.01"></script>
+    <script defer src="app/cell-format.js?v=v1.00.01"></script>
+    <script defer src="app/ui-controls.js?v=v1.00.01"></script>
+    <script defer src="app/filter-bar.js?v=v1.00.01"></script>
+    <script defer src="app/qs-history.js?v=v1.00.01"></script>
+    <script defer src="app/undo.js?v=v1.00.01"></script>
+    <script defer src="app/cell-notes.js?v=v1.00.01"></script>
+    <script defer src="app/anonymize-core.js?v=v1.00.01"></script>
+    <script defer src="app/anonymize-tools.js?v=v1.00.01"></script>
+    <script defer src="app/anonymize-zip.js?v=v1.00.01"></script>
+    <script defer src="app/anonymize-ui.js?v=v1.00.01"></script>
+    <script defer src="app/drafts.js?v=v1.00.01"></script>
+    <script defer src="app/session-resume.js?v=v1.00.01"></script>
+    <script defer src="app/recent-files.js?v=v1.00.01"></script>
+    <script defer src="app/shortcuts.js?v=v1.00.01"></script>
+    <script defer src="app/app-settings.js?v=v1.00.01"></script>
+    <script defer src="app/transcribe.js?v=v1.00.01"></script>
+    <script defer src="app/local-ai.js?v=v1.00.01"></script>
+    <script defer src="app/nl-query.js?v=v1.00.01"></script>
+    <script defer src="app/report.js?v=v1.00.01"></script>
+    <script defer src="app/freeze-pane.js?v=v1.00.01"></script>
+    <script defer src="app/app-frame.js?v=v1.00.01"></script>
+    <script defer src="app/sheet-edit-ui.js?v=v1.00.01"></script>
+    <script defer src="app/frame-compact.js?v=v1.00.01"></script>
+    <script defer src="app/key-bar.js?v=v1.00.01"></script>
+    <script defer src="app/cell-spill.js?v=v1.00.01"></script>
+    <script defer src="app/autofill.js?v=v1.00.01"></script>
+    <script defer src="app/move-cells.js?v=v1.00.01"></script>
+    <script defer src="app/header-edit.js?v=v1.00.01"></script>
+    <script defer src="app/formula-ui.js?v=v1.00.01"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=v1.00.00"></script>
-    <script defer src="app/launch-files.js?v=v1.00.00"></script>
-    <script defer src="app/bootstrap.js?v=v1.00.00"></script>
+    <script defer src="app/debug-loaders.js?v=v1.00.01"></script>
+    <script defer src="app/launch-files.js?v=v1.00.01"></script>
+    <script defer src="app/bootstrap.js?v=v1.00.01"></script>
   </body>
 </html>

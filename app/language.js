@@ -198,6 +198,15 @@ const I18N = {
     draftRestoreFailed: "Nie udało się przywrócić szkicu.",
     draftOriginalChanged: "Plik „{name}” na dysku zmienił się od czasu szkicu — „Zapisz” utworzy kopię, żeby niczego nie nadpisać.",
     draftNote: "Szkic jest tylko na tym urządzeniu i znika sam po 7 dniach.",
+    recentTitle: "Ostatnio otwierane",
+    recentClear: "Wyczyść listę",
+    recentClearTitle: "Wyczyścić listę ostatnich plików?",
+    recentClearAsk: "Kopie tych plików zostaną usunięte z aplikacji. Pliki na dysku zostają bez zmian.",
+    recentRemove: "Usuń „{name}” z listy",
+    recentNote: "Kopie ostatnich 5 plików są tylko na tym urządzeniu.",
+    recentFromCopy: "Brak dostępu do „{name}” na dysku — otwieram kopię z aplikacji.",
+    recentGone: "Nie ma już kopii pliku „{name}” — otwórz go z dysku.",
+    recentOpenFailed: "Nie udało się otworzyć pliku z listy.",
     openDiscardWarn: "Masz niezapisane zmiany w otwartym pliku. Zapisać je, zanim otworzysz inny plik?",
     openSharedConfirm: "Otworzyć udostępniony plik „{name}”? Jeśli nic nie było udostępniane, plik mogła wysłać strona internetowa — wybierz wtedy Anuluj.",
     openExternalFailed: "Nie udało się otworzyć przekazanego pliku — otwórz go przyciskiem „Otwórz”.",
@@ -1576,6 +1585,15 @@ const I18N = {
     draftRestoreFailed: "Couldn't restore the draft.",
     draftOriginalChanged: "“{name}” on disk changed since the draft — “Save” will create a copy so nothing gets overwritten.",
     draftNote: "The draft stays only on this device and disappears after 7 days.",
+    recentTitle: "Recently opened",
+    recentClear: "Clear list",
+    recentClearTitle: "Clear the recent files list?",
+    recentClearAsk: "The copies of these files will be removed from the app. Files on your disk stay unchanged.",
+    recentRemove: "Remove “{name}” from the list",
+    recentNote: "Copies of the last 5 files are kept only on this device.",
+    recentFromCopy: "No access to “{name}” on disk — opening the copy kept in the app.",
+    recentGone: "The copy of “{name}” is gone — open it from disk.",
+    recentOpenFailed: "Couldn't open the file from the list.",
     openDiscardWarn: "You have unsaved changes in the open file. Save them before opening another file?",
     openSharedConfirm: "Open the shared file “{name}”? If you didn't share anything, a web page may have sent it — choose Cancel.",
     openExternalFailed: "Couldn't open the passed file — open it with the “Open” button.",
@@ -4375,6 +4393,7 @@ function applyLanguage(lang) {
   if (typeof swbKeyBar !== "undefined" && swbKeyBar.syncToggle) swbKeyBar.syncToggle();
   if (typeof swbNotesSyncFilterUi === "function") swbNotesSyncFilterUi();
   if (typeof swbAnonSyncLanguage === "function") swbAnonSyncLanguage();
+  if (typeof swbRecent !== "undefined") swbRecent.render();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));
   renderSortRules();

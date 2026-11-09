@@ -3511,6 +3511,33 @@ details.panel[open] > summary {
   .empty-example:hover { border-color: var(--accent-border); background: var(--accent-light); }
 }
 .empty-state.in-file .empty-examples { display: none; }
+/* Ostatnio otwierane (recent-files.js) — pod przyciskami, nad przykładami */
+.recent-files { width: min(440px, 100%); margin: 16px auto 0; text-align: left; }
+.recent-files[hidden], .empty-state.in-file .recent-files { display: none; }
+.recent-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.recent-cap { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.recent-clear { border: 0; background: none; padding: 2px 4px; font: inherit; font-size: 12px; color: var(--muted-strong); cursor: pointer; border-radius: 6px; }
+.recent-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--r); background: var(--panel); overflow: hidden; }
+.recent-item { display: flex; align-items: stretch; }
+.recent-item + .recent-item { border-top: 1px solid var(--border); }
+.recent-open {
+  flex: 1; min-width: 0; display: grid; gap: 2px; padding: 8px 12px;
+  border: 0; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; transition: background var(--t);
+}
+.recent-name { font-size: 13px; font-weight: 650; color: var(--accent); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-meta { font-size: 11.5px; color: var(--muted); }
+.recent-open:disabled { opacity: .6; cursor: progress; }
+.recent-remove { flex: none; width: 40px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; transition: color var(--t), background var(--t); }
+.recent-open:active, .recent-remove:active { background: var(--accent-light); }
+:is(.recent-open, .recent-remove, .recent-clear):focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--border-focus); }
+@media (hover: hover) {
+  .recent-open:hover { background: var(--accent-light); }
+  .recent-remove:hover { color: var(--danger); background: var(--accent-light); }
+  .recent-clear:hover { color: var(--ink); }
+}
+@media (pointer: coarse) { .recent-open { min-height: 48px; } .recent-remove { width: 48px; } }
+.recent-note { font-size: 11.5px; color: var(--muted); margin: 6px 0 0; text-align: center; }
 @media (max-width: 560px) {
   .empty-examples { grid-template-columns: 1fr; }
 }
