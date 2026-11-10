@@ -973,6 +973,9 @@ function updateSheetCell(rowIndex0, colIndex0, parsed) {
   if (typeof swbHeaderRowTouched === "function") swbHeaderRowTouched(currentSheetName, rowIndex0);
   const absoluteCol = currentStartCol + colIndex0;
   const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
+  // nowy wiersz pod danymi: styl wiersza nad nim + formuły kolumn (row-grow.js), ten sam krok Cofnij
+  // (tylko wpis wartości — Delete w pustym nowym wierszu nie może dopisywać formuł)
+  if (typeof swbRowGrow !== "undefined" && parsed && parsed.value !== null) swbRowGrow.beforeWrite(currentSheetName, rowIndex0, absoluteCol);
   if (!parsed || parsed.value === null) {
     if (typeof undoCaptureCell === "function") undoCaptureCell(rowIndex0, colIndex0); // stan „przed" do Cofnij
     const prevCell = sheet[cellRef];
@@ -1056,6 +1059,8 @@ function updateSheetFormulaCell(rowIndex0, colIndex0, fileF, value) {
   if (typeof swbHeaderRowTouched === "function") swbHeaderRowTouched(currentSheetName, rowIndex0);
   const absoluteCol = currentStartCol + colIndex0;
   const cellRef = XLSX.utils.encode_cell({ r: rowIndex0, c: absoluteCol });
+  // nowy wiersz pod danymi: styl wiersza nad nim + formuły kolumn (row-grow.js), ten sam krok Cofnij
+  if (typeof swbRowGrow !== "undefined") swbRowGrow.beforeWrite(currentSheetName, rowIndex0, absoluteCol);
   if (typeof undoCaptureCell === "function") undoCaptureCell(rowIndex0, colIndex0);
   const prev = sheet[cellRef];
   const cell = { f: fileF };
@@ -1107,6 +1112,8 @@ function recordPendingEdit(sheetName, cellRef, payload) {
     if ("note" in prev && !(payload && "note" in payload)) keep.note = prev.note;
     if (Object.keys(keep).length) payload = payload === null ? { clear: true, ...keep } : { ...payload, ...keep };
   }
+  // komórka, której nie było w pliku (nowy wiersz): zapis dostaje styl wiersza nad nią (row-grow.js)
+  if (typeof swbRowGrow !== "undefined") payload = swbRowGrow.withXf(sheetName, cellRef, payload);
   pendingEdits[sheetName][cellRef] = payload;
 }
 

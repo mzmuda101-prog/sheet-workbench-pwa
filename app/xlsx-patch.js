@@ -295,6 +295,9 @@ function patchSheetDataInner(inner, cells, formulaMap, dateStyler) {
     if (payload === undefined) return;
 
     const existing = cellMap.get(ref);
+    // Komórka, której nie było w pliku (nowy wiersz pod danymi, row-grow.js): payload.xf = styl
+    // z komórki nad nią — ramki, tło i format liczb jak w wierszu powyżej (Excel robi tak samo).
+    const newAttrs = !existing && payload && Number.isInteger(payload.xf) && payload.xf > 0 ? withCellStyleIdx("", payload.xf) : "";
     if (payload === null) {
       // Jak „Wyczyść zawartość” w Excelu: znika wartość/formuła, styl (s=) zostaje —
       // inaczej czyszczenie komórki w obramowanej tabeli zjadało ramkę, tło i format.
@@ -308,7 +311,7 @@ function patchSheetDataInner(inner, cells, formulaMap, dateStyler) {
     // Zmiana formatu (pasek „Narzędzia główne”): nowy styl = styl z pliku + delta.
     const fmt = payload.fmt && dateStyler && typeof dateStyler.withFmt === "function" ? payload.fmt : null;
     if (fmt && (payload.clear || !("t" in payload))) {
-      const curAttrs = existing ? existing.attrs : "";
+      const curAttrs = existing ? existing.attrs : newAttrs;
       const idx = dateStyler.withFmt(cellStyleIdx(curAttrs), fmt);
       let text;
       if (payload.clear || !existing) text = `<c r="${ref}"${withCellStyleIdx(curAttrs.replace(/\s*\bt="[^"]*"/g, "").replace(/\/\s*$/g, ""), idx)}/>`;
@@ -331,9 +334,13 @@ function patchSheetDataInner(inner, cells, formulaMap, dateStyler) {
       }
       return;
     }
-    if (!("t" in payload)) return;
+    if (!("t" in payload)) {
+      // sam styl nowej komórki (pusta kolumna nowego wiersza) — <c r s/> bez wartości
+      if (!existing && newAttrs) inserts.push({ ref, cellXml: `<c r="${ref}"${newAttrs}/>` });
+      return;
+    }
 
-    let attrsIn = existing ? existing.attrs : "";
+    let attrsIn = existing ? existing.attrs : newAttrs;
     let styler = dateStyler;
     if (fmt) {
       attrsIn = withCellStyleIdx(attrsIn, dateStyler.withFmt(cellStyleIdx(attrsIn), fmt, { date: payload.t === "d" }));
@@ -1198,7 +1205,7 @@ async function applySheetNotes(zip, sheetPath, sheetXml, notes) {
   return sheet;
 }
 
-async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
+async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}, opts = {}) {
   if (typeof JSZip === "undefined") throw new Error("JSZip niedostępny");
   const zip = await JSZip.loadAsync(originalBytes);
   const sheetPaths = await resolveSheetPaths(zip);
@@ -1229,7 +1236,7 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
     Object.keys(cells).forEach((ref) => {
       const p = cells[ref];
       if (p && "note" in p) notes[ref] = p.note;
-      if (p === null || (p && ("t" in p || p.fmt || p.clear))) valueCells[ref] = p;
+      if (p === null || (p && ("t" in p || p.fmt || p.clear || "xf" in p))) valueCells[ref] = p; // xf: sam styl nowej komórki (row-grow.js)
     });
     const xml = await zip.file(path).async("string");
     let patched = xml;
@@ -1242,6 +1249,10 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}) {
   }
 
   if (dateStyler && dateStyler.changed) zipWriteUtf8Xml(zip, stylesPath, dateStyler.apply(stylesXml));
+
+  // dopisane wiersze pod danymi: tabele, autofiltr, formatowanie warunkowe, listy wyboru i wymiar
+  // arkusza rosną razem z nimi (xlsx-grow.js). opts.grow = { arkusz: { fromRow, toRow } }, 1-based.
+  if (opts && opts.grow && typeof swbGrow !== "undefined") await swbGrow.growZip(zip, sheetPaths, opts.grow);
 
   if (touched) {
     await forceRecalcOnLoad(zip);

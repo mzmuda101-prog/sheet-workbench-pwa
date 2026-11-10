@@ -438,13 +438,17 @@ function setSelectedCell(rowKey, colIndex0, options = {}) {
   updateCellStats();
 }
 
-function moveFocusedCell(rowDelta, colDelta) {
+function moveFocusedCell(rowDelta, colDelta, opts = {}) {
   if (!focusedCellState || !currentDisplayModel?.rows?.length || !currentDisplayModel?.headers?.length) return false;
   const view = swbSelView(); // strzałka w górę z 1. wiersza danych wchodzi nad nagłówek
   const rowIndex = swbSelIndexOfKey(view, focusedCellState.rowKey);
   if (rowIndex < 0) {
     focusedCellState = null;
     return false;
+  }
+  // Enter po wpisie w OSTATNIM wierszu = nowy wiersz pod danymi (row-grow.js), jak w Excelu
+  if (opts.grow && rowDelta === 1 && rowIndex === view.rows.length - 1 && typeof swbRowGrow !== "undefined" && swbRowGrow.canAdd()) {
+    if (swbRowGrow.addDraft({ col: focusedCellState.colIndex0 })) return true;
   }
   const nextRowIndex = Math.max(0, Math.min(view.rows.length - 1, rowIndex + rowDelta));
   const nextColIndex = Math.max(0, Math.min(view.headers.length - 1, focusedCellState.colIndex0 + colDelta));

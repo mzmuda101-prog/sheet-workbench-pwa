@@ -8706,6 +8706,35 @@ body.rp-active { overflow: hidden; }
 /* Podgląd: kursor zwykły (nic tu nie edytujesz) */
 :root.swb-view-mode #dataTable tbody td:not(.row-head) { cursor: default; }
 
+/* „＋ Nowy wiersz” w pasku pod tabelą, przed sumami (row-grow.js) — tylko Edycja. Pasek jest
+   rzędem na każdej szerokości (dawniej tylko na telefonie, obok statusu). */
+.table-foot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.table-foot > .cell-stats-bar { flex: 1 1 auto; min-width: 0; }
+.add-row-btn {
+  flex: none;
+  order: -1;
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--t), border-color var(--t);
+}
+.add-row-btn[hidden], :root.swb-view-mode .add-row-btn { display: none; }
+.add-row-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+@media (hover: hover) { .add-row-btn:hover { background: var(--accent-light); border-color: var(--accent-border); } }
+@media (pointer: coarse) { .add-row-btn { min-height: 38px; } }
+
 /* Kursor myszy jak w Excelu (2026-11-10). Edycja: biały krzyżyk nad komórką (dawniej kursor
    tekstowy — sugerował pisanie od razu, a klik zaznacza komórkę); Podgląd i Malarz formatów
    mają silniejsze reguły wyżej (:root…), więc wygrywają. Litery kolumn: czarna strzałka ↓

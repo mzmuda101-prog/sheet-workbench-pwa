@@ -171,6 +171,11 @@ const swbDrafts = (() => {
           else delete sheet[ref];
           return;
         }
+        // nowa komórka (nowy wiersz pod danymi, row-grow.js): wygląd wiersza nad nią wraca z indeksem stylu
+        if (p && Number.isInteger(p.xf) && typeof currentStyleIndexMap !== "undefined" && currentStyleIndexMap) {
+          if (!currentStyleIndexMap.get(sheetName)) currentStyleIndexMap.set(sheetName, new Map());
+          if (!currentStyleIndexMap.get(sheetName).has(ref)) currentStyleIndexMap.get(sheetName).set(ref, p.xf);
+        }
         if (p && !("t" in p)) { // sam format — wartość z pliku zostaje (nakłada go cfmtOverlayRows)
           if (sheet[ref] && p.fmt && "numFmt" in p.fmt) sheet[ref].z = p.fmt.numFmt;
           return;

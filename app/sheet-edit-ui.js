@@ -526,7 +526,7 @@ var sheetEditUi = (() => {
 
   function afterCommitMove(move) {
     if (!move) return;
-    if (move.row || move.col) moveFocusedCell(move.row || 0, move.col || 0);
+    if (move.row || move.col) moveFocusedCell(move.row || 0, move.col || 0, { grow: (move.row || 0) === 1 });
     returnFocusToGrid();
   }
 

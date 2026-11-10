@@ -2288,7 +2288,9 @@ async function buildOutputBytes(ext) {
   let bytes = null;
   if (originalFileBytes && typeof buildPatchedXlsx === "function" && typeof JSZip !== "undefined") {
     try {
-      bytes = await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps());
+      // grow: dane urosły w dół (nowe wiersze) → tabele, filtry, CF i listy wyboru rosną razem z nimi
+      const grow = typeof swbRowGrow !== "undefined" ? swbRowGrow.growInfo() : null;
+      bytes = await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps(), { grow });
     } catch (err) {
       log("ZIP-patch nie powiódł się — zapis przez xlsx-js-style (możliwa utrata tabel/wykresów).", "warning");
     }
@@ -5286,7 +5288,7 @@ function openCellEditor(td, options = {}) {
       close();
       if (move) {
         setFocusedCell(rowKey, colIndex0, { scroll: false });
-        withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0));
+        withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0, { grow: (move.row || 0) === 1 }));
       }
       updateCellStats();
       return;
@@ -5311,7 +5313,7 @@ function openCellEditor(td, options = {}) {
       flashCellSaved(td);
       if (move) {
         setFocusedCell(rowKey, colIndex0, { scroll: false });
-        withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0));
+        withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0, { grow: (move.row || 0) === 1 }));
       }
       updateCellStats();
       return;
@@ -5347,7 +5349,7 @@ function openCellEditor(td, options = {}) {
     flashCellSaved(td);
     if (move) {
       setFocusedCell(rowKey, colIndex0, { scroll: false });
-      withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0));
+      withDeferredCellScroll(() => moveFocusedCell(move.row || 0, move.col || 0, { grow: (move.row || 0) === 1 }));
     }
     updateCellStats();
   };

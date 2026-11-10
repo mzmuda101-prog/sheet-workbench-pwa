@@ -199,6 +199,9 @@ const I18N = {
     draftOriginalChanged: "Plik „{name}” na dysku zmienił się od czasu szkicu — „Zapisz” utworzy kopię, żeby niczego nie nadpisać.",
     draftNote: "Szkic jest tylko na tym urządzeniu i znika sam po 7 dniach.",
     recentTitle: "Ostatnio otwierane",
+    addRowBtn: "＋ Nowy wiersz",
+    addRowTotalsTable: "Ta tabela Excela kończy się wierszem sumy — nowy wiersz trafiłby pod sumę, poza tabelę. Wstawianie wiersza nad sumą będzie w kolejnej wersji.",
+    addRowHint: "Dodaj wiersz pod danymi — wygląd i formuły jak w wierszu wyżej (albo Enter w ostatnim wierszu)",
     recentClear: "Wyczyść listę",
     recentClearTitle: "Wyczyścić listę ostatnich plików?",
     recentClearAsk: "Kopie tych plików zostaną usunięte z aplikacji. Pliki na dysku zostają bez zmian.",
@@ -1589,6 +1592,9 @@ const I18N = {
     draftOriginalChanged: "“{name}” on disk changed since the draft — “Save” will create a copy so nothing gets overwritten.",
     draftNote: "The draft stays only on this device and disappears after 7 days.",
     recentTitle: "Recently opened",
+    addRowBtn: "＋ New row",
+    addRowTotalsTable: "This Excel table ends with a totals row — a new row would land below it, outside the table. Inserting a row above the totals is coming in a later version.",
+    addRowHint: "Add a row below the data — look and formulas like the row above (or press Enter in the last row)",
     recentClear: "Clear list",
     recentClearTitle: "Clear the recent files list?",
     recentClearAsk: "The copies of these files will be removed from the app. Files on your disk stay unchanged.",
@@ -4401,6 +4407,7 @@ function applyLanguage(lang) {
   if (typeof swbAnonSyncLanguage === "function") swbAnonSyncLanguage();
   if (typeof swbRecent !== "undefined") swbRecent.render();
   if (typeof swbDrawerTabs !== "undefined") swbDrawerTabs.labels();
+  if (typeof swbRowGrow !== "undefined") swbRowGrow.syncButton();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));
   renderSortRules();
