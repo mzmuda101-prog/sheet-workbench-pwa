@@ -41,14 +41,17 @@ async function open(browser, opts) {
   return { ctx, page, errors };
 }
 
-// wskaźnik (dotyk/mysz) od punktu a do b, n kroków co ms milisekund
+// wskaźnik (dotyk/mysz) od punktu a do b, n kroków co ms milisekund. ms = 0: cały ruch jednym
+// ciągiem, bez oddawania wątku — „pstryknięcie” to w aplikacji < 250 ms od dotknięcia do puszczenia
+// (autofill.js), a przerwy setTimeout pod obciążeniem (5 testów naraz) potrafiły rozciągnąć gest ponad
+// ten próg i test widział wolne przeciąganie (D6:F9 zamiast D6:D9, 2026-11-10).
 const swipe = (p, a, b, type, n, ms) => p.evaluate(async ([from, to, t, steps, gap]) => {
   const target = document.elementFromPoint(from.x, from.y);
   const mk = (k, pt) => new PointerEvent(k, { bubbles: true, cancelable: true, pointerId: 21, pointerType: t, isPrimary: true, clientX: pt.x, clientY: pt.y, button: 0, buttons: k === "pointerup" ? 0 : 1 });
   target.dispatchEvent(mk("pointerdown", from));
   for (let i = 1; i <= steps; i++) {
     window.dispatchEvent(mk("pointermove", { x: from.x + (to.x - from.x) * i / steps, y: from.y + (to.y - from.y) * i / steps }));
-    await new Promise((r) => setTimeout(r, gap));
+    if (gap > 0) await new Promise((r) => setTimeout(r, gap));
   }
   window.dispatchEvent(mk("pointerup", to));
 }, [a, b, type, n, ms]);
@@ -80,7 +83,7 @@ async function run() {
   await p.evaluate(() => { setSelectionKind("cell"); setFocusedCell("wide:5", 3, { scroll: true }); });
   await sleep(300);
   let k = await center("#tableWrap .fill-handle:not(.sel-start), td .fill-handle:not(.sel-start)");
-  await swipe(p, k, { x: k.x, y: k.y + 70 }, "touch", 3, 15);
+  await swipe(p, k, { x: k.x, y: k.y + 70 }, "touch", 3, 0);
   await sleep(300);
   const r1 = await rect();
   check("1. pstryknięcie w dół zaznacza do końca danych (D6:D" + (edgeRow + 1) + ")", r1 && r1.r1 === 5 && r1.r2 === edgeRow && r1.c1 === 3 && r1.c2 === 3, r1);

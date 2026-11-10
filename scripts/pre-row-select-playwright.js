@@ -77,8 +77,11 @@ async function run() {
   const s2 = await state(p);
   ok("2. „Odznacz” zdejmuje obwódkę pre-cell i znika", s2.pre === 0 && !s2.fab && !s2.focused, s2);
   pt = await center(p, PRE);
+  // podwójne stuknięcie = dwa stuknięcia w < 420 ms (ui-controls.js, lastCellTap). Dawniej 300 ms
+  // przerwy + czas samego stuknięcia pod obciążeniem przekraczały próg i test widział dwa pojedyncze
+  // (2026-11-10); 120 ms to zwykłe tempo palca z dużym zapasem.
   await p.touchscreen.tap(pt.x, pt.y);
-  await sleep(300);
+  await sleep(120);
   await p.touchscreen.tap(pt.x, pt.y);
   await sleep(300);
   const s2b = await p.evaluate(() => !!document.querySelector("#dataTable thead tr.pre-row input.cell-editor"));
