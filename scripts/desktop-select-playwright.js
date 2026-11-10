@@ -9,7 +9,8 @@
 //   2. przeciągnięcie myszą po komórkach = zakres, ŻADNA wartość się nie zmienia; klik po nim nie kasuje zakresu;
 //   3. wypełnienie, które nadpisuje formuły / czyści dane → ostrzeżenie z podpowiedzią Cofnij;
 //   4. przy wciśniętym przycisku myszy dymek komórki się nie pokazuje;
-//   5. tytuł: nazwa pliku, „• ” przy niezapisanych zmianach, bez dubla nazwy aplikacji.
+//   5. tytuł: nazwa pliku, „• ” przy niezapisanych zmianach, bez dubla nazwy aplikacji;
+//   7. kursor myszy jak w Excelu (krzyżyk, ↓ nad literą, → nad numerem); w Podglądzie zwykła strzałka.
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
 
 const playwright = require("playwright");
@@ -115,12 +116,31 @@ async function run() {
   const a6 = await p.evaluate(() => { const r = getSelectionRectangle(); return r && { cols: r.colCount, all: currentDisplayModel.headers.length }; });
   check("6. klik narożnika = wszystko", a6 && a6.cols === a6.all, a6);
 
+  // 7. kursor myszy jak w Excelu: krzyżyk nad komórką i narożnikiem, ↓ nad literą kolumny, → nad
+  // numerem wiersza, uchwyty szerokości/wysokości bez zmian; w Podglądzie zwykła strzałka
+  const cur = () => p.evaluate(() => {
+    const c = (sel) => { const el = document.querySelector(sel); return el ? getComputedStyle(el).cursor : "—"; };
+    const svg = (v) => (/^url\("data:image\/svg\+xml/.test(v) ? "svg" : v);
+    return {
+      td: c("#dataTable tbody tr[data-row-key] td[data-col-index='3']"),
+      corner: c("#dataTable thead tr.guide-row > th.corner-cell"),
+      letter: svg(c("#dataTable thead tr.guide-row th.guide-cell")),
+      rowNum: svg(c("#dataTable tbody tr[data-row-key] td.row-head")),
+      colRes: c("#dataTable thead .col-resizer"),
+      rowRes: c("#dataTable tbody .row-resizer"),
+    };
+  });
+  const k7 = await cur();
+  check("7. Edycja: kursory jak w Excelu", k7.td === "cell" && k7.corner === "cell" && k7.letter === "svg" && k7.rowNum === "svg" && k7.colRes === "col-resize" && k7.rowRes === "row-resize", k7);
+
   // 1. Podgląd: klik = wiersz
   await p.evaluate(() => sheetEditUi.setMode("view"));
   await p.click(CELL(3, 2));
   await sleep(200);
   const s5 = await p.evaluate(() => selectionKind);
   check("1. Podgląd: klik dalej zaznacza wiersz", s5 === "row", s5);
+  const k7v = await cur();
+  check("7. Podgląd: nad komórką zwykła strzałka", k7v.td === "default", k7v);
 
   check("bez błędów strony", errors.length === 0, errors);
   await browser.close();

@@ -8706,6 +8706,23 @@ body.rp-active { overflow: hidden; }
 /* Podgląd: kursor zwykły (nic tu nie edytujesz) */
 :root.swb-view-mode #dataTable tbody td:not(.row-head) { cursor: default; }
 
+/* Kursor myszy jak w Excelu (2026-11-10). Edycja: biały krzyżyk nad komórką (dawniej kursor
+   tekstowy — sugerował pisanie od razu, a klik zaznacza komórkę); Podgląd i Malarz formatów
+   mają silniejsze reguły wyżej (:root…), więc wygrywają. Litery kolumn: czarna strzałka ↓
+   (klik zaznacza kolumnę), numery wierszy: → (klik zaznacza wiersz) — uchwyty zmiany
+   szerokości/wysokości w tych komórkach mają własny kursor i zostają. Dotyk: bez zmian. */
+#dataTable tbody td:not(.row-head),
+#dataTable thead tr.guide-row > th.corner-cell { cursor: cell; } /* narożnik = zaznacz wszystko */
+#dataTable tbody td :is(a[href], button, [role="button"]) { cursor: pointer; }
+input.cell-editor { cursor: text; }
+#dataTable thead tr.guide-row > th.guide-cell {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M6 .5h4v8.5h3.5L8 15.3 2.5 9H6z' fill='%23111' stroke='%23fff' stroke-width='1' stroke-linejoin='round'/%3E%3C/svg%3E") 8 15, default;
+}
+#dataTable tbody td.row-head,
+#dataTable thead tr.pre-row > td.row-head {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='M.5 6v4H9v3.5L15.3 8 9 2.5V6z' fill='%23111' stroke='%23fff' stroke-width='1' stroke-linejoin='round'/%3E%3C/svg%3E") 15 8, default;
+}
+
 @media (pointer: coarse) {
   .fmt-btn { min-width: 36px; height: 36px; }
   .fmt-select { height: 36px; }
