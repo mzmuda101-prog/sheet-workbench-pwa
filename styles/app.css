@@ -1436,6 +1436,7 @@ body.splashing {
   -webkit-overflow-scrolling: touch;
 }
 .drawer-tabs::-webkit-scrollbar { display: none; }
+.drawer-tabs[hidden] { display: none; }
 .drawer-tabs.more-right { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .drawer-tabs.more-left { -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to left, #000 calc(100% - 28px), transparent); }
 .drawer-tabs.more-left.more-right { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }

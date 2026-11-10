@@ -34,6 +34,9 @@ const swbDrawerTabs = (() => {
 
   function apply() {
     const on = drawerMode() && !!current && !finding();
+    // `hidden` w HTML, odsłania dopiero ten skrypt w trybie szuflady — przy pasku ikon (albo ze
+    // starym app.css z pamięci service workera) zakładki nie pokażą się jako gołe przyciski
+    if (tabsEl) tabsEl.hidden = !drawerMode();
     root.classList.toggle("drawer-focus", on);
     groups().forEach((g) => g.classList.toggle("drawer-current", g.id === current));
     tabs().forEach((b) => {

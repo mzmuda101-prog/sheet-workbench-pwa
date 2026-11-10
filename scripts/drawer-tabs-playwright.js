@@ -10,7 +10,7 @@
 //   4. „Znajdź ustawienie…” szuka we wszystkich grupach, po wyczyszczeniu wraca zakładka;
 //   5. sekcja otwarta z kodu w innej grupie (Pomoc z menu ⋯) — zakładka idzie za nią i sekcję widać;
 //   6. strzałki w pasku zakładek przełączają grupy;
-//   7. komputer (pasek ikon, ≥1024 px): zakładek nie ma, panel jak dawniej.
+//   7. komputer (pasek ikon, ≥1024 px): zakładek nie ma (atrybut hidden, nie tylko CSS), panel jak dawniej.
 
 const { chromium, webkit } = require("playwright");
 
@@ -43,6 +43,7 @@ async function run() {
     visible: [...document.querySelectorAll(".sidebar-scroll > .sidebar-group")].filter((g) => g.offsetParent !== null).map((g) => g.id),
     selected: document.querySelector("#drawerTabs [aria-selected='true']")?.dataset.group || "",
     tabsShown: getComputedStyle(document.getElementById("drawerTabs")).display !== "none",
+    tabsHiddenAttr: document.getElementById("drawerTabs").hidden,
   }));
   // otwarty panel na telefonie zasłania „Narzędzia” — przełączamy tą samą funkcją, którą woła przycisk
   const toggle = async (page) => { await page.evaluate(() => toggleSidebar()); await sleep(450); };
@@ -115,6 +116,9 @@ async function run() {
   await sleep(450);
   const ds = await state(d.page);
   check("7. komputer: bez zakładek, pasek ikon pokazuje swoją grupę", !ds.tabsShown && !ds.focus && ds.visible.join() === "group-view", ds);
+  // atrybut hidden, nie tylko CSS: ze starym app.css z pamięci service workera (wydanie bez podbitej
+  // wersji, 2026-11-10) zakładki pokazały się przy pasku ikon jako gołe szare przyciski
+  check("7. komputer: zakładki mają atrybut hidden (niezależnie od CSS)", ds.tabsHiddenAttr, ds);
   await d.ctx.close();
 
   await browser.close();
