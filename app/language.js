@@ -1372,6 +1372,9 @@ const I18N = {
     "rail_group-edit": "Edycja",
     "rail_group-analyze": "Analizy",
     "rail_group-help": "Pomoc",
+    drawerTabsAria: "Grupy narzędzi",
+    drawerActiveFilters: "Aktywne filtry: {count}",
+    drawerActiveClear: "Wyczyść filtry",
     formulaSyntax: "Błąd w formule: {msg}",
     formulaCircular: "Formuła odwołuje się do własnej komórki {ref} — tak nie da się policzyć (odwołanie cykliczne)",
     formulaUnknownFn: "Tej funkcji aplikacja nie liczy: {fns}. Formuła zapisze się w pliku, a Excel policzy ją przy otwarciu",
@@ -2758,6 +2761,9 @@ const I18N = {
     "rail_group-edit": "Edit",
     "rail_group-analyze": "Analyses",
     "rail_group-help": "Help",
+    drawerTabsAria: "Tool groups",
+    drawerActiveFilters: "Active filters: {count}",
+    drawerActiveClear: "Clear filters",
     formulaSyntax: "Formula error: {msg}",
     formulaCircular: "The formula refers to its own cell {ref} — it can't be calculated (circular reference)",
     formulaUnknownFn: "The app doesn't calculate: {fns}. The formula is saved to the file and Excel calculates it on open",
@@ -4394,6 +4400,7 @@ function applyLanguage(lang) {
   if (typeof swbNotesSyncFilterUi === "function") swbNotesSyncFilterUi();
   if (typeof swbAnonSyncLanguage === "function") swbAnonSyncLanguage();
   if (typeof swbRecent !== "undefined") swbRecent.render();
+  if (typeof swbDrawerTabs !== "undefined") swbDrawerTabs.labels();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));
   renderSortRules();

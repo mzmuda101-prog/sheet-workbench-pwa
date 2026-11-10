@@ -54,6 +54,7 @@ const SHELL_ASSETS = [
   `./app/sheet-edit-ui.js?v=${ASSET_V}`,
   `./app/formula-ui.js?v=${ASSET_V}`,
   `./app/frame-compact.js?v=${ASSET_V}`,
+  `./app/drawer-tabs.js?v=${ASSET_V}`,
   `./app/key-bar.js?v=${ASSET_V}`,
   `./app/cell-notes.js?v=${ASSET_V}`,
   `./app/anonymize-core.js?v=${ASSET_V}`,

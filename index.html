@@ -167,6 +167,20 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
             </button>
           </div>
+          <!-- Telefon / tablet (bez paska ikon): jedna grupa naraz, zakładki stoją nad przewijaną
+               częścią (drawer-tabs.js, audyt QoL S7). Na komputerze ukryte — tam jest pasek ikon. -->
+          <div class="drawer-tabs" id="drawerTabs" role="tablist" aria-label="Grupy narzędzi">
+            <button class="drawer-tab" type="button" role="tab" data-group="group-data" aria-controls="group-data" aria-selected="false" tabindex="-1"><span class="drawer-tab-label">Plik</span></button>
+            <button class="drawer-tab" type="button" role="tab" data-group="group-filters" aria-controls="group-filters" aria-selected="false" tabindex="-1"><span class="drawer-tab-label">Filtry</span><span class="drawer-tab-count" hidden></span></button>
+            <button class="drawer-tab" type="button" role="tab" data-group="group-view" aria-controls="group-view" aria-selected="false" tabindex="-1"><span class="drawer-tab-label">Widok</span></button>
+            <button class="drawer-tab" type="button" role="tab" data-group="group-edit" aria-controls="group-edit" aria-selected="false" tabindex="-1"><span class="drawer-tab-label">Edycja</span></button>
+            <button class="drawer-tab" type="button" role="tab" data-group="group-analyze" aria-controls="group-analyze" aria-selected="false" tabindex="-1"><span class="drawer-tab-label">Analizy</span></button>
+            <button class="drawer-tab" type="button" role="tab" data-group="group-help" aria-controls="group-help" aria-selected="false" tabindex="-1"><span class="drawer-tab-label">Pomoc</span></button>
+          </div>
+          <div class="drawer-active" id="drawerActive" hidden>
+            <span class="drawer-active-text" id="drawerActiveText"></span>
+            <button class="drawer-active-clear" id="drawerActiveClear" type="button">Wyczyść filtry</button>
+          </div>
           <!-- Przewija się TYLKO ta część; pasek ze szukajką nad nią stoi w miejscu bez
                position:sticky (sticky w przewijanym panelu rozjeżdżał dotyk na iOS). -->
           <div class="sidebar-scroll" id="sidebarScroll">
@@ -1975,6 +1989,7 @@
     <script defer src="app/app-frame.js?v=v1.00.01"></script>
     <script defer src="app/sheet-edit-ui.js?v=v1.00.01"></script>
     <script defer src="app/frame-compact.js?v=v1.00.01"></script>
+    <script defer src="app/drawer-tabs.js?v=v1.00.01"></script>
     <script defer src="app/key-bar.js?v=v1.00.01"></script>
     <script defer src="app/cell-spill.js?v=v1.00.01"></script>
     <script defer src="app/autofill.js?v=v1.00.01"></script>
