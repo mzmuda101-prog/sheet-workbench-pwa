@@ -79,6 +79,9 @@ function installHelpers() {
   // pierwszej kolumny danych. Każdy punkt musi trafić w komórkę wiersza danych,
   // a indeksy wierszy muszą iść kolejno (bez luk i powtórek w złej kolejności).
   const sampleColumn = () => {
+    // „Duchy” (row-grow.js): blade puste wiersze ZA danymi w Edycji — to nie dziura; dół danych = górna
+    // krawędź duchów (pod nią, do dołu okna, mają stać same duchy)
+    const dataBottom = (bottom) => { const g = document.querySelector("#dataTable tbody.ghost-body"); return g && g.offsetParent ? Math.min(bottom, g.getBoundingClientRect().top) : bottom; };
     const b = band();
     const firstData = theadEl.querySelector(".header-row th:nth-child(2)");
     const fr = firstData ? firstData.getBoundingClientRect() : null;
@@ -89,7 +92,7 @@ function installHelpers() {
     // przyklejony nagłówek (blokada wierszy — domyślnie z <pane> Excela) zasłania górę: to nie dziura
     // (przyklejone są pojedyncze wiersze <thead>, sam <thead> odjeżdża — liczy się dół wiersza nagłówka)
     const headBottom = tableWrapEl.classList.contains("freeze-headers") && fr ? fr.bottom : b.top;
-    for (let y = Math.ceil(Math.max(b.top, headBottom) + 3); y < b.bottom - 3; y += 12) {
+    for (let y = Math.ceil(Math.max(b.top, headBottom) + 3); y < dataBottom(b.bottom) - 3; y += 12) {
       const el = document.elementFromPoint(x, y);
       const tr = el && el.closest ? el.closest("#dataTable tbody tr[data-row-key]") : null;
       if (!tr) { holes.push({ y: Math.round(y - b.top), what: el ? `${el.tagName}.${el.className}` : "null" }); continue; }

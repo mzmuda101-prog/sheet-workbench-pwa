@@ -859,7 +859,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "v1.00.05";
+const APP_BUILD_VERSION = "v1.00.06";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1399,7 +1399,9 @@ function frozenColsCss(n) {
     css += `${W} tbody td${at(k)},${W} thead tr.guide-row>th:nth-child(${c}),${W} thead tr.header-row>th${at(k)},${W} thead tr.pre-row>td${at(k)}{position:sticky;${L};background:var(--surface)}\n`
       + `${W} tbody td${at(k)}{z-index:4}${W} thead tr.guide-row>th:nth-child(${c}),${W} thead tr.header-row>th${at(k)}{z-index:9}${W} thead tr.pre-row>td${at(k)}{z-index:5}\n`
       // szyba (freeze-pane.js): prawdziwe komórki i kopia bez sticky — jak .fz-off w app.css
-      + `${W} tbody td.fz-off${at(k)},${W} .fz-clone tbody td${at(k)}{position:relative;left:auto}\n`;
+      + `${W} tbody td.fz-off${at(k)},${W} .fz-clone tbody td${at(k)}{position:relative;left:auto}\n`
+      // „duchy” pod danymi (row-grow.js) — ta sama blokada, żeby nie odjeżdżały spod nagłówka
+      + `${W} #dataTable tbody.ghost-body td[data-ghost-col="${k}"]{position:sticky;${L};z-index:4;background:var(--surface)}\n`;
   }
   const all = Array.from({ length: n }, (_, k) => at(k)).join(",");
   css += `${W} #dataTable tbody tr:not(.vr-spacer)>td:is(${all}):not(.fz-off),${W} #dataTable thead tr.pre-row>td:is(${all}){position:sticky}\n`; // jak w app.css (notatka/uchwyt)

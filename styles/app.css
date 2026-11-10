@@ -8732,6 +8732,18 @@ body.rp-active { overflow: hidden; }
 }
 .add-row-btn[hidden], :root.swb-view-mode .add-row-btn { display: none; }
 .add-row-btn .lbl-short { display: none; }
+/* „Duchy” (row-grow.js): 3 blade puste wiersze pod danymi w Edycji — klik = nowy wiersz i pisanie
+   w tej kolumnie. Bez tła komórek danych; numer wiersza wyblakły; podświetlenie tylko pod kursorem. */
+#dataTable tbody.ghost-body td { background: transparent; color: transparent; cursor: cell; }
+/* zablokowane kolumny: duchy stoją w miejscu jak komórki danych (kolejne kolumny: core.js frozenColsCss) */
+.table-wrap.freeze-first-col #dataTable tbody.ghost-body td.ghost-head { position: sticky; left: 0; z-index: 4; background: var(--surface); }
+.table-wrap.freeze-first-col #dataTable tbody.ghost-body td[data-ghost-col="0"] { position: sticky; left: var(--row-head-w, 44px); z-index: 4; background: var(--surface); }
+#dataTable tbody.ghost-body td.ghost-head { color: var(--muted); opacity: .55; cursor: pointer; }
+:root.swb-view-mode #dataTable tbody.ghost-body { display: none; }
+@media (hover: hover) {
+  #dataTable tbody.ghost-body tr:hover td { background: color-mix(in srgb, var(--accent-light) 70%, transparent); }
+  #dataTable tbody.ghost-body tr:hover td.ghost-head { opacity: .85; }
+}
 @media (max-width: 560px) { .add-row-btn .lbl-long { display: none; } .add-row-btn .lbl-short { display: inline; } }
 .add-row-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
 @media (hover: hover) { .add-row-btn:hover { background: var(--accent-light); border-color: var(--accent-border); } }

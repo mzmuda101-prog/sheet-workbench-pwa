@@ -44,24 +44,30 @@ async function run() {
     tableWrapEl.dispatchEvent(new WheelEvent("wheel", { deltaY: 400 }));
     tableWrapEl.scrollTop = tableWrapEl.scrollHeight;
     await new Promise((res) => setTimeout(res, 1000)); await fr();
+    // „Duchy” (row-grow.js): blade puste wiersze ZA danymi w Edycji — to nie dziura; dół danych = górna
+    // krawędź duchów (pod nią, do dołu okna, mają stać same duchy)
+    const dataBottom = (bottom) => { const g = document.querySelector("#dataTable tbody.ghost-body"); return g && g.offsetParent ? Math.min(bottom, g.getBoundingClientRect().top) : bottom; };
     const wb = tableWrapEl.getBoundingClientRect();
     const rows = [...document.querySelectorAll("#dataTable tbody tr[data-row-key]")];
     const last = rows[rows.length - 1];
     let holes = 0;
-    for (let y = wb.bottom - 200; y < wb.bottom - 4; y += 10) {
+    for (let y = dataBottom(wb.bottom) - 200; y < dataBottom(wb.bottom) - 4; y += 10) {
       const el = document.elementFromPoint(wb.left + 120, y);
       if (!el || !el.closest("#dataTable tbody tr[data-row-key]")) holes++;
     }
     out.lastIdx = last && +last.dataset.rowIndex;
     out.expected = currentDisplayModel.rows[currentDisplayModel.rows.length - 1].rowIndex0;
-    out.lastVisible = !!last && Math.abs(last.getBoundingClientRect().bottom - wb.bottom) < 4;
+    out.lastVisible = !!last && Math.abs(last.getBoundingClientRect().bottom - dataBottom(wb.bottom)) < 4;
+    // duchy (jeśli są) wypełniają resztę okna do samego dołu — bez pustego pasa pod nimi
+    const g = document.querySelector("#dataTable tbody.ghost-body");
+    out.ghostsToBottom = !(g && g.offsetParent) || Math.abs(g.getBoundingClientRect().bottom - wb.bottom) < 4;
     out.holes = holes;
     return out;
   });
   ok("1. nowy silnik działa", r.virt, r);
   ok("1. tekst w skali Excela (rozmiar domyślnej czcionki pliku w px)", parseFloat(r.fs) === r.base, r);
   ok("2. dół osiągalny za pierwszym razem (ostatni wiersz przy dolnej krawędzi)", r.lastIdx === r.expected && r.lastVisible, r);
-  ok("2. bez dziur przy dole", r.holes === 0, r);
+  ok("2. bez dziur przy dole", r.holes === 0 && r.ghostsToBottom, r);
   ok("bez błędów strony", errors.length === 0, errors);
   await browser.close();
   if (failures.length) {

@@ -23,6 +23,13 @@
 //   • kolumny wynikają z arkusza, więc układ wczytuje się na nowo „po cichu” (reloadStructure):
 //     filtry, szukanie i sortowanie (po nazwach), szerokości i przewinięcie zostają. Cofnij/Ponów,
 //     które zmienia liczbę kolumn, robi to samo.
+//
+// „Duchy” (po Etapie 1b): 3 blade puste wiersze pod danymi w trybie Edycja, jak pusta siatka
+// Excela. Klik / stuknięcie w komórkę ducha = nowy wiersz (addDraft) i pisanie w TEJ kolumnie.
+// Osobny <tbody class="ghost-body"> ZA tabelą danych: silnik przewijania, zaznaczanie, filtry,
+// liczniki i eksport pracują na tbodyEl i go nie widzą; komórki bez data-col-index (selektory
+// komórek danych ich nie łapią), szerokości z <colgroup> tabeli. Bez „ducha-kolumny”: nowa
+// kolumna i tak wymaga nazwy (to samo okno co „＋ Nowa kolumna”).
 
 const swbRowGrow = (() => {
   const origLast = new Map(); // arkusz → ostatni wiersz z treścią w otwartym pliku (0-based, -1 = pusty)
@@ -470,6 +477,58 @@ const swbRowGrow = (() => {
     return true;
   }
 
+  // ── „duchy”: blade puste wiersze pod danymi ────────────────────────────────
+  const GHOSTS = 3;
+  let ghostBody = null;
+  function onGhostClick(e) {
+    const td = e.target && e.target.closest ? e.target.closest("td") : null;
+    if (!td || !ghostBody || !ghostBody.contains(td)) return;
+    const col = Number(td.dataset.ghostCol);
+    if (!addDraft({ col: Number.isInteger(col) ? col : 0 })) return;
+    requestAnimationFrame(() => {
+      const cell = typeof findCellElement === "function" ? findCellElement(focusedCellState) : null;
+      if (cell && typeof openCellEditor === "function") openCellEditor(cell);
+    });
+  }
+  function syncGhosts() {
+    const table = document.getElementById("dataTable");
+    const tb = typeof tbodyEl !== "undefined" && tbodyEl ? tbodyEl : (table ? table.tBodies[0] : null);
+    if (!table || !tb) return;
+    if (!ghostBody) {
+      ghostBody = document.createElement("tbody");
+      ghostBody.className = "ghost-body";
+      ghostBody.setAttribute("aria-hidden", "true"); // tylko podpowiedź wzrokowa; klawiatura: Enter / „＋ Nowy wiersz”
+      ghostBody.addEventListener("click", onGhostClick);
+    }
+    if (!canAdd() || !baseRows.length) { ghostBody.remove(); ghostBody.dataset.key = ""; return; }
+    if (ghostBody.previousElementSibling !== tb) tb.after(ghostBody);
+    const n = currentDisplayModel.headers.length;
+    let last = -1;
+    baseRows.forEach((r) => { if (Number.isFinite(r.rowIndex0) && r.rowIndex0 > last) last = r.rowIndex0; });
+    const sample = tb.querySelector("tr[data-row-key]");
+    const h = sample ? Math.round(sample.getBoundingClientRect().height) : 0;
+    const key = `${n}|${last}|${h}`;
+    if (ghostBody.dataset.key === key) return;
+    ghostBody.dataset.key = key;
+    const frag = document.createDocumentFragment();
+    for (let g = 1; g <= GHOSTS; g++) {
+      const tr = document.createElement("tr");
+      tr.className = "ghost-row";
+      if (h) tr.style.height = `${h}px`;
+      const head = document.createElement("td");
+      head.className = "row-head ghost-head";
+      head.textContent = String(last + 1 + g); // numer wiersza w Excelu (rowIndex0 + 1)
+      tr.appendChild(head);
+      for (let i = 0; i < n; i++) {
+        const td = document.createElement("td");
+        td.dataset.ghostCol = String(i);
+        tr.appendChild(td);
+      }
+      frag.appendChild(tr);
+    }
+    ghostBody.replaceChildren(frag);
+  }
+
   // ── przycisk „＋ Nowy wiersz” w pasku pod tabelą (obok sum) ─────────────────
   // POZA przewijaną tabelą: na dole przewijania ostatni wiersz ma stać przy krawędzi (pilnują
   // tego testy virt-*), a przycisk widać zawsze — nowy wiersz i tak przewija się do widoku.
@@ -524,6 +583,7 @@ const swbRowGrow = (() => {
       window.renderActiveTable = function renderActiveTableRowGrow(...args) {
         const r = origRender.apply(this, args);
         syncButton();
+        syncGhosts();
         return r;
       };
     }
@@ -532,7 +592,7 @@ const swbRowGrow = (() => {
 
   return {
     init, snapshot, canAdd, addDraft, beforeWrite, withXf, growInfo, syncButton,
-    addColumn, writeColumn, reloadStructure, afterUndo, isQuietReload: () => quiet,
+    addColumn, writeColumn, reloadStructure, afterUndo, isQuietReload: () => quiet, syncGhosts,
     _state: () => ({ origLast: [...origLast], liveLast: [...liveLast], drafts: [...drafts], origLastCol: [...origLastCol] }),
   };
 })();

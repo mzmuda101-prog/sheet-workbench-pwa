@@ -38,11 +38,14 @@ async function run() {
     const heads = [...document.querySelectorAll("thead tr.header-row th[data-col-index]")];
     const colLeft = (i) => { const th = heads.find((t) => t.dataset.colIndex === String(i)); return th ? th.getBoundingClientRect().left : null; };
     const merges = (currentMerges || []).filter((m) => m.e.r > m.s.r);
+    // „Duchy” (row-grow.js): blade puste wiersze ZA danymi w Edycji — to nie dziura; dół danych = górna
+    // krawędź duchów (pod nią, do dołu okna, mają stać same duchy)
+    const dataBottom = (bottom) => { const g = document.querySelector("#dataTable tbody.ghost-body"); return g && g.offsetParent ? Math.min(bottom, g.getBoundingClientRect().top) : bottom; };
     const check = () => {
       const wb = tableWrapEl.getBoundingClientRect();
       const head = document.querySelector("thead tr.header-row th").getBoundingClientRect();
       let holes = 0;
-      for (let y = Math.max(wb.top, head.bottom) + 4; y < wb.bottom - 4; y += 10) {
+      for (let y = Math.max(wb.top, head.bottom) + 4; y < dataBottom(wb.bottom) - 4; y += 10) {
         const el = document.elementFromPoint(wb.left + 60, y);
         if (!el || !el.closest("#dataTable tbody tr[data-row-key]")) holes++;
       }

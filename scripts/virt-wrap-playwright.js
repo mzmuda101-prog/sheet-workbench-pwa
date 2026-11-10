@@ -38,11 +38,14 @@ async function run() {
     const fr = () => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     // nagłówki czytane za każdym razem — przełączenie zawijania przerysowuje tabelę
     const colLeft = (i) => { const th = document.querySelector(`thead tr.header-row th[data-col-index="${i}"]`); return th ? th.getBoundingClientRect().left : null; };
+    // „Duchy” (row-grow.js): blade puste wiersze ZA danymi w Edycji — to nie dziura; dół danych = górna
+    // krawędź duchów (pod nią, do dołu okna, mają stać same duchy)
+    const dataBottom = (bottom) => { const g = document.querySelector("#dataTable tbody.ghost-body"); return g && g.offsetParent ? Math.min(bottom, g.getBoundingClientRect().top) : bottom; };
     const check = () => {
       const wb = tableWrapEl.getBoundingClientRect();
       const head = document.querySelector("thead tr.header-row th").getBoundingClientRect();
       let holes = 0; const idx = [];
-      for (let y = Math.max(wb.top, head.bottom) + 4; y < wb.bottom - 4; y += 8) {
+      for (let y = Math.max(wb.top, head.bottom) + 4; y < dataBottom(wb.bottom) - 4; y += 8) {
         const el = document.elementFromPoint(wb.left + 60, y);
         const tr = el && el.closest("#dataTable tbody tr[data-row-key]");
         if (!tr) holes++; else idx.push(+tr.dataset.rowIndex);
@@ -84,7 +87,7 @@ async function run() {
     const last = rows[rows.length - 1];
     out.last = last && +last.dataset.rowIndex;
     out.expected = currentDisplayModel.rows[currentDisplayModel.rows.length - 1].rowIndex0;
-    out.lastAtBottom = !!last && Math.abs(last.getBoundingClientRect().bottom - tableWrapEl.getBoundingClientRect().bottom) < 4;
+    out.lastAtBottom = !!last && Math.abs(last.getBoundingClientRect().bottom - dataBottom(tableWrapEl.getBoundingClientRect().bottom)) < 4;
     wrapCellsEl.checked = false;
     wrapCellsEl.dispatchEvent(new Event("change", { bubbles: true }));
     await fr(); await fr();
