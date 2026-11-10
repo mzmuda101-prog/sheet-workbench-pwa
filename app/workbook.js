@@ -609,7 +609,7 @@ function localizeDisplayedDate(value, shown, cell = null) {
 
 function getDisplayValue(row, index) {
   if (row && Array.isArray(row.display) && index < row.display.length) {
-    return row.display[index];
+    return row.display[index] ?? ""; // dziura w tablicy (np. po Cofnij dodania kolumny) = pusta komórka
   }
   if (row && Array.isArray(row.values) && index < row.values.length) {
     return toDisplay(row.values[index]);

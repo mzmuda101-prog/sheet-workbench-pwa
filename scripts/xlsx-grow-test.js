@@ -7,7 +7,11 @@
 //   2. arkusz: <dimension>, autofiltr, formatowanie warunkowe, listy wyboru, rozszerzenia x14;
 //      <sheetData> zostaje bajt w bajt; arkusz z prefiksem przestrzeni nazw (x:);
 //   3. tabela Excela: ref i jej autofiltr rosną; z wierszem sumy — bez zmian;
-//   4. ścieżki tabel z relacji arkusza.
+//   4. ścieżki tabel z relacji arkusza;
+//   5. kolumny (Etap 1b): zakres kończący się na ostatniej kolumnie danych i mający ≥ 2 kolumny
+//      rośnie w bok (także przez Z → AA); jedna kolumna bez zmian; tabela Excela dostaje
+//      <tableColumn> z nazwą z arkusza (id = największe + 1, count, znaki & < " escapowane),
+//      a bez nazw nie rośnie w bok.
 
 const fs = require("fs");
 const path = require("path");
@@ -73,6 +77,28 @@ async function run() {
     + '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://x" TargetMode="External"/>'
     + '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/table" Target="/xl/tables/table7.xml"/></Relationships>';
   eq("4. ścieżki tabel z relacji", JSON.stringify(G.tablePathsFromRels(rels, sheetPath)), JSON.stringify(["xl/tables/table1.xml", "xl/tables/table7.xml"]));
+
+  // 5. kolumny
+  eq("5. A3:H42 w bok → A3:I42", G.growRange("A3:H42", { fromCol: 8, toCol: 9 }), "A3:I42");
+  eq("5. w dół i w bok naraz", G.growRange("A3:H42", { fromRow: 42, toRow: 44, fromCol: 8, toCol: 9 }), "A3:I44");
+  eq("5. jedna kolumna (E3:E42) bez zmian w bok", G.growRange("E3:E42", { fromCol: 5, toCol: 6 }), "E3:E42");
+  eq("5. $ zostają", G.growRange("$A$2:$H$42", { fromCol: 8, toCol: 9 }), "$A$2:$I$42");
+  eq("5. Z → AA", G.growRange("A1:Z5", { fromCol: 26, toCol: 27 }), "A1:AA5");
+  const cg = G.growSheetXml(sheet, { fromCol: 8, toCol: 9 });
+  eq("5. autofiltr A2:H42 → A2:I42", pick(cg, /<autoFilter[^>]*>/g), '<autoFilter ref="A2:I42" />');
+  check("5. CF na całe dane rośnie w bok, CF na jedną kolumnę nie",
+    /<conditionalFormatting sqref="A3:I42">/.test(cg) && /<conditionalFormatting sqref="E3:E42">/.test(cg), pick(cg, /<conditionalFormatting [^>]*>/g));
+  eq("5. dimension sięgająca dalej (K) bez zmian", pick(cg, /<dimension[^>]*>/g), '<dimension ref="A1:K42" />');
+  const tcol = G.growTableXml(t1, { fromCol: 33, toCol: 34, tableCols: { opracowanie_terenow: ["Uwagi & <nowe>"] } });
+  const ids = [...t1.matchAll(/<tableColumn [^>]*\bid="(\d+)"/g)].map((m) => Number(m[1]));
+  const cnt = Number((/<tableColumns count="(\d+)"/.exec(t1) || [])[1]);
+  check("5. tabela w bok: ref i autofiltr A2:AH565", /\sref="A2:AH565"/.test(tcol) && /<autoFilter ref="A2:AH565"/.test(tcol), (tcol.match(/ ref="[^"]*"/g) || []).join(" "));
+  check("5. tabela w bok: nowy <tableColumn> (id, nazwa z escapowaniem, count)",
+    tcol.includes(`<tableColumn id="${Math.max(...ids) + 1}" name="Uwagi &amp; &lt;nowe&gt;"/></tableColumns>`) && tcol.includes(`<tableColumns count="${cnt + 1}"`),
+    tcol.slice(tcol.indexOf("</tableColumns>") - 160, tcol.indexOf("</tableColumns>") + 15));
+  eq("5. tabela bez podanych nazw — nie rośnie w bok", G.growTableXml(t1, { fromCol: 33, toCol: 34 }), t1);
+  const both = G.growTableXml(t1, { fromRow: 565, toRow: 566, fromCol: 33, toCol: 34, tableCols: { opracowanie_terenow: ["X"] } });
+  check("5. tabela w dół i w bok naraz: A2:AH566", /\sref="A2:AH566"/.test(both) && /<autoFilter ref="A2:AH566"/.test(both));
 
   if (fails.length) { console.log(`❌ xlsx-grow: ${fails.length} niezaliczone`); process.exit(1); }
   console.log("✅ xlsx-grow: wszystko przeszło");

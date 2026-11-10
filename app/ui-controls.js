@@ -2708,10 +2708,13 @@ loadBtn.addEventListener("click", () => {
       if (currentSheetStats?.duplicateHeaderCount) {
         toast(t("duplicatedHeaders", { count: currentSheetStats.duplicateHeaderCount }), "warning");
       }
+      // Ponowne wczytanie układu po dodaniu kolumny (row-grow.js): bez dymka i bez skoku do widoku
+      // startowego z Excela — użytkownik zostaje tam, gdzie był.
+      const quietReload = typeof swbRowGrow !== "undefined" && swbRowGrow.isQuietReload();
       // Jedno zbiorcze powiadomienie (toast() scala je z „Plik wczytany” sprzed chwili).
-      toast(t("sheetLoadedRows", { sheet: sheetName, rows: formatRowCount(baseRows.length) }), "success");
+      if (!quietReload) toast(t("sheetLoadedRows", { sheet: sheetName, rows: formatRowCount(baseRows.length) }), "success");
       log(`Wczytano arkusz: ${sheetName}`, "success");
-      requestAnimationFrame(() => applyExcelStartView(sheetName));
+      if (!quietReload) requestAnimationFrame(() => applyExcelStartView(sheetName));
       sheetLoadedName = sheetName;
     } finally {
       // wczytanie wyprzedzone przez nowsze nie gasi JEGO wskaźnika ładowania

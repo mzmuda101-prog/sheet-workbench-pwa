@@ -129,7 +129,10 @@ function undoApplyStep(step) {
       if (ch.snap.pendingHas) pendingEdits[step.sheet][ch.cellRef] = ch.snap.pending;
       else delete pendingEdits[step.sheet][ch.cellRef];
       const row = rowMap ? rowMap.get(ch.rowIndex0) : null;
-      if (row) {
+      // Komórka nowej kolumny (row-grow.js): w chwili nagrania kolumny w wierszu nie było
+      // (v i d undefined) — nie wpisujemy „undefined” do wiersza; układ i tak wczyta się od nowa.
+      const absentCol = !!(ch.snap.rowVals && ch.snap.rowVals.v === undefined && ch.snap.rowVals.d === undefined);
+      if (row && !absentCol) {
         // Wartości wiersza: dokładnie te sprzed zmiany; gdy ich nie mamy (krok nagrany
         // na innym arkuszu), odtwarzamy z komórki.
         const rv = ch.snap.rowVals;
@@ -177,6 +180,8 @@ function undoRedo(direction) {
   const inverse = undoApplyStep(step);
   if (inverse) to.push(inverse);
   setDirtyState(true);
+  // Cofnięte/ponowione dodanie kolumny: kolumny wynikają z arkusza — układ od nowa (row-grow.js)
+  if (typeof swbRowGrow !== "undefined") swbRowGrow.afterUndo(step);
 
   const count = step.changes.length;
   if (step.sheet === currentSheetName) {

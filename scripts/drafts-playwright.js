@@ -37,10 +37,13 @@ async function loadFile(page) {
   // przykład i test edytował jego kolumnę Status (od 2026-10-29 lista rozwijana, odrzuca wpis)
   await page.evaluate(() => { fileInput.value = ""; });
   await page.setInputFiles("#fileInput", FILE);
-  await page.waitForFunction(() => document.getElementById("sheetSelect")?.options?.length > 0 && !!workbook, null, { timeout: 15000 });
+  // NASZ plik (nie poprzedni przykład — jego model tabeli też „istnieje”, a pod obciążeniem test
+  // szedł dalej przed wczytaniem i trafiał na chwilowo pusty model, 2026-11-10)
+  const name = path.basename(FILE);
+  await page.waitForFunction((n) => document.getElementById("sheetSelect")?.options?.length > 0 && !!workbook && currentFileName === n, name, { timeout: 15000 });
   await sleep(300);
   await page.evaluate(() => loadBtn.click()); // przycisk siedzi w panelu bocznym (bywa schowany)
-  await page.waitForFunction(() => !!currentDisplayModel && document.querySelectorAll("tbody tr").length > 0, null, { timeout: 15000 });
+  await page.waitForFunction(() => !!currentDisplayModel && document.querySelectorAll("tbody tr").length > 0 && document.body.getAttribute("aria-busy") !== "true", null, { timeout: 15000 });
   await sleep(500);
   await page.evaluate(() => { if (typeof setSidebarOpen === "function") setSidebarOpen(false); });
 }

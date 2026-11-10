@@ -8731,6 +8731,8 @@ body.rp-active { overflow: hidden; }
   transition: background var(--t), border-color var(--t);
 }
 .add-row-btn[hidden], :root.swb-view-mode .add-row-btn { display: none; }
+.add-row-btn .lbl-short { display: none; }
+@media (max-width: 560px) { .add-row-btn .lbl-long { display: none; } .add-row-btn .lbl-short { display: inline; } }
 .add-row-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
 @media (hover: hover) { .add-row-btn:hover { background: var(--accent-light); border-color: var(--accent-border); } }
 @media (pointer: coarse) { .add-row-btn { min-height: 38px; } }

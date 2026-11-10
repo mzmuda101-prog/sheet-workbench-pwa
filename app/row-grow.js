@@ -14,12 +14,23 @@
 //   • Zapis: growInfo() mówi xlsx-grow.js, o ile urosły dane każdego arkusza (tabele Excela,
 //     autofiltr, formatowanie warunkowe, listy wyboru, wymiar arkusza rosną razem z nimi).
 // Cofnij zostawia pusty wiersz w widoku (jak w Excelu); znika przy przebudowie danych.
+//
+// Etap 1b — nowe kolumny z prawej („＋ Nowa kolumna”):
+//   • nazwa we własnym oknie (zasady jak przy zmianie nazwy: niepusta, unikalna, bez " { } : && ||);
+//   • nagłówek + wygląd z kolumny po lewej (nagłówek i każdy wiersz danych), jeden krok Cofnij;
+//   • tabela Excela kończąca się na ostatniej kolumnie dostaje kolumnę (w pamięci od razu, w pliku
+//     <tableColumn> z tą samą nazwą — xlsx-grow.js); CF, listy wyboru i autofiltr rosną w bok;
+//   • kolumny wynikają z arkusza, więc układ wczytuje się na nowo „po cichu” (reloadStructure):
+//     filtry, szukanie i sortowanie (po nazwach), szerokości i przewinięcie zostają. Cofnij/Ponów,
+//     które zmienia liczbę kolumn, robi to samo.
 
 const swbRowGrow = (() => {
   const origLast = new Map(); // arkusz → ostatni wiersz z treścią w otwartym pliku (0-based, -1 = pusty)
   const liveLast = new Map(); // arkusz → ostatni wiersz, za którym zaczynają się „nowe” (rośnie)
   const drafts = new Set();   // `${arkusz}\t${r}` — wiersze z przycisku/Entera (dostają formuły)
   const newXf = new Map();    // arkusz → Map(ref → indeks stylu) dla komórek, których nie było w pliku
+  const origLastCol = new Map(); // arkusz → ostatnia kolumna z treścią w otwartym pliku (0-based)
+  const origTables = new Map();  // tabela (lower) → { sheet, ref } z otwartego pliku
 
   const keyOf = (sheet, r) => `${sheet}\t${r}`;
   const enc = (r, c) => XLSX.utils.encode_cell({ r, c });
@@ -35,16 +46,31 @@ const swbRowGrow = (() => {
     return last;
   }
   function r0(ref) { const m = /\d+$/.exec(ref); return m ? Number(m[0]) - 1 : -1; }
+  function lastColOf(ws) {
+    let last = -1;
+    if (!ws) return last;
+    for (const k in ws) {
+      if (k[0] === "!") continue;
+      const c = XLSX.utils.decode_cell(k).c;
+      if (c <= last) continue;
+      if (typeof isMeaningfulSheetCell === "function" ? isMeaningfulSheetCell(ws[k]) : ws[k] && ws[k].v != null) last = c;
+    }
+    return last;
+  }
 
   // Nowy plik: zapamiętaj, gdzie kończyły się dane każdego arkusza (zanim cokolwiek dopiszemy).
   function snapshot() {
-    origLast.clear(); liveLast.clear(); drafts.clear(); newXf.clear();
+    origLast.clear(); liveLast.clear(); drafts.clear(); newXf.clear(); origLastCol.clear(); origTables.clear();
     if (typeof workbook === "undefined" || !workbook) return;
     (workbook.SheetNames || []).forEach((name) => {
       const last = lastRowOf(workbook.Sheets[name]);
       origLast.set(name, last);
       liveLast.set(name, last);
+      origLastCol.set(name, lastColOf(workbook.Sheets[name]));
     });
+    if (typeof currentTables !== "undefined" && currentTables) {
+      Object.entries(currentTables).forEach(([k, m]) => { if (m && m.ref && m.sheetName) origTables.set(k, { sheet: m.sheetName, ref: m.ref, display: m.displayName || k }); });
+    }
   }
 
   const styleMapOf = (sheet) => {
@@ -231,27 +257,234 @@ const swbRowGrow = (() => {
     return payload;
   }
 
-  // Dla xlsx-grow.js: { arkusz: { fromRow, toRow } } (1-based), gdy dane urosły w dół.
+  // Dla xlsx-grow.js: { arkusz: { fromRow, toRow, fromCol, toCol, tableCols } } (1-based), gdy dane
+  // urosły w dół i/lub w bok. tableCols: nazwy nowych kolumn tabel Excela, czytane z ARKUSZA
+  // (wiersz nagłówka tabeli) w chwili zapisu — muszą się zgadzać z nagłówkami, bo tak sprawdza Excel.
   function growInfo() {
     const out = {};
     if (typeof workbook === "undefined" || !workbook) return out;
     origLast.forEach((orig, name) => {
       if (orig < 0) return; // pusty arkusz — nie ma zakresów kończących się na danych
-      const cur = lastRowOf(workbook.Sheets[name]);
-      if (cur > orig) out[name] = { fromRow: orig + 1, toRow: cur + 1 };
+      const ws = workbook.Sheets[name];
+      const g = {};
+      const cur = lastRowOf(ws);
+      if (cur > orig) { g.fromRow = orig + 1; g.toRow = cur + 1; }
+      const oc = origLastCol.get(name);
+      const cc = lastColOf(ws);
+      if (oc >= 0 && cc > oc) {
+        g.fromCol = oc + 1; g.toCol = cc + 1;
+        origTables.forEach((t, key) => {
+          if (t.sheet !== name) return;
+          let rg;
+          try { rg = XLSX.utils.decode_range(t.ref); } catch { return; }
+          if (rg.e.c !== oc) return;
+          const names = [];
+          for (let c = oc + 1; c <= cc; c++) {
+            const cell = ws[enc(rg.s.r, c)];
+            const v = cell && cell.v != null ? String(cell.v).trim() : "";
+            if (!v) return; // kolumna bez nazwy — tabela nie rośnie w bok
+            names.push(v);
+          }
+          g.tableCols = g.tableCols || {};
+          g.tableCols[key] = names;
+        });
+      }
+      if (Object.keys(g).length) out[name] = g;
     });
     return out;
+  }
+
+  // ── Etap 1b: nowa kolumna z prawej ────────────────────────────────────────
+  const realCount = () => (typeof swbRealHeaderCount === "function" ? swbRealHeaderCount() : currentHeaders.length);
+
+  function nameProblem(raw) {
+    const name = String(raw ?? "").replace(/\s+/g, " ").trim();
+    if (!name) return t("hdrRenameEmpty");
+    if (typeof SWB_HDR_BAD !== "undefined" && SWB_HDR_BAD.test(name)) return t("hdrRenameBadChars");
+    const key = typeof normalizeHeaderKey === "function" ? normalizeHeaderKey(name) : name.toLowerCase();
+    const taken = (currentHeaders || []).some((h) => (typeof normalizeHeaderKey === "function" ? normalizeHeaderKey(h) : String(h).toLowerCase()) === key);
+    if (taken) return t("hdrRenameDuplicate", { name });
+    return "";
+  }
+  function defaultColName() {
+    for (let n = realCount() + 1; n < realCount() + 500; n++) {
+      const name = t("addColDefault", { n });
+      if (!nameProblem(name)) return name;
+    }
+    return "";
+  }
+
+  // Ta sama reguła w bok (kolumny 0-based): koniec na `prev`, ≥ 2 kolumny → do `next`.
+  function growRngCol(rg, prev, next) {
+    if (!rg || !rg.s || !rg.e || rg.e.c !== prev || rg.s.c >= rg.e.c) return false;
+    rg.e.c = next;
+    return true;
+  }
+  function growColsInApp(sheetName, prev, next, name, hdrR) {
+    if (typeof currentTables !== "undefined" && currentTables) {
+      let changed = false;
+      new Set(Object.values(currentTables)).forEach((meta) => {
+        if (!meta || meta.sheetName !== sheetName || !meta.ref) return;
+        let rg;
+        try { rg = XLSX.utils.decode_range(meta.ref); } catch { return; }
+        if (rg.s.r !== hdrR || !growRngCol(rg, prev, next)) return; // nagłówek tabeli = wiersz nagłówka widoku
+        meta.ref = XLSX.utils.encode_range(rg);
+        if (Array.isArray(meta.colNames)) meta.colNames.push(name);
+        if (meta.columns) meta.columns[name.toLowerCase()] = next;
+        changed = true;
+      });
+      if (changed) currentTables = Object.assign({}, currentTables);
+    }
+    if (typeof dvRulesBySheet !== "undefined" && dvRulesBySheet && dvRulesBySheet.has(sheetName)) {
+      dvRulesBySheet.get(sheetName).forEach((rule) => (rule.ranges || []).forEach((rg) => growRngCol(rg, prev, next)));
+    }
+    if (typeof currentCFRules !== "undefined" && currentCFRules && currentCFRules.get && currentCFRules.get(sheetName)) {
+      currentCFRules.get(sheetName).forEach((block) => (block.ranges || []).forEach((rg) => growRngCol(rg, prev, next)));
+      if (typeof cfEvalCache !== "undefined" && cfEvalCache) cfEvalCache.delete(sheetName);
+    }
+    const ws = workbook.Sheets[sheetName];
+    const af = ws && ws["!autofilter"];
+    if (af && af.ref) {
+      try { const rg = XLSX.utils.decode_range(af.ref); if (growRngCol(rg, prev, next)) af.ref = XLSX.utils.encode_range(rg); } catch { /* */ }
+    }
+  }
+
+  // Zapis nowej kolumny — synchronicznie, jedno zadanie JS = jeden krok Cofnij.
+  function writeColumn(name) {
+    const sheetName = currentSheetName;
+    const ws = workbook.Sheets[sheetName];
+    const real = realCount();
+    const hdrR = currentHeaderRow - 1;
+    const absC = currentStartCol + real;
+    const leftC = absC - 1;
+    const styleMap = styleMapOf(sheetName);
+    const xfMap = xfMapOf(sheetName);
+    const inherit = (r) => {
+      const ref = enc(r, absC);
+      const xf = styleMap ? styleMap.get(enc(r, leftC)) : undefined;
+      if (Number.isInteger(xf) && xf > 0) {
+        if (styleMap && !styleMap.has(ref)) styleMap.set(ref, xf);
+        xfMap.set(ref, xf);
+      }
+      return ref;
+    };
+    // nagłówek
+    if (typeof undoCaptureCell === "function") undoCaptureCell(hdrR, real);
+    const hdrRef = inherit(hdrR);
+    ws[hdrRef] = { t: "s", v: name };
+    recordPendingEdit(sheetName, hdrRef, { v: name, t: "s" });
+    if (typeof swbEnsureSheetRef === "function") swbEnsureSheetRef(ws, hdrR, absC);
+    // wygląd w wierszach danych (z komórki po lewej)
+    (baseRows || []).forEach((row) => {
+      if (!row || row.isPreRow || !Number.isFinite(row.rowIndex0) || row.rowIndex0 <= hdrR) return;
+      const ref = inherit(row.rowIndex0);
+      if (!xfMap.has(ref) || ws[ref]) return;
+      if (typeof undoCaptureCell === "function") undoCaptureCell(row.rowIndex0, real);
+      ws[ref] = { t: "z" };
+      recordPendingEdit(sheetName, ref, { xf: xfMap.get(ref) });
+    });
+    growColsInApp(sheetName, leftC, absC, name, hdrR);
+    if (typeof bumpSheetDataStamp === "function") bumpSheetDataStamp();
+    return real; // indeks nowej kolumny w widoku
+  }
+
+  async function addColumn() {
+    if (!canAdd()) return false;
+    if (typeof swbEditGuard === "function" && !swbEditGuard()) return false;
+    if (typeof appPrompt !== "function") return false;
+    const raw = await appPrompt(t("addColPrompt"), defaultColName(), {
+      title: t("addColTitle"),
+      okLabel: t("addColOk"),
+      validate: (v) => nameProblem(v),
+    });
+    if (raw == null) return false;
+    const name = String(raw).replace(/\s+/g, " ").trim();
+    if (nameProblem(name) || !canAdd()) return false;
+    const col = writeColumn(name);
+    setDirtyState(true);
+    await reloadStructure({ shift: { from: col, by: 1 }, focusCol: col });
+    if (typeof updateUndoButtons === "function") updateUndoButtons();
+    toast(t("addColDone", { name }), "success", typeof swbUndoToastOpts === "function" ? swbUndoToastOpts() : null);
+    return true;
+  }
+
+  // Liczba kolumn arkusza ≠ liczba kolumn widoku (np. Cofnij dodania kolumny)?
+  function columnsChanged() {
+    if (typeof workbook === "undefined" || !workbook || !currentSheetName) return false;
+    const ws = workbook.Sheets[currentSheetName];
+    const last = lastColOf(ws);
+    return last >= 0 && last - currentStartCol + 1 !== realCount();
+  }
+
+  // Ponowne wczytanie układu arkusza „po cichu” (bez dymka „Wczytano…”, bez skoku do widoku
+  // startowego z Excela), z zachowaniem filtrów/sortowania (po nazwach), szerokości kolumn
+  // (indeksy za `shift.from` przesunięte o `shift.by`) i przewinięcia.
+  let quiet = false;
+  async function reloadStructure({ shift = null, focusCol = null } = {}) {
+    if (typeof loadBtn === "undefined" || !loadBtn || typeof sheetSelect === "undefined") return;
+    const vs = typeof captureViewState === "function" ? captureViewState() : null;
+    const widths = {};
+    Object.entries(typeof manualColumnWidths !== "undefined" ? manualColumnWidths : {}).forEach(([k, w]) => {
+      const i = Number(k);
+      widths[shift && i >= shift.from ? i + shift.by : i] = w;
+    });
+    const wrap = typeof tableWrapEl !== "undefined" ? tableWrapEl : null;
+    const scroll = wrap ? { top: wrap.scrollTop, left: wrap.scrollLeft } : null;
+    const focus = typeof focusedCellState !== "undefined" && focusedCellState ? { ...focusedCellState } : null;
+    const auto = typeof autoHeaderRowEl !== "undefined" && autoHeaderRowEl ? autoHeaderRowEl.checked : null;
+    if (auto) autoHeaderRowEl.checked = false; // wiersz nagłówka zostaje ten sam
+    quiet = true;
+    try {
+      sheetSelect.value = currentSheetName;
+      loadBtn.click();
+      const t0 = performance.now();
+      await new Promise((resolve) => {
+        const tick = () => (document.body.getAttribute("aria-busy") !== "true" || performance.now() - t0 > 15000 ? resolve() : setTimeout(tick, 40));
+        setTimeout(tick, 80);
+      });
+    } finally {
+      quiet = false;
+      if (auto) autoHeaderRowEl.checked = true;
+    }
+    if (vs && typeof applyViewState === "function") applyViewState(vs);
+    if (typeof manualColumnWidths !== "undefined") { Object.keys(manualColumnWidths).forEach((k) => delete manualColumnWidths[k]); Object.assign(manualColumnWidths, widths); }
+    renderActiveTable();
+    if (wrap && scroll) { wrap.scrollTop = scroll.top; wrap.scrollLeft = scroll.left; }
+    const first = (currentDisplayModel && currentDisplayModel.rows || []).find((r) => r && !r.isPreRow);
+    if (Number.isInteger(focusCol) && first) {
+      setFocusedCell(getRowSelectionKey(first), focusCol, { scroll: true });
+      if (typeof giveGridDomFocus === "function") giveGridDomFocus(); // pisanie od razu trafia do nowej kolumny
+    }
+    else if (focus && focus.rowKey) setFocusedCell(focus.rowKey, Math.min(focus.colIndex0, Math.max(0, currentDisplayModel.headers.length - 1)), { scroll: false });
+  }
+
+  // Cofnij/Ponów, po którym arkusz ma inną liczbę kolumn niż widok — układ od nowa.
+  function afterUndo(step) {
+    if (!step || step.sheet !== currentSheetName) return false;
+    const hdrR = currentHeaderRow - 1;
+    if (!step.changes.some((ch) => ch.rowIndex0 === hdrR)) return false;
+    if (!columnsChanged()) return false;
+    const real = realCount();
+    const grew = lastColOf(workbook.Sheets[currentSheetName]) - currentStartCol + 1 > real;
+    reloadStructure({ shift: { from: grew ? real : real - 1, by: grew ? 1 : -1 } });
+    return true;
   }
 
   // ── przycisk „＋ Nowy wiersz” w pasku pod tabelą (obok sum) ─────────────────
   // POZA przewijaną tabelą: na dole przewijania ostatni wiersz ma stać przy krawędzi (pilnują
   // tego testy virt-*), a przycisk widać zawsze — nowy wiersz i tak przewija się do widoku.
   let btn = null;
+  let colBtn = null;
+  const label = (el, long, short) => {
+    el.replaceChildren(
+      Object.assign(document.createElement("span"), { className: "lbl-long", textContent: long }),
+      Object.assign(document.createElement("span"), { className: "lbl-short", textContent: short }),
+    );
+  };
   function syncButton() {
-    if (!btn) return;
-    btn.hidden = !canAdd();
-    btn.textContent = t("addRowBtn");
-    btn.title = t("addRowHint");
+    const can = canAdd();
+    if (btn) { btn.hidden = !can; label(btn, t("addRowBtn"), t("addRowShort")); btn.title = t("addRowHint"); }
+    if (colBtn) { colBtn.hidden = !can; label(colBtn, t("addColBtn"), t("addColShort")); colBtn.title = t("addColHint"); }
   }
 
   function init() {
@@ -270,7 +503,13 @@ const swbRowGrow = (() => {
           if (td && typeof openCellEditor === "function") openCellEditor(td);
         });
       });
-      foot.prepend(btn);
+      colBtn = document.createElement("button");
+      colBtn.type = "button";
+      colBtn.id = "addColBtn";
+      colBtn.className = "add-row-btn add-col-btn";
+      colBtn.hidden = true;
+      colBtn.addEventListener("click", () => { addColumn(); });
+      foot.prepend(btn, colBtn);
     }
     if (typeof window.handleFile === "function") {
       const orig = window.handleFile;
@@ -291,7 +530,11 @@ const swbRowGrow = (() => {
     syncButton();
   }
 
-  return { init, snapshot, canAdd, addDraft, beforeWrite, withXf, growInfo, syncButton, _state: () => ({ origLast: [...origLast], liveLast: [...liveLast], drafts: [...drafts] }) };
+  return {
+    init, snapshot, canAdd, addDraft, beforeWrite, withXf, growInfo, syncButton,
+    addColumn, writeColumn, reloadStructure, afterUndo, isQuietReload: () => quiet,
+    _state: () => ({ origLast: [...origLast], liveLast: [...liveLast], drafts: [...drafts], origLastCol: [...origLastCol] }),
+  };
 })();
 
 document.addEventListener("DOMContentLoaded", () => swbRowGrow.init());

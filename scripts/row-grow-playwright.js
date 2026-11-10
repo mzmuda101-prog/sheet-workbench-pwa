@@ -31,6 +31,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let ooxml = null;
 try { ooxml = require("./ooxml-validate"); } catch { ooxml = null; }
 
+// EXCEL_DIR=/private/tmp/swb-excel-check: kopia zapisanych plików do sprawdzenia w prawdziwym Excelu
+// (scripts/excel-real-check.py, npm run test:excel)
+const toExcelDir = (file, name) => { if (process.env.EXCEL_DIR) { fs.mkdirSync(process.env.EXCEL_DIR, { recursive: true }); fs.copyFileSync(file, path.join(process.env.EXCEL_DIR, `row-grow-${ENGINE_NAME}-${name}.xlsx`)); } };
+
 async function run() {
   const fails = [];
   const check = (name, ok, detail) => {
@@ -127,6 +131,7 @@ async function run() {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "row-grow-"));
   const out = path.join(tmp, "sample.xlsx");
   fs.writeFileSync(out, Buffer.from(await p.evaluate(async () => Array.from(await buildOutputBytes("xlsx")))));
+  toExcelDir(out, "przyklad");
   if (ooxml && ooxml.available && ooxml.available()) {
     const res = ooxml.validate([out]);
     const errs = res && res[0] ? res[0].errors || [] : [];
@@ -162,6 +167,7 @@ print(json.dumps({'B':ws['B%d'%R].value,'G':ws['G%d'%R].value,'Efmt':ws['E%d'%R]
     check("6. tabela w aplikacji rośnie, [#This Row] bez #REF!, lista wyboru w nowym wierszu", s6.tbl === "A2:AG566" && s6.errs.length === 0 && s6.dv && s6.f > 0, s6);
     const rodoOut = path.join(tmp, "rodo.xlsx");
     fs.writeFileSync(rodoOut, Buffer.from(await p.evaluate(async () => Array.from(await buildOutputBytes("xlsx")))));
+    toExcelDir(rodoOut, "rodo");
     const JSZip = require(path.join(ROOT, "lib", "jszip.min.js"));
     const zip = await JSZip.loadAsync(fs.readFileSync(rodoOut));
     const tables = await Promise.all(Object.keys(zip.files).filter((n) => /^xl\/tables\/table\d+\.xml$/.test(n)).map((n) => zip.file(n).async("string")));
