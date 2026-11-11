@@ -99,11 +99,18 @@ const swbRowGrow = (() => {
       && (typeof swbIsEditMode !== "function" || swbIsEditMode());
   }
 
+  // Filtr / szukanie ukrywa część wierszy: ostatni WIDOCZNY wiersz nie jest końcem danych, a nowy
+  // wiersz trafiłby pod ukryte (albo od razu zniknął, bo nie pasuje do filtra). Wtedy bez duchów,
+  // bez Entera-dopisywania i z wyłączonym przyciskiem — najpierw trzeba wyczyścić filtr.
+  // (Wiersze robocze są i w baseRows, i w viewRows, więc bez filtra długości są równe.)
+  const filtered = () => typeof viewRows !== "undefined" && Array.isArray(viewRows) && Array.isArray(baseRows) && viewRows.length < baseRows.length;
+
   const isEmptyRow = (row) => !row || !Array.isArray(row.values) || row.values.every((v) => v === null || v === undefined || v === "");
 
   // Wiersz roboczy za ostatnim wierszem danych arkusza. Zwraca klucz wiersza (do fokusu) albo "".
   function addDraft({ col = 0 } = {}) {
     if (!canAdd()) return "";
+    if (filtered()) { toast(t("addRowFiltered"), "info"); return ""; }
     const name = currentSheetName;
     const tail = baseRows[baseRows.length - 1];
     // pusty wiersz roboczy już czeka na końcu — nie mnożymy pustych
@@ -549,7 +556,7 @@ const swbRowGrow = (() => {
       ghostBody.setAttribute("aria-hidden", "true"); // tylko podpowiedź wzrokowa; klawiatura: Enter / „＋ Nowy wiersz”
       ghostBody.addEventListener("click", onGhostClick);
     }
-    if (!canAdd() || !baseRows.length) { ghostBody.remove(); ghostBody.dataset.key = ""; return; }
+    if (!canAdd() || filtered() || !baseRows.length) { ghostBody.remove(); ghostBody.dataset.key = ""; return; }
     if (ghostBody.previousElementSibling !== tb) tb.after(ghostBody);
     const n = currentDisplayModel.headers.length;
     let last = -1;
@@ -586,7 +593,7 @@ const swbRowGrow = (() => {
     if (!table) return;
     table.querySelectorAll("col.ghost-col, .ghost-col-cell").forEach((el) => el.remove());
     const derived = typeof dcAppliedCount === "number" ? dcAppliedCount : 0;
-    if (!canAdd() || derived > 0 || !baseRows.length) return;
+    if (!canAdd() || filtered() || derived > 0 || !baseRows.length) return;
     const cg = table.querySelector("colgroup");
     const head = typeof theadEl !== "undefined" ? theadEl : table.tHead;
     if (!cg || !head) return;
@@ -621,7 +628,7 @@ const swbRowGrow = (() => {
   // Klik w ducha-kolumnę: komórka-duch (nagłówek, wiersz-duch) albo puste pole za ostatnią komórką
   // wiersza danych (tam wiersz po prostu się kończy) → nowa kolumna i pisanie w tym wierszu.
   function onGhostColClick(e) {
-    if (!canAdd()) return;
+    if (!canAdd() || filtered()) return; // przy filtrze duchów-kolumn nie ma — pusty margines nie dodaje kolumny
     const t0 = e.target;
     if (!t0 || !t0.closest) return;
     let rowKey = null;
@@ -659,7 +666,8 @@ const swbRowGrow = (() => {
   };
   function syncButton() {
     const can = canAdd();
-    if (btn) { btn.hidden = !can; label(btn, t("addRowBtn"), t("addRowShort")); btn.title = t("addRowHint"); }
+    const f = can && filtered();
+    if (btn) { btn.hidden = !can; btn.disabled = f; label(btn, t("addRowBtn"), t("addRowShort")); btn.title = t(f ? "addRowFiltered" : "addRowHint"); }
     if (colBtn) { colBtn.hidden = !can; label(colBtn, t("addColBtn"), t("addColShort")); colBtn.title = t("addColHint"); }
   }
 
@@ -724,7 +732,7 @@ const swbRowGrow = (() => {
   }
 
   return {
-    init, snapshot, canAdd, addDraft, beforeWrite, withXf, growInfo, syncButton,
+    init, snapshot, canAdd, filtered, addDraft, beforeWrite, withXf, growInfo, syncButton,
     addColumn, writeColumn, reloadStructure, afterUndo, isQuietReload: () => quiet, syncGhosts,
     _state: () => ({ origLast: [...origLast], liveLast: [...liveLast], drafts: [...drafts], origLastCol: [...origLastCol] }),
   };

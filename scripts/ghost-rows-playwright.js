@@ -64,6 +64,26 @@ async function run() {
   check("2. duchy nie są danymi (zaznacz wszystko = tylko wiersze danych, bez data-col-index)",
     g1.colIdx === 0 && all === (await p.evaluate(() => swbSelView().rows.length)), { colIdx: g1.colIdx, all, s2 });
 
+  // 2b. filtr ukrywa wiersze → bez duchów (wierszy i kolumn), Enter w ostatnim widocznym wierszu
+  //     niczego nie dopisuje, „＋ Nowy wiersz” wyłączony; po wyczyszczeniu wszystko wraca
+  const word = await p.evaluate(() => String(baseRows[1].display.find((x) => x && String(x).length > 2) || ""));
+  await p.fill("#quickSearch", word); await p.press("#quickSearch", "Enter"); await sleep(500);
+  const f1 = await p.evaluate(() => ({
+    view: viewRows.length, base: baseRows.length,
+    ghostRows: !!document.querySelector("#dataTable tbody.ghost-body"),
+    ghostCols: document.querySelectorAll("#dataTable col.ghost-col, #dataTable .ghost-col-cell").length,
+    btnOff: document.getElementById("addRowBtn").disabled,
+  }));
+  await p.evaluate(() => { const v = swbSelView(); setFocusedCell(getRowSelectionKey(v.rows[v.rows.length - 1]), 0, { scroll: false }); moveFocusedCell(1, 0, { grow: true }); });
+  await sleep(200);
+  const f2 = await p.evaluate(() => baseRows.length);
+  check("2b. przy filtrze: bez duchów, przycisk wyłączony, Enter w ostatnim widocznym wierszu nie dopisuje",
+    f1.view < f1.base && !f1.ghostRows && f1.ghostCols === 0 && f1.btnOff && f2 === f1.base, { word, f1, f2 });
+  await p.fill("#quickSearch", ""); await p.press("#quickSearch", "Enter"); await sleep(500);
+  await p.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
+  const f3 = await p.evaluate(() => ({ view: viewRows.length, base: baseRows.length, btnOff: document.getElementById("addRowBtn").disabled }));
+  check("2b. po wyczyszczeniu filtra duchy i przycisk wracają", f3.view === f3.base && !f3.btnOff && (await ghosts()).shown, f3);
+
   // 3. klik w ducha (2. wiersz, kolumna D = 3)
   await p.click("#dataTable tbody.ghost-body tr:nth-child(2) td[data-ghost-col='3']");
   await sleep(300);

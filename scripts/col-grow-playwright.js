@@ -160,6 +160,10 @@ print(json.dumps({'hdr':h.value,'bold':[h.font.b,s.font.b],'fill':[h.fill.fgColo
     const s5 = await p.evaluate(() => ({ tbl: currentTables["opracowanie_terenow"].ref, last: currentTables["opracowanie_terenow"].colNames.slice(-1)[0] }));
     check("5. tabela w aplikacji rośnie w bok (A2:AH565, kolumna w tabeli)", s5.tbl === "A2:AH565" && s5.last === "Uwagi & nowe", s5);
     // i nowy wiersz — tabela w obie strony
+    // szukanie „Nowak” z kroku 2 dalej filtruje — przy filtrze nowych wierszy się nie dodaje (row-grow.js)
+    check("5. przy aktywnym filtrze „＋ Nowy wiersz” jest wyłączony", await p.evaluate(() => viewRows.length < baseRows.length && addRowBtn.disabled));
+    await p.fill("#quickSearch", ""); await p.press("#quickSearch", "Enter");
+    await p.waitForFunction(() => viewRows.length === baseRows.length && !addRowBtn.disabled, null, { timeout: 15000 });
     await p.click("#addRowBtn"); await sleep(300);
     await p.keyboard.type("Nowy teren"); await p.keyboard.press("Tab"); await sleep(300);
     const rodoOut = path.join(tmp, "rodo.xlsx");

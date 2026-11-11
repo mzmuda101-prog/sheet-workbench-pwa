@@ -447,7 +447,7 @@ function moveFocusedCell(rowDelta, colDelta, opts = {}) {
     return false;
   }
   // Enter po wpisie w OSTATNIM wierszu = nowy wiersz pod danymi (row-grow.js), jak w Excelu
-  if (opts.grow && rowDelta === 1 && rowIndex === view.rows.length - 1 && typeof swbRowGrow !== "undefined" && swbRowGrow.canAdd()) {
+  if (opts.grow && rowDelta === 1 && rowIndex === view.rows.length - 1 && typeof swbRowGrow !== "undefined" && swbRowGrow.canAdd() && !swbRowGrow.filtered()) {
     if (swbRowGrow.addDraft({ col: focusedCellState.colIndex0 })) return true;
   }
   const nextRowIndex = Math.max(0, Math.min(view.rows.length - 1, rowIndex + rowDelta));
