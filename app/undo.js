@@ -18,6 +18,13 @@ let undoStack = [];
 let redoStack = [];
 let undoOpenStep = null;
 let undoApplying = false;
+// Część AUTOMATYCZNA zmiany (row-grow.js: formuły i wygląd dopisane do nowego wiersza). Jak w Excelu
+// pierwsze Cofnij zdejmuje tylko automat — wpis użytkownika zostaje; drugie cofa sam wpis.
+let undoAutoDepth = 0;
+function undoAutoPart(fn) {
+  undoAutoDepth++;
+  try { return fn(); } finally { undoAutoDepth--; }
+}
 
 const undoBtnEl = document.getElementById("undoBtn");
 const redoBtnEl = document.getElementById("redoBtn");
@@ -73,7 +80,9 @@ function undoCaptureCell(rowIndex0, colIndex0) {
   if (step.sheet !== currentSheetName || step.seen.has(cellRef)) return; // liczy się PIERWSZY stan „przed"
   step.seen.add(cellRef);
   if (!step.rowMap) step.rowMap = undoRowMap();
-  step.changes.push({ cellRef, rowIndex0, col: colIndex0, snap: undoSnapshot(step.sheet, cellRef, rowIndex0, colIndex0, step.rowMap) });
+  const ch = { cellRef, rowIndex0, col: colIndex0, snap: undoSnapshot(step.sheet, cellRef, rowIndex0, colIndex0, step.rowMap) };
+  if (undoAutoDepth > 0) ch.auto = true;
+  step.changes.push(ch);
 }
 
 function undoCloseStep() {
@@ -93,8 +102,16 @@ function undoCloseStep() {
   delete step.seen;
   delete step.rowMap;
   if (!step.changes.length) return;
-  undoStack.push(step);
-  if (undoStack.length > UNDO_LIMIT) undoStack.shift();
+  const auto = step.changes.filter((ch) => ch.auto);
+  if (auto.length && auto.length < step.changes.length) {
+    // dwa kroki: najpierw (niżej na stosie) wpis, nad nim automat — to on cofa się pierwszy
+    const user = { ...step, changes: step.changes.filter((ch) => !ch.auto) };
+    undoStack.push(user);
+    undoStack.push({ ...step, changes: auto, auto: true, pair: user });
+  } else {
+    undoStack.push(step);
+  }
+  while (undoStack.length > UNDO_LIMIT) undoStack.shift();
   redoStack = [];
   updateUndoButtons();
 }
@@ -116,6 +133,7 @@ function undoApplyStep(step) {
   if (!sheet) return null;
   const rowMap = step.sheet === currentSheetName ? undoRowMap() : null;
   const inverse = { workbook: step.workbook, sheet: step.sheet, changes: [] };
+  if (step.auto) inverse.auto = true;
   undoApplying = true;
   try {
     for (let i = step.changes.length - 1; i >= 0; i--) {
@@ -194,7 +212,7 @@ function undoRedo(direction) {
       setFocusedCell(rowKey, first.col, { scroll: true });
     }
     // po Cofnij z dymka (albo Ctrl+Z) — w dymku od razu „Ponów”, po Ponów — „Cofnij”
-    toast(t(direction === "undo" ? "undoDone" : "redoDone", { count }), "info", {
+    toast(step.auto ? t(direction === "undo" ? "undoAutoDone" : "redoAutoDone") : t(direction === "undo" ? "undoDone" : "redoDone", { count }), "info", {
       action: t(direction === "undo" ? "redoAction" : "undoAction"),
       onAction: () => (direction === "undo" ? redoLast() : undoLast()),
     });
@@ -220,7 +238,11 @@ function swbUndoToastOpts() {
     action: t("undoAction"),
     onAction: () => {
       undoCloseStep();
-      if (undoStack[undoStack.length - 1] === step) undoLast();
+      if (undoStack[undoStack.length - 1] === step) {
+        undoLast();
+        // dymek po operacji (wklejenie pod danymi…) cofa CAŁĄ operację — także wpis pod automatem
+        if (step.pair && undoStack[undoStack.length - 1] === step.pair) undoLast();
+      }
       else toast(t("undoStepGone"), "info");
     },
   };

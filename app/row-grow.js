@@ -219,7 +219,10 @@ const swbRowGrow = (() => {
     const last = liveLast.get(sheetName);
     if (r > last) liveLast.set(sheetName, r);
     preparing = true;
-    try { prepareRow(sheetName, ws, r, absC, k, last); } finally { preparing = false; }
+    try {
+      if (typeof undoAutoPart === "function") undoAutoPart(() => prepareRow(sheetName, ws, r, absC, k, last));
+      else prepareRow(sheetName, ws, r, absC, k, last);
+    } finally { preparing = false; }
   }
 
   function prepareRow(sheetName, ws, r, absC, k, last) {

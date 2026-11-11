@@ -110,9 +110,18 @@ async function run() {
   // 4. Cofnij / ponowny wpis / Delete
   await p.keyboard.type("Drugi"); await p.keyboard.press("Enter"); await sleep(300);
   const before4 = await cell(`G${R + 1}`);
+  // jak w Excelu: 1. Cofnij zdejmuje tylko automat (formuły, wygląd z góry) — wpis zostaje; 2. cofa wpis
+  await p.evaluate(() => undoLast()); await sleep(300);
+  const mid4 = await Promise.all([`B${R + 1}`, `G${R + 1}`, `E${R + 1}`].map(cell));
+  check("4. 1. Cofnij: wpis zostaje, formuła i wygląd z góry znikają", !!(before4 && before4.f) && mid4[0] && mid4[0].v === "Drugi" && !mid4[1] && !mid4[2], { before4, mid4 });
   await p.evaluate(() => undoLast()); await sleep(300);
   const after4 = await Promise.all([`B${R + 1}`, `G${R + 1}`, `E${R + 1}`].map(cell));
-  check("4. jedno Cofnij cofa cały nowy wiersz (wartość, formuła, wygląd)", !!(before4 && before4.f) && after4.every((c) => !c), { before4, after4 });
+  check("4. 2. Cofnij: nowy wiersz cały cofnięty", after4.every((c) => !c), { after4 });
+  await p.evaluate(() => redoLast()); await sleep(300);
+  await p.evaluate(() => redoLast()); await sleep(300);
+  const redo4 = await Promise.all([`B${R + 1}`, `G${R + 1}`].map(cell));
+  check("4. Ponów ×2 przywraca wpis i formułę", redo4[0] && redo4[0].v === "Drugi" && redo4[1] && !!redo4[1].f, redo4);
+  await p.evaluate(() => { undoLast(); undoLast(); }); await sleep(300);
   await p.evaluate((k) => setFocusedCell(k, 1, { scroll: true }), `wide:${R}`);
   await p.keyboard.press("Enter"); await sleep(100);
   await p.keyboard.type("Drugi raz"); await p.keyboard.press("Tab"); await sleep(300);
@@ -194,7 +203,7 @@ print(json.dumps({'B':ws['B%d'%R].value,'G':ws['G%d'%R].value,'Efmt':ws['E%d'%R]
     const add8 = async (text) => { await p.click("#addRowBtn"); await sleep(300); await p.keyboard.type(text); await p.keyboard.press("Tab"); await sleep(300); await p.keyboard.press("Escape"); await sleep(150); };
     await add8("Kowalski Jan");
     const a8 = await cells8(R8);
-    await p.evaluate(() => undoLast()); await sleep(300);
+    await p.evaluate(() => { undoLast(); undoLast(); }); await sleep(300); // automat, potem wpis
     await p.evaluate(() => { setFocusedCell(getRowSelectionKey(baseRows[0]), 0, { scroll: false }); renderActiveTable(); }); await sleep(300); // pusty wiersz roboczy sprzątnięty
     await add8("Nowak Anna");
     const b8 = await cells8(R8);

@@ -121,12 +121,13 @@ async function run() {
     await p.keyboard.type(txt); await p.keyboard.press("Tab"); await sleep(250);
   }
   const before5 = await p.evaluate(() => baseRows.length);
-  for (let i = 0; i < 3; i++) { await p.evaluate(() => undoLast()); await sleep(250); }
+  // wiersz z formułą to 2 kroki Cofnij (automat, potem wpis) — cofamy wszystko z tego pliku
+  for (let i = 0; i < 12 && (await p.evaluate(() => undoStack.some((s) => s.workbook === workbook))); i++) { await p.evaluate(() => undoLast()); await sleep(250); }
   await p.evaluate(() => { setFocusedCell(getRowSelectionKey(baseRows[0]), 1, { scroll: false }); renderActiveTable(); });
   await sleep(300);
   const s5 = await p.evaluate(() => ({ base: baseRows.length, view: viewRows.length, nums: [...document.querySelectorAll("tbody.ghost-body .ghost-head")].map((x) => x.textContent) }));
   check("5. po Cofnij puste nowe wiersze znikają, duchy wracają tuż pod dane", before5 === s2.base + 3 && s5.base === s2.base && s5.view === s2.view && s5.nums.join() === [last + 1, last + 2, last + 3].join(), { before5, s5, s2, last });
-  for (let i = 0; i < 3; i++) { await p.evaluate(() => redoLast()); await sleep(250); }
+  for (let i = 0; i < 12 && (await p.evaluate(() => redoStack.some((s) => s.workbook === workbook))); i++) { await p.evaluate(() => redoLast()); await sleep(250); }
   const s5b = await p.evaluate((r) => ({ base: baseRows.length, D: [r, r + 1, r + 2].map((n) => { const row = baseRows.find((x) => x.rowIndex0 === n - 1); return row ? row.values[2] || row.values[3] : null; }) }), last + 1);
   check("5. Ponów przywraca wiersze także w tabeli", s5b.base === s2.base + 3 && s5b.D.every(Boolean), s5b);
 
