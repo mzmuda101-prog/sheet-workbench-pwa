@@ -205,6 +205,9 @@ print(json.dumps({'B':ws['B%d'%R].value,'G':ws['G%d'%R].value,'Efmt':ws['E%d'%R]
     await add8("Lis Ewa");
     const c8 = await cells8(R8 + 1);
     check("8. wiersz wyżej bez formuły nie zrywa łańcucha (reguła Excela: 3 z 5 wierszy)", c8[0] === "Lis Ewa" && c8[1] === "f:Ewa Lis" && c8[2] === "f:E. Lis", c8);
+    // to, co WIDAĆ w tabeli (film 2026-11-11 22:07: wynik był w arkuszu, a komórka pusta)
+    const shown8 = await p.evaluate((r) => [...document.querySelectorAll(`#dataTable tbody tr[data-row-key="wide:${r - 1}"] td[data-col-index]`)].slice(0, 5).map((td) => td.textContent), R8 + 1);
+    check("8. wynik formuły widać w tabeli także w KOLEJNYM nowym wierszu", shown8[2] === "Ewa Lis" && shown8[4] === "E. Lis", shown8);
     // ręcznie: prawy klik na pojedynczej komórce → „Wypełnij z komórki wyżej” dociąga formułę
     const m8 = await p.evaluate((r) => {
       const row = baseRows.find((x) => x.rowIndex0 === r - 1);

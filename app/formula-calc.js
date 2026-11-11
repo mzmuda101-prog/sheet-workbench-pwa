@@ -380,12 +380,15 @@ function fcStore(cell, v) {
 }
 
 // Odświeża wiersz tabeli (bieżący arkusz) po zmianie komórki r,c.
-let fcRowMapCache = { rows: null, map: null };
+let fcRowMapCache = { rows: null, len: -1, map: null };
 function fcRowFor(r) {
-  if (fcRowMapCache.rows !== baseRows) {
+  // nowy wiersz (row-grow.js) jest DOPISYWANY do tej samej tablicy baseRows — sama tożsamość tablicy
+  // nie wystarcza: pamięć bez nowych wierszy zostawiała wyniki formuł w arkuszu, a w tabeli puste
+  // komórki (film 2026-11-11 22:07: drugi nowy wiersz bez „Jerzy Jodłowski” w C i E)
+  if (fcRowMapCache.rows !== baseRows || fcRowMapCache.len !== baseRows.length) {
     const map = new Map();
     baseRows.forEach((row) => { if (row && !row.isLongViewRow && Number.isFinite(row.rowIndex0) && !map.has(row.rowIndex0)) map.set(row.rowIndex0, row); });
-    fcRowMapCache = { rows: baseRows, map };
+    fcRowMapCache = { rows: baseRows, len: baseRows.length, map };
   }
   const row = fcRowMapCache.map.get(r);
   if (row) return row;
