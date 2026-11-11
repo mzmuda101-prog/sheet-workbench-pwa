@@ -84,8 +84,25 @@ async function run() {
   const f3 = await p.evaluate(() => ({ view: viewRows.length, base: baseRows.length, btnOff: document.getElementById("addRowBtn").disabled }));
   check("2b. po wyczyszczeniu filtra duchy i przycisk wracają", f3.view === f3.base && !f3.btnOff && (await ghosts()).shown, f3);
 
-  // 3. klik w ducha (2. wiersz, kolumna D = 3)
-  await p.click("#dataTable tbody.ghost-body tr:nth-child(2) td[data-ghost-col='3']");
+  // 2c. klik w TRZECIEGO ducha = wiersz w klikniętym miejscu, nad nim 2 puste (jak w Excelu: osobny
+  //     blok — bez formuł i wyglądu z góry, tabele i zakresy w pliku nie rosną, rośnie tylko wymiar)
+  await p.evaluate(() => { tableWrapEl.scrollTop = tableWrapEl.scrollHeight; }); await sleep(300); // duchy na ekranie (WebKit nie przewija sam)
+  await p.click("#dataTable tbody.ghost-body tr:nth-child(3) td[data-ghost-col='1']");
+  await sleep(400);
+  await p.keyboard.type("Osobny blok"); await p.keyboard.press("Tab"); await sleep(300); await p.keyboard.press("Escape"); await sleep(150);
+  const gp = await p.evaluate((last) => {
+    const ws = workbook.Sheets[currentSheetName];
+    const row = (r) => Object.keys(ws).filter((k) => k[0] !== "!" && XLSX.utils.decode_cell(k).r === r - 1 && ws[k].t !== "z");
+    return { at: row(last + 3), gap: [row(last + 1).length, row(last + 2).length], grow: swbRowGrow.growInfo()[currentSheetName] || null };
+  }, last);
+  check("2c. klik w 3. ducha: wiersz w klikniętym miejscu, nad nim odstęp, bez formuł; plik: tylko wymiar",
+    gp.at.length === 1 && gp.gap.join() === "0,0" && gp.grow && !gp.grow.fromRow && gp.grow.dimRow === last + 3, { gp, last });
+  await p.evaluate(() => undoLast()); await sleep(300);
+  await p.evaluate(() => { setFocusedCell(getRowSelectionKey(baseRows[0]), 1, { scroll: false }); renderActiveTable(); }); await sleep(300);
+  check("2c. po Cofnij duchy wracają tuż pod dane", (await ghosts()).nums.join() === [last + 1, last + 2, last + 3].join(), (await ghosts()).nums);
+
+  // 3. klik w ducha (1. wiersz — tuż pod danymi, kolumna D = 3)
+  await p.click("#dataTable tbody.ghost-body tr:nth-child(1) td[data-ghost-col='3']");
   await sleep(300);
   const s3 = await p.evaluate(() => ({ focus: focusedCellState && `${focusedCellState.rowKey}:${focusedCellState.colIndex0}`, editor: !!document.querySelector("input.cell-editor") }));
   check("3. klik w ducha = nowy wiersz, pisanie w tej kolumnie", s3.focus === `wide:${last}:3` && s3.editor, { s3, last });

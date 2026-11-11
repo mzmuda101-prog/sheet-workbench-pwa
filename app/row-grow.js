@@ -108,13 +108,15 @@ const swbRowGrow = (() => {
   const isEmptyRow = (row) => !row || !Array.isArray(row.values) || row.values.every((v) => v === null || v === undefined || v === "");
 
   // Wiersz roboczy za ostatnim wierszem danych arkusza. Zwraca klucz wiersza (do fokusu) albo "".
-  function addDraft({ col = 0 } = {}) {
+  // gap = ile pustych wierszy zostawić nad nowym (klik w 2./3. ducha). Jak w Excelu: wiersz za
+  // odstępem nie jest ciągiem danych — bez formuł i wyglądu z góry, tabele i zakresy nie rosną.
+  function addDraft({ col = 0, gap = 0 } = {}) {
     if (!canAdd()) return "";
     if (filtered()) { toast(t("addRowFiltered"), "info"); return ""; }
     const name = currentSheetName;
     const tail = baseRows[baseRows.length - 1];
     // pusty wiersz roboczy już czeka na końcu — nie mnożymy pustych
-    if (tail && tail.isDraftRow && isEmptyRow(tail)) {
+    if (!gap && tail && tail.isDraftRow && isEmptyRow(tail)) {
       if (!viewRows.includes(tail)) {
         viewRows.push(tail);
         justAdded = tail;
@@ -131,9 +133,11 @@ const swbRowGrow = (() => {
     // Tabela Excela z wierszem sumy na końcu danych: nowy wiersz pod sumą wypadłby z tabeli.
     // Excel wstawia wtedy NAD sumą — to wstawianie w środku (Etap 4); na razie mówimy wprost.
     if (totalsTableEndingAt(name, lastData)) { toast(t("addRowTotalsTable"), "info"); return ""; }
-    const r = lastData + 1;
+    // pusty wiersz roboczy na końcu (np. po kliknięciu niżej) nie jest danymi — liczymy od treści
+    if (gap) baseRows.forEach((x) => { if (x.isDraftRow && isEmptyRow(x) && x.rowIndex0 === lastData) lastData = lastRowOf(workbook.Sheets[name]); });
+    const r = lastData + 1 + gap;
     const n = currentDisplayModel.headers.length;
-    const tpl = baseRows.find((x) => x.rowIndex0 === lastData) || tail || null;
+    const tpl = gap ? null : (baseRows.find((x) => x.rowIndex0 === lastData) || tail || null);
     const values = new Array(n).fill(null);
     const row = {
       values,
@@ -146,7 +150,7 @@ const swbRowGrow = (() => {
     };
     baseRows.push(row);
     viewRows.push(row);
-    drafts.add(keyOf(name, r));
+    if (!gap) drafts.add(keyOf(name, r)); // formuły tylko w wierszu przylegającym do danych
     justAdded = row; // kursor ustawiamy po rysowaniu — do tego czasu wiersz chroniony przed sprzątaniem
     try { renderActiveTable(); } finally { justAdded = null; }
     const k = getRowSelectionKey(row);
@@ -182,6 +186,16 @@ const swbRowGrow = (() => {
     return cand.filter((x) => x.sh === cand[0].sh).length >= 3 ? cand[0].d : 0;
   }
 
+  function rowHasData(ws, r) {
+    let rg;
+    try { rg = XLSX.utils.decode_range(ws["!ref"]); } catch { return false; }
+    for (let c = rg.s.c; c <= rg.e.c; c++) {
+      const cell = ws[enc(r, c)];
+      if (cell && (typeof isMeaningfulSheetCell === "function" ? isMeaningfulSheetCell(cell) : cell.v != null)) return true;
+    }
+    return false;
+  }
+
   function rowIsEmpty(ws, r, n) {
     for (let i = 0; i < n; i++) {
       const cell = ws[enc(r, currentStartCol + i)];
@@ -212,6 +226,8 @@ const swbRowGrow = (() => {
     const styleMap = styleMapOf(sheetName);
     const xfMap = xfMapOf(sheetName);
     const tplR = r - 1;
+    // wiersz za pustym odstępem: wygląd też nie „spływa” z góry (Excel rozszerza formaty tylko w ciągu)
+    if (!rowHasData(ws, tplR)) return;
     const n = currentDisplayModel && Array.isArray(currentDisplayModel.headers) ? currentDisplayModel.headers.length : 0;
     const realCols = [];
     for (let i = 0; i < n; i++) if (typeof cfmtIsRealCol !== "function" || cfmtIsRealCol(i)) realCols.push(i);
@@ -301,7 +317,14 @@ const swbRowGrow = (() => {
       const ws = workbook.Sheets[name];
       const g = {};
       const cur = lastRowOf(ws);
-      if (cur > orig) { g.fromRow = orig + 1; g.toRow = cur + 1; }
+      if (cur > orig) {
+        // tabele, filtr, CF i listy rosną tylko o wiersze PRZYLEGAJĄCE do danych (jak Excel) —
+        // wiersz za pustym odstępem (klik w dalszego ducha) to osobny blok; wymiar arkusza do końca
+        let cont = orig;
+        while (cont < cur && rowHasData(ws, cont + 1)) cont++;
+        if (cont > orig) { g.fromRow = orig + 1; g.toRow = cont + 1; }
+        if (cur > cont) g.dimRow = cur + 1;
+      }
       const oc = origLastCol.get(name);
       const cc = lastColOf(ws);
       if (oc >= 0 && cc > oc) {
@@ -549,7 +572,9 @@ const swbRowGrow = (() => {
     const td = e.target && e.target.closest ? e.target.closest("td") : null;
     if (!td || !ghostBody || !ghostBody.contains(td)) return;
     const col = Number(td.dataset.ghostCol);
-    if (!addDraft({ col: Number.isInteger(col) ? col : 0 })) return;
+    const tr = td.parentElement;
+    const gap = tr && tr.parentElement === ghostBody ? Math.max(0, Array.prototype.indexOf.call(ghostBody.rows, tr)) : 0;
+    if (!addDraft({ col: Number.isInteger(col) ? col : 0, gap })) return;
     requestAnimationFrame(() => {
       const cell = typeof findCellElement === "function" ? findCellElement(focusedCellState) : null;
       if (cell && typeof openCellEditor === "function") openCellEditor(cell);

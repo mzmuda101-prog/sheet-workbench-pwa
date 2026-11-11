@@ -48,6 +48,13 @@ async function run() {
   eq("2. listy wyboru do wiersza 200 bez zmian", pick(grown, /<dataValidation [^>]*>/g), pick(sheet, /<dataValidation [^>]*>/g));
   const sd = (xml) => xml.slice(xml.indexOf("<sheetData"), xml.indexOf("</sheetData>"));
   check("2. <sheetData> bajt w bajt", sd(grown) === sd(sheet));
+  // wiersz za pustym odstępem (klik w dalszego ducha): rośnie TYLKO wymiar arkusza, zakresy nie
+  const gapOnly = G.growSheetXml(sheet, { dimRow: 45 });
+  eq("2. odstęp: dimension A1:K42 → A1:K45", pick(gapOnly, /<dimension[^>]*>/g), '<dimension ref="A1:K45" />');
+  check("2. odstęp: autofiltr i formatowanie warunkowe bez zmian",
+    pick(gapOnly, /<autoFilter[^>]*>/g) === pick(sheet, /<autoFilter[^>]*>/g) && pick(gapOnly, /<conditionalFormatting [^>]*>/g) === pick(sheet, /<conditionalFormatting [^>]*>/g));
+  const gapMix = G.growSheetXml(sheet, { fromRow: 42, toRow: 43, dimRow: 45 });
+  check("2. ciąg + odstęp: zakresy do 43, wymiar do 45", pick(gapMix, /<autoFilter[^>]*>/g) === '<autoFilter ref="A2:H43" />' && pick(gapMix, /<dimension[^>]*>/g) === '<dimension ref="A1:K45" />', [pick(gapMix, /<autoFilter[^>]*>/g), pick(gapMix, /<dimension[^>]*>/g)]);
   eq("2. bez dopisanych wierszy — bez zmian", G.growSheetXml(sheet, 42, 42), sheet);
 
   const prefixed = '<x:worksheet xmlns:x="m"><x:dimension ref="A1:C10"/><x:sheetData><x:row r="1"/></x:sheetData>'

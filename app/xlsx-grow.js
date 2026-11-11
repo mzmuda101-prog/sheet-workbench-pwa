@@ -78,7 +78,7 @@ const swbGrow = (() => {
       const parts = ref.split(":");
       const end = CELL_RE.exec(parts[parts.length - 1]);
       if (!end) return m;
-      const r = Math.max(Number(end[4]), rowsOn(g) ? g.toRow : 0);
+      const r = Math.max(Number(end[4]), rowsOn(g) ? g.toRow : 0, g.dimRow || 0);
       const c = Math.max(colNum(end[2]), colsOn(g) ? g.toCol : 0);
       if (r === Number(end[4]) && c === colNum(end[2])) return m;
       return `${p1}${parts[0]}:${colLetters(c)}${r}${p3}`;
@@ -87,11 +87,12 @@ const swbGrow = (() => {
 
   function growSheetXml(xml, a, b) {
     const g = asG(a, b);
-    if (!rowsOn(g) && !colsOn(g)) return xml;
+    if (!rowsOn(g) && !colsOn(g) && !g.dimRow) return xml;
     const parts = splitOutsideSheetData(xml);
     if (!parts) return xml;
     const before = growDimension(parts.before, g);
     let after = parts.after;
+    if (!rowsOn(g) && !colsOn(g)) return before + parts.data + after; // tylko wiersz za odstępem: sam wymiar
     // autofiltr arkusza
     after = after.replace(/<(?:\w+:)?autoFilter\s[^>]*>/g, (tag) => growAttr(tag, "ref", g));
     // formatowanie warunkowe i listy wyboru (zwykłe: atrybut sqref)
