@@ -13,7 +13,9 @@
 //     Wszystko w tym samym zadaniu JS co wpis → jeden krok Cofnij.
 //   • Zapis: growInfo() mówi xlsx-grow.js, o ile urosły dane każdego arkusza (tabele Excela,
 //     autofiltr, formatowanie warunkowe, listy wyboru, wymiar arkusza rosną razem z nimi).
-// Cofnij zostawia pusty wiersz w widoku (jak w Excelu); znika przy przebudowie danych.
+// Puste nowe wiersze na KOŃCU danych (np. po Cofnij albo Enter bez wpisu) znikają z widoku przy
+// rysowaniu tabeli — ich miejsce zajmują „duchy”; zostaje tylko ten, w którym stoi kursor
+// (dawniej zostawały i pod danymi rósł pas pustych wierszy łudząco podobnych do duchów, film 2026-11-10).
 //
 // Etap 1b — nowe kolumny z prawej („＋ Nowa kolumna”):
 //   • nazwa we własnym oknie (zasady jak przy zmianie nazwy: niepusta, unikalna, bez " { } : && ||);
@@ -28,8 +30,11 @@
 // Excela. Klik / stuknięcie w komórkę ducha = nowy wiersz (addDraft) i pisanie w TEJ kolumnie.
 // Osobny <tbody class="ghost-body"> ZA tabelą danych: silnik przewijania, zaznaczanie, filtry,
 // liczniki i eksport pracują na tbodyEl i go nie widzą; komórki bez data-col-index (selektory
-// komórek danych ich nie łapią), szerokości z <colgroup> tabeli. Bez „ducha-kolumny”: nowa
-// kolumna i tak wymaga nazwy (to samo okno co „＋ Nowa kolumna”).
+// komórek danych ich nie łapią), szerokości z <colgroup> tabeli.
+// 2 „duchy-kolumny” z prawej: blade litery i „＋” w nagłówku, dwie dodatkowe <col>; wiersze danych
+// po prostu kończą się wcześniej (silnik przewijania i rysowanie wierszy bez zmian), a klik w puste
+// pole po prawej / w nagłówek ducha = okno nazwy nowej kolumny i pisanie w klikniętym wierszu.
+// Bez duchów-kolumn, gdy są kolumny wyliczane (nowa kolumna stanęłaby PRZED nimi, nie w duchu).
 
 const swbRowGrow = (() => {
   const origLast = new Map(); // arkusz → ostatni wiersz z treścią w otwartym pliku (0-based, -1 = pusty)
@@ -103,7 +108,11 @@ const swbRowGrow = (() => {
     const tail = baseRows[baseRows.length - 1];
     // pusty wiersz roboczy już czeka na końcu — nie mnożymy pustych
     if (tail && tail.isDraftRow && isEmptyRow(tail)) {
-      if (!viewRows.includes(tail)) { viewRows.push(tail); renderActiveTable(); }
+      if (!viewRows.includes(tail)) {
+        viewRows.push(tail);
+        justAdded = tail;
+        try { renderActiveTable(); } finally { justAdded = null; }
+      }
       const k = getRowSelectionKey(tail);
       setFocusedCell(k, Math.max(0, Math.min(col, currentDisplayModel.headers.length - 1)), { scroll: true });
       return k;
@@ -129,7 +138,8 @@ const swbRowGrow = (() => {
     baseRows.push(row);
     viewRows.push(row);
     drafts.add(keyOf(name, r));
-    renderActiveTable();
+    justAdded = row; // kursor ustawiamy po rysowaniu — do tego czasu wiersz chroniony przed sprzątaniem
+    try { renderActiveTable(); } finally { justAdded = null; }
     const k = getRowSelectionKey(row);
     setFocusedCell(k, Math.max(0, Math.min(col, n - 1)), { scroll: true });
     return k;
@@ -395,7 +405,7 @@ const swbRowGrow = (() => {
     return real; // indeks nowej kolumny w widoku
   }
 
-  async function addColumn() {
+  async function addColumn({ rowKey = null } = {}) {
     if (!canAdd()) return false;
     if (typeof swbEditGuard === "function" && !swbEditGuard()) return false;
     if (typeof appPrompt !== "function") return false;
@@ -409,7 +419,7 @@ const swbRowGrow = (() => {
     if (nameProblem(name) || !canAdd()) return false;
     const col = writeColumn(name);
     setDirtyState(true);
-    await reloadStructure({ shift: { from: col, by: 1 }, focusCol: col });
+    await reloadStructure({ shift: { from: col, by: 1 }, focusCol: col, focusRowKey: rowKey });
     if (typeof updateUndoButtons === "function") updateUndoButtons();
     toast(t("addColDone", { name }), "success", typeof swbUndoToastOpts === "function" ? swbUndoToastOpts() : null);
     return true;
@@ -427,7 +437,7 @@ const swbRowGrow = (() => {
   // startowego z Excela), z zachowaniem filtrów/sortowania (po nazwach), szerokości kolumn
   // (indeksy za `shift.from` przesunięte o `shift.by`) i przewinięcia.
   let quiet = false;
-  async function reloadStructure({ shift = null, focusCol = null } = {}) {
+  async function reloadStructure({ shift = null, focusCol = null, focusRowKey = null } = {}) {
     if (typeof loadBtn === "undefined" || !loadBtn || typeof sheetSelect === "undefined") return;
     const vs = typeof captureViewState === "function" ? captureViewState() : null;
     const widths = {};
@@ -459,15 +469,28 @@ const swbRowGrow = (() => {
     if (wrap && scroll) { wrap.scrollTop = scroll.top; wrap.scrollLeft = scroll.left; }
     const first = (currentDisplayModel && currentDisplayModel.rows || []).find((r) => r && !r.isPreRow);
     if (Number.isInteger(focusCol) && first) {
-      setFocusedCell(getRowSelectionKey(first), focusCol, { scroll: true });
+      const target = focusRowKey && (currentDisplayModel.rows || []).some((r) => getRowSelectionKey(r) === focusRowKey) ? focusRowKey : getRowSelectionKey(first);
+      setFocusedCell(target, focusCol, { scroll: true });
       if (typeof giveGridDomFocus === "function") giveGridDomFocus(); // pisanie od razu trafia do nowej kolumny
+      // klik w ducha-kolumnę w konkretnym wierszu = od razu pisanie w tej komórce
+      if (focusRowKey === target) requestAnimationFrame(() => {
+        const cell = typeof findCellElement === "function" ? findCellElement(focusedCellState) : null;
+        if (cell && typeof openCellEditor === "function") openCellEditor(cell);
+      });
     }
     else if (focus && focus.rowKey) setFocusedCell(focus.rowKey, Math.min(focus.colIndex0, Math.max(0, currentDisplayModel.headers.length - 1)), { scroll: false });
   }
 
   // Cofnij/Ponów, po którym arkusz ma inną liczbę kolumn niż widok — układ od nowa.
+  // Ponów wpisu w wierszu, którego już nie ma w widoku (pusty wiersz sprzątnięty po Cofnij) —
+  // dane z arkusza od nowa, żeby wiersz wrócił do tabeli.
   function afterUndo(step) {
     if (!step || step.sheet !== currentSheetName) return false;
+    const ws = workbook.Sheets[currentSheetName];
+    const shown = new Set((baseRows || []).map((r) => r.rowIndex0));
+    const lost = step.changes.some((ch) => !shown.has(ch.rowIndex0) && ch.rowIndex0 >= currentHeaderRow
+      && typeof isMeaningfulSheetCell === "function" && isMeaningfulSheetCell(ws[ch.cellRef]));
+    if (lost && typeof rebuildCurrentSheetData === "function") rebuildCurrentSheetData();
     const hdrR = currentHeaderRow - 1;
     if (!step.changes.some((ch) => ch.rowIndex0 === hdrR)) return false;
     if (!columnsChanged()) return false;
@@ -475,6 +498,23 @@ const swbRowGrow = (() => {
     const grew = lastColOf(workbook.Sheets[currentSheetName]) - currentStartCol + 1 > real;
     reloadStructure({ shift: { from: grew ? real : real - 1, by: grew ? 1 : -1 } });
     return true;
+  }
+
+  let justAdded = null;
+  // Puste wiersze robocze na końcu (oprócz tego z kursorem) — precz z widoku przed rysowaniem.
+  function pruneEmptyDrafts() {
+    if (typeof baseRows === "undefined" || !Array.isArray(baseRows)) return false;
+    const focusKey = typeof focusedCellState !== "undefined" && focusedCellState ? focusedCellState.rowKey : "";
+    let changed = false;
+    while (baseRows.length) {
+      const r = baseRows[baseRows.length - 1];
+      if (!r || !r.isDraftRow || !isEmptyRow(r) || r === justAdded || getRowSelectionKey(r) === focusKey) break;
+      baseRows.pop();
+      const i = viewRows.indexOf(r);
+      if (i >= 0) viewRows.splice(i, 1);
+      changed = true;
+    }
+    return changed;
   }
 
   // ── „duchy”: blade puste wiersze pod danymi ────────────────────────────────
@@ -529,6 +569,74 @@ const swbRowGrow = (() => {
     ghostBody.replaceChildren(frag);
   }
 
+  // ── „duchy-kolumny”: 2 blade kolumny z prawej ──────────────────────────────
+  const GHOST_COLS = 2;
+  const GHOST_COL_W = 96;
+  function syncGhostCols() {
+    const table = document.getElementById("dataTable");
+    if (!table) return;
+    table.querySelectorAll("col.ghost-col, .ghost-col-cell").forEach((el) => el.remove());
+    const derived = typeof dcAppliedCount === "number" ? dcAppliedCount : 0;
+    if (!canAdd() || derived > 0 || !baseRows.length) return;
+    const cg = table.querySelector("colgroup");
+    const head = typeof theadEl !== "undefined" ? theadEl : table.tHead;
+    if (!cg || !head) return;
+    const n = currentDisplayModel.headers.length;
+    for (let g = 1; g <= GHOST_COLS; g++) {
+      const col = document.createElement("col");
+      col.className = "ghost-col";
+      col.style.width = `${GHOST_COL_W}px`;
+      cg.appendChild(col);
+    }
+    Array.from(head.rows).forEach((tr) => {
+      for (let g = 1; g <= GHOST_COLS; g++) {
+        const isGuide = tr.classList.contains("guide-row");
+        const isHeader = tr.classList.contains("header-row");
+        const cell = document.createElement(isGuide || isHeader ? "th" : "td");
+        cell.className = "ghost-col-cell";
+        cell.dataset.ghostNewCol = String(g);
+        if (isGuide) cell.textContent = XLSX.utils.encode_col(currentStartCol + n + g - 1);
+        else if (isHeader && g === 1) { cell.textContent = "＋"; cell.title = t("addColHint"); }
+        tr.appendChild(cell);
+      }
+    });
+    if (ghostBody) Array.from(ghostBody.rows).forEach((tr) => {
+      for (let g = 1; g <= GHOST_COLS; g++) {
+        const td = document.createElement("td");
+        td.className = "ghost-col-cell";
+        td.dataset.ghostNewCol = String(g);
+        tr.appendChild(td);
+      }
+    });
+  }
+  // Klik w ducha-kolumnę: komórka-duch (nagłówek, wiersz-duch) albo puste pole za ostatnią komórką
+  // wiersza danych (tam wiersz po prostu się kończy) → nowa kolumna i pisanie w tym wierszu.
+  function onGhostColClick(e) {
+    if (!canAdd()) return;
+    const t0 = e.target;
+    if (!t0 || !t0.closest) return;
+    let rowKey = null;
+    const cell = t0.closest(".ghost-col-cell");
+    if (cell) {
+      rowKey = cell.parentElement && cell.parentElement.dataset.rowKey ? cell.parentElement.dataset.rowKey : null;
+    } else {
+      // puste pole za ostatnią komórką: przeglądarka nie przypisuje kliku do wiersza (cel = tabela
+      // albo tbody) — wiersz po wysokości, kolumna-duch = na prawo od ostatniego nagłówka danych
+      if (t0.closest("td, th, input, button")) return;
+      const lastTh = document.querySelector(`#dataTable thead tr.header-row th[data-col-index="${currentDisplayModel.headers.length - 1}"]`);
+      if (!lastTh) return;
+      const edge = lastTh.getBoundingClientRect().right;
+      if (e.clientX <= edge) return;
+      const hit = document.elementFromPoint(edge - 4, e.clientY);
+      const tr = hit && hit.closest ? hit.closest("#dataTable tbody tr[data-row-key]") : null;
+      if (!tr) return;
+      rowKey = tr.dataset.rowKey;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+    addColumn({ rowKey });
+  }
+
   // ── przycisk „＋ Nowy wiersz” w pasku pod tabelą (obok sum) ─────────────────
   // POZA przewijaną tabelą: na dole przewijania ostatni wiersz ma stać przy krawędzi (pilnują
   // tego testy virt-*), a przycisk widać zawsze — nowy wiersz i tak przewija się do widoku.
@@ -570,6 +678,8 @@ const swbRowGrow = (() => {
       colBtn.addEventListener("click", () => { addColumn(); });
       foot.prepend(btn, colBtn);
     }
+    const table = document.getElementById("dataTable");
+    if (table) table.addEventListener("click", onGhostColClick, true);
     if (typeof window.handleFile === "function") {
       const orig = window.handleFile;
       window.handleFile = async function handleFileRowGrow(...args) {
@@ -581,9 +691,11 @@ const swbRowGrow = (() => {
     if (typeof window.renderActiveTable === "function") {
       const origRender = window.renderActiveTable;
       window.renderActiveTable = function renderActiveTableRowGrow(...args) {
+        pruneEmptyDrafts();
         const r = origRender.apply(this, args);
         syncButton();
         syncGhosts();
+        syncGhostCols();
         return r;
       };
     }

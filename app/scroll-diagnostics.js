@@ -52,7 +52,7 @@
     return document.getElementById("tableWrap") || document.querySelector(".table-wrap");
   }
   function rowCount() {
-    return document.querySelectorAll("#dataTable tbody tr").length;
+    return document.querySelectorAll("#dataTable tbody:not(.ghost-body) tr").length; // bez „duchów” (row-grow.js)
   }
 
   // Statystyki z listy odstępów między klatkami (ms).

@@ -138,8 +138,9 @@
   }
 
   function tableLine() {
-    var rows = document.querySelectorAll("#dataTable tbody tr").length;
-    var cells = document.querySelectorAll("#dataTable tbody td").length;
+    // bez „duchów” pod danymi (row-grow.js) — liczymy tylko narysowane wiersze danych
+    var rows = document.querySelectorAll("#dataTable tbody:not(.ghost-body) tr").length;
+    var cells = document.querySelectorAll("#dataTable tbody:not(.ghost-body) td").length;
     var frozen = document.getElementById("tableWrap");
     var flags = [];
     if (frozen && frozen.classList.contains("freeze-first-col")) flags.push("blokada kol.");

@@ -8,7 +8,9 @@
 //      komórki duchów bez data-col-index (selektory komórek danych ich nie łapią);
 //   3. klik w komórkę ducha = nowy wiersz i pisanie w TEJ kolumnie (wygląd i formuły jak przy
 //      „＋ Nowy wiersz”), numery duchów przesuwają się w dół;
-//   4. kolumny duchów stoją równo z nagłówkami (ta sama <colgroup>), także po przewinięciu w bok.
+//   4. kolumny duchów stoją równo z nagłówkami (ta sama <colgroup>), także po przewinięciu w bok;
+//   5. Cofnij wpisów w duchach nie zostawia pasa pustych wierszy — duchy wracają tuż pod dane;
+//   6. 2 duchy-kolumny z prawej (litery, „＋”): klik w puste pole za wierszem = nowa kolumna i pisanie w nim.
 
 const { chromium, webkit } = require("playwright");
 
@@ -73,6 +75,24 @@ async function run() {
   const g3 = await ghosts();
   check("3. duchy przesunęły się o wiersz", g3.nums.join() === [last + 2, last + 3, last + 4].join(), g3);
 
+  // 5. scenariusz z filmu 2026-11-10: wpisy w trzech duchach, potem Cofnij ×3 → puste wiersze NIE
+  //    zostają (dawniej pod danymi rósł pas pustych wierszy, a duchy zjeżdżały coraz niżej)
+  await p.keyboard.press("Escape");
+  for (const txt of ["jdsbad", "snda"]) {
+    await p.click("#dataTable tbody.ghost-body tr:nth-child(1) td[data-ghost-col='2']");
+    await sleep(250);
+    await p.keyboard.type(txt); await p.keyboard.press("Tab"); await sleep(250);
+  }
+  const before5 = await p.evaluate(() => baseRows.length);
+  for (let i = 0; i < 3; i++) { await p.evaluate(() => undoLast()); await sleep(250); }
+  await p.evaluate(() => { setFocusedCell(getRowSelectionKey(baseRows[0]), 1, { scroll: false }); renderActiveTable(); });
+  await sleep(300);
+  const s5 = await p.evaluate(() => ({ base: baseRows.length, view: viewRows.length, nums: [...document.querySelectorAll("tbody.ghost-body .ghost-head")].map((x) => x.textContent) }));
+  check("5. po Cofnij puste nowe wiersze znikają, duchy wracają tuż pod dane", before5 === s2.base + 3 && s5.base === s2.base && s5.view === s2.view && s5.nums.join() === [last + 1, last + 2, last + 3].join(), { before5, s5, s2, last });
+  for (let i = 0; i < 3; i++) { await p.evaluate(() => redoLast()); await sleep(250); }
+  const s5b = await p.evaluate((r) => ({ base: baseRows.length, D: [r, r + 1, r + 2].map((n) => { const row = baseRows.find((x) => x.rowIndex0 === n - 1); return row ? row.values[2] || row.values[3] : null; }) }), last + 1);
+  check("5. Ponów przywraca wiersze także w tabeli", s5b.base === s2.base + 3 && s5b.D.every(Boolean), s5b);
+
   // 4. kolumny równo z nagłówkami (także po przewinięciu w bok)
   const misaligned = async () => p.evaluate(() => {
     let bad = 0;
@@ -88,6 +108,49 @@ async function run() {
   await p.evaluate(() => { tableWrapEl.scrollLeft = 300; }); await sleep(300);
   const m1 = await misaligned();
   check("4. kolumny duchów równo z nagłówkami (także przewinięte w bok)", m0 === 0 && m1 === 0, { m0, m1 });
+
+  // 6. duchy-kolumny: 2 blade kolumny z prawej, klik w puste pole za wierszem = nowa kolumna i pisanie
+  await p.evaluate(() => { document.querySelectorAll(".toast").forEach((t) => t.remove()); tableWrapEl.scrollLeft = tableWrapEl.scrollWidth; });
+  await sleep(300);
+  const c6 = await p.evaluate(() => {
+    const n = currentDisplayModel.headers.length;
+    return {
+      cols: document.querySelectorAll("#dataTable col.ghost-col").length,
+      letters: [...document.querySelectorAll("#dataTable thead tr.guide-row .ghost-col-cell")].map((x) => x.textContent),
+      want: [XLSX.utils.encode_col(currentStartCol + n), XLSX.utils.encode_col(currentStartCol + n + 1)],
+      plus: document.querySelector("#dataTable thead tr.header-row .ghost-col-cell")?.textContent,
+      dataIdx: document.querySelectorAll("#dataTable .ghost-col-cell[data-col-index]").length,
+    };
+  });
+  check("6. 2 duchy-kolumny z kolejnymi literami i „＋”, bez data-col-index", c6.cols === 2 && c6.letters.join() === c6.want.join() && c6.plus === "＋" && c6.dataIdx === 0, c6);
+  // wiersz WIDOCZNY w oknie tabeli (wcześniej przewinięto na dół — 7. wiersz DOM bywa poza widokiem)
+  const pt = await p.evaluate(() => {
+    const wb = tableWrapEl.getBoundingClientRect();
+    const head = document.querySelector("#dataTable thead tr.header-row").getBoundingClientRect();
+    const top = Math.max(wb.top, head.bottom) + 4; // nagłówek przyklejony albo nie
+    // naprawdę widoczny: w środku jego komórki widać TEN wiersz (nie przyklejony nagłówek nad nim)
+    const tr = [...tbodyEl.querySelectorAll("tr[data-row-key]")].find((x) => {
+      const r = x.getBoundingClientRect();
+      if (!(r.top > top && r.bottom < wb.bottom - 8)) return false;
+      const c = x.cells[x.cells.length - 1].getBoundingClientRect();
+      const el = document.elementFromPoint(c.left + 3, r.top + r.height / 2);
+      return !!el && el.closest("tr") === x;
+    });
+    const last = tr.cells[tr.cells.length - 1].getBoundingClientRect();
+    return { x: last.right + 40, y: last.top + last.height / 2, key: tr.dataset.rowKey };
+  });
+  await p.mouse.click(pt.x, pt.y);
+  await p.waitForSelector(".app-dialog-box input", { state: "visible", timeout: 5000 });
+  await p.fill(".app-dialog-box input", "Uwagi"); await p.keyboard.press("Enter");
+  await p.waitForFunction(() => currentHeaders.includes("Uwagi"), null, { timeout: 20000 });
+  await sleep(500);
+  const s6 = await p.evaluate(() => ({ focus: focusedCellState && focusedCellState.rowKey, col: focusedCellState && focusedCellState.colIndex0, real: swbRealHeaderCount(), editor: !!document.querySelector("input.cell-editor") }));
+  check("6. klik za wierszem = nowa kolumna i pisanie w tym wierszu", s6.focus === pt.key && s6.col === s6.real - 1 && s6.editor, { s6, pt });
+  await p.keyboard.type("uwaga"); await p.keyboard.press("Enter"); await sleep(300);
+  const s6b = await p.evaluate((key) => { const r = currentDisplayModel.rows.find((x) => getRowSelectionKey(x) === key); return r && r.values[swbRealHeaderCount() - 1]; }, pt.key);
+  check("6. wpis trafił do nowej kolumny w klikniętym wierszu", s6b === "uwaga", s6b);
+  await p.evaluate(() => sheetEditUi.setMode("view")); await sleep(200);
+  check("6. w Podglądzie duchów-kolumn nie ma", await p.evaluate(() => [...document.querySelectorAll("#dataTable .ghost-col-cell")].every((x) => x.offsetParent === null)));
 
   check("bez błędów strony", errors.length === 0, errors.slice(0, 5));
   await browser.close();

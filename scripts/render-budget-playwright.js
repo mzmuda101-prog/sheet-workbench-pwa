@@ -42,7 +42,7 @@ async function openWith(browser, { cost, manual, query = "" }) {
   await page.waitForFunction(() => document.querySelectorAll("#dataTable tbody tr").length > 0, null, { timeout: 60000 });
   await sleep(600);
   const info = await page.evaluate(() => ({
-    shown: document.querySelectorAll("#dataTable tbody tr").length,
+    shown: document.querySelectorAll("#dataTable tbody:not(.ghost-body) tr").length, // bez „duchów” pod danymi (row-grow.js)
     field: maxRowsEl.value,
     cols: currentHeaders.length,
   }));
@@ -77,14 +77,14 @@ async function run() {
   // 4b. wyczyszczenie ręcznego limitu → powrót do automatu (na tej samej karcie)
   await s.page.evaluate(() => { maxRowsEl.value = "50"; maxRowsEl.dispatchEvent(new Event("change")); });
   await sleep(400);
-  const manualShown = await s.page.evaluate(() => document.querySelectorAll("#dataTable tbody tr").length);
+  const manualShown = await s.page.evaluate(() => document.querySelectorAll("#dataTable tbody:not(.ghost-body) tr").length);
   check("ręczne 50 działa od razu", manualShown === 50, String(manualShown));
   await s.page.evaluate(() => { maxRowsEl.value = ""; maxRowsEl.dispatchEvent(new Event("change")); });
   await sleep(400);
   const back = await s.page.evaluate(() => ({
     saved: localStorage.getItem("excel-workbench-max-rows"),
     field: maxRowsEl.value,
-    shown: document.querySelectorAll("#dataTable tbody tr").length,
+    shown: document.querySelectorAll("#dataTable tbody:not(.ghost-body) tr").length, // bez „duchów” pod danymi (row-grow.js)
   }));
   check("puste pole → automat (brak zapisu, wartość > 200)", back.saved === null && Number(back.field) > 200 && back.shown === Number(back.field), JSON.stringify(back));
   check("brak błędów strony (szybkie)", s.errors.length === 0, s.errors.join("; "));
