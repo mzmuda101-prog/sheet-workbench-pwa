@@ -467,6 +467,15 @@ const swbRowGrow = (() => {
     if (typeof manualColumnWidths !== "undefined") { Object.keys(manualColumnWidths).forEach((k) => delete manualColumnWidths[k]); Object.assign(manualColumnWidths, widths); }
     renderActiveTable();
     if (wrap && scroll) { wrap.scrollTop = scroll.top; wrap.scrollLeft = scroll.left; }
+    // Filtry, szerokości i przewinięcie — od razu (bez mignięcia tabeli bez filtra). Kursor i pole pisania
+    // dopiero po animowanym przejściu wczytania (klasa vt-scene, rysuje tabelę PÓŹNIEJ niż koniec ładowania):
+    // inaczej spóźnione rysowanie zamykało otwarte pole w nowej kolumnie (ghost-rows w tłoku, 2026-11-11).
+    await new Promise((resolve) => {
+      const t1 = performance.now();
+      const tick = () => (!document.documentElement.classList.contains("vt-scene") || performance.now() - t1 > 3000
+        ? requestAnimationFrame(() => requestAnimationFrame(resolve)) : setTimeout(tick, 30));
+      tick();
+    });
     const first = (currentDisplayModel && currentDisplayModel.rows || []).find((r) => r && !r.isPreRow);
     if (Number.isInteger(focusCol) && first) {
       const target = focusRowKey && (currentDisplayModel.rows || []).some((r) => getRowSelectionKey(r) === focusRowKey) ? focusRowKey : getRowSelectionKey(first);
@@ -694,6 +703,18 @@ const swbRowGrow = (() => {
         pruneEmptyDrafts();
         const r = origRender.apply(this, args);
         syncButton();
+        syncGhosts(); // zwykle już po renderTable (niżej) — tu na wypadek rysowania bez renderTable
+        syncGhostCols();
+        return r;
+      };
+    }
+    // Duchy dopisujemy ZARAZ po narysowaniu tabeli, nie dopiero po renderActiveTable: animacja
+    // sortowania/filtra (flipRows w core.js) mierzy wiersze i klonuje <colgroup> tuż po renderTable —
+    // bez duchów-kolumn w tej chwili kopie miały inny układ kolumn niż tabela (flip-ghost, 2026-11-11).
+    if (typeof window.renderTable === "function") {
+      const origTable = window.renderTable;
+      window.renderTable = function renderTableRowGrow(...args) {
+        const r = origTable.apply(this, args);
         syncGhosts();
         syncGhostCols();
         return r;

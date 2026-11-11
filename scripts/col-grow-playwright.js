@@ -81,7 +81,9 @@ async function run() {
   await p.fill(".app-dialog-box input", "Uwagi");
   await p.keyboard.press("Enter");
   await p.waitForFunction(() => currentHeaders.includes("Uwagi"), null, { timeout: 20000 });
-  await sleep(500);
+  // kursor staje w nowej kolumnie dopiero po animowanym wczytaniu układu (row-grow.js reloadStructure)
+  await p.waitForFunction(() => !!focusedCellState && focusedCellState.colIndex0 === swbRealHeaderCount() - 1, null, { timeout: 8000 }).catch(() => {});
+  await sleep(200);
   const s2 = await p.evaluate((real) => {
     const ws = workbook.Sheets[currentSheetName];
     const sm = currentStyleIndexMap.get(currentSheetName);
@@ -152,6 +154,7 @@ print(json.dumps({'hdr':h.value,'bold':[h.font.b,s.font.b],'fill':[h.fill.fgColo
     await p.fill(".app-dialog-box input", "Uwagi & nowe");
     await p.keyboard.press("Enter");
     await p.waitForFunction(() => currentHeaders.includes("Uwagi & nowe"), null, { timeout: 30000 });
+    await p.waitForFunction(() => !!focusedCellState && focusedCellState.colIndex0 === swbRealHeaderCount() - 1, null, { timeout: 8000 }).catch(() => {});
     await sleep(400);
     await p.keyboard.type("pierwsza uwaga"); await p.keyboard.press("Enter"); await sleep(300);
     const s5 = await p.evaluate(() => ({ tbl: currentTables["opracowanie_terenow"].ref, last: currentTables["opracowanie_terenow"].colNames.slice(-1)[0] }));

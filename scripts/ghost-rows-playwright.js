@@ -143,7 +143,10 @@ async function run() {
   await p.waitForSelector(".app-dialog-box input", { state: "visible", timeout: 5000 });
   await p.fill(".app-dialog-box input", "Uwagi"); await p.keyboard.press("Enter");
   await p.waitForFunction(() => currentHeaders.includes("Uwagi"), null, { timeout: 20000 });
-  await sleep(500);
+  // pole pisania otwiera się dopiero po animowanym wczytaniu układu (row-grow.js reloadStructure) —
+  // czekamy na nie zamiast stałej przerwy; po 8 s bez pola punkt i tak nie przejdzie
+  await p.waitForFunction(() => !!document.querySelector("input.cell-editor"), null, { timeout: 8000 }).catch(() => {});
+  await sleep(300); // pole nie może zniknąć tuż po otwarciu (spóźnione rysowanie)
   const s6 = await p.evaluate(() => ({ focus: focusedCellState && focusedCellState.rowKey, col: focusedCellState && focusedCellState.colIndex0, real: swbRealHeaderCount(), editor: !!document.querySelector("input.cell-editor") }));
   check("6. klik za wierszem = nowa kolumna i pisanie w tym wierszu", s6.focus === pt.key && s6.col === s6.real - 1 && s6.editor, { s6, pt });
   await p.keyboard.type("uwaga"); await p.keyboard.press("Enter"); await sleep(300);
