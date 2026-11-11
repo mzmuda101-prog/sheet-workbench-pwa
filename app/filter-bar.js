@@ -455,7 +455,10 @@ function cellMenuFillItems(target) {
   if (typeof swbIsEditMode === "function" && !swbIsEditMode()) return [];
   return [
     { id: "fill-series", label: t("cellMenuFillSeries"), run: () => { closeCellMenu(); swbFillSeriesSelection(); } },
-    rect.rowCount > 1 ? { id: "fill-down", label: t("cellMenuFillDown"), run: () => { closeCellMenu(); swbFillCopy("down"); } } : null,
+    // jeden wiersz (także sama komórka) = kopia z wiersza wyżej, jak Ctrl+D w Excelu — tak dociąga się
+    // formułę do komórki, która jej nie dostała (dawniej pozycja była tylko przy zaznaczeniu wielu wierszy)
+    rect.rowCount > 1 ? { id: "fill-down", label: t("cellMenuFillDown"), run: () => { closeCellMenu(); swbFillCopy("down"); } }
+      : rect.rowStart > 0 ? { id: "fill-down", label: t("cellMenuFillFromAbove"), run: () => { closeCellMenu(); swbFillCopy("down"); } } : null,
     rect.colCount > 1 ? { id: "fill-right", label: t("cellMenuFillRight"), run: () => { closeCellMenu(); swbFillCopy("right"); } } : null,
   ];
 }

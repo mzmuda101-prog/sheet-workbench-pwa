@@ -124,7 +124,9 @@ const swbRowGrow = (() => {
       setFocusedCell(k, Math.max(0, Math.min(col, currentDisplayModel.headers.length - 1)), { scroll: true });
       return k;
     }
-    let lastData = liveLast.has(name) ? liveLast.get(name) : lastRowOf(workbook.Sheets[name]);
+    // ostatni wiersz z TREŚCIĄ teraz, nie „dokąd kiedyś doszliśmy” (liveLast): po Cofnij nowego wiersza
+    // kolejny stawał o jeden niżej, nad nim zostawał pusty wiersz i formuły już się nie kopiowały
+    let lastData = lastRowOf(workbook.Sheets[name]);
     baseRows.forEach((r) => { if (Number.isFinite(r.rowIndex0) && r.rowIndex0 > lastData) lastData = r.rowIndex0; });
     // Tabela Excela z wierszem sumy na końcu danych: nowy wiersz pod sumą wypadłby z tabeli.
     // Excel wstawia wtedy NAD sumą — to wstawianie w środku (Etap 4); na razie mówimy wprost.
@@ -163,15 +165,21 @@ const swbRowGrow = (() => {
   }
 
   // Formuła względna w tej samej postaci (angielska, znormalizowana) — do porównania wierszy.
-  function normF(f) { try { return FC.serialize(FC.parse(f, { lang: "en" }), { lang: "en" }); } catch { return null; } }
   function shiftedF(f, dr) { try { return FC.serialize(FC.shift(FC.parse(f, { lang: "en" }), dr, 0), { lang: "en" }); } catch { return null; } }
-  // Kolumna z „ciągłą” formułą: 3 wiersze nad nowym mają formułę, każda = poprzednia przesunięta o 1.
-  function consistentFormula(ws, r, c) {
-    const f = [1, 2, 3].map((d) => (r - d >= 0 ? ws[enc(r - d, c)] : null)).map((cell) => (cell && cell.f ? cell.f : null));
-    if (f.some((x) => !x) || typeof FC === "undefined" || !FC) return false;
-    const a = shiftedF(f[2], 1); const b = normF(f[1]);
-    const c2 = shiftedF(f[1], 1); const d = normF(f[0]);
-    return !!a && a === b && !!c2 && c2 === d;
+  // Kolumna z „ciągłą” formułą — reguła Excela „rozszerzaj formaty i formuły zakresu danych”:
+  // co najmniej 3 z 5 wierszy nad nowym mają tę samą formułę względną. Zwraca odległość do
+  // najbliższego takiego wiersza (1…5) albo 0. Dawniej wymagane były dokładnie 3 wiersze tuż nad —
+  // jeden wiersz bez formuły (np. dopisany inną drogą) zrywał łańcuch dla wszystkich następnych.
+  function formulaSource(ws, r, c) {
+    if (typeof FC === "undefined" || !FC) return 0;
+    const cand = [];
+    for (let d = 1; d <= 5 && r - d >= 0; d++) {
+      const cell = ws[enc(r - d, c)];
+      const sh = cell && cell.f ? shiftedF(cell.f, d) : null;
+      if (sh) cand.push({ d, sh });
+    }
+    if (cand.length < 3) return 0;
+    return cand.filter((x) => x.sh === cand[0].sh).length >= 3 ? cand[0].d : 0;
   }
 
   function rowIsEmpty(ws, r, n) {
@@ -232,8 +240,9 @@ const swbRowGrow = (() => {
       if (c === absC) return; // tu użytkownik właśnie coś wpisuje
       const ref = enc(r, c);
       if (ws[ref] && ws[ref].f) return;
-      if (!consistentFormula(ws, r, c)) return;
-      const text = swbFormulaShifted(sheetName, enc(r - 1, c), 1, 0);
+      const d = formulaSource(ws, r, c);
+      if (!d) return;
+      const text = swbFormulaShifted(sheetName, enc(r - d, c), d, 0);
       if (text) swbFormulaCommitAt(r, i, text, { silent: true });
     });
   }

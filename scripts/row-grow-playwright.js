@@ -181,6 +181,41 @@ print(json.dumps({'B':ws['B%d'%R].value,'G':ws['G%d'%R].value,'Efmt':ws['E%d'%R]
       const fresh = ooxml.newErrors(before, after);
       check("6. plik: bez NOWYCH błędów schematu względem oryginału", !fresh || fresh.length === 0, (fresh || []).slice(0, 3));
     }
+
+    // 8. „Baza danych” (zgłoszenie 2026-11-12): wpis w A, formuły w C i E mają się dopisywać ZA KAŻDYM
+    //    razem — także po Cofnij (dawniej kolejny wiersz stawał o jeden niżej, nad nim zostawał pusty
+    //    i formuły już się nie kopiowały) i gdy wiersz wyżej formuły nie ma (reguła Excela 3 z 5)
+    await p.evaluate(() => { hasUnsavedChanges = false; setDirtyState(false); sheetSelect.value = "Baza danych"; loadBtn.click(); });
+    await p.waitForFunction(() => currentSheetName === "Baza danych" && document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 60000 });
+    await sleep(800);
+    await p.evaluate(() => { sheetEditUi.setMode("edit"); document.querySelectorAll(".toast").forEach((t) => t.remove()); });
+    const R8 = await p.evaluate(() => baseRows.reduce((m, r) => Math.max(m, r.rowIndex0), 0) + 2); // 1-based numer nowego wiersza
+    const cells8 = (r) => p.evaluate((r) => ["A", "C", "E"].map((c) => { const x = workbook.Sheets[currentSheetName][c + r]; return x ? (x.f ? "f:" + x.v : x.t === "z" ? null : x.v) : null; }), r);
+    const add8 = async (text) => { await p.click("#addRowBtn"); await sleep(300); await p.keyboard.type(text); await p.keyboard.press("Tab"); await sleep(300); await p.keyboard.press("Escape"); await sleep(150); };
+    await add8("Kowalski Jan");
+    const a8 = await cells8(R8);
+    await p.evaluate(() => undoLast()); await sleep(300);
+    await p.evaluate(() => { setFocusedCell(getRowSelectionKey(baseRows[0]), 0, { scroll: false }); renderActiveTable(); }); await sleep(300); // pusty wiersz roboczy sprzątnięty
+    await add8("Nowak Anna");
+    const b8 = await cells8(R8);
+    check("8. po Cofnij nowy wiersz wraca w TO SAMO miejsce i znów dostaje formuły", a8[1] === "f:Jan Kowalski" && b8[0] === "Nowak Anna" && b8[1] === "f:Anna Nowak" && b8[2] === "f:A. Nowak" && (await cells8(R8 + 1)).every((x) => x == null), { a8, b8, R8 });
+    // wiersz wyżej bez formuły w C → następny nowy wiersz i tak ją dostaje (3 z 5 wierszy wyżej)
+    await p.evaluate((r) => { const row = baseRows.find((x) => x.rowIndex0 === r - 1); setFocusedCell(getRowSelectionKey(row), 2, { scroll: true }); cfmtClearContents(); }, R8);
+    await sleep(300);
+    await add8("Lis Ewa");
+    const c8 = await cells8(R8 + 1);
+    check("8. wiersz wyżej bez formuły nie zrywa łańcucha (reguła Excela: 3 z 5 wierszy)", c8[0] === "Lis Ewa" && c8[1] === "f:Ewa Lis" && c8[2] === "f:E. Lis", c8);
+    // ręcznie: prawy klik na pojedynczej komórce → „Wypełnij z komórki wyżej” dociąga formułę
+    const m8 = await p.evaluate((r) => {
+      const row = baseRows.find((x) => x.rowIndex0 === r - 1);
+      setFocusedCell(getRowSelectionKey(row), 2, { scroll: true });
+      const item = cellMenuFillItems({ rect: rangeCellsToCopy() }).find((x) => x && x.id === "fill-down");
+      if (item) item.run();
+      return { label: item ? item.label : null };
+    }, R8);
+    await sleep(300);
+    const d8 = await cells8(R8);
+    check("8. menu komórki: „Wypełnij z komórki wyżej” na jednej komórce kopiuje formułę", /wyżej|above/.test(m8.label || "") && d8[1] === "f:Anna Nowak", { m8, d8 });
   }
 
   check("bez błędów strony", errors.length === 0, errors.slice(0, 5));
