@@ -2803,17 +2803,7 @@ function buildTableRow(ctx, row, rowPos) {
     }
     // kolor z formatu liczbowego ([Red]/[Czerwony] dla ujemnych…) — cell-format.js
     if (row.nfFmt && row.nfFmt[i] && typeof swbApplyNumFmtColor === "function") swbApplyNumFmtColor(td, row, i);
-    if (cfMapForRender) {
-      const cf = cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i }));
-      if (cf) {
-        if (cf.fontColor) { td.style.color = cf.fontColor; td.classList.add("cell-fc"); td.style.setProperty("--fc", cf.fontColor); if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); else if (isDarkNeutralColor(cf.fontColor)) td.classList.add("cell-dark-text"); }
-        if (cf.fillColor) {
-          td.classList.add("cell-has-fill");
-          const cbg = hexToRgba(cf.fillColor, 1); // pełne krycie, jak w Excelu (2026-10-31)
-          if (cbg) { td.style.background = cbg; td.style.setProperty("--cell-fill", cbg); if (!cf.fontColor) td.style.color = isLightColor(cf.fillColor) ? "#000000" : "#FFFFFF"; }
-        }
-      }
-    }
+    if (cfMapForRender) applyCfToCell(td, cfMapForRender.get(XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + i })));
     tr.appendChild(td);
   });
   // punkt odniesienia dla różnicowego odświeżania przy kolejnym renderze
@@ -2823,6 +2813,19 @@ function buildTableRow(ctx, row, rowPos) {
     : -1;
   nextRowNodes.set(reuseKey, tr);
   return tr;
+}
+
+// Wynik formatowania warunkowego na komórce (wiersze danych i wiersze nad nagłówkiem).
+function applyCfToCell(td, cf) {
+  if (!cf) return;
+  if (cf.fontColor) { td.style.color = cf.fontColor; td.classList.add("cell-fc"); td.style.setProperty("--fc", cf.fontColor); if (isLightColor(cf.fontColor)) td.classList.add("cell-light-text"); else if (isDarkNeutralColor(cf.fontColor)) td.classList.add("cell-dark-text"); }
+  if (cf.fillColor) {
+    td.classList.add("cell-has-fill");
+    const cbg = hexToRgba(cf.fillColor, 1); // pełne krycie, jak w Excelu (2026-10-31)
+    if (cbg) { td.style.background = cbg; td.style.setProperty("--cell-fill", cbg); if (!cf.fontColor) td.style.color = isLightColor(cf.fillColor) ? "#000000" : "#FFFFFF"; }
+  }
+  // shortcut: ramka z reguły rysowana jako obwódka całej komórki w kolorze z dxf (bez stylów/boków osobno)
+  if (cf.borderColor) td.style.boxShadow = `inset 0 0 0 2px ${cf.borderColor}`;
 }
 
 // ── Wiersze NAD nagłówkiem (punkt A1, 2026-10-11) ─────────────────────────────
@@ -2928,6 +2931,7 @@ function appendPreHeaderRows(model, headers, narrowCols = null) {
     }
   });
   const useExcelLayout = isExcelLayoutEnabled();
+  const preCfMap = cellStyleShowConditionalFormatting ? getSheetCFMap(currentSheetName) : null;
   const frag = document.createDocumentFragment();
   pre.forEach((p) => {
     const tr = document.createElement("tr");
@@ -2952,6 +2956,7 @@ function appendPreHeaderRows(model, headers, narrowCols = null) {
       td.textContent = text;
       if (p.cellStyles[i]) applyCellStyle(td, p.cellStyles[i]);
       applyTableHeaderStyle(td, p.rowIndex0, currentStartCol + i);
+      if (preCfMap) applyCfToCell(td, preCfMap.get(XLSX.utils.encode_cell({ r: p.rowIndex0, c: currentStartCol + i })));
       // „Zawijaj tekst” z pliku w wierszach nad nagłówkiem (Wymiary z Excela) — jak nagłówek z th-wrap:
       // to tytuły i dopiski, którym Excel daje wysoki wiersz (np. „Aktualizacja 1.1: …” w 4 liniach).
       if (useExcelLayout && p.cellStyles[i] && p.cellStyles[i].wrapText) td.classList.add("cell-wrap");

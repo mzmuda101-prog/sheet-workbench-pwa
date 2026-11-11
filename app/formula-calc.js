@@ -427,6 +427,7 @@ function swbFormulaTouched(sheet, r, c) {
   if (!fcPending) {
     fcPending = new Set();
     queueMicrotask(fcFlush);
+    if (typeof cfRepaintAfterEdit === "function") queueMicrotask(cfRepaintAfterEdit); // kolory CF (po przeliczeniu)
   }
   fcPending.add(`${sheet}\u0000${r}\u0000${c}`);
 }

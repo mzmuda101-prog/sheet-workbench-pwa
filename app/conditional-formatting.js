@@ -329,21 +329,34 @@ function cfColorFromEl(el) {
   if (el.hasAttribute("auto")) node.auto = el.getAttribute("auto");
   return colorFromStyleNode(node, true);
 }
+const cfEl = (el, name) => el.getElementsByTagNameNS("*", name)[0];
+function parseDxfEl(dxf) {
+  let fontColor = null;
+  const fontEl = cfEl(dxf, "font");
+  if (fontEl) fontColor = cfColorFromEl(cfEl(fontEl, "color"));
+  let fillColor = null;
+  const pf = cfEl(dxf, "patternFill");
+  if (pf) fillColor = cfColorFromEl(cfEl(pf, "bgColor")) || cfColorFromEl(cfEl(pf, "fgColor"));
+  // ramka reguły („podświetl osobę z wyszukiwarki” obwódką): kolor pierwszego boku ze stylem
+  let borderColor = null;
+  const border = cfEl(dxf, "border");
+  if (border) {
+    for (const side of ["left", "right", "top", "bottom"]) {
+      const el = cfEl(border, side);
+      if (el && el.getAttribute("style") && el.getAttribute("style") !== "none") {
+        borderColor = cfColorFromEl(cfEl(el, "color")) || "#000000";
+        break;
+      }
+    }
+  }
+  return { fontColor, fillColor, borderColor };
+}
 function parseDxfs(stylesXml) {
   const out = [];
   let doc;
   try { doc = new DOMParser().parseFromString(stylesXml, "application/xml"); } catch { return out; }
   const dxfs = doc.getElementsByTagName("dxf");
-  for (let i = 0; i < dxfs.length; i++) {
-    const dxf = dxfs[i];
-    let fontColor = null;
-    const fontEl = dxf.getElementsByTagName("font")[0];
-    if (fontEl) fontColor = cfColorFromEl(fontEl.getElementsByTagName("color")[0]);
-    let fillColor = null;
-    const pf = dxf.getElementsByTagName("patternFill")[0];
-    if (pf) fillColor = cfColorFromEl(pf.getElementsByTagName("bgColor")[0]) || cfColorFromEl(pf.getElementsByTagName("fgColor")[0]);
-    out.push({ fontColor, fillColor });
-  }
+  for (let i = 0; i < dxfs.length; i++) out.push(parseDxfEl(dxfs[i]));
   return out;
 }
 function cfDecodeRange(ref) {
@@ -353,14 +366,17 @@ function parseSheetCF(sheetXml) {
   const blocks = [];
   let doc;
   try { doc = new DOMParser().parseFromString(sheetXml, "application/xml"); } catch { return blocks; }
-  const cfs = doc.getElementsByTagName("conditionalFormatting");
+  // Excel 2010+ zapisuje część reguł (np. odwołania do innego arkusza) w <extLst> jako
+  // <x14:conditionalFormatting>: zakres w <xm:sqref>, formuła w <xm:f>, styl w <x14:dxf>.
+  const cfs = doc.getElementsByTagNameNS("*", "conditionalFormatting");
   for (let i = 0; i < cfs.length; i++) {
     const cf = cfs[i];
-    const sqref = cf.getAttribute("sqref") || "";
+    const sqEl = Array.from(cf.children).find((el) => el.localName === "sqref");
+    const sqref = cf.getAttribute("sqref") || (sqEl ? sqEl.textContent : "");
     const ranges = sqref.trim().split(/\s+/).filter(Boolean).map(cfDecodeRange).filter(Boolean);
     if (!ranges.length) continue;
     const anchor = ranges[0].s;
-    const ruleEls = cf.getElementsByTagName("cfRule");
+    const ruleEls = cf.getElementsByTagNameNS("*", "cfRule");
     const rules = [];
     for (let j = 0; j < ruleEls.length; j++) {
       const re = ruleEls[j];
@@ -371,7 +387,8 @@ function parseSheetCF(sheetXml) {
         operator: re.getAttribute("operator") || "",
         text: re.getAttribute("text") || "",
         stopIfTrue: re.getAttribute("stopIfTrue") === "1",
-        formulas: Array.from(re.getElementsByTagName("formula")).map((f) => f.textContent),
+        formulas: Array.from(re.children).filter((el) => el.localName === "formula" || el.localName === "f").map((f) => f.textContent),
+        dxf: cfEl(re, "dxf") ? parseDxfEl(cfEl(re, "dxf")) : null,
         rank: re.hasAttribute("rank") ? parseInt(re.getAttribute("rank"), 10) : 10,
         percent: re.getAttribute("percent") === "1",
         bottom: re.getAttribute("bottom") === "1",
@@ -380,10 +397,10 @@ function parseSheetCF(sheetXml) {
         colorScale: null,
         _ast: {},
       };
-      const cs = re.getElementsByTagName("colorScale")[0];
+      const cs = cfEl(re, "colorScale");
       if (cs) {
-        const cfvos = Array.from(cs.getElementsByTagName("cfvo")).map((v) => ({ type: v.getAttribute("type"), val: v.getAttribute("val") }));
-        const colors = Array.from(cs.getElementsByTagName("color")).map(cfColorFromEl);
+        const cfvos = Array.from(cs.getElementsByTagNameNS("*", "cfvo")).map((v) => ({ type: v.getAttribute("type"), val: v.getAttribute("val") }));
+        const colors = Array.from(cs.getElementsByTagNameNS("*", "color")).map(cfColorFromEl);
         rule.colorScale = { cfvos, colors };
       }
       rules.push(rule);
@@ -443,11 +460,37 @@ async function buildConditionalFormatting(bytes, wb) {
 // ---- ewaluacja CF per arkusz (z cache) ----
 function getSheetCFMap(sheetName) {
   if (!currentCFRules || !currentCFRules.has(sheetName)) return null;
-  if (cfEvalCache.has(sheetName)) return cfEvalCache.get(sheetName);
+  // każda zmiana danych (wpis, przeliczenie formuł, Cofnij, wklejenie) podbija sheetDataStamp —
+  // kolory liczymy wtedy od nowa, jak Excel (dawniej zostawały te z otwarcia pliku)
+  const hit = cfEvalCache.get(sheetName);
+  if (hit && hit.stamp === sheetDataStamp) return hit.map;
   let map;
   try { map = evalSheetCF(sheetName); } catch { map = new Map(); }
-  cfEvalCache.set(sheetName, map);
+  cfEvalCache.set(sheetName, { stamp: sheetDataStamp, map });
   return map;
+}
+// Po zmianie wartości (wpis, wklejenie, Delete, Cofnij…) — wołane z formula-calc.js po
+// przeliczeniu formuł. Edytor zmienia tylko tekst jednej komórki, a reguła może barwić
+// zupełnie inne (wyszukiwarka „=D2=$G$2”), więc gdy wynik CF się zmienił, rysujemy tabelę.
+// Przy otwartym edytorze czekamy: ponowne rysowanie zamknęłoby pole (porównanie zostaje
+// do następnej zmiany — mapa w pamięci jest dalej ta narysowana).
+function cfRepaintAfterEdit() {
+  if (typeof currentSheetName === "undefined" || !cellStyleShowConditionalFormatting) return;
+  const hit = cfEvalCache.get(currentSheetName);
+  if (!hit || hit.stamp === sheetDataStamp) return; // nic nie narysowano albo już aktualne
+  if (typeof activeCellEditor !== "undefined" && activeCellEditor) return;
+  const before = hit.map;
+  const after = getSheetCFMap(currentSheetName);
+  if (!after || cfMapsEqual(before, after)) return;
+  renderActiveTable();
+}
+function cfMapsEqual(a, b) {
+  if (a.size !== b.size) return false;
+  for (const [k, x] of a) {
+    const y = b.get(k);
+    if (!y || x.fontColor !== y.fontColor || x.fillColor !== y.fillColor || x.borderColor !== y.borderColor) return false;
+  }
+  return true;
 }
 function cfBlockStats(sheet, block, used) {
   const nums = [];
@@ -501,7 +544,37 @@ function cfColorScaleColor(rule, v, stats) {
   }
   return null;
 }
-function cfRuleResult(rule, sheet, r, c, dr, dc, stats) {
+// Formuła reguły pełnym silnikiem (formula-engine.js — ten sam co w komórkach: PODAJ.POZYCJĘ,
+// WYSZUKAJ.PIONOWO, całe kolumny $A:$A, inne arkusze, nazwy…). AST parsowany raz dla komórki
+// zakotwiczenia, dla kolejnych przesuwany o (dr, dc) jak przy kopiowaniu formuły.
+// Zwraca wartość albo undefined (brak silnika / nieobsługiwana funkcja → mini-silnik niżej).
+function cfEvalFull(rule, i, ctx) {
+  if (typeof FormulaEngine === "undefined" || typeof fcContext !== "function" || !ctx.sheetName) return undefined;
+  const FE = FormulaEngine;
+  if (!rule._fc) rule._fc = {};
+  let ast = rule._fc[i];
+  if (ast === undefined) {
+    ast = null;
+    try {
+      const a = FE.parse(rule.formulas[i] || "", { lang: "en" });
+      if ([...FE.functionsOf(a)].every((n) => FE.isSupported(n))) ast = a;
+    } catch { /* zostaje mini-silnik */ }
+    rule._fc[i] = ast;
+  }
+  if (!ast) return undefined;
+  let v;
+  try { v = FE.evaluate(ctx.dr || ctx.dc ? FE.shift(ast, ctx.dr, ctx.dc) : ast, fcContext(ctx.sheetName, ctx.r, ctx.c)); } catch { return undefined; }
+  if (v === FE.UNSUPPORTED) return undefined;
+  return FE.isErr(v) ? CF_ERR : v;
+}
+function cfRuleFormula(rule, i, ctx) {
+  const full = cfEvalFull(rule, i, ctx);
+  if (full !== undefined) return full;
+  let ast = rule._ast[i];
+  if (ast === undefined) { try { ast = cfParse(cfTokenize(rule.formulas[i] || "")); } catch { ast = null; } rule._ast[i] = ast; }
+  return ast ? cfEval(ast, ctx) : CF_ERR;
+}
+function cfRuleResult(rule, sheet, r, c, dr, dc, stats, sheetName) {
   const t = rule.type;
   if (t === "colorScale") {
     const col = cfColorScaleColor(rule, cfCellValue(sheet, r, c), stats);
@@ -509,12 +582,11 @@ function cfRuleResult(rule, sheet, r, c, dr, dc, stats) {
   }
   let matched = false;
   if (t === "expression") {
-    let ast = rule._ast[0];
-    if (ast === undefined) { try { ast = cfParse(cfTokenize(rule.formulas[0] || "")); } catch { ast = null; } rule._ast[0] = ast; }
-    if (!ast) return null;
-    matched = cfBool(cfEval(ast, { sheet, dr, dc })) === true;
+    // tekst jako wynik reguły Excel traktuje jak FAŁSZ (bez błędu)
+    const v = cfRuleFormula(rule, 0, { sheet, sheetName, r, c, dr, dc });
+    matched = typeof v !== "string" && cfBool(v) === true;
   } else if (t === "cellIs") {
-    matched = cfCellIs(rule, sheet, r, c, dr, dc);
+    matched = cfCellIs(rule, sheet, r, c, dr, dc, sheetName);
   } else if (t === "containsText" || t === "notContainsText" || t === "beginsWith" || t === "endsWith") {
     const val = cfCellValue(sheet, r, c);
     const str = (val == null ? "" : String(val)).toLowerCase();
@@ -551,17 +623,13 @@ function cfRuleResult(rule, sheet, r, c, dr, dc, stats) {
     return null;
   }
   if (!matched) return null;
-  const dxf = rule.dxfId != null ? currentDxfs[rule.dxfId] : null;
+  const dxf = rule.dxf || (rule.dxfId != null ? currentDxfs[rule.dxfId] : null);
   if (!dxf) return null;
-  return { fontColor: dxf.fontColor, fillColor: dxf.fillColor };
+  return { fontColor: dxf.fontColor, fillColor: dxf.fillColor, borderColor: dxf.borderColor };
 }
-function cfCellIs(rule, sheet, r, c, dr, dc) {
+function cfCellIs(rule, sheet, r, c, dr, dc, sheetName) {
   const val = cfCellValue(sheet, r, c);
-  const ev = (i) => {
-    let ast = rule._ast[i];
-    if (ast === undefined) { try { ast = cfParse(cfTokenize(rule.formulas[i] || "")); } catch { ast = null; } rule._ast[i] = ast; }
-    return ast ? cfEval(ast, { sheet, dr, dc }) : CF_ERR;
-  };
+  const ev = (i) => cfRuleFormula(rule, i, { sheet, sheetName, r, c, dr, dc });
   const v1 = ev(0);
   if (cfIsErr(v1)) return false;
   const op = rule.operator;
@@ -584,31 +652,48 @@ function evalSheetCF(sheetName) {
   if (!sheet || !blocks) return map;
   const used = cfDecodeRange(sheet["!ref"]);
   let budget = 400000;
-  for (const block of blocks) {
-    const needStats = block.rules.some((r) => ["top10", "aboveAverage", "colorScale", "duplicateValues", "uniqueValues"].includes(r.type));
-    const stats = needStats ? cfBlockStats(sheet, block, used) : null;
-    for (const range of block.ranges) {
-      const r1 = used ? Math.max(range.s.r, used.s.r) : range.s.r;
-      const r2 = used ? Math.min(range.e.r, used.e.r) : range.e.r;
-      const c1 = used ? Math.max(range.s.c, used.s.c) : range.s.c;
-      const c2 = used ? Math.min(range.e.c, used.e.c) : range.e.c;
-      for (let r = r1; r <= r2; r++) {
-        for (let c = c1; c <= c2; c++) {
-          if (budget-- <= 0) return map;
-          const dr = r - block.anchor.r, dc = c - block.anchor.c;
-          let fontColor = null, fillColor = null;
-          for (const rule of block.rules) {
-            const res = cfRuleResult(rule, sheet, r, c, dr, dc, stats);
-            if (!res) continue;
-            if (res.fontColor && !fontColor) fontColor = res.fontColor;
-            if (res.fillColor && !fillColor) fillColor = res.fillColor;
-            if (rule.stopIfTrue) break;
-            if (fontColor && fillColor) break;
+  // Priorytet reguł jest wspólny dla całego arkusza (także między blokami i regułami x14):
+  // bloki od najważniejszej reguły, a komórka bierze kolor z PIERWSZEJ pasującej reguły —
+  // dawniej późniejszy blok w pliku nadpisywał wcześniejszy.
+  const minPrio = (b) => (b.rules.length ? b.rules[0].priority : Infinity);
+  const ordered = blocks.slice().sort((a, b) => minPrio(a) - minPrio(b));
+  // wspólna pamięć zakresów dla pełnego silnika (LICZ.JEŻELI($A:$A;A1) w każdej komórce)
+  const fcReady = typeof fcContext === "function" && typeof FormulaEngine !== "undefined" && FormulaEngine.makeMatrixCache;
+  if (fcReady) { fcContext(sheetName, 0, 0); fcBaseCtx.matrixCache = FormulaEngine.makeMatrixCache(); }
+  try {
+    for (const block of ordered) {
+      const needStats = block.rules.some((r) => ["top10", "aboveAverage", "colorScale", "duplicateValues", "uniqueValues"].includes(r.type));
+      const stats = needStats ? cfBlockStats(sheet, block, used) : null;
+      for (const range of block.ranges) {
+        const r1 = used ? Math.max(range.s.r, used.s.r) : range.s.r;
+        const r2 = used ? Math.min(range.e.r, used.e.r) : range.e.r;
+        const c1 = used ? Math.max(range.s.c, used.s.c) : range.s.c;
+        const c2 = used ? Math.min(range.e.c, used.e.c) : range.e.c;
+        for (let r = r1; r <= r2; r++) {
+          for (let c = c1; c <= c2; c++) {
+            if (budget-- <= 0) return map;
+            const key = XLSX.utils.encode_cell({ r, c });
+            const prev = map.get(key);
+            if (prev && (prev.stop || (prev.fontColor && prev.fillColor && prev.borderColor))) continue;
+            const dr = r - block.anchor.r, dc = c - block.anchor.c;
+            let fontColor = prev ? prev.fontColor : null, fillColor = prev ? prev.fillColor : null, borderColor = prev ? prev.borderColor : null;
+            let stop = false;
+            for (const rule of block.rules) {
+              const res = cfRuleResult(rule, sheet, r, c, dr, dc, stats, sheetName);
+              if (!res) continue;
+              if (res.fontColor && !fontColor) fontColor = res.fontColor;
+              if (res.fillColor && !fillColor) fillColor = res.fillColor;
+              if (res.borderColor && !borderColor) borderColor = res.borderColor;
+              if (rule.stopIfTrue) { stop = true; break; }
+              if (fontColor && fillColor && borderColor) break;
+            }
+            if (fontColor || fillColor || borderColor || stop) map.set(key, { fontColor, fillColor, borderColor, stop });
           }
-          if (fontColor || fillColor) map.set(XLSX.utils.encode_cell({ r, c }), { fontColor, fillColor });
         }
       }
     }
+  } finally {
+    if (fcReady && fcBaseCtx) fcBaseCtx.matrixCache = null;
   }
   return map;
 }
