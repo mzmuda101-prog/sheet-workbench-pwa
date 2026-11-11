@@ -13,6 +13,7 @@
 //   2. druga zmiana → kolor znika tam, gdzie licznik spadł,
 //   3. wpis w wyszukiwarkę → podświetlone pasujące komórki grafiku, zmiana wpisu → inne,
 //   4. Cofnij → kolory wracają razem z wartością,
+//   3b. kotwica formuły = lewy górny róg CAŁEGO sqref (plik Mateusza: „V6:V25 … P6:P31” z „…P6”),
 //   5. reguły x14 z <extLst> (Excel 2010+) są czytane: zakres z <xm:sqref>, formuła z <xm:f>, styl z <x14:dxf>.
 
 const pw = require("playwright");
@@ -111,6 +112,13 @@ async function run() {
   await type(1, 6, "Ewa");
   [d2, d3] = await look([[1, 3], [2, 3]]);
   ok("3. zmiana wpisu → podświetlenie przechodzi na Ewę", green(d2) && !green(d3), { d2, d3 });
+
+  // 3b. kotwica reguły = lewy górny róg CAŁEGO obszaru (openpyxl sortuje sqref, więc XML ręcznie)
+  const anchor = await page.evaluate(() => {
+    const b = parseSheetCF(`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData/><conditionalFormatting sqref="V6:V25 Y6:Y25 P6:P31"><cfRule type="expression" dxfId="0" priority="1"><formula>COUNTIF($P$38:$P$55,P6)&gt;0</formula></cfRule></conditionalFormatting></worksheet>`);
+    return b[0] && b[0].anchor;
+  });
+  ok("3b. „V6:V25 Y6:Y25 P6:P31” z formułą „…P6” liczy się od P6 (dawniej od V6 — wyszukiwarka barwiła złe osoby)", anchor && anchor.r === 5 && anchor.c === 15, anchor);
 
   // 4. Cofnij wpis w wyszukiwarce → znów Bartek
   await page.evaluate(() => { setFocusedCell("wide:1", 0, { scroll: false }); });

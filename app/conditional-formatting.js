@@ -336,7 +336,7 @@ function parseDxfEl(dxf) {
   if (fontEl) fontColor = cfColorFromEl(cfEl(fontEl, "color"));
   let fillColor = null;
   const pf = cfEl(dxf, "patternFill");
-  if (pf) fillColor = cfColorFromEl(cfEl(pf, "bgColor")) || cfColorFromEl(cfEl(pf, "fgColor"));
+  if (pf && pf.getAttribute("patternType") !== "none") fillColor = cfColorFromEl(cfEl(pf, "bgColor")) || cfColorFromEl(cfEl(pf, "fgColor"));
   // ramka reguły („podświetl osobę z wyszukiwarki” obwódką): kolor pierwszego boku ze stylem
   let borderColor = null;
   const border = cfEl(dxf, "border");
@@ -375,7 +375,10 @@ function parseSheetCF(sheetXml) {
     const sqref = cf.getAttribute("sqref") || (sqEl ? sqEl.textContent : "");
     const ranges = sqref.trim().split(/\s+/).filter(Boolean).map(cfDecodeRange).filter(Boolean);
     if (!ranges.length) continue;
-    const anchor = ranges[0].s;
+    // Formuła reguły jest zapisana względem lewego górnego rogu CAŁEGO obszaru (wszystkich
+    // zakresów sqref), nie pierwszego zakresu: „V6:V25 P6:P31” z formułą „…P6” liczy się od P6.
+    // Dawniej kotwica V6 przesuwała odwołania o 6 kolumn (wyszukiwarka barwiła złe osoby).
+    const anchor = { r: Math.min(...ranges.map((g) => g.s.r)), c: Math.min(...ranges.map((g) => g.s.c)) };
     const ruleEls = cf.getElementsByTagNameNS("*", "cfRule");
     const rules = [];
     for (let j = 0; j < ruleEls.length; j++) {
