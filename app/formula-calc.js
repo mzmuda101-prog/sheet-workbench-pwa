@@ -237,7 +237,22 @@ function fcIndexAdd(sheet, ref, cell, idx = fcIndex) {
   const key = `${sheet}\u0000${ref}`;
   const p = fcParseFile(cell.f, r, c);
   const deps = fcDepsOf(p.ast, sheet, r, c);
-  idx.entries.set(key, { sheet, ref, r, c, f: cell.f, ast: p.ast, ok: p.ok && !cell.F, deps });
+  // formuła tablicowa: liczymy tylko rozlewaną (tablica dynamiczna, kotwica zakresu) — stare CSE zostają z pliku
+  const spill = !!(cell.F && cell.F.split(":")[0] === ref && p.ast && FC.isSpillFormula(p.ast));
+  idx.entries.set(key, { sheet, ref, r, c, f: cell.f, ast: p.ast, ok: p.ok && (!cell.F || spill), spill, deps });
+  if (spill) {
+    if (!idx.spills) idx.spills = new Set();
+    idx.spills.add(key);
+    // komórki wyniku z pliku są „własne” kotwicy (cudzy wpis w zakresie = #ROZLANIE!, nie nadpisanie)
+    const ws = workbook.Sheets[sheet];
+    try {
+      const g = XLSX.utils.decode_range(cell.F);
+      for (let rr = g.s.r; rr <= g.e.r; rr++) for (let cc = g.s.c; cc <= g.e.c; cc++) {
+        const x = ws[XLSX.utils.encode_cell({ r: rr, c: cc })];
+        if (x && !x.f) x._spill = ref;
+      }
+    } catch { /* zły zakres */ }
+  }
   deps.forEach((d) => {
     if (!idx.bySheet.has(d.sheet)) idx.bySheet.set(d.sheet, []);
     idx.bySheet.get(d.sheet).push({ ...d, key });
@@ -248,6 +263,7 @@ function fcIndexRemove(key) {
   const e = fcIndex && fcIndex.entries.get(key);
   if (!e) return;
   fcIndex.entries.delete(key);
+  if (fcIndex.spills) fcIndex.spills.delete(key);
   new Set(e.deps.map((d) => d.sheet)).forEach((sh) => {
     const list = fcIndex.bySheet.get(sh);
     if (list) fcIndex.bySheet.set(sh, list.filter((x) => x.key !== key));
@@ -419,6 +435,64 @@ function fcRefreshRow(sheet, r, c) {
   return true;
 }
 
+// ── rozlewanie (tablice dynamiczne: UNIKATOWE, FILTRUJ, SORTUJ, STOS.PION…) ────────────
+// Kotwica (komórka z formułą) trzyma cały wynik w cell.F („R4:R38”, jak SheetJS czyta z pliku);
+// pozostałe komórki zakresu to zwykłe wartości bez formuły. Nowy wynik: stary zakres sprzątamy,
+// nowy wypełniamy; gdy w nowym zakresie stoi coś obcego (wpis, inna formuła) — kotwica #ROZLANIE!
+// jak w Excelu, a zakres pusty. Zwraca listę komórek (poza kotwicą), których wartość się zmieniła.
+function fcSpill(sheet, r, c, cell, m) {
+  const ws = workbook.Sheets[sheet];
+  const enc = (rr, cc) => XLSX.utils.encode_cell({ r: rr, c: cc });
+  let old;
+  try { old = cell.F ? XLSX.utils.decode_range(cell.F) : { s: { r, c }, e: { r, c } }; } catch { old = { s: { r, c }, e: { r, c } }; }
+  const inOld = (rr, cc) => rr >= old.s.r && rr <= old.e.r && cc >= old.s.c && cc <= old.e.c;
+  const h = m.length, w = m[0].length;
+  const filled = (x) => !!x && (x.f || (typeof isMeaningfulSheetCell === "function" ? isMeaningfulSheetCell(x) : x.v != null && x.v !== ""));
+  const anchorRef0 = enc(r, c);
+  const own = (x) => !!x && !x.f && x._spill === anchorRef0;
+  let blocked = false;
+  for (let rr = r; rr < r + h && !blocked; rr++) {
+    for (let cc = c; cc < c + w; cc++) {
+      if (rr === r && cc === c) continue;
+      const x = ws[enc(rr, cc)];
+      if (x && !own(x) && filled(x)) { blocked = true; break; }
+    }
+  }
+  const changed = [];
+  const clear = (rr, cc) => {
+    const ref = enc(rr, cc);
+    const x = ws[ref];
+    if (!own(x)) return; // cudzy wpis (przeszkoda) zostaje
+    if (x.v == null && x.t === "z") return;
+    if (x.s || x.z || x.c) { const stub = { t: "z" }; if (x.s) stub.s = x.s; if (x.z) stub.z = x.z; if (x.c) stub.c = x.c; ws[ref] = stub; } else delete ws[ref];
+    changed.push([rr, cc]);
+  };
+  const inNew = (rr, cc) => !blocked && rr >= r && rr < r + h && cc >= c && cc < c + w;
+  for (let rr = old.s.r; rr <= old.e.r; rr++) for (let cc = old.s.c; cc <= old.e.c; cc++) {
+    if ((rr !== r || cc !== c) && !inNew(rr, cc)) clear(rr, cc);
+  }
+  const anchorRef = enc(r, c);
+  const want = `${anchorRef}:${enc(r + h - 1, c + w - 1)}`;
+  if (blocked) {
+    cell.F = `${anchorRef}:${anchorRef}`;
+    cell._spillWant = want; // gdzie chce się rozlać — zmiana tam (usunięcie przeszkody) przelicza kotwicę
+    return { changed, anchorChanged: fcStore(cell, FC.ERR["#SPILL!"]) };
+  }
+  for (let rr = r; rr < r + h; rr++) for (let cc = c; cc < c + w; cc++) {
+    if (rr === r && cc === c) continue;
+    const ref = enc(rr, cc);
+    const x = ws[ref] && !ws[ref].f ? ws[ref] : {};
+    if (x.t === "z") delete x.t;
+    x._spill = anchorRef;
+    if (fcStore(x, m[rr - r][cc - c])) changed.push([rr, cc]);
+    ws[ref] = x;
+  }
+  cell.F = want;
+  delete cell._spillWant;
+  if (typeof swbEnsureSheetRef === "function") swbEnsureSheetRef(ws, r + h - 1, c + w - 1);
+  return { changed, anchorChanged: fcStore(cell, m[0][0]) };
+}
+
 // ── przeliczenie ────────────────────────────────────────────────────────────
 let fcPending = null; // Set "arkusz\u0000r\u0000c"
 let fcRecalcing = false;
@@ -449,6 +523,18 @@ function fcFlush() {
   pending.forEach((k) => {
     const [sheet, r, c] = k.split("\u0000");
     fcDependents(sheet, +r, +c).forEach((key) => { if (!seen.has(key)) { seen.add(key); queue.push(key); } });
+    // zmiana w obszarze rozlania (wpis w środku listy, usunięta przeszkoda) — kotwica liczy się od nowa
+    if (idx.spills) idx.spills.forEach((key) => {
+      if (seen.has(key)) return;
+      const e = idx.entries.get(key);
+      const cell = e && e.sheet === sheet && workbook.Sheets[sheet] && workbook.Sheets[sheet][e.ref];
+      const span = cell && (cell._spillWant || cell.F);
+      if (!span) return;
+      try {
+        const g = XLSX.utils.decode_range(span);
+        if (+r >= g.s.r && +r <= g.e.r && +c >= g.s.c && +c <= g.e.c && !(+r === e.r && +c === e.c)) { seen.add(key); queue.push(key); }
+      } catch { /* zły zakres */ }
+    });
   });
   while (queue.length) {
     const key = queue.shift();
@@ -460,7 +546,9 @@ function fcFlush() {
   }
   if (!order.length) return;
   let renderNeeded = false;
+  let rebuildNeeded = false; // rozlanie weszło w wiersze, których tabela nie rysuje
   let changedCount = 0;
+  const spillTouched = []; // komórki rozlanego wyniku — ich zależne liczymy w następnym przebiegu
   fcRecalcing = true;
   // wspólna pamięć zakresów dla wszystkich formuł tego przeliczenia (zrzut Mateusza
   // 2026-10-25: Enter/Wklej w arkuszu z ~300 LICZ.JEŻELI po całych kolumnach = 2 s blokady,
@@ -479,6 +567,27 @@ function fcFlush() {
         const cell = workbook.Sheets[e.sheet] && workbook.Sheets[e.sheet][e.ref];
         if (!cell || !cell.f) continue;
         let v;
+        if (e.spill && cell.F) {
+          let m;
+          try { m = FC.evaluateArray(e.ast, fcContext(e.sheet, e.r, e.c)); } catch { continue; }
+          if (m === FC.UNSUPPORTED) continue;
+          const res = fcSpill(e.sheet, e.r, e.c, cell, m);
+          res.changed.forEach(([rr, cc]) => {
+            if (matrixCache) matrixCache.invalidate(e.sheet, rr, cc);
+            changedCount++;
+            changedThisPass = true;
+            spillTouched.push([e.sheet, rr, cc]);
+            if (fcRefreshRow(e.sheet, rr, cc)) renderNeeded = true;
+            else if (e.sheet === currentSheetName) rebuildNeeded = true;
+          });
+          if (res.anchorChanged) {
+            if (matrixCache) matrixCache.invalidate(e.sheet, e.r, e.c);
+            changedThisPass = true;
+            changedCount++;
+            if (fcRefreshRow(e.sheet, e.r, e.c)) renderNeeded = true;
+          }
+          continue;
+        }
         try { v = FC.evaluate(e.ast, fcContext(e.sheet, e.r, e.c)); } catch { continue; }
         if (v === FC.UNSUPPORTED) continue;
         if (fcStore(cell, v)) {
@@ -494,9 +603,14 @@ function fcFlush() {
     fcRecalcing = false;
     if (fcBaseCtx) fcBaseCtx.matrixCache = null; // poza przeliczeniem komórki zmienia edycja — bez pamięci
   }
+  // formuły czytające komórki rozlanego wyniku (np. LICZ.JEŻELI po liście R4:R38) — kolejny przebieg
+  spillTouched.forEach(([sh, rr, cc]) => swbFormulaTouched(sh, rr, cc));
   if (changedCount) {
     bumpSheetDataStamp();
-    if (renderNeeded) {
+    if (rebuildNeeded && typeof rebuildCurrentSheetData === "function") {
+      rebuildCurrentSheetData(); // nowe/zniknięte wiersze z rozlania — dane od nowa (filtry i sort zostają)
+      if (typeof scheduleViewRefresh === "function") scheduleViewRefresh({ analyses: true });
+    } else if (renderNeeded) {
       renderActiveTable();
       if (typeof scheduleViewRefresh === "function") scheduleViewRefresh({ analyses: true });
     }
@@ -556,6 +670,34 @@ function swbFormulaCommitAt(rowIndex0, col, text, { silent = false } = {}) {
     cell.w = fcFormatted(cell, value);
   }
   fcRefreshRow(currentSheetName, r, c);
+  // formuła rozlewana (UNIKATOWE, FILTRUJ, SORTUJ…): kotwica + wynik w sąsiednich komórkach od razu
+  if (!unknown.length && FC.isSpillFormula(ast)) {
+    const ws = workbook.Sheets[currentSheetName];
+    const anchor = ws[ref];
+    const prevF = anchor.F;
+    if (!prevF || prevF.split(":")[0] !== ref) anchor.F = `${ref}:${ref}`;
+    swbFormulaCellChanged(currentSheetName, ref); // indeks: kotwica rozlania (e.spill)
+    let m = null;
+    try { m = FC.evaluateArray(ast, fcContext(currentSheetName, r, c)); } catch { m = null; }
+    if (m && m !== FC.UNSUPPORTED) {
+      // komórki starego i nowego wyniku do tego samego kroku Cofnij co formuła
+      if (typeof undoCaptureCell === "function") {
+        const spans = [{ s: { r, c }, e: { r: r + m.length - 1, c: c + m[0].length - 1 } }];
+        try { if (prevF) spans.push(XLSX.utils.decode_range(prevF)); } catch { /* zły zakres */ }
+        spans.forEach((g) => { for (let rr = g.s.r; rr <= g.e.r; rr++) for (let cc = g.s.c; cc <= g.e.c; cc++) if (rr !== r || cc !== c) undoCaptureCell(rr, cc - currentStartCol); });
+      }
+      const res = fcSpill(currentSheetName, r, c, anchor, m);
+      let rebuild = false;
+      res.changed.forEach(([rr, cc]) => {
+        if (!fcRefreshRow(currentSheetName, rr, cc)) rebuild = true;
+        swbFormulaTouched(currentSheetName, rr, cc); // formuły czytające rozlany wynik
+      });
+      fcRefreshRow(currentSheetName, r, c);
+      bumpSheetDataStamp();
+      // nowe wiersze z wynikiem (pod danymi) — dane od nowa; inaczej wystarczy narysować tabelę
+      queueMicrotask(() => { if (rebuild && typeof rebuildCurrentSheetData === "function") rebuildCurrentSheetData(); else renderActiveTable(); });
+    }
+  }
   fcLastUnknown = unknown.length > 0;
   if (unknown.length && !silent) toast(t("formulaUnknownFn", { fns: unknown.map((n) => FC.PL_NAMES[n] && lang === "pl" ? FC.PL_NAMES[n] : n).join(", ") }), "info");
   return "ok";

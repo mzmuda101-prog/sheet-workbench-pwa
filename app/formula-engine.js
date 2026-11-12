@@ -62,6 +62,9 @@
     ISBLANK: "CZY.PUSTA", ISNUMBER: "CZY.LICZBA", ISTEXT: "CZY.TEKST", ISNONTEXT: "CZY.NIE.TEKST",
     ISLOGICAL: "CZY.LOGICZNA", ISERROR: "CZY.BŁĄD", ISERR: "CZY.BŁ", ISNA: "CZY.BRAK", ISEVEN: "CZY.PARZYSTE",
     ISODD: "CZY.NIEPARZYSTE", NA: "BRAK",
+    // tablice dynamiczne (wynik rozlewa się na sąsiednie komórki)
+    UNIQUE: "UNIKATOWE", VSTACK: "STOS.PION", HSTACK: "STOS.POZ", TOCOL: "DO.KOLUMNY", TOROW: "DO.WIERSZA",
+    FILTER: "FILTRUJ", SORT: "SORTUJ", SEQUENCE: "SEKWENCJA",
   };
   const EN_FROM_PL = {};
   Object.entries(PL_NAMES).forEach(([en, pl]) => { EN_FROM_PL[pl] = en; });
@@ -72,7 +75,10 @@
   });
   // Funkcje dodane po Excelu 2007 — w pliku zapisuje się je z prefiksem _xlfn.
   const XLFN = new Set(["IFS", "IFNA", "XOR", "SWITCH", "XLOOKUP", "XMATCH", "CONCAT", "TEXTJOIN", "MAXIFS", "MINIFS",
-    "DAYS", "CEILING.MATH", "FLOOR.MATH", "STDEV.S", "STDEV.P", "VAR.S", "VAR.P", "RANK.EQ", "ISOWEEKNUM"]);
+    "DAYS", "CEILING.MATH", "FLOOR.MATH", "STDEV.S", "STDEV.P", "VAR.S", "VAR.P", "RANK.EQ", "ISOWEEKNUM",
+    "UNIQUE", "VSTACK", "HSTACK", "TOCOL", "TOROW", "FILTER", "SORT", "SEQUENCE"]);
+  // funkcje, których wynik jest tablicą do rozlania (formula-calc.js: komórka-kotwica + sąsiednie)
+  const SPILL_FNS = new Set(["UNIQUE", "VSTACK", "HSTACK", "TOCOL", "TOROW", "FILTER", "SORT", "SEQUENCE"]);
 
   // ── tokenizer ──────────────────────────────────────────────────────────────
   const LETTER = "A-Za-z_\\u00C0-\\u024F";
@@ -1744,6 +1750,115 @@
     }
     return best < 0 ? ERR["#N/A"] : best + 1;
   };
+  // ── tablice dynamiczne (Excel 365): wynik = macierz [[…]], rozlewana przez formula-calc.js ────
+  // Puste komórki zostają PUSTE w środku tablicy (POŁĄCZ.TEKSTY widzi „”, SORTUJ daje je na koniec);
+  // zerem stają się dopiero w komórce arkusza (evaluateArray) — wyrocznia Excela 2026-11-13.
+  // Brakujące miejsca przy łączeniu tablic różnej szerokości — #N/D. Pominięty argument (;;) = domyślny.
+  const truthy = (v) => bool(v) === true;
+  const noArg = (a) => a === undefined || a === null || (a && a.t === "missing");
+  const argNum = (a, def, ctx) => (noArg(a) ? def : num(scalar(a, ctx)));
+  const asMatrix = (v) => toMatrix(v).map((row) => row.slice());
+  FN.VSTACK = (args) => {
+    const ms = args.map(asMatrix);
+    const w = Math.max(...ms.map((m) => m[0].length));
+    const out = [];
+    ms.forEach((m) => m.forEach((row) => out.push(Array.from({ length: w }, (_, j) => (j < row.length ? row[j] : ERR["#N/A"])))));
+    return out;
+  };
+  FN.HSTACK = (args) => {
+    const ms = args.map(asMatrix);
+    const h = Math.max(...ms.map((m) => m.length));
+    return Array.from({ length: h }, (_, i) => ms.flatMap((m) => (i < m.length ? m[i] : Array(m[0].length).fill(ERR["#N/A"]))));
+  };
+  // DO.KOLUMNY / DO.WIERSZA (tablica; [ignoruj] 0 nic, 1 puste, 2 błędy, 3 oba; [skanuj_kolumnami])
+  function flatten(args, ctx) {
+    const m = asMatrix(args[0]);
+    const ign = argNum(args[1], 0, ctx);
+    if (isErr(ign)) return ign;
+    const byCol = !noArg(args[2]) && truthy(scalar(args[2], ctx));
+    const vals = [];
+    const push = (x) => {
+      if ((ign === 1 || ign === 3) && (x === null || x === undefined)) return;
+      if ((ign === 2 || ign === 3) && isErr(x)) return;
+      vals.push(x === undefined ? null : x);
+    };
+    if (byCol) { for (let j = 0; j < m[0].length; j++) for (let i = 0; i < m.length; i++) push(m[i][j]); }
+    else m.forEach((row) => row.forEach(push));
+    return vals.length ? vals : null;
+  }
+  FN.TOCOL = (args, ctx) => { const v = flatten(args, ctx); return v === null ? ERR["#CALC!"] : isErr(v) ? v : v.map((x) => [x]); };
+  FN.TOROW = (args, ctx) => { const v = flatten(args, ctx); return v === null ? ERR["#CALC!"] : isErr(v) ? v : [v]; };
+  // klucz porównania jak w Excelu: tekst bez wielkości liter, liczba, PRAWDA/FAŁSZ, błąd
+  const keyOf = (x) => (typeof x === "string" ? "s" + x.toLowerCase() : typeof x === "number" ? "n" + x : typeof x === "boolean" ? "b" + x : isErr(x) ? "e" + x.err : "z");
+  FN.UNIQUE = (args, ctx) => {
+    let m = asMatrix(args[0]);
+    const byCol = !noArg(args[1]) && truthy(scalar(args[1], ctx));
+    const once = !noArg(args[2]) && truthy(scalar(args[2], ctx));
+    if (byCol) m = m[0].map((_, j) => m.map((row) => row[j]));
+    const counts = new Map();
+    m.forEach((row) => { const k = row.map(keyOf).join("\u0001"); counts.set(k, (counts.get(k) || 0) + 1); });
+    const seen = new Set();
+    let out = m.filter((row) => {
+      const k = row.map(keyOf).join("\u0001");
+      if (once ? counts.get(k) !== 1 : seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    if (!out.length) return ERR["#CALC!"];
+    if (byCol) out = out[0].map((_, i) => out.map((col) => col[i]));
+    return out;
+  };
+  // FILTRUJ(tablica; uwzględnij; [jeżeli_puste]) — uwzględnij: kolumna (filtr wierszy) albo wiersz (kolumn)
+  FN.FILTER = (args, ctx) => {
+    const m = asMatrix(args[0]);
+    const inc = asMatrix(args[1]);
+    const test = (x) => { if (isErr(x)) return x; const n = typeof x === "string" ? ERR["#VALUE!"] : num(x); return isErr(n) ? n : n !== 0; };
+    let out;
+    if (inc.length === m.length && inc[0].length === 1) {
+      out = [];
+      for (let i = 0; i < m.length; i++) { const t = test(inc[i][0]); if (isErr(t)) return t; if (t) out.push(m[i]); }
+    } else if (inc.length === 1 && inc[0].length === m[0].length) {
+      const keep = inc[0].map(test);
+      const bad = keep.find(isErr); if (bad) return bad;
+      out = m.map((row) => row.filter((_, j) => keep[j]));
+      if (!out[0].length) out = [];
+    } else return ERR["#VALUE!"];
+    if (!out.length) return !noArg(args[2]) ? asMatrix(args[2]) : ERR["#CALC!"];
+    return out;
+  };
+  // SORTUJ(tablica; [indeks_sortowania]; [kolejność 1/-1]; [według_kolumny]) — stabilne, jak Excel:
+  // liczby < tekst (bez wielkości liter) < PRAWDA/FAŁSZ < błędy
+  FN.SORT = (args, ctx) => {
+    let m = asMatrix(args[0]);
+    const idx = argNum(args[1], 1, ctx);
+    const ord = argNum(args[2], 1, ctx);
+    if (isErr(idx)) return idx; if (isErr(ord)) return ord;
+    const byCol = !noArg(args[3]) && truthy(scalar(args[3], ctx));
+    if (byCol) m = m[0].map((_, j) => m.map((row) => row[j]));
+    if (idx < 1 || idx > m[0].length || (ord !== 1 && ord !== -1)) return ERR["#VALUE!"];
+    const k = Math.trunc(idx) - 1;
+    // liczby < tekst < PRAWDA/FAŁSZ, a błędy i puste ZAWSZE na końcu (także malejąco)
+    const rank = (x) => (x === null || x === undefined ? 5 : isErr(x) ? 4 : typeof x === "boolean" ? 3 : typeof x === "string" ? 2 : 1);
+    const out = m.map((row, i) => ({ row, i })).sort((a, b) => {
+      const x = a.row[k], y = b.row[k];
+      const rx = rank(x), ry = rank(y);
+      if (rx >= 4 || ry >= 4) return rx !== ry ? rx - ry : a.i - b.i;
+      let c = rx !== ry ? rx - ry : compare(x, y);
+      c *= ord;
+      return c || a.i - b.i;
+    }).map((e) => e.row);
+    return byCol ? out[0].map((_, i) => out.map((col) => col[i])) : out;
+  };
+  // SEKWENCJA(wiersze; [kolumny]; [początek]; [krok])
+  FN.SEQUENCE = (args, ctx) => {
+    const v = [0, 1, 2, 3].map((i) => (i === 0 ? num(scalar(args[0], ctx)) : argNum(args[i], 1, ctx)));
+    const bad = v.find(isErr); if (bad) return bad;
+    const rows = Math.trunc(v[0]), cols = Math.trunc(v[1]);
+    if (!(rows >= 1) || !(cols >= 1)) return ERR["#CALC!"];
+    if (rows * cols > 1048576) return ERR["#NUM!"];
+    return Array.from({ length: rows }, (_, i) => Array.from({ length: cols }, (_, j) => v[2] + (i * cols + j) * v[3]));
+  };
+
   FN.XLOOKUP = (args, ctx) => {
     const pos = FN.XMATCH([args[0], args[1], args[4], args[5]], ctx);
     if (isErr(pos)) {
@@ -1901,6 +2016,26 @@
   }
   const INFO_FNS = new Set(["ISERROR", "ISERR", "ISNA", "ISBLANK", "ISNUMBER", "ISTEXT", "ISNONTEXT", "ISLOGICAL", "N", "T"]);
 
+  // Formuła tablicowa / rozlewana: PEŁNY wynik jako macierz (formula-calc.js rozlewa go na sąsiednie
+  // komórki). Zakres → wartości (pusta komórka = 0), pojedyncza wartość → [[v]].
+  function evaluateArray(ast, ctx) {
+    let v;
+    try { v = evalNode(ast, ctx); } catch (e) { if (e && e.unsupported) return UNSUPPORTED; throw e; }
+    if (v === UNSUPPORTED) return v;
+    if (isRange(v) || isMatrix(v)) {
+      const m = toMatrix(v).map((row) => row.map((x) => (x === null || x === undefined ? 0 : typeof x === "number" && !Number.isFinite(x) ? ERR["#NUM!"] : x)));
+      return m;
+    }
+    return [[evaluate(ast, ctx)]];
+  }
+  // Czy wynik formuły to tablica do rozlania (najbardziej zewnętrzna funkcja tablicowa albo samo
+  // odwołanie do zakresu w formule tablicowej) — decyzja formula-calc.js
+  function isSpillFormula(ast) {
+    let n = ast;
+    while (n && n.t === "paren") n = n.a;
+    return !!(n && n.t === "call" && SPILL_FNS.has(n.name));
+  }
+
   // Wynik formuły w komórce: zakres → wartość (niejawne przecięcie), pusta → 0.
   function evaluate(ast, ctx) {
     let v;
@@ -1978,6 +2113,10 @@
     ["VLOOKUP", "lookup", "szukana; tabela; nr_kolumny; [przybliżone]"], ["HLOOKUP", "lookup", "szukana; tabela; nr_wiersza; [przybliżone]"],
     ["XLOOKUP", "lookup", "szukana; tablica_szukana; tablica_wynikowa; [jeśli_brak]; [tryb]; [kierunek]"], ["INDEX", "lookup", "tablica; nr_wiersza; [nr_kolumny]"],
     ["MATCH", "lookup", "szukana; tablica; [typ]"], ["XMATCH", "lookup", "szukana; tablica; [tryb]; [kierunek]"], ["LOOKUP", "lookup", "szukana; wektor; [wynik]"],
+    ["UNIQUE", "lookup", "tablica; [według_kolumny]; [dokładnie_raz]"], ["FILTER", "lookup", "tablica; uwzględnij; [jeżeli_puste]"],
+    ["SORT", "lookup", "tablica; [indeks_sortowania]; [kolejność_sortowania]; [według_kolumny]"], ["SEQUENCE", "math", "wiersze; [kolumny]; [początek]; [krok]"],
+    ["VSTACK", "lookup", "tablica1; [tablica2]; …"], ["HSTACK", "lookup", "tablica1; [tablica2]; …"],
+    ["TOCOL", "lookup", "tablica; [ignoruj]; [skanuj_według_kolumny]"], ["TOROW", "lookup", "tablica; [ignoruj]; [skanuj_według_kolumny]"],
     ["ROW", "lookup", "[odwołanie]"], ["COLUMN", "lookup", "[odwołanie]"], ["ROWS", "lookup", "tablica"], ["COLUMNS", "lookup", "tablica"],
     ["TODAY", "date", ""], ["NOW", "date", ""], ["DATE", "date", "rok; miesiąc; dzień"], ["YEAR", "date", "data"], ["MONTH", "date", "data"], ["DAY", "date", "data"],
     ["WEEKDAY", "date", "data; [typ]"], ["WEEKNUM", "date", "data; [typ]"], ["EDATE", "date", "data; miesiące"], ["EOMONTH", "date", "data; miesiące"],
@@ -2086,7 +2225,7 @@
 
   const api = {
     makeStructuredResolver, makeNameResolver, makeMatrixCache, setLocale, roundExcel, excelPow,
-    parse, serialize, localize, shift, moveRefs, syntaxLang, evaluate, refsOf, functionsOf, isSupported, resultLooksLikeDate,
+    parse, serialize, localize, shift, moveRefs, syntaxLang, evaluate, evaluateArray, isSpillFormula, refsOf, functionsOf, isSupported, resultLooksLikeDate,
     tokenize, colToIndex, indexToCol, quoteSheet, Range, isRange, isErr, ERR, ERR_PL, UNSUPPORTED,
     jsDateToSerial, dateSerial, generalText, PL_NAMES, EN_FROM_PL, CATALOG, makeCriterion, compare,
   };

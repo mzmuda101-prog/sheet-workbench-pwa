@@ -175,8 +175,12 @@ const FILE_ERROR_CODES = new Set(["#NULL!", "#DIV/0!", "#VALUE!", "#REF!", "#NAM
 // otwarciu — fullCalcOnLoad). Typ wyniku: liczba bez t, tekst t="str", logiczna t="b",
 // błąd t="e". Brak wyniku (funkcja, której nie liczymy) = sama formuła, bez <v>.
 function buildFormulaCellXml(ref, payload, attrs) {
-  const a = String(attrs || "").replace(/\/\s*$/g, "").replace(/\s*\bt="[^"]*"/g, "").trim();
-  const f = `<f>${escapeFormulaXml(sanitizeXmlText(String(payload.f).replace(/^=/, "")))}</f>`;
+  let a = String(attrs || "").replace(/\/\s*$/g, "").replace(/\s*\bt="[^"]*"/g, "").replace(/\s*\bcm="[^"]*"/g, "").trim();
+  // formuła rozlewana (tablica dynamiczna): <c cm="N"><f t="array" ref="R4:R38">… — jak zapis Excela,
+  // cm wskazuje wpis XLDAPR w metadata.xml (ensureDynamicArrayMetadata)
+  if (payload.dyn && payload.cm) a = (a ? a + " " : "") + `cm="${payload.cm}"`;
+  const fAttrs = payload.dyn ? ` t="array" ref="${payload.ref}"` : "";
+  const f = `<f${fAttrs}>${escapeFormulaXml(sanitizeXmlText(String(payload.f).replace(/^=/, "")))}</f>`;
   const v = payload.v;
   let tAttr = "";
   let vXml = "";
@@ -809,6 +813,49 @@ async function forceRecalcOnLoad(zip) {
   }
 }
 
+// Tablice dynamiczne: metadata.xml z typem XLDAPR (fDynamic="1") — bez niego Excel traktuje
+// <f t="array"> jako starą formułę tablicową {…} bez rozlewania. Plik może już go mieć (Excel 365):
+// wtedy szukamy istniejącego wpisu, inaczej dopisujemy. Zwraca numer cm (1-based) do <c cm="…">.
+const XLDAPR_EXT = '<bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"><xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk>';
+async function ensureDynamicArrayMetadata(zip) {
+  const path = "xl/metadata.xml";
+  const f = zip.file(path);
+  if (f) {
+    let xml = await f.async("string");
+    const types = [...xml.matchAll(/<metadataType\b[^>]*\bname="([^"]+)"/g)].map((m) => m[1]);
+    let ti = types.indexOf("XLDAPR");
+    const futM = /<futureMetadata\b[^>]*\bname="XLDAPR"[^>]*>([\s\S]*?)<\/futureMetadata>/.exec(xml);
+    const cellM = /<cellMetadata\b[^>]*>([\s\S]*?)<\/cellMetadata>/.exec(xml);
+    if (ti >= 0 && futM && cellM) {
+      const futIdx = [...futM[1].matchAll(/<bk>[\s\S]*?<\/bk>/g)].findIndex((b) => /fDynamic="1"/.test(b[0]));
+      if (futIdx >= 0) {
+        const bks = [...cellM[1].matchAll(/<bk>([\s\S]*?)<\/bk>/g)];
+        const hit = bks.findIndex((b) => new RegExp(`<rc\\b[^>]*\\bt="${ti + 1}"[^>]*\\bv="${futIdx}"`).test(b[1]));
+        if (hit >= 0) return hit + 1;
+      }
+    }
+    return null; // inny układ metadanych — nie ryzykujemy (zapis jak zwykła formuła tablicowa)
+  }
+  zipWriteUtf8Xml(zip, path, '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<metadata xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray"><metadataTypes count="1"><metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/></metadataTypes><futureMetadata name="XLDAPR" count="1">' + XLDAPR_EXT + '</futureMetadata><cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata></metadata>');
+  const ctFile = zip.file("[Content_Types].xml");
+  if (ctFile) {
+    let ct = await ctFile.async("string");
+    if (!/\/xl\/metadata\.xml/.test(ct)) ct = ct.replace("</Types>", '<Override PartName="/xl/metadata.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheetMetadata+xml"/></Types>');
+    zipWriteUtf8Xml(zip, "[Content_Types].xml", ct);
+  }
+  const relsFile = zip.file("xl/_rels/workbook.xml.rels");
+  if (relsFile) {
+    let rels = await relsFile.async("string");
+    if (!/sheetMetadata/.test(rels)) {
+      const ids = [...rels.matchAll(/\bId="rId(\d+)"/g)].map((m) => Number(m[1]));
+      const id = `rId${(ids.length ? Math.max(...ids) : 0) + 1}`;
+      rels = rels.replace("</Relationships>", `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata" Target="metadata.xml"/></Relationships>`);
+      zipWriteUtf8Xml(zip, "xl/_rels/workbook.xml.rels", rels);
+    }
+  }
+  return 1;
+}
+
 // Usuwa calcChain.xml WRAZ z jego wpisami w [Content_Types].xml i workbook.xml.rels.
 async function dropCalcChain(zip) {
   if (!zip.file("xl/calcChain.xml")) return;
@@ -1225,6 +1272,7 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}, opts = {
   }
 
   let touched = false;
+  let dynCm; // numer wpisu tablic dynamicznych w metadata.xml — ustalany przy pierwszej potrzebie
   for (const sheetName of Object.keys(edits || {})) {
     const cells = edits[sheetName];
     if (!cells || Object.keys(cells).length === 0) continue;
@@ -1239,6 +1287,30 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}, opts = {
       if (p === null || (p && ("t" in p || p.fmt || p.clear || "xf" in p))) valueCells[ref] = p; // xf: sam styl nowej komórki (row-grow.js)
     });
     const xml = await zip.file(path).async("string");
+    // formuły rozlewane wpisane/zmienione w aplikacji: zakres z bieżącego wyniku (cell.F), znacznik cm,
+    // a komórki starego wyniku z pliku spoza nowego zakresu — usunięte (inaczej Excel widzi w nich
+    // zwykłe wpisy i daje #ROZLANIE!)
+    for (const ref of Object.keys(valueCells)) {
+      const p = valueCells[ref];
+      const wsCell = p && p.f && typeof workbook !== "undefined" && workbook && workbook.Sheets[sheetName] ? workbook.Sheets[sheetName][ref] : null;
+      if (!wsCell || !wsCell.F || wsCell.F.split(":")[0] !== ref || typeof FormulaEngine === "undefined") continue;
+      let dyn = false;
+      try { dyn = FormulaEngine.isSpillFormula(FormulaEngine.parse(String(p.f), { lang: "en" })); } catch { dyn = false; }
+      if (!dyn) continue;
+      if (dynCm === undefined) dynCm = await ensureDynamicArrayMetadata(zip);
+      const newRef = wsCell.F;
+      valueCells[ref] = { ...p, dyn: true, ref: newRef, cm: dynCm };
+      const old = new RegExp(`<c\\b[^>]*\\br="${ref}"[^>]*>\\s*<f\\b[^>]*\\bref="([A-Z]+\\d+:[A-Z]+\\d+)"`).exec(xml);
+      if (old && typeof XLSX !== "undefined") {
+        const go = XLSX.utils.decode_range(old[1]);
+        const gn = XLSX.utils.decode_range(newRef);
+        for (let rr = go.s.r; rr <= go.e.r; rr++) for (let cc = go.s.c; cc <= go.e.c; cc++) {
+          const mref = XLSX.utils.encode_cell({ r: rr, c: cc });
+          if (mref === ref || (rr >= gn.s.r && rr <= gn.e.r && cc >= gn.s.c && cc <= gn.e.c) || mref in valueCells) continue;
+          valueCells[mref] = null;
+        }
+      }
+    }
     let patched = xml;
     if (Object.keys(valueCells).length) {
       patched = patchSheetXml(xml, valueCells, (formulaMaps && formulaMaps[sheetName]) || null, dateStyler);

@@ -121,6 +121,24 @@ const failures = [];
     }
     CASES.push(...TEXT_PL); // tylko do licznika przypadków
   }
+  // tablice dynamiczne — Excel 16.115 PL (2026-11-13): cały wynik przez POŁĄCZ.TEKSTY i rozmiar
+  // ILE.WIERSZY×LICZBA.KOLUMN (formuła zapisana skryptem trafia do Excela bez rozlewania).
+  // Dane: A1:A8 imiona z pustymi (A3, A7), B1:B8 liczby, C1:C8 mieszane (liczby, tekst, PRAWDA/FAŁSZ, pusta).
+  {
+    const A = ["Anna", "bartek", null, "anna", "Celina", "Bartek", null, "Ola"], B = [3, 1, 5, 2, 7, 4, 6, 2], C = [3, "tekst", true, null, "abc", 1, false, 5];
+    const ctxA = mkCtx("D", (sh, r, c) => { const col = [A, B, C][c]; return col && r < 8 ? col[r] : null; }, { r2: 7, c2: 2 });
+    ctxA.lang = "pl"; ctxA.row = 40; ctxA.col = 10;
+    const SPILL = [["UNIQUE(A1:A8)", "Anna|bartek||Celina|Ola", "5x1"], ["UNIQUE(A1:A8,,TRUE)", "Celina|Ola", "2x1"], ["UNIQUE(TOCOL(A1:A8,1))", "Anna|bartek|Celina|Ola", "4x1"], ["UNIQUE(A1:B8)", "Anna|3|bartek|1||5|anna|2|Celina|7|Bartek|4||6|Ola|2", "8x2"], ["UNIQUE(A1:B2,TRUE)", "Anna|3|bartek|1", "2x2"], ["TOCOL(A1:B3)", "Anna|3|bartek|1||5", "6x1"], ["TOCOL(A1:B3,,TRUE)", "Anna|bartek||3|1|5", "6x1"], ["TOROW(A1:A4)", "Anna|bartek||anna", "1x4"], ["TOCOL(A1:A8,1)", "Anna|bartek|anna|Celina|Bartek|Ola", "6x1"], ["TOCOL(C1:C8,2)", "3|tekst|PRAWDA||abc|1|FAŁSZ|5", "8x1"], ["TOCOL(C1:C8,3)", "3|tekst|PRAWDA|abc|1|FAŁSZ|5", "7x1"], ["VSTACK(A1:A2,B1:C2)", null, "4x2"], ["HSTACK(A1:A2,B1:B3)", null, "3x2"], ["FILTER(A1:A8,B1:B8>2)", "Anna||Celina|Bartek|", "5x1"], ["FILTER(A1:A8,B1:B8>100,\"brak\")", "brak", "1x1"], ["FILTER(A1:B8,B1:B8>4)", "|5|Celina|7||6", "3x2"], ["SORT(B1:B8)", "1|2|2|3|4|5|6|7", "8x1"], ["SORT(B1:B8,,-1)", "7|6|5|4|3|2|2|1", "8x1"], ["SORT(A1:B8,2,-1)", "Celina|7||6||5|Bartek|4|Anna|3|anna|2|Ola|2|bartek|1", "8x2"], ["SORT(A1:A8)", "Anna|anna|bartek|Bartek|Celina|Ola||", "8x1"], ["SORT(C1:C7)", "1|3|abc|tekst|FAŁSZ|PRAWDA|", "7x1"], ["SORT(C1:C7,,-1)", "PRAWDA|FAŁSZ|tekst|abc|3|1|", "7x1"], ["SEQUENCE(2,3,10,5)", "10|15|20|25|30|35", "2x3"], ["SEQUENCE(3)", "1|2|3", "3x1"], ["UNIQUE(SORT(A1:A8))", "Anna|bartek|Celina|Ola|", "5x1"], ["SORT(UNIQUE(TOCOL(A1:A8,1)))", "Anna|bartek|Celina|Ola", "4x1"]];
+    FE.setLocale("pl");
+    const ev = (src) => { try { const v = FE.evaluate(FE.parse("=" + src, { lang: "en" }), ctxA); return FE.isErr(v) ? v.err : String(v); } catch (e) { return "WYJĄTEK " + e.message; } };
+    for (const [f, want, size] of SPILL) {
+      const got = ev(`IFERROR(TEXTJOIN("|",FALSE,${f}),"ERR")`);
+      const gotSize = ev(`IFERROR(ROWS(${f})&"x"&COLUMNS(${f}),"ERR")`);
+      if (want !== null && got !== want) failures.push(`${f} (Excel PL) = ${JSON.stringify(got)}, Excel: ${JSON.stringify(want)}`);
+      if (gotSize !== size) failures.push(`${f} rozmiar ${gotSize}, Excel: ${size}`);
+    }
+    CASES.push(...SPILL);
+  }
   FE.setLocale("en");
   // zapis do pliku i z powrotem
   const roundtrip = [["=JEŻELI.BŁĄD(X.WYSZUKAJ(A2;B:B;C:C);\"brak\")", "IFERROR(_xlfn.XLOOKUP(A2,B:B,C:C),\"brak\")"], ["=SUMA(A1:A3;1,5)", "SUM(A1:A3,1.5)"]];
@@ -233,7 +251,7 @@ for (const file of files) {
   base.lang = process.env.ORACLE_LANG || "pl";
   FE.setLocale(base.lang);
 
-  let total = 0, okN = 0, unsupported = 0, noCache = 0;
+  let total = 0, okN = 0, unsupported = 0, noCache = 0, spillOk = 0, spillBad = 0;
   const bad = new Map();
   const astCache = new Map();
   for (const sn of wb.SheetNames) {
@@ -257,6 +275,17 @@ for (const file of files) {
       const { r, c } = XLSX.utils.decode_cell(ref);
       let got;
       try { got = FE.evaluate(ast, { ...base, sheetName: sn, row: r, col: c }); } catch (e) { got = { err: "WYJĄTEK " + e.message }; }
+      // formuła rozlewana (tablica dynamiczna): cały wynik kontra komórki zakresu zapisane przez Excela
+      if (cell.F && cell.F.split(":")[0] === ref && FE.isSpillFormula(ast) && same(got, want)) {
+        let arr;
+        try { arr = FE.evaluateArray(ast, { ...base, sheetName: sn, row: r, col: c }); } catch (e) { arr = [[{ err: "WYJĄTEK " + e.message }]]; }
+        const g = XLSX.utils.decode_range(cell.F);
+        const fileM = [];
+        for (let rr = g.s.r; rr <= g.e.r; rr++) { const row = []; for (let cc = g.s.c; cc <= g.e.c; cc++) row.push(cellValue(ws[XLSX.utils.encode_cell({ r: rr, c: cc })] || { t: "z" })); fileM.push(row); }
+        const sizeOk = Array.isArray(arr) && arr.length === fileM.length && arr[0].length === fileM[0].length;
+        const diff = sizeOk ? fileM.flatMap((row, i) => row.map((x, j) => (same(arr[i][j], x) ? null : `${XLSX.utils.encode_cell({ r: g.s.r + i, c: g.s.c + j })}: nasz ${JSON.stringify(arr[i][j])}, Excel ${JSON.stringify(x)}`))).filter(Boolean) : [`rozmiar: nasz ${arr.length}×${arr[0] && arr[0].length}, Excel ${fileM.length}×${fileM[0].length}`];
+        if (diff.length) { got = { err: "ROZLANIE " + diff.slice(0, 2).join("; ") }; spillBad++; } else spillOk++;
+      }
       if (same(got, want)) okN++;
       else {
         const key = fns.sort().join("+") || "(bez funkcji)";
@@ -270,7 +299,7 @@ for (const file of files) {
   const checked = total - unsupported;
   const rate = checked ? okN / checked : 1;
   console.log(`${rate >= THRESHOLD ? "✅" : "❌"} ${path.basename(file)}: ${okN}/${checked} zgodnych z Excelem (${(rate * 100).toFixed(2)}%)` +
-    `${unsupported ? `, ${unsupported} z funkcjami spoza silnika` : ""}${noCache ? `, ${noCache} bez zapisanego wyniku` : ""} · dziś=${mod.toISOString().slice(0, 10)}`);
+    `${spillOk || spillBad ? `, rozlane: ${spillOk}/${spillOk + spillBad} całe zgodne` : ""}${unsupported ? `, ${unsupported} z funkcjami spoza silnika` : ""}${noCache ? `, ${noCache} bez zapisanego wyniku` : ""} · dziś=${mod.toISOString().slice(0, 10)}`);
   for (const [k, list] of [...bad.entries()].sort((a, b) => (b[1].n || b[1].length) - (a[1].n || a[1].length)).slice(0, 12)) {
     console.log(`   ${k}: ${list.n || list.length}×`);
     list.slice(0, 2).forEach((x) => console.log("      " + x));
