@@ -1154,6 +1154,9 @@ async function handleFile(file, fileHandle = null) {
       smartInvalidateModel();
       resetSmartFilterState();
     }
+    // nowy plik = bez filtrów i szukania z poprzedniego (dawniej „Nowak” z jednego pliku filtrował
+    // następny — widać było część wierszy, a przycisk „＋ Nowy wiersz” był wyłączony bez powodu)
+    resetFilterInputs();
     currentDisplayModel = null;
     tableViewMode = "wide";
     multiSortState = [];
