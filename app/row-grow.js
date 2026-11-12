@@ -257,6 +257,23 @@ const swbRowGrow = (() => {
     // 3. formuły kolumn (tylko wiersz dodany przyciskiem / Enterem — nie np. wiersz Autosumy)
     if (!auto || !drafts.has(k) || typeof swbFormulaCommitAt !== "function" || typeof swbFormulaShifted !== "function") return;
     const filled = [];
+    // kolumny obliczeniowe tabeli Excela: nowy wiersz W tabeli dostaje ich formułę zawsze (jak Excel),
+    // nie dopiero przy regule 3 z 5 wierszy — formuła z pliku jest zapisana dla 1. wiersza danych
+    const tmetas = typeof currentTables !== "undefined" && currentTables
+      ? [...new Set(Object.values(currentTables))].filter((m) => m && m.sheetName === sheetName && Array.isArray(m.calc) && m.calc.some(Boolean)
+        && (() => { try { const g = XLSX.utils.decode_range(m.ref); return r >= g.s.r + (m.headerRows ?? 1) && r <= g.e.r - (m.totalsRows || 0); } catch { return false; } })())
+      : [];
+    for (const tmeta of tmetas) {
+      const g = XLSX.utils.decode_range(tmeta.ref);
+      const r1 = g.s.r + (tmeta.headerRows ?? 1);
+      tmeta.calc.forEach((f, idx) => {
+        const c = g.s.c + idx, i = c - currentStartCol;
+        if (!f || c === absC || i < 0 || !realCols.includes(i) || (ws[enc(r, c)] && ws[enc(r, c)].f)) return;
+        let text = null;
+        try { text = "=" + FC.serialize(FC.shift(FC.parse(f, { lang: "en" }), r - r1, 0), { lang: typeof currentLang === "string" ? currentLang : "pl" }); } catch { text = null; }
+        if (text && swbFormulaCommitAt(r, i, text, { silent: true }) === "ok") filled.push(XLSX.utils.encode_col(c));
+      });
+    }
     realCols.forEach((i) => {
       const c = currentStartCol + i;
       if (c === absC) return; // tu użytkownik właśnie coś wpisuje
@@ -343,6 +360,14 @@ const swbRowGrow = (() => {
       }
     });
     if (count) {
+      // do zapisu: kolumna obliczeniowa w opisie tabeli (<calculatedColumnFormula>, formuła 1. wiersza danych)
+      const first = ws[enc(r1, c)];
+      if (first && first.f) {
+        if (!Array.isArray(meta.calc)) meta.calc = (meta.colNames || []).map(() => null);
+        meta.calc[c - g.s.c] = first.f;
+        if (!Array.isArray(meta.calcNew)) meta.calcNew = [];
+        meta.calcNew[c - g.s.c] = first.f;
+      }
       requestAnimationFrame(() => renderActiveTable()); // wyniki w wierszach, których edytor nie rysuje
       autoToast(t("autoFillColDone", { count }));
     }
@@ -472,6 +497,7 @@ const swbRowGrow = (() => {
         if (rg.s.r !== hdrR || !growRngCol(rg, prev, next)) return; // nagłówek tabeli = wiersz nagłówka widoku
         meta.ref = XLSX.utils.encode_range(rg);
         if (Array.isArray(meta.colNames)) meta.colNames.push(name);
+        if (Array.isArray(meta.calc)) meta.calc.push(null);
         if (meta.columns) meta.columns[name.toLowerCase()] = next;
         changed = true;
       });

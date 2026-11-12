@@ -16,6 +16,9 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const { spawnSync } = require("child_process");
+const JSZip = require("../lib/jszip.min.js");
+let ooxml = null;
+try { ooxml = require("./ooxml-validate"); } catch { ooxml = null; }
 const VENV_PY = path.join(__dirname, "..", ".venv/bin/python");
 const PY = fs.existsSync(VENV_PY) ? VENV_PY : "python3";
 
@@ -30,11 +33,17 @@ import sys
 from openpyxl import Workbook
 from openpyxl.worksheet.table import Table, TableStyleInfo
 wb = Workbook(); ws = wb.active; ws.title = "Arkusz"
-ws.append(["Imię", "Kwota", "Wynik", "Uwagi", "Ile"])
+ws.append(["Imię", "Kwota", "Wynik", "Uwagi", "Ile", "Razy10"])
 for i, (n, k) in enumerate([("Anna", 10), ("Bartek", 20), ("Celina", 30), ("Darek", 40), ("Ewa", 50)]):
     ws.append([n, k, None, "pilne" if i == 2 else None, None])
 for r in range(2, 7): ws.cell(r, 5, f"=B{r}+1")
-t = Table(displayName="Dane", ref="A1:E6"); t.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
+# F: kolumna obliczeniowa z pliku (B2*10), ale tylko 2 wiersze z formułą — reguła 3 z 5 by jej nie dała
+ws.cell(2, 6, "=B2*10"); ws.cell(3, 6, "=B3*10"); ws.cell(4, 6, 1); ws.cell(5, 6, 2); ws.cell(6, 6, 3)
+t = Table(displayName="Dane", ref="A1:F6"); t.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)
+t._initialise_columns()
+for i, n in enumerate(["Imię", "Kwota", "Wynik", "Uwagi", "Ile", "Razy10"]): t.tableColumns[i].name = n
+from openpyxl.worksheet.table import TableFormula
+t.tableColumns[5].calculatedColumnFormula = TableFormula(attr_text="B2*10")
 ws.add_table(t)
 wb.save(sys.argv[1])
 `, file], { encoding: "utf8" });
@@ -88,6 +97,23 @@ async function run() {
   const shown1 = await page.evaluate(() => document.querySelector('#dataTable tbody tr[data-row-key="wide:5"] td[data-col-index="2"]').textContent);
   ok("1. wyniki widać w tabeli (ostatni wiersz)", shown1 === "100", shown1);
 
+  // 1b. zapis: kolumna C jako obliczeniowa w opisie tabeli
+  const saveTable = async (name) => {
+    const out = path.join(tmp, name);
+    fs.writeFileSync(out, Buffer.from(await page.evaluate(async () => Array.from(await buildOutputBytes("xlsx")))));
+    const zip = await JSZip.loadAsync(fs.readFileSync(out));
+    const tf = Object.keys(zip.files).find((f) => /xl\/tables\/table\d+\.xml$/.test(f));
+    return { out, xml: await zip.file(tf).async("string") };
+  };
+  const s1 = await saveTable("po-wypelnieniu.xlsx");
+  ok("1b. zapis: <calculatedColumnFormula>B2*2 w kolumnie „Wynik”", /name="Wynik"[^>]*><calculatedColumnFormula>B2\*2<\/calculatedColumnFormula>/.test(s1.xml), s1.xml.slice(s1.xml.indexOf("<tableColumns"), s1.xml.indexOf("</tableColumns>")));
+  ok("1b. zapis: kolumna obliczeniowa z pliku (Razy10) zostaje", /name="Razy10"[^>]*><calculatedColumnFormula>B2\*10<\/calculatedColumnFormula>/.test(s1.xml));
+  if (ooxml && ooxml.available && ooxml.available()) {
+    const [b0, a0] = ooxml.validate([FILE, s1.out]);
+    const fresh = ooxml.newErrors(b0, a0).map(ooxml.short);
+    ok("1b. plik zgodny ze schematem Office (bez nowych błędów)", a0 && !a0.error && fresh.length === 0, fresh.slice(0, 3));
+  } else console.warn("⚠️  schemat Office pominięty — brak .NET");
+
   // 2.
   await page.evaluate(() => undoLast()); await sleep(300);
   const c2a = await col("C");
@@ -95,6 +121,8 @@ async function run() {
   await page.evaluate(() => undoLast()); await sleep(300);
   const c2b = await col("C");
   ok("2. 2. Cofnij: kolumna pusta", c2b.every((x) => x == null), c2b);
+  const s2 = await saveTable("po-cofnij.xlsx");
+  ok("2. zapis po Cofnij: „Wynik” już nie jest kolumną obliczeniową", !/name="Wynik"[^>]*><calculatedColumnFormula>/.test(s2.xml), s2.xml.slice(s2.xml.indexOf("<tableColumns"), s2.xml.indexOf("</tableColumns>")));
   await page.evaluate(() => { redoLast(); redoLast(); }); await sleep(300);
   const c2c = await col("C");
   ok("2. Ponów ×2: znów cała kolumna", c2c.every((x) => x && x.startsWith("f:")), c2c);
@@ -125,9 +153,10 @@ async function run() {
   await clearToasts();
   await page.click("#addRowBtn"); await sleep(300);
   await page.keyboard.type("Franek"); await page.keyboard.press("Tab"); await sleep(400); await page.keyboard.press("Escape"); await sleep(150);
-  const r7 = await page.evaluate(() => ["E7", "C7"].map((k) => { const x = workbook.Sheets[currentSheetName][k]; return x && x.f ? x.f : null; }));
+  const r7 = await page.evaluate(() => ["E7", "C7", "F7"].map((k) => { const x = workbook.Sheets[currentSheetName][k]; return x && x.f ? x.f : null; }));
   const t6 = await toasts();
   ok("6. nowy wiersz dostaje formuły z wierszy wyżej", r7[0] === "B7+1", r7);
+  ok("6. nowy wiersz w tabeli dostaje formułę kolumny obliczeniowej z pliku (choć 3 z 5 by jej nie dała)", r7[2] === "B7*10", r7);
   ok("6. dymek o nowym wierszu (za pierwszym razem) z 2 przyciskami", t6.some((x) => /Nowy wiersz dostał formuły/.test(x.msg) && x.btns.length === 2), t6);
   await clearToasts();
   await page.click("#addRowBtn"); await sleep(300);

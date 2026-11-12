@@ -107,6 +107,17 @@ async function run() {
   const both = G.growTableXml(t1, { fromRow: 565, toRow: 566, fromCol: 33, toCol: 34, tableCols: { opracowanie_terenow: ["X"] } });
   check("5. tabela w dół i w bok naraz: A2:AH566", /\sref="A2:AH566"/.test(both) && /<autoFilter ref="A2:AH566"/.test(both));
 
+  // 6. kolumna obliczeniowa w opisie tabeli (<calculatedColumnFormula>, jak zapisuje Excel)
+  const tx = '<table ref="A1:D6"><tableColumns count="4"><tableColumn id="1" name="A"/><tableColumn id="2" name="B" dataDxfId="3"/>'
+    + '<tableColumn id="3" name="C"><calculatedColumnFormula>OLD</calculatedColumnFormula></tableColumn>'
+    + '<tableColumn id="4" name="D"><totalsRowFormula>SUM(D2:D5)</totalsRowFormula></tableColumn></tableColumns></table>';
+  const c6 = G.setCalcColumnsXml(tx, [null, 'IF(A2<>"",A2&"x","")', "B2*2", "A2+1"]);
+  check("6. samozamykający <tableColumn/> dostaje formułę (escapowaną)", c6.includes('<tableColumn id="2" name="B" dataDxfId="3"><calculatedColumnFormula>IF(A2&lt;&gt;"",A2&amp;"x","")</calculatedColumnFormula></tableColumn>'), c6);
+  check("6. istniejąca formuła podmieniona", c6.includes("<calculatedColumnFormula>B2*2</calculatedColumnFormula></tableColumn>") && !c6.includes("OLD"), c6);
+  check("6. formuła PRZED totalsRowFormula (kolejność ze schematu)", c6.includes('<tableColumn id="4" name="D"><calculatedColumnFormula>A2+1</calculatedColumnFormula><totalsRowFormula>'), c6);
+  check("6. kolumna bez zmian (null) nietknięta", c6.includes('<tableColumn id="1" name="A"/>'));
+  check("6. prefiks przestrzeni nazw (x:)", G.setCalcColumnsXml('<x:tableColumn id="1" name="A"/>', ["B2"]) === '<x:tableColumn id="1" name="A"><x:calculatedColumnFormula>B2</x:calculatedColumnFormula></x:tableColumn>');
+
   if (fails.length) { console.log(`❌ xlsx-grow: ${fails.length} niezaliczone`); process.exit(1); }
   console.log("✅ xlsx-grow: wszystko przeszło");
 }

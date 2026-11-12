@@ -1253,6 +1253,18 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}, opts = {
   // dopisane wiersze pod danymi: tabele, autofiltr, formatowanie warunkowe, listy wyboru i wymiar
   // arkusza rosną razem z nimi (xlsx-grow.js). opts.grow = { arkusz: { fromRow, toRow } }, 1-based.
   if (opts && opts.grow && typeof swbGrow !== "undefined") await swbGrow.growZip(zip, sheetPaths, opts.grow);
+  // kolumny obliczeniowe utworzone w aplikacji → opis tabeli (row-grow.js calcColumn). Tylko te, które
+  // dalej nimi są: po Cofnij wypełnienia 1. wiersz danych nie ma już tej formuły — wtedy bez zmian.
+  if (typeof swbGrow !== "undefined" && typeof currentTables !== "undefined" && currentTables && typeof workbook !== "undefined" && workbook) {
+    const list = [...new Set(Object.values(currentTables))].filter((t) => t && Array.isArray(t.calcNew) && t.path && t.sheetName && workbook.Sheets[t.sheetName]).map((t) => {
+      let g; try { g = XLSX.utils.decode_range(t.ref); } catch { return null; }
+      const ws = workbook.Sheets[t.sheetName];
+      const r1 = g.s.r + (t.headerRows ?? 1);
+      const calcNew = t.calcNew.map((f, i) => { const x = ws[XLSX.utils.encode_cell({ r: r1, c: g.s.c + i })]; return f && x && x.f === f ? f : null; });
+      return calcNew.some(Boolean) ? { path: t.path, calcNew } : null;
+    }).filter(Boolean);
+    if (list.length) await swbGrow.writeCalcColumns(zip, list);
+  }
 
   if (touched) {
     await forceRecalcOnLoad(zip);

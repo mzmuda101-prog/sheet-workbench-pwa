@@ -765,6 +765,13 @@ async function parseTables(zip) {
       // styl tabeli (paski wierszy) — table.js tableBandColorAt
       styleName: ((xml.match(/<tableStyleInfo\b[^>]*\bname="([^"]+)"/) || [])[1]) || "",
       rowStripes: /<tableStyleInfo\b[^>]*\bshowRowStripes="1"/.test(xml),
+      // formuły kolumn obliczeniowych (w kolejności kolumn; null = zwykła kolumna) — zapis jak Excel:
+      // tekst formuły dla PIERWSZEGO wiersza danych, angielskie nazwy (row-grow.js: nowe wiersze, zapis)
+      calc: Array.from(xml.matchAll(/<tableColumn\b[^>]*?(?:\/>|>([\s\S]*?)<\/tableColumn>)/g)).map((m) => {
+        const f = m[1] && /<calculatedColumnFormula\b[^>]*>([\s\S]*?)<\/calculatedColumnFormula>/.exec(m[1]);
+        return f ? decodeXmlEntities(f[1]) : null;
+      }),
+      path: f,
     };
     const nameM = xml.match(/<table\b[^>]*\bname="([^"]+)"/);
     const dispM = xml.match(/\bdisplayName="([^"]+)"/);

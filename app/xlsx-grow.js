@@ -189,7 +189,36 @@ const swbGrow = (() => {
     }
   }
 
-  return { growRange, growSqref, growSheetXml, growTableXml, tablePathsFromRels, growZip };
+  // Kolumny obliczeniowe utworzone w aplikacji (row-grow.js calcColumn) → <calculatedColumnFormula>
+  // w opisie tabeli, jak zapisuje Excel: formuła dla 1. wiersza danych, angielskie nazwy. Dzięki temu
+  // Excel traktuje kolumnę jako obliczeniową (nowy wiersz dodany już w Excelu też dostanie formułę).
+  // calc: [formuła | null] w kolejności kolumn tabeli; null = bez zmian (kolumny z pliku zostają, jak są).
+  function setCalcColumnsXml(xml, calc) {
+    let idx = -1;
+    return xml.replace(/<((?:\w+:)?)tableColumn\b([^>]*?)(\/>|>([\s\S]*?)<\/\1tableColumn>)/g, (whole, pfx, attrs, tail, inner) => {
+      idx++;
+      const f = calc[idx];
+      if (!f) return whole;
+      attrs = attrs.replace(/\s+$/, "");
+      const el = `<${pfx}calculatedColumnFormula>${escText(f)}</${pfx}calculatedColumnFormula>`;
+      if (tail === "/>") return `<${pfx}tableColumn${attrs}>${el}</${pfx}tableColumn>`;
+      const body = /<(?:\w+:)?calculatedColumnFormula\b/.test(inner)
+        ? inner.replace(/<((?:\w+:)?)calculatedColumnFormula\b[^>]*>[\s\S]*?<\/\1calculatedColumnFormula>/, el)
+        : el + inner; // pierwszy element tableColumn wg schematu
+      return `<${pfx}tableColumn${attrs}>${body}</${pfx}tableColumn>`;
+    });
+  }
+  const escText = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  async function writeCalcColumns(zip, tables) {
+    for (const t of tables) {
+      if (!t || !t.path || !Array.isArray(t.calcNew) || !zip.file(t.path)) continue;
+      const xml = await zip.file(t.path).async("string");
+      const out = setCalcColumnsXml(xml, t.calcNew);
+      if (out !== xml) zipWriteUtf8Xml(zip, t.path, out);
+    }
+  }
+
+  return { growRange, growSqref, growSheetXml, growTableXml, tablePathsFromRels, growZip, setCalcColumnsXml, writeCalcColumns };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = swbGrow;

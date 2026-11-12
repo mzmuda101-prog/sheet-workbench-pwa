@@ -1425,7 +1425,7 @@
   function plTextFormat(fmt, x) {
     const lit = (str) => `"${str.replace(/\./g, DOT).replace(/,/g, COMMA)}"`;
     const parts = serialToParts(x);
-    let out = "", plNames = true, isDate = false, dot = false, decimal = false;
+    let out = "", plNames = true, isDate = false, dot = false;
     const isPh = (ch) => ch === "0" || ch === "#" || ch === "?";
     // czy to format daty/czasu (kody poza literałami) — wtedy przecinek i spacja to zwykłe znaki
     const bare = fmt.replace(/"[^"]*"|\\.|\[[^\]]*\]/g, "");
@@ -1447,7 +1447,7 @@
         out += col ? `[${col}]` : /^kolor\d+$/i.test(body) ? `[Color${body.slice(5)}]` : `[${body}]`;
         continue;
       }
-      if (ch === ";") { decimal = false; out += ch; continue; }
+      if (ch === ";") { out += ch; continue; }
       if (/^(am\/pm|a\/p)/i.test(fmt.slice(i))) { const m = /^(am\/pm|a\/p)/i.exec(fmt.slice(i))[0]; out += m; i += m.length - 1; isDate = true; continue; }
       const lower = ch.toLowerCase();
       if ((lower === "e") && (fmt[i + 1] === "+" || fmt[i + 1] === "-")) { out += "E" + fmt[i + 1]; i++; continue; } // 0,00E+00
@@ -1467,16 +1467,18 @@
       if (lower === "s") { out += "s"; isDate = true; continue; }
       if (/\p{L}/u.test(ch)) { out += lit(ch); continue; } // y, h i inne litery to tekst (polski Excel)
       if (ch === "," && dateFmt) { out += lit(","); continue; }
-      if (ch === ",") { out += "."; decimal = true; continue; }
+      if (ch === ",") { out += "."; continue; }
       if (ch === ".") { out += lit("."); dot = true; continue; }
       if (ch === " ") {
         let k = i; while (k > 0 && fmt[k - 1] === " ") k--;
         const prev = k > 0 ? fmt[k - 1] : "";
         let n = i; while (n < fmt.length && fmt[n] === " ") n++;
         const next = fmt[n] || "";
-        // spacja między cyframi = separator tysięcy; spacja na KOŃCU sekcji liczby = ÷1000 („0  ” → 1)
-        // shortcut: „0 "szt."” dało w Excelu „1szt.”, a „0 "zł"” — „5 zł”; reguły nie rozstrzygnięto, spacja przed tekstem zostaje spacją
-        if (!dateFmt && isPh(prev) && (isPh(next) || (!decimal && (next === ";" || next === "")))) { out += ","; continue; }
+        // spacja między cyframi = separator tysięcy; spacja po cyfrach, a przed końcem sekcji albo tekstem
+        // w cudzysłowie = ÷1000 i znika (Excel PL: 0 "szt." → „1szt.”, 0,0 "tys" → „1234,6tys”, dwie spacje
+        // ÷1 000 000) — oprócz „zł”, symbolu waluty: 0 "zł" → „1235 zł” (wyrocznia 2026-11-13)
+        const quoted = next === '"' ? fmt.slice(n + 1, fmt.indexOf('"', n + 1) < 0 ? fmt.length : fmt.indexOf('"', n + 1)) : null;
+        if (!dateFmt && isPh(prev) && (isPh(next) || next === ";" || next === "" || (quoted !== null && quoted.trim().toLowerCase() !== "zł"))) { out += ","; continue; }
         out += lit(" "); continue;
       }
       out += ch;
