@@ -114,6 +114,7 @@ const virtRowsEl = document.getElementById("virtRows");
 const showConditionalFormattingEl = document.getElementById("showConditionalFormatting");
 const showSubheadersEl = document.getElementById("showSubheaders");
 const recalcDatesEl = document.getElementById("recalcDates");
+const autoFillFormulasEl = document.getElementById("autoFillFormulas");
 const rowHeightAllEl = document.getElementById("rowHeightAll");
 const colWidthAllEl = document.getElementById("colWidthAll");
 const freezeFirstColEl = document.getElementById("freezeFirstCol");
@@ -748,6 +749,7 @@ let cellStyleShowBorders = true;
 let cellStyleShowConditionalFormatting = true;
 let cellStyleShowSubheaders = false; // szary pasek wykrytych wierszy sekcji (domyślnie wyłączony)
 let recalcDateFormulas = true; // przeliczaj podgląd formuł zależnych od TODAY()/NOW()
+let swbAutoFillOn = true; // formuły/wygląd w nowych wierszach i kolumny obliczeniowe (row-grow.js)
 let cellStyleSmartWidths = true; // true = dopasuj do większości (p90, przycina skrajnie długie); false = zmieść wszystko
 let currentDxfs = [];        // [{fontColor, fillColor}] z xl/styles.xml <dxfs>
 let currentCFRules = null;   // Map<sheetName, Array<block>> z <conditionalFormatting>
@@ -859,7 +861,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "v1.00.16";
+const APP_BUILD_VERSION = "v1.00.17";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
@@ -1073,7 +1075,7 @@ function toast(msg, type = "info", opts = null) {
   const render = (text, o, withAction) => {
     label.textContent = text;
     kind.textContent = `${t(`toastKind_${type}`)}: `;
-    if (actionBtn) { actionBtn.remove(); actionBtn = null; }
+    if (actionBtn) { if (actionBtn._second) actionBtn._second.remove(); actionBtn.remove(); actionBtn = null; }
     if (withAction) {
       actionBtn = document.createElement("button");
       actionBtn.type = "button";
@@ -1085,6 +1087,20 @@ function toast(msg, type = "info", opts = null) {
         try { o.onAction(); } catch (err) { console.error(err); }
       }, { once: true });
       toastEl.insertBefore(actionBtn, closeBtn);
+      // drugi przycisk (np. „Cofnij uzupełnienie” + „Nie uzupełniaj automatycznie”)
+      if (o.action2 && typeof o.onAction2 === "function") {
+        const b2 = document.createElement("button");
+        b2.type = "button";
+        b2.className = "toast-action toast-action-2";
+        b2.textContent = o.action2;
+        b2.addEventListener("click", (e) => {
+          e.stopPropagation();
+          close();
+          try { o.onAction2(); } catch (err) { console.error(err); }
+        }, { once: true });
+        toastEl.insertBefore(b2, closeBtn);
+        actionBtn._second = b2;
+      }
     }
     const needClose = withAction || type === "warning" || type === "error";
     if (needClose && !closeBtn) {

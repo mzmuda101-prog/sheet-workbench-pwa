@@ -143,6 +143,7 @@ function syncCellStyleFlags() {
   cellStyleShowSubheaders = !showSubheadersEl || showSubheadersEl.checked;
   cellStyleSmartWidths = !smartColWidthsEl || smartColWidthsEl.checked;
   recalcDateFormulas = !recalcDatesEl || recalcDatesEl.checked;
+  swbAutoFillOn = !autoFillFormulasEl || autoFillFormulasEl.checked;
 }
 
 // Przebudowa danych bieżącego arkusza (np. po zmianie „Przeliczaj formuły z datą")
@@ -179,6 +180,7 @@ function saveCellStylePreferences() {
     subheaders2: cellStyleShowSubheaders,
     smartWidths: cellStyleSmartWidths,
     recalcDates: recalcDateFormulas,
+    autoFill: swbAutoFillOn,
     wrap: !!(wrapCellsEl && wrapCellsEl.checked),
     freezeFirstCol: !!(freezeFirstColEl && freezeFirstColEl.checked),
   }));
@@ -196,6 +198,7 @@ function loadCellStylePreferences() {
   if (showSubheadersEl) showSubheadersEl.checked = prefs.subheaders2 === true; // wyróżnianie sekcji domyślnie WYŁ.
   set(smartColWidthsEl, prefs.smartWidths);
   set(recalcDatesEl, prefs.recalcDates);
+  set(autoFillFormulasEl, prefs.autoFill);
   if (wrapCellsEl) wrapCellsEl.checked = prefs.wrap === true; // zawijanie domyślnie WYŁĄCZONE
   if (freezeFirstColEl) freezeFirstColEl.checked = prefs.freezeFirstCol === true; // blokada kolumny domyślnie WYŁ.
   syncCellStyleFlags();

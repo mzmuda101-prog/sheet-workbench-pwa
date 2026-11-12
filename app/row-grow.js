@@ -73,6 +73,7 @@ const swbRowGrow = (() => {
   // Nowy plik: zapamiętaj, gdzie kończyły się dane każdego arkusza (zanim cokolwiek dopiszemy).
   function snapshot() {
     origLast.clear(); liveLast.clear(); drafts.clear(); newXf.clear(); origLastCol.clear(); origTables.clear();
+    rowToastShown = false;
     if (typeof workbook === "undefined" || !workbook) return;
     (workbook.SheetNames || []).forEach((name) => {
       const last = lastRowOf(workbook.Sheets[name]);
@@ -234,8 +235,9 @@ const swbRowGrow = (() => {
     const n = currentDisplayModel && Array.isArray(currentDisplayModel.headers) ? currentDisplayModel.headers.length : 0;
     const realCols = [];
     for (let i = 0; i < n; i++) if (typeof cfmtIsRealCol !== "function" || cfmtIsRealCol(i)) realCols.push(i);
+    const auto = typeof swbAutoFillOn === "undefined" || swbAutoFillOn; // Widok → Tabela: „Automatycznie uzupełniaj…”
     // 1. styl z wiersza nad nim — dla każdej kolumny (pusta też ma ramkę/tło jak w Excelu)
-    realCols.forEach((i) => {
+    if (auto) realCols.forEach((i) => {
       const c = currentStartCol + i;
       const ref = enc(r, c);
       const xf = styleMap ? styleMap.get(enc(tplR, c)) : undefined;
@@ -253,7 +255,8 @@ const swbRowGrow = (() => {
     //    formatowania warunkowego działają od razu, bez ponownego otwierania pliku
     if (r === last + 1) growInApp(sheetName, last, r);
     // 3. formuły kolumn (tylko wiersz dodany przyciskiem / Enterem — nie np. wiersz Autosumy)
-    if (!drafts.has(k) || typeof swbFormulaCommitAt !== "function" || typeof swbFormulaShifted !== "function") return;
+    if (!auto || !drafts.has(k) || typeof swbFormulaCommitAt !== "function" || typeof swbFormulaShifted !== "function") return;
+    const filled = [];
     realCols.forEach((i) => {
       const c = currentStartCol + i;
       if (c === absC) return; // tu użytkownik właśnie coś wpisuje
@@ -262,8 +265,88 @@ const swbRowGrow = (() => {
       const d = formulaSource(ws, r, c);
       if (!d) return;
       const text = swbFormulaShifted(sheetName, enc(r - d, c), d, 0);
-      if (text) swbFormulaCommitAt(r, i, text, { silent: true });
+      if (text && swbFormulaCommitAt(r, i, text, { silent: true }) === "ok") filled.push(XLSX.utils.encode_col(c));
     });
+    // dymek tylko za pierwszym razem w pliku — przy każdym wierszu byłby natrętny (Excel: mała ikonka)
+    if (filled.length && !rowToastShown) {
+      rowToastShown = true;
+      autoToast(t("autoFillRowDone", { cols: filled.join(", ") }));
+    }
+  }
+
+  // Dymek po automatycznym uzupełnieniu (zamiennik ikonki z błyskawicą w Excelu): „Cofnij uzupełnienie”
+  // cofa TYLKO część automatyczną (krok z undo.js oznaczony auto), „Nie uzupełniaj automatycznie”
+  // wyłącza przełącznik w Widok → Tabela. Krok Cofnij zamyka się w mikrozadaniu — dymek po nim.
+  let rowToastShown = false;
+  function autoToast(msg) {
+    queueMicrotask(() => {
+      const step = typeof undoStack !== "undefined" ? undoStack[undoStack.length - 1] : null;
+      toast(msg, "info", {
+        action: t("autoFillUndo"),
+        onAction: () => {
+          if (typeof undoCloseStep === "function") undoCloseStep();
+          if (step && step.auto && undoStack[undoStack.length - 1] === step) undoLast();
+          else toast(t("undoStepGone"), "info");
+        },
+        action2: t("autoFillStop"),
+        onAction2: () => {
+          if (typeof autoFillFormulasEl !== "undefined" && autoFillFormulasEl) autoFillFormulasEl.checked = false;
+          if (typeof syncCellStyleFlags === "function") syncCellStyleFlags();
+          if (typeof saveCellStylePreferences === "function") saveCellStylePreferences();
+          toast(t("autoFillStopped"), "info");
+        },
+      });
+    });
+  }
+
+  // ── kolumna obliczeniowa (Excel: „Wypełnij formuły w tabelach, aby utworzyć kolumny obliczeniowe”) ──
+  // Wołane z edytora PO zatwierdzeniu formuły wpisanej ręcznie w komórkę (r, col) — w tym samym
+  // zadaniu, jako część automatyczna (pierwsze Cofnij zdejmuje wypełnienie, formuła w komórce zostaje).
+  // Komórka w danych tabeli Excela (bez nagłówka i wiersza sumy) i pozostałe komórki kolumny:
+  //   • wszystkie puste → formuła wypełnia całą kolumnę,
+  //   • wszystkie z tą samą formułą względną co ta komórka PRZED zmianą (już kolumna obliczeniowa)
+  //     → nowa formuła zastępuje ją w całej kolumnie.
+  // W każdym innym przypadku (ręczne wartości, różne formuły) nic — jak Excel bez pytania.
+  function calcColumn(r, col, prevF) {
+    if (!(typeof swbAutoFillOn === "undefined" || swbAutoFillOn)) return 0;
+    if (typeof currentTables === "undefined" || !currentTables || typeof swbFormulaShifted !== "function" || typeof FC === "undefined" || !FC) return 0;
+    const sheetName = currentSheetName;
+    const ws = workbook.Sheets[sheetName];
+    const c = currentStartCol + col;
+    const cell = ws && ws[enc(r, c)];
+    if (!cell || !cell.f) return 0;
+    const meta = Object.values(currentTables).find((m) => {
+      if (!m || m.sheetName !== sheetName || !m.ref) return false;
+      try { const g = XLSX.utils.decode_range(m.ref); return c >= g.s.c && c <= g.e.c && r >= g.s.r + (m.headerRows ?? 1) && r <= g.e.r - (m.totalsRows || 0); } catch { return false; }
+    });
+    if (!meta) return 0;
+    const g = XLSX.utils.decode_range(meta.ref);
+    const r1 = g.s.r + (meta.headerRows ?? 1), r2 = g.e.r - (meta.totalsRows || 0);
+    if (r2 - r1 > 20000) return 0; // bezpiecznik
+    const prevShape = prevF ? shiftedF(prevF, 0) : null;
+    let allEmpty = true, allPrev = !!prevShape;
+    for (let rr = r1; rr <= r2; rr++) {
+      if (rr === r) continue;
+      const x = ws[enc(rr, c)];
+      const filled = x && (x.f || (typeof isMeaningfulSheetCell === "function" ? isMeaningfulSheetCell(x) : x.v != null && x.v !== ""));
+      if (filled) allEmpty = false;
+      if (allPrev && !(x && x.f && shiftedF(x.f, r - rr) === prevShape)) allPrev = false;
+      if (!allEmpty && !allPrev) return 0;
+    }
+    if (r2 <= r1) return 0; // tabela z jednym wierszem danych — nie ma czego wypełniać
+    let count = 0;
+    undoAutoPart(() => {
+      for (let rr = r1; rr <= r2; rr++) {
+        if (rr === r) continue;
+        const text = swbFormulaShifted(sheetName, enc(r, c), rr - r, 0);
+        if (text && swbFormulaCommitAt(rr, col, text, { silent: true }) === "ok") count++;
+      }
+    });
+    if (count) {
+      requestAnimationFrame(() => renderActiveTable()); // wyniki w wierszach, których edytor nie rysuje
+      autoToast(t("autoFillColDone", { count }));
+    }
+    return count;
   }
 
   // Ta sama reguła co xlsx-grow.js (zakres kończący się na wierszu `prev` i mający ≥ 2 wiersze
@@ -769,7 +852,7 @@ const swbRowGrow = (() => {
   }
 
   return {
-    init, snapshot, canAdd, filtered, addDraft, beforeWrite, withXf, growInfo, syncButton,
+    init, snapshot, canAdd, filtered, addDraft, calcColumn, beforeWrite, withXf, growInfo, syncButton,
     addColumn, writeColumn, reloadStructure, afterUndo, isQuietReload: () => quiet, syncGhosts,
     _state: () => ({ origLast: [...origLast], liveLast: [...liveLast], drafts: [...drafts], origLastCol: [...origLastCol] }),
   };

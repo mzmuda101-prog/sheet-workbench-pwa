@@ -5302,7 +5302,10 @@ function openCellEditor(td, options = {}) {
     const parsed = parseCellInput(input.value, row.rowIndex0, colIndex0);
     if (parsed && parsed.type === "formula") {
       // Formuła (formula-calc.js): błąd składni zostawia edytor otwarty z komunikatem.
+      const prevF = (() => { const x = workbook.Sheets[currentSheetName][XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + colIndex0 })]; return x && x.f ? x.f : null; })();
       const res = typeof swbFormulaCommit === "function" ? swbFormulaCommit(row, colIndex0, input.value) : "error";
+      // formuła w kolumnie tabeli Excela → kolumna obliczeniowa (row-grow.js), część automatyczna Cofnij
+      if (res === "ok" && typeof swbRowGrow !== "undefined" && swbRowGrow.calcColumn) swbRowGrow.calcColumn(row.rowIndex0, colIndex0, prevF);
       if (res !== "ok") {
         if (res === "skip") toast(t("formulaEditBlocked"), "warning");
         shakeCellEditor(input);

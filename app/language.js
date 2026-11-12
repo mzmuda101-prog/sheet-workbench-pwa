@@ -2963,6 +2963,12 @@ const STATIC_TRANSLATIONS = {
     showConditionalFormatting: "Formatowanie warunkowe",
     showSubheaders: "Wyróżnione podnagłówki",
     recalcDates: "Formuły z datą liczone na dziś",
+    autoFillFormulas: "Automatycznie uzupełniaj formuły (jak w Excelu)",
+    autoFillRowDone: "Nowy wiersz dostał formuły z wierszy wyżej ({cols})",
+    autoFillColDone: "Formuła wypełniła całą kolumnę tabeli ({count} wierszy) — kolumna obliczeniowa, jak w Excelu",
+    autoFillUndo: "Cofnij uzupełnienie",
+    autoFillStop: "Nie uzupełniaj automatycznie",
+    autoFillStopped: "Automatyczne uzupełnianie wyłączone — włączysz je w Widok → Tabela",
     smartColWidths: "Węższe kolumny przy długich tekstach",
     wrapCells: "Zawijaj tekst we wszystkich komórkach",
     showPanelHandle: "Uchwyt panelu przy krawędzi",
@@ -3334,6 +3340,12 @@ const STATIC_TRANSLATIONS = {
     showConditionalFormatting: "Conditional formatting",
     showSubheaders: "Highlighted subheaders",
     recalcDates: "Date formulas as of today",
+    autoFillFormulas: "Fill formulas automatically (like Excel)",
+    autoFillRowDone: "The new row got formulas from the rows above ({cols})",
+    autoFillColDone: "The formula filled the whole table column ({count} rows) — a calculated column, like Excel",
+    autoFillUndo: "Undo the fill",
+    autoFillStop: "Stop filling automatically",
+    autoFillStopped: "Automatic filling is off — turn it back on in View → Table",
     smartColWidths: "Narrower columns for long text",
     wrapCells: "Wrap text in all cells",
     showPanelHandle: "Panel handle at the edge",
@@ -3984,6 +3996,7 @@ function applyStaticTranslations() {
   setCheckboxText("showConditionalFormatting", copy.showConditionalFormatting);
   setCheckboxText("showSubheaders", copy.showSubheaders);
   setCheckboxText("recalcDates", copy.recalcDates);
+  setCheckboxText("autoFillFormulas", copy.autoFillFormulas);
   setCheckboxText("smartColWidths", copy.smartColWidths);
   setCheckboxText("wrapCells", copy.wrapCells);
   setCheckboxText("virtRows", copy.virtRows);

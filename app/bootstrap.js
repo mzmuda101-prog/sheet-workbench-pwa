@@ -407,6 +407,12 @@ if (freezeColCountEl) {
   });
 }
 syncFreezeCountField();
+if (autoFillFormulasEl) {
+  autoFillFormulasEl.addEventListener("change", () => {
+    syncCellStyleFlags();
+    saveCellStylePreferences();
+  });
+}
 if (recalcDatesEl) {
   recalcDatesEl.addEventListener("change", () => {
     syncCellStyleFlags();
