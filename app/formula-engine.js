@@ -1410,10 +1410,98 @@
     const n = parseNumberText(text(v, ctx));
     return n === null ? ERR["#VALUE!"] : n;
   };
+  // ── TEKST() w polskim Excelu (wyrocznia: Excel 16.115 PL, 2026-11-12) ──────────────────────
+  // Kody formatu są polskie: rok r/e, godzina g, przecinek dziesiętny, spacja tysięcy (spacja po
+  // cyfrach bez przecinka dzieli przez 1000: 0 "szt." → „1szt.”). y i h to zwykłe litery
+  // („dd.mm.yyyy” → „05.10.yyyy”, „hh:mm” → „hh:10”), kropka w formacie liczby = #ARG!.
+  // Nazwy dni i miesięcy po polsku w mianowniku („poniedziałek, 5 październik”), chyba że
+  // [$-409] (albo inny język) — wtedy angielskie. Wynik: format angielski dla SSF + literały.
+  const PL_DAYS = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
+  const PL_DAYS3 = ["niedz", "pon", "wt", "śr", "czw", "pt", "sob"];
+  const PL_MONTHS = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
+  const PL_MONTHS3 = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
+  const PL_COLORS = { czarny: "Black", niebieski: "Blue", turkusowy: "Cyan", zielony: "Green", purpurowy: "Magenta", czerwony: "Red", "biały": "White", "żółty": "Yellow" };
+  const DOT = "\ue000", COMMA = "\ue001"; // kropka/przecinek z literałów — nie podlegają zamianie separatorów
+  function plTextFormat(fmt, x) {
+    const lit = (str) => `"${str.replace(/\./g, DOT).replace(/,/g, COMMA)}"`;
+    const parts = serialToParts(x);
+    let out = "", plNames = true, isDate = false, dot = false, decimal = false;
+    const isPh = (ch) => ch === "0" || ch === "#" || ch === "?";
+    // czy to format daty/czasu (kody poza literałami) — wtedy przecinek i spacja to zwykłe znaki
+    const bare = fmt.replace(/"[^"]*"|\\.|\[[^\]]*\]/g, "");
+    const dateFmt = /[dmrgs]|(^|[^0#?,])e(?![+-])|am\/pm|a\/p/i.test(bare.replace(/e[+-]/gi, ""));
+    for (let i = 0; i < fmt.length; i++) {
+      const ch = fmt[i];
+      if (ch === '"') { const j = fmt.indexOf('"', i + 1); const end = j < 0 ? fmt.length : j; out += lit(fmt.slice(i + 1, end)); i = end; continue; }
+      if (ch === "\\") { out += lit(fmt[i + 1] || ""); i++; continue; }
+      if (ch === "[") {
+        const j = fmt.indexOf("]", i); const body = fmt.slice(i + 1, j < 0 ? fmt.length : j); i = j < 0 ? fmt.length : j;
+        const lcid = /^\$[^-]*-([0-9a-f]+)$/i.exec(body);
+        if (lcid) {
+          if ((parseInt(lcid[1], 16) & 0x3ff) !== 0x15) plNames = false;
+          const sym = body.slice(1, body.lastIndexOf("-")); // [$zł-415] → „zł”, [$-415] → nic
+          if (sym) out += lit(sym);
+          continue;
+        }
+        const col = PL_COLORS[body.toLowerCase()];
+        out += col ? `[${col}]` : /^kolor\d+$/i.test(body) ? `[Color${body.slice(5)}]` : `[${body}]`;
+        continue;
+      }
+      if (ch === ";") { decimal = false; out += ch; continue; }
+      if (/^(am\/pm|a\/p)/i.test(fmt.slice(i))) { const m = /^(am\/pm|a\/p)/i.exec(fmt.slice(i))[0]; out += m; i += m.length - 1; isDate = true; continue; }
+      const lower = ch.toLowerCase();
+      if ((lower === "e") && (fmt[i + 1] === "+" || fmt[i + 1] === "-")) { out += "E" + fmt[i + 1]; i++; continue; } // 0,00E+00
+      if (lower === "d" || lower === "m") {
+        let j = i; while (j < fmt.length && fmt[j].toLowerCase() === lower) j++;
+        const run = j - i; isDate = true;
+        if (plNames && run >= 3) {
+          const word = lower === "d" ? (run === 3 ? PL_DAYS3[parts.wd] : PL_DAYS[parts.wd])
+            : run === 3 ? PL_MONTHS3[parts.m - 1] : run === 4 ? PL_MONTHS[parts.m - 1] : PL_MONTHS[parts.m - 1].charAt(0);
+          out += lit(word);
+        } else out += lower.repeat(run);
+        i = j - 1; continue;
+      }
+      if (lower === "r") { out += "y"; isDate = true; continue; }
+      if (lower === "e") { out += "yyyy"; isDate = true; continue; }
+      if (lower === "g") { out += "h"; isDate = true; continue; }
+      if (lower === "s") { out += "s"; isDate = true; continue; }
+      if (/\p{L}/u.test(ch)) { out += lit(ch); continue; } // y, h i inne litery to tekst (polski Excel)
+      if (ch === "," && dateFmt) { out += lit(","); continue; }
+      if (ch === ",") { out += "."; decimal = true; continue; }
+      if (ch === ".") { out += lit("."); dot = true; continue; }
+      if (ch === " ") {
+        let k = i; while (k > 0 && fmt[k - 1] === " ") k--;
+        const prev = k > 0 ? fmt[k - 1] : "";
+        let n = i; while (n < fmt.length && fmt[n] === " ") n++;
+        const next = fmt[n] || "";
+        // spacja między cyframi = separator tysięcy; spacja na KOŃCU sekcji liczby = ÷1000 („0  ” → 1)
+        // shortcut: „0 "szt."” dało w Excelu „1szt.”, a „0 "zł"” — „5 zł”; reguły nie rozstrzygnięto, spacja przed tekstem zostaje spacją
+        if (!dateFmt && isPh(prev) && (isPh(next) || (!decimal && (next === ";" || next === "")))) { out += ","; continue; }
+        out += lit(" "); continue;
+      }
+      out += ch;
+    }
+    return { code: out, isDate, error: dot && !isDate };
+  }
+  function plTextResult(str, isDate) {
+    let r = String(str);
+    if (!isDate) r = r.replace(/(\d),(?=\d{3})/g, "$1\u00a0").replace(/(\d)\.(\d)/g, "$1,$2"); // 1,234.5 → 1 234,5
+    return r.replace(new RegExp(DOT, "g"), ".").replace(new RegExp(COMMA, "g"), ",");
+  }
   FN.TEXT = (args, ctx) => {
     const v = scalar(args[0], ctx);
     if (isErr(v)) return v;
     let fmt = text(scalar(args[1], ctx), ctx);
+    if (ctx && ctx.lang === "pl" && ctx.formatNumber) {
+      const xp = typeof v === "number" ? v : parseNumberText(String(v ?? ""));
+      if (xp === null) return text(v, ctx);
+      if (/^@$/.test(fmt.trim())) return text(xp, ctx);
+      const conv = plTextFormat(fmt, xp);
+      if (conv.error) return ERR["#VALUE!"];
+      const outPl = ctx.formatNumber(conv.code, xp);
+      if (outPl != null) return plTextResult(outPl, conv.isDate);
+      return text(xp, ctx);
+    }
     // Excel PL zapisuje kody formatu po polsku (rrrr = rok, gg = godziny)
     // — ale nie w tekście w cudzysłowie, w [Red]/[$-415] ani po „\\” („0 ""hrs""” zostaje, [Red] nie robi się [Yed])
     fmt = fmt.replace(/"[^"]*"|\[[^\]]*\]|\\.|[rg]+/gi, (m, at, all) => {

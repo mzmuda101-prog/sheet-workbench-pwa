@@ -88,6 +88,35 @@ const failures = [];
   CASES_PL.forEach(([s, w]) => check(s, w, "pl"));
   check('=WARTOŚĆ("1 234,5")', 1234.5, "pl");
   check('="12,5 zł"*2', 25, "pl");
+  // TEKST() w polskim Excelu — wyniki z Excela 16.115 PL (2026-11-12): kody r/e/g, y i h jako litery,
+  // przecinek dziesiętny, spacja tysięcy (twarda), kropka w formacie liczby = #ARG!, nazwy dni/miesięcy w mianowniku
+  {
+    const ctxPl = { ...ctx, lang: "pl" };
+    const d = "DATE(2026,10,5)+TIME(14,7,9)", NB = "\u00a0";
+    const TEXT_PL = [
+      [d, "dddd", "poniedziałek"], [d, "ddd", "pon"], [d, "mmmm", "październik"], [d, "mmm", "paź"], [d, "mmmmm", "p"],
+      [d, "d mmmm yyyy", "5 październik yyyy"], [d, "dddd, d mmmm", "poniedziałek, 5 październik"], [d, "ddd d mmm", "pon 5 paź"],
+      [d, "[$-409]dddd", "Monday"], [d, "[$-415]dddd mmmm", "poniedziałek październik"], [d, "dd.mm.yyyy", "05.10.yyyy"],
+      [d, "mmmm d", "październik 5"], [d, "rrrr", "2026"], [d, "rr", "26"], [d, "yy", "yy"], [d, "hh:mm", "hh:10"], [d, "gg:mm", "14:07"],
+      [d, "dd.mm.rrrr gg:mm:ss", "05.10.2026 14:07:09"], [d, "[$-409]yyyy", "yyyy"], [d, '"yyyy" rrrr', "yyyy 2026"], [d, "mm:ss", "07:09"],
+      [d, "AM/PM", "PM"], [d, "dd/mm/rr", "05/10/26"], [d, "e", "2026"],
+      ["1234.567", "0.00", "#VALUE!"], ["1234.567", "#,##0.00", "#VALUE!"], ["1234.567", "0,0", "1234,6"], ["1234.567", "0,00%", "123456,70%"],
+      ["1234.567", "# ##0", `1${NB}235`], ["1234.567", '# ##0,00 "zł"', `1${NB}234,57 zł`], ["1234.567", "0,00 zł", "1234,57 zł"], ["1234.567", "0", "1235"],
+      ["1234.567", "0,###", "1234,567"], ["1234.567", "00000", "01235"], ["1234.567", "0,00E+00", "1,23E+03"], ["1234.567", "[Czerwony]0,00;-0,00", "1234,57"],
+      ["1234.567", '"Suma: "0,00', "Suma: 1234,57"], ["1234.567", "0,00;(0,00)", "1234,57"], ["1234.567", "@", "1234,567"], ["1234.567", "dd.mm", "18.05"],
+      ["1234567.891", "# ##0,00", `1${NB}234${NB}567,89`], ["0.5", "0%", "50%"], ["-1234.5", "0,00", "-1234,50"], ["1234.5", "#", "1235"],
+      ["5", '0 "zł"', "5 zł"], ["1234567", "0  ", "1"],
+    ];
+    FE.setLocale("pl");
+    for (const [v, f, want] of TEXT_PL) {
+      const src = `=TEXT(${v},"${f.replace(/"/g, '""')}")`;
+      let got;
+      try { got = FE.evaluate(FE.parse(src, { lang: "en" }), ctxPl); } catch (e) { got = "SYNTAX: " + e.message; }
+      const g = FE.isErr(got) ? got.err : got;
+      if (g !== want) failures.push(`${src} (Excel PL) = ${JSON.stringify(g)}, Excel: ${JSON.stringify(want)}`);
+    }
+    CASES.push(...TEXT_PL); // tylko do licznika przypadków
+  }
   FE.setLocale("en");
   // zapis do pliku i z powrotem
   const roundtrip = [["=JEŻELI.BŁĄD(X.WYSZUKAJ(A2;B:B;C:C);\"brak\")", "IFERROR(_xlfn.XLOOKUP(A2,B:B,C:C),\"brak\")"], ["=SUMA(A1:A3;1,5)", "SUM(A1:A3,1.5)"]];
@@ -195,6 +224,10 @@ for (const file of files) {
     return boundsCache.get(sh);
   }, { today, sheetFor: (n) => lowerSheets.get(String(n).toLowerCase()) ?? null, structured: FE.makeStructuredResolver(tables) });
   base.name = FE.makeNameResolver((wb.Workbook && wb.Workbook.Names) || [], wb.SheetNames);
+  // pliki z polskiego Excela: TEKST(), liczby w tekście („x”&0,5) i PRAWDA/FAŁSZ jak w Excelu PL
+  // (ORACLE_LANG=en — reguły angielskiego Excela)
+  base.lang = process.env.ORACLE_LANG || "pl";
+  FE.setLocale(base.lang);
 
   let total = 0, okN = 0, unsupported = 0, noCache = 0;
   const bad = new Map();
