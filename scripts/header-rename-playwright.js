@@ -65,7 +65,7 @@ async function run() {
   await p.evaluate(() => {
     setPrimarySort("Status", "asc");
     sortRows();
-    searchQueryEl.value = 'Status:="W trakcie" && Zakres:="Zakres A-01"';
+    searchQueryEl.value = 'Status:="W trakcie" && Zadanie:="Zadanie A-01"';
     derivedColumns = [{ id: dcNextId(), name: "Stan krótko", expr: 'LEFT([Status];3)' }];
     applyDerivedColumns({ silent: true });
     renderActiveTable();
@@ -86,7 +86,7 @@ async function run() {
   await sleep(500);
   const s2 = await state(p);
   check("2. nazwa w arkuszu, nagłówku i liście sortowania", s2.h === "Stan zakresu" && s2.cell === "Stan zakresu" && s2.th === "Stan zakresu" && s2.opt.includes("Stan zakresu") && !s2.opt.includes("Status"), s2);
-  check("2. sort i zapytanie idą za nową nazwą (wartości w cudzysłowie bez zmian)", s2.sort === "Stan zakresu" && s2.q === 'Stan zakresu:="W trakcie" && Zakres:="Zakres A-01"', s2);
+  check("2. sort i zapytanie idą za nową nazwą (wartości w cudzysłowie bez zmian)", s2.sort === "Stan zakresu" && s2.q === 'Stan zakresu:="W trakcie" && Zadanie:="Zadanie A-01"', s2);
   const dc = await p.evaluate(() => ({ expr: derivedColumns[0].expr, v: viewRows[0] && viewRows[0].display[currentHeaders.indexOf("Stan krótko")] }));
   check("2. kolumna wyliczana [Status] → [Stan zakresu] i liczy się dalej", dc.expr === "LEFT([Stan zakresu];3)" && typeof dc.v === "string" && dc.v.length === 3, dc);
 
@@ -99,7 +99,7 @@ async function run() {
   const s3b = await state(p);
   check("3. Ponów wraca do nowej nazwy", s3b.h === "Stan zakresu" && s3b.sort === "Stan zakresu", s3b);
 
-  const refused = await p.evaluate(() => [swbRenameColumn(2, ""), swbRenameColumn(2, "Zakres"), swbRenameColumn(2, "Stan: nowy"), swbRenameColumn(2, " zakres ")]);
+  const refused = await p.evaluate(() => [swbRenameColumn(2, ""), swbRenameColumn(2, "Zadanie"), swbRenameColumn(2, "Stan: nowy"), swbRenameColumn(2, " zadanie ")]);
   const s4 = await state(p);
   check("4. pusta / zdublowana / z „:” — odmowa bez zmian", refused.every((x) => x === false) && s4.h === "Stan zakresu", { refused, s4 });
 

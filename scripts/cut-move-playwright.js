@@ -97,7 +97,7 @@ async function run() {
 
   // 5. przefiltrowany widok z dziurą
   const refused = await p.evaluate(async () => {
-    setPrimarySort("Zakres", "desc"); // sąsiednie wiersze widoku ≠ sąsiednie wiersze pliku
+    setPrimarySort("Zadanie", "desc"); // sąsiednie wiersze widoku ≠ sąsiednie wiersze pliku
     sortRows();
     renderActiveTable();
     const a = viewRows[0];

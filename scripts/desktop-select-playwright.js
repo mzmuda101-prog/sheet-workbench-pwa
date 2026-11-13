@@ -49,7 +49,7 @@ async function run() {
 
   // 5. tytuł
   const t0 = await p.evaluate(() => document.title);
-  check("5. tytuł = nazwa pliku + aplikacja (karta przeglądarki)", /Przyklad-obieg-zakresow\.xlsx — /.test(t0) && !/^\*/.test(t0), t0);
+  check("5. tytuł = nazwa pliku + aplikacja (karta przeglądarki)", /Przyklad-obieg-zadan\.xlsx — /.test(t0) && !/^\*/.test(t0), t0);
 
   // 1. klik w Edycji = komórka
   await p.click(CELL(2, 3));
@@ -95,7 +95,7 @@ async function run() {
   }, formulaCol);
   check("3. ostrzeżenie o nadpisanych formułach z podpowiedzią Cofnij", warn.some((x) => /nadpisało formuły w 1 kom\..*Cofnij/.test(x)), warn);
   const t1 = await p.evaluate(() => document.title);
-  check("5. niezapisane zmiany: „• ” przed nazwą pliku", /^• Przyklad-obieg-zakresow\.xlsx/.test(t1), t1);
+  check("5. niezapisane zmiany: „• ” przed nazwą pliku", /^• Przyklad-obieg-zadan\.xlsx/.test(t1), t1);
   await p.evaluate(() => undoRedo("undo"));
 
   // 6. numer wiersza / litera kolumny / narożnik (mysz, jak w Excelu)

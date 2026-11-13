@@ -392,7 +392,10 @@ const swbRowGrow = (() => {
         if (growRng(rg, prev, next)) { meta.ref = XLSX.utils.encode_range(rg); changed = true; }
       });
       // nowy obiekt = nowe granice w pamięci podręcznej silnika (fcTables, fcContext)
-      if (changed) currentTables = Object.assign({}, currentTables);
+      if (changed) {
+        currentTables = Object.assign({}, currentTables);
+        if (typeof swbFormulaTablesChanged === "function") swbFormulaTablesChanged(); // Tabela[Kolumna] w formułach
+      }
     }
     if (typeof dvRulesBySheet !== "undefined" && dvRulesBySheet && dvRulesBySheet.has(sheetName)) {
       dvRulesBySheet.get(sheetName).forEach((rule) => (rule.ranges || []).forEach((rg) => growRng(rg, prev, next)));
@@ -501,7 +504,10 @@ const swbRowGrow = (() => {
         if (meta.columns) meta.columns[name.toLowerCase()] = next;
         changed = true;
       });
-      if (changed) currentTables = Object.assign({}, currentTables);
+      if (changed) {
+        currentTables = Object.assign({}, currentTables);
+        if (typeof swbFormulaTablesChanged === "function") swbFormulaTablesChanged(); // Tabela[Kolumna] w formułach
+      }
     }
     if (typeof dvRulesBySheet !== "undefined" && dvRulesBySheet && dvRulesBySheet.has(sheetName)) {
       dvRulesBySheet.get(sheetName).forEach((rule) => (rule.ranges || []).forEach((rg) => growRngCol(rg, prev, next)));

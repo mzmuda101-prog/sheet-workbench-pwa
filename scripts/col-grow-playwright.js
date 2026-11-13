@@ -121,7 +121,7 @@ async function run() {
   } else console.log("⚠️  4. walidator Open XML niedostępny — pomijam");
   if (fs.existsSync(PY)) {
     const py = `import openpyxl,sys,json
-ws=openpyxl.load_workbook(sys.argv[1])['Obieg zakresów']
+ws=openpyxl.load_workbook(sys.argv[1])['Obieg zadań']
 vals=[ws.cell(row=r,column=20).value for r in range(5,126)]
 h=ws['T5']; s=ws['S5']
 print(json.dumps({'hdr':h.value,'bold':[h.font.b,s.font.b],'fill':[h.fill.fgColor.rgb,s.fill.fgColor.rgb],'note':'notatka 1' in vals,'fmt':[ws['T7'].number_format,ws['S7'].number_format]}))`;

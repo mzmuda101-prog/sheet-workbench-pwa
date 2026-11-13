@@ -239,7 +239,10 @@ function fcIndexAdd(sheet, ref, cell, idx = fcIndex) {
   const deps = fcDepsOf(p.ast, sheet, r, c);
   // formuła tablicowa: liczymy tylko rozlewaną (tablica dynamiczna, kotwica zakresu) — stare CSE zostają z pliku
   const spill = !!(cell.F && cell.F.split(":")[0] === ref && p.ast && FC.isSpillFormula(p.ast));
-  idx.entries.set(key, { sheet, ref, r, c, f: cell.f, ast: p.ast, ok: p.ok && (!cell.F || spill), spill, deps });
+  // tabele, do których formuła się odwołuje (Tabela[Kolumna]) — po urośnięciu tabeli zakres zależności
+  // trzeba policzyć od nowa (swbFormulaTablesChanged)
+  const tables = p.ast ? FC.refsOf(p.ast).filter((x) => x.table).map((x) => String(x.table).toLowerCase()) : [];
+  idx.entries.set(key, { sheet, ref, r, c, f: cell.f, ast: p.ast, ok: p.ok && (!cell.F || spill), spill, deps, tables: tables.length ? tables : null });
   if (spill) {
     if (!idx.spills) idx.spills = new Set();
     idx.spills.add(key);
@@ -341,6 +344,19 @@ function swbFormulaCellChanged(sheet, ref) {
   const cell = workbook.Sheets[sheet] && workbook.Sheets[sheet][ref];
   if (cell && cell.f) fcIndexAdd(sheet, ref, cell);
 }
+
+// Tabela Excela urosła (nowy wiersz/kolumna — row-grow.js): formuły z Tabela[Kolumna] dostają zależności
+// od nowego zakresu. Dawniej zostawał zakres z otwarcia pliku — lista UNIKATOWE(Tabela[Dział]) albo
+// LICZ.JEŻELI(Tabela[Osoba];…) nie widziały nowego wiersza.
+function swbFormulaTablesChanged(names) {
+  if (!fcIndex || fcIndex.wb !== workbook) return;
+  const want = new Set((names || []).map((n) => String(n).toLowerCase()));
+  const hit = [];
+  fcIndex.entries.forEach((e) => { if (e.tables && e.tables.some((t) => !want.size || want.has(t))) hit.push(e); });
+  fcIndexBaseReset();
+  hit.forEach((e) => swbFormulaCellChanged(e.sheet, e.ref));
+}
+function fcIndexBaseReset() { fcBaseCtx = null; } // resolwer tabel w kontekście czyta currentTables od nowa
 
 function fcDependents(sheet, r, c) {
   const list = fcIndex && fcIndex.bySheet.get(sheet);

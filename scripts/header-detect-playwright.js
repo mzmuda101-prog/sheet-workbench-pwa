@@ -151,7 +151,7 @@ async function run() {
     ok("4. przykładowy plik: wiersze 1–4 nad nagłówkiem, tytuł w A1, nagłówek pod nimi",
       a.nums === "1,2,3,4" && /Raport/.test(a.title) && a.headerBelow && a.bodyRows === 120, a);
     // filtr szybkiego szukania — wiersze nad nagłówkiem zostają
-    await p4.evaluate(() => { quickSearchEl.value = "Zakres A-01"; commitQuickSearch(); });
+    await p4.evaluate(() => { quickSearchEl.value = "Zadanie A-01"; commitQuickSearch(); });
     await p4.waitForFunction(() => viewRows.length > 0 && viewRows.length < 10, null, { timeout: 8000 });
     await sleep(300);
     const b = await preState();

@@ -2,7 +2,7 @@
 //   node scripts/row-grow-playwright.js            (Chromium)
 //   ENGINE=webkit node scripts/row-grow-playwright.js
 //
-// Pilnuje (przykład „Obieg zakresów”: 4 kolumny „Długość” to formuły, kolumny dat mają format daty):
+// Pilnuje (przykład „Obieg zadań”: 4 kolumny „Długość” to formuły, kolumny dat mają format daty):
 //   1. „＋ Nowy wiersz” tylko w Edycji; klik = wiersz za ostatnim wierszem danych, pisanie od 1. kolumny;
 //   2. wpis: wartości w arkuszu, wygląd z wiersza wyżej (indeks stylu w pustych kolumnach też),
 //      formuły „Długość” przeniesione i liczą się z dat wpisanych w nowym wierszu;
@@ -148,7 +148,7 @@ async function run() {
   } else console.log("⚠️  5. walidator Open XML niedostępny (brak .NET) — pomijam");
   if (fs.existsSync(PY)) {
     const py = `import openpyxl,sys,json
-ws=openpyxl.load_workbook(sys.argv[1])['Obieg zakresów']
+ws=openpyxl.load_workbook(sys.argv[1])['Obieg zadań']
 R=int(sys.argv[2])
 print(json.dumps({'B':ws['B%d'%R].value,'G':ws['G%d'%R].value,'Efmt':ws['E%d'%R].number_format,'Ifmt':ws['I%d'%R].number_format,'Iprev':ws['I%d'%(R-1)].number_format,'max':ws.max_row,'B2':ws['B%d'%(R+1)].value}))`;
     let o = null;

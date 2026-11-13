@@ -206,7 +206,7 @@ async function run() {
 
   // 7. kopia ma te same odstępy i znaczniki co prawdziwe komórki: reguły z `#dataTable` nie
   // obejmowały .fz-clone — w wąskiej kolumnie z Excela (cell-narrow/cell-tight, 3 px) kopia
-  // miała 12 px i przy przewijaniu „Zakres A-01” skakało w prawo i ucinało się (2026-11-06).
+  // miała 12 px i przy przewijaniu „Zadanie A-01” skakało w prawo i ucinało się (2026-11-06).
   const sameStyle = await page.evaluate(() => {
     document.activeElement?.blur(); // fokus w zamrożonej kolumnie (krok wyżej) = bez szyby
     // zamrożona kolumna danych to cells[1]; każda klasa w innym wierszu

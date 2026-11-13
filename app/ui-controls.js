@@ -1254,7 +1254,8 @@ async function buildSampleWorkbookArrayBuffer() {
       return 0;
     }
   })();
-  const SHEET = "Obieg zakresów";
+  // Ogólny temat „zadania” (2026-11-13, prośba Mateusza: mniej skojarzeń z terenami) — układ ten sam.
+  const SHEET = "Obieg zadań";
   const SUMMARY = "Podsumowanie";
   const NOTE_AUTHOR = "Koordynator";
   const CYCLES = 4;
@@ -1268,8 +1269,8 @@ async function buildSampleWorkbookArrayBuffer() {
 
   // Nagłówek: prefiks (Nr./Zakres/Status) + CYCLES × blok. Powtórzenia dostają sufiks
   // cyfrowy (od2, do2…), bo tak wyglądają realne pliki i tak je rozpoznaje parser nagłówków.
-  // „Zakres” zamiast „Teren” — przykład ma być ogólny (2026-09-28, prośba Mateusza).
-  const prefixHeaders = ["Nr.", "Zakres", "Status"];
+  // „Zadanie” — przykład ma być ogólny (2026-09-28 „Zakres” zamiast „Teren”, 2026-11-13 „Zadanie”).
+  const prefixHeaders = ["Nr.", "Zadanie", "Status"];
   const headerRow = prefixHeaders.slice();
   for (let c = 0; c < CYCLES; c++) {
     BLOCK.forEach((name) => headerRow.push(c === 0 ? name : `${name}${c + 1}`));
@@ -1310,7 +1311,7 @@ async function buildSampleWorkbookArrayBuffer() {
 
   // Komórka: { s: tekst } | { n: liczba } | { f: formuła, n|s: zapisana wartość } + st (styl).
   // Indeksy stylów (st) odpowiadają <cellXfs> w STYLES niżej.
-  const ST = { title: 1, kpiLabel: 2, kpiValue: 3, header: 4, cycle: 5, date: 6, int: 7, bold: 8, pct: 9, dec: 10, totInt: 11, totDec: 12, totPct: 13, dateBold: 14, totLabel: 15 };
+  const ST = { title: 1, kpiLabel: 2, kpiValue: 3, header: 4, cycle: 5, date: 6, int: 7, bold: 8, pct: 9, dec: 10, totInt: 11, totDec: 12, totPct: 13, dateBold: 14, totLabel: 15, search: 16 };
   const HEADER_ROW = 5;           // wiersz nagłówka (Excel, od 1)
   const FIRST = HEADER_ROW + 1;   // pierwszy wiersz danych
   const LAST = FIRST + planRows.length - 1;
@@ -1324,8 +1325,8 @@ async function buildSampleWorkbookArrayBuffer() {
 
   planRows.forEach((spec, i) => {
     const r = FIRST + i;
-    const zakres = `Zakres ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
-    const cells = [{ n: i + 1 }, { s: zakres }, null];
+    const zadanie = `Zadanie ${String.fromCharCode(65 + (i % 4))}-${String(i + 1).padStart(2, "0")}`;
+    const cells = [{ n: i + 1 }, { s: zadanie }, null];
     const closedCount = Math.min(spec.closed, spec.open ? CYCLES - 1 : CYCLES);
     // Cykle zamknięte układamy chronologicznie wstecz od dziś, żeby „ostatni cykl"
     // faktycznie był tym najświeższym.
@@ -1358,7 +1359,7 @@ async function buildSampleWorkbookArrayBuffer() {
         perPerson.get(person).all += 1;
         if ((spec.openAgeDays || 30) > longestOpen.days) longestOpen = { row: r, col: blockCol(c, 1), days: spec.openAgeDays || 30 };
       } else if (isOrphan) {
-        // Celowa dziura w danych: jest data zwrotu, nie ma wydania.
+        // Celowa dziura w danych: jest data zakończenia, nie ma rozpoczęcia.
         cells.push({ s: person }, null, { n: serial(addDays(today, -(15 + i))), st: ST.date }, { f: lenF, s: "", st: ST.int });
         perPerson.get(person).all += 1;
         if (!firstOrphanRow) firstOrphanRow = r;
@@ -1377,11 +1378,11 @@ async function buildSampleWorkbookArrayBuffer() {
   const lenRange = (c) => `${colName(blockCol(c, 3))}${FIRST}:${colName(blockCol(c, 3))}${LAST}`;
   note(`${colName(blockCol(0, 3))}${HEADER_ROW}`, "Liczone formułą: „do” minus „od” (w dniach). Puste, dopóki cykl nie ma obu dat.");
   note(`C${HEADER_ROW}`, "Wybór z listy: Zamknięte / W trakcie / Nie zaczęte. Kolor nadaje formatowanie warunkowe.");
-  if (longestOpen.row) note(`${colName(longestOpen.col)}${longestOpen.row}`, `Wydany ${longestOpen.days} dni temu i dalej nie wrócił — przypomnieć.`);
-  if (firstOrphanRow) note(`C${firstOrphanRow}`, "Jest data zwrotu, brakuje daty wydania — uzupełnić z papierowej karty.");
+  if (longestOpen.row) note(`${colName(longestOpen.col)}${longestOpen.row}`, `Rozpoczęte ${longestOpen.days} dni temu i dalej w toku — przypomnieć.`);
+  if (firstOrphanRow) note(`C${firstOrphanRow}`, "Jest data zakończenia, brakuje daty rozpoczęcia — uzupełnić.");
 
   const kpiRow = [
-    { s: "Zakresów łącznie", st: ST.kpiLabel }, { f: `COUNTA(A${FIRST}:A${LAST})`, n: dataRows.length, st: ST.kpiValue }, null,
+    { s: "Zadań łącznie", st: ST.kpiLabel }, { f: `COUNTA(A${FIRST}:A${LAST})`, n: dataRows.length, st: ST.kpiValue }, null,
     { s: "Cykli zamkniętych", st: ST.kpiLabel }, { f: `COUNT(${[0, 1, 2, 3].map(lenRange).join(",")})`, n: closedTotal, st: ST.kpiValue }, null,
     { s: "Cykli w toku", st: ST.kpiLabel }, { f: `COUNTIF(C${FIRST}:C${LAST},"W trakcie")`, n: openTotal, st: ST.kpiValue }, null,
     { s: "Nie zaczętych", st: ST.kpiLabel }, { f: `COUNTIF(C${FIRST}:C${LAST},"Nie zaczęte")`, n: untouchedTotal, st: ST.kpiValue }, null,
@@ -1391,7 +1392,7 @@ async function buildSampleWorkbookArrayBuffer() {
   const cycleRow = prefixHeaders.map(() => null);
   for (let c = 0; c < CYCLES; c++) cycleRow.push({ s: `${c + 1} Cykl`, st: ST.cycle }, { st: ST.cycle }, { st: ST.cycle }, { st: ST.cycle });
   const mainRows = [
-    [{ s: "Raport: Obieg zakresów 2026", st: ST.title }],
+    [{ s: "Raport: Obieg zadań 2026", st: ST.title }],
     kpiRow,
     [],
     cycleRow,
@@ -1429,8 +1430,59 @@ async function buildSampleWorkbookArrayBuffer() {
   ]);
   summaryRows.push([]);
   summaryRows.push([{ s: "Stan na", st: ST.bold }, { f: "TODAY()", n: serial(today), st: ST.dateBold }]);
-  summaryRows.push([{ s: "Zakresów w toku", st: ST.bold }, { f: `COUNTIF('${SHEET}'!$C$${FIRST}:$C$${LAST},"W trakcie")`, n: openTotal, st: ST.int }]);
+  summaryRows.push([{ s: "Zadań w toku", st: ST.bold }, { f: `COUNTIF('${SHEET}'!$C$${FIRST}:$C$${LAST},"W trakcie")`, n: openTotal, st: ST.int }]);
   const summaryNotes = { [`F1`]: { text: "Ile zamkniętych cykli z całego obiegu przypada na tę osobę.", author: NOTE_AUTHOR } };
+
+  // Arkusz „Zespół” (2026-11-13): to, co aplikacja liczy jak Excel 365 — tabela Excela z kolumnami
+  // obliczeniowymi (TEKST po polsku, DZIŚ, LICZ.JEŻELI do „Obiegu zadań”), komórka „Szukaj” z
+  // formatowaniem warunkowym z formułą i dwie listy rozlewane (SORTUJ(UNIKATOWE), FILTRUJ).
+  // Wartości zapisane obok formuł liczymy tu, jak zrobiłby Excel (i tak przelicza przy otwarciu).
+  const TEAM = "Zespół";
+  const TEAM_TABLE = "Zespol";
+  const team = [
+    ...people.map((p, k) => [p, ["Sprzedaż", "Logistyka", "Sprzedaż", "Biuro", "Logistyka", "Biuro", "Sprzedaż", "Serwis"][k], 30 + k * 97]),
+    ["Ewa Krawczyk", "Serwis", 12], ["Paweł Mazur", "Biuro", 5], // nowi — jeszcze bez przydziałów (lista FILTRUJ)
+  ];
+  const PL_DAYS = ["niedziela", "poniedziałek", "wtorek", "środa", "czwartek", "piątek", "sobota"];
+  const T_HDR = 4, T_FIRST = 5, T_LAST = T_FIRST + team.length - 1;
+  const teamCols = ["Osoba", "Dział", "Od kiedy", "Dzień tygodnia", "Staż (dni)", "Przydziały"];
+  const thisRow = (col) => `${TEAM_TABLE}[[#This Row],[${col}]]`;
+  const calc = {
+    day: `TEXT(${thisRow("Od kiedy")},"dddd")`,
+    stay: `TODAY()-${thisRow("Od kiedy")}`,
+    tasks: [0, 1, 2, 3].map((c) => `COUNTIF(${ref(blockCol(c, 0))},${thisRow("Osoba")})`).join("+"),
+  };
+  const teamRows = [
+    [{ s: "Zespół", st: ST.title }],
+    [{ s: "Szukaj osoby:", st: ST.kpiLabel }, { st: ST.search }, null, { s: "Jej przydziałów:", st: ST.kpiLabel },
+      { f: `IF($B$2="","",IFERROR(INDEX(${TEAM_TABLE}[Przydziały],MATCH($B$2,${TEAM_TABLE}[Osoba],0)),"brak w zespole"))`, s: "", st: ST.kpiValue }],
+    [],
+    [...teamCols.map((s) => ({ s })), null, { s: "Działy", st: ST.bold }, null, { s: "Bez przydziałów", st: ST.bold }],
+    ...team.map(([p, dept, ago]) => {
+      const joined = addDays(today, -ago);
+      return [{ s: p }, { s: dept }, { n: serial(joined), st: ST.date },
+        { f: calc.day, s: PL_DAYS[joined.getDay()] }, { f: calc.stay, n: serial(today) - serial(joined), st: ST.int },
+        { f: calc.tasks, n: (perPerson.get(p) || { all: 0 }).all, st: ST.int }];
+    }),
+  ];
+  // listy rozlewane: kotwica z formułą tablicową + wartości w kolejnych wierszach (jak zapis Excela 365)
+  const depts = [...new Set(team.map((x) => x[1]))].sort((a, b) => a.localeCompare(b, "pl"));
+  const idle = team.filter(([p]) => !(perPerson.get(p) || { all: 0 }).all).map(([p]) => p);
+  const idleList = idle.length ? idle : ["—"];
+  const spill = (col, f, list) => list.forEach((v, k) => {
+    const row = teamRows[T_HDR + k] || (teamRows[T_HDR + k] = []);
+    while (row.length < col) row.push(null);
+    row[col] = k === 0 ? { f, s: v, arr: `${colName(col)}${T_FIRST}:${colName(col)}${T_FIRST + list.length - 1}` } : { s: v };
+  });
+  spill(7, `_xlfn.SORT(_xlfn.UNIQUE(${TEAM_TABLE}[Dział]))`, depts);
+  spill(9, `_xlfn.FILTER(${TEAM_TABLE}[Osoba],${TEAM_TABLE}[Przydziały]=0,"—")`, idleList);
+  const teamNotes = {
+    B2: { text: "Wpisz imię i nazwisko, np. Maria Wójcik — wiersz tej osoby w tabeli się podświetli (formatowanie warunkowe z formułą), a obok pojawi się liczba jej przydziałów.", author: NOTE_AUTHOR },
+    D4: { text: "Kolumna obliczeniowa: TEKST(data;\"dddd\") — dzień tygodnia po polsku. Nowy wiersz tabeli dostaje tę formułę sam.", author: NOTE_AUTHOR },
+    F4: { text: "Kolumna obliczeniowa: ile razy osoba występuje w arkuszu „Obieg zadań”. Zmień tam osobę, a liczba się przeliczy.", author: NOTE_AUTHOR },
+    H4: { text: "Lista rozlewana: SORTUJ(UNIKATOWE(Zespol[Dział])). Dopisz osobę z nowym działem — lista sama się wydłuży.", author: NOTE_AUTHOR },
+    J4: { text: "Lista rozlewana: FILTRUJ — osoby bez żadnego przydziału. Wpisz którąś do „Obiegu zadań”, a zniknie z listy.", author: NOTE_AUTHOR },
+  };
 
   // ── Zapis komórek do XML (shared strings jak w Excelu) ──
   const strings = [];
@@ -1443,8 +1495,10 @@ async function buildSampleWorkbookArrayBuffer() {
     if (!cell) return "";
     const a = `r="${colName(c)}${r}"${cell.st ? ` s="${cell.st}"` : ""}`;
     if (cell.f != null) {
-      const fx = `<f>${escapeXmlText(cell.f)}</f>`;
-      return cell.n != null ? `<c ${a}>${fx}<v>${cell.n}</v></c>` : `<c ${a} t="str">${fx}<v>${escapeXmlText(cell.s || "")}</v></c>`;
+      // formuła rozlewana: <c cm="1"><f t="array" ref="H5:H8"> — cm = wpis XLDAPR w xl/metadata.xml
+      const fx = cell.arr ? `<f t="array" ref="${cell.arr}">${escapeXmlText(cell.f)}</f>` : `<f>${escapeXmlText(cell.f)}</f>`;
+      const cm = cell.arr ? ' cm="1"' : "";
+      return cell.n != null ? `<c ${a}${cm}>${fx}<v>${cell.n}</v></c>` : `<c ${a} t="str"${cm}>${fx}<v>${escapeXmlText(cell.s || "")}</v></c>`;
     }
     if (cell.n != null) return `<c ${a}><v>${cell.n}</v></c>`;
     if (cell.s != null) return `<c ${a} t="s"><v>${sst(cell.s)}</v></c>`;
@@ -1480,19 +1534,40 @@ async function buildSampleWorkbookArrayBuffer() {
     + `<conditionalFormatting sqref="E2:E${TOTAL - 1}"><cfRule type="colorScale" priority="1"><colorScale><cfvo type="min"/><cfvo type="percentile" val="50"/><cfvo type="max"/><color rgb="FF63BE7B"/><color rgb="FFFFEB84"/><color rgb="FFF8696B"/></colorScale></cfRule></conditionalFormatting>`
     + `<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/><legacyDrawing r:id="rId2"/></worksheet>`;
 
+  const teamXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="${SPREADSHEETML_NS}" xmlns:r="${OOXML_REL_NS}"><sheetPr><tabColor rgb="FF1F3B63"/></sheetPr><dimension ref="A1:J${Math.max(T_LAST, T_HDR + idleList.length)}"/>`
+    + `<sheetViews><sheetView workbookViewId="0"><selection activeCell="B2" sqref="B2"/></sheetView></sheetViews>`
+    + `<sheetFormatPr defaultRowHeight="15"/>${colsXml([22, 13, 12, 16, 11, 12, 3, 14, 3, 20])}`
+    + sheetDataXml(teamRows)
+    + `<conditionalFormatting sqref="A${T_FIRST}:F${T_LAST}"><cfRule type="expression" dxfId="4" priority="1"><formula>AND($B$2&lt;&gt;"",$A${T_FIRST}=$B$2)</formula></cfRule></conditionalFormatting>`
+    + `<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/><legacyDrawing r:id="rId2"/>`
+    + `<tableParts count="1"><tablePart r:id="rId3"/></tableParts></worksheet>`;
+  const calcCol = (name) => ({ "Dzień tygodnia": calc.day, "Staż (dni)": calc.stay, Przydziały: calc.tasks })[name];
+  const TABLE_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<table xmlns="${SPREADSHEETML_NS}" id="1" name="${TEAM_TABLE}" displayName="${TEAM_TABLE}" ref="A${T_HDR}:F${T_LAST}" totalsRowShown="0"><autoFilter ref="A${T_HDR}:F${T_LAST}"/>`
+    + `<tableColumns count="${teamCols.length}">${teamCols.map((n, i) => (calcCol(n)
+      ? `<tableColumn id="${i + 1}" name="${escapeXmlText(n)}"><calculatedColumnFormula>${escapeXmlText(calcCol(n))}</calculatedColumnFormula></tableColumn>`
+      : `<tableColumn id="${i + 1}" name="${escapeXmlText(n)}"/>`)).join("")}</tableColumns>`
+    + `<tableStyleInfo name="TableStyleMedium2" showFirstColumn="0" showLastColumn="0" showRowStripes="1" showColumnStripes="0"/></table>`;
+  const METADATA = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<metadata xmlns="${SPREADSHEETML_NS}" xmlns:xda="http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray"><metadataTypes count="1"><metadataType name="XLDAPR" minSupportedVersion="120000" copy="1" pasteAll="1" pasteValues="1" merge="1" splitFirst="1" rowColShift="1" clearFormats="1" clearComments="1" assign="1" coerce="1" cellMeta="1"/></metadataTypes>`
+    + `<futureMetadata name="XLDAPR" count="1"><bk><extLst><ext uri="{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}"><xda:dynamicArrayProperties fDynamic="1" fCollapsed="0"/></ext></extLst></bk></futureMetadata><cellMetadata count="1"><bk><rc t="1" v="0"/></bk></cellMetadata></metadata>`;
+
   const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="${SPREADSHEETML_NS}">`
     + `<numFmts count="3"><numFmt numFmtId="164" formatCode="dd\\.mm\\.yyyy"/><numFmt numFmtId="165" formatCode="0.0%"/><numFmt numFmtId="166" formatCode="0.0"/></numFmts>`
     + `<fonts count="6"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>`
     + `<font><b/><sz val="14"/><color rgb="FF1F3B63"/><name val="Calibri"/><family val="2"/></font><font><sz val="11"/><color rgb="FF595959"/><name val="Calibri"/><family val="2"/></font>`
     + `<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font><font><b/><sz val="11"/><color rgb="FF2F6F5C"/><name val="Calibri"/><family val="2"/></font></fonts>`
-    + `<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>`
+    + `<fills count="6"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>`
     + `<fill><patternFill patternType="solid"><fgColor rgb="FF2F6F5C"/><bgColor indexed="64"/></patternFill></fill>`
     + `<fill><patternFill patternType="solid"><fgColor rgb="FFE7F1EC"/><bgColor indexed="64"/></patternFill></fill>`
-    + `<fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill></fills>`
-    + `<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top style="thin"><color rgb="FFBFBFBF"/></top><bottom/><diagonal/></border></borders>`
+    + `<fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/><bgColor indexed="64"/></patternFill></fill>`
+    + `<fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill></fills>`
+    + `<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left/><right/><top style="thin"><color rgb="FFBFBFBF"/></top><bottom/><diagonal/></border>`
+    + `<border><left style="thin"><color rgb="FFBF9000"/></left><right style="thin"><color rgb="FFBF9000"/></right><top style="thin"><color rgb="FFBF9000"/></top><bottom style="thin"><color rgb="FFBF9000"/></bottom><diagonal/></border></borders>`
     + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>`
-    + `<cellXfs count="16">`
+    + `<cellXfs count="17">`
     + `<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>`                                                         // 0
     + `<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>`                                          // 1 tytuł
     + `<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>`                                          // 2 etykieta KPI
@@ -1509,13 +1584,15 @@ async function buildSampleWorkbookArrayBuffer() {
     + `<xf numFmtId="165" fontId="1" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>` // 13
     + `<xf numFmtId="164" fontId="1" fillId="0" borderId="0" xfId="0" applyNumberFormat="1" applyFont="1"/>`                  // 14 data pogrubiona
     + `<xf numFmtId="0" fontId="1" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>`            // 15 etykieta sumy
+    + `<xf numFmtId="0" fontId="0" fillId="5" borderId="2" xfId="0" applyFill="1" applyBorder="1"/>`                          // 16 pole „Szukaj”
     + `</cellXfs><cellStyles count="1"><cellStyle name="Normalny" xfId="0" builtinId="0"/></cellStyles>`
-    + `<dxfs count="4"><dxf><font><b/><color rgb="FF1E7B45"/></font></dxf><dxf><font><b/><color rgb="FFB7791F"/></font></dxf><dxf><font><b/><color rgb="FFC00000"/></font></dxf>`
-    + `<dxf><font><color rgb="FF9C0006"/></font><fill><patternFill><bgColor rgb="FFFFE4E1"/></patternFill></fill></dxf></dxfs></styleSheet>`;
+    + `<dxfs count="5"><dxf><font><b/><color rgb="FF1E7B45"/></font></dxf><dxf><font><b/><color rgb="FFB7791F"/></font></dxf><dxf><font><b/><color rgb="FFC00000"/></font></dxf>`
+    + `<dxf><font><color rgb="FF9C0006"/></font><fill><patternFill><bgColor rgb="FFFFE4E1"/></patternFill></fill></dxf>`
+    + `<dxf><font><b/></font><fill><patternFill><bgColor rgb="FFFFE699"/></patternFill></fill></dxf></dxfs></styleSheet>`;
 
   const WORKBOOK = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="${SPREADSHEETML_NS}" xmlns:r="${OOXML_REL_NS}"><workbookPr/><bookViews><workbookView activeTab="0"/></bookViews>`
-    + `<sheets><sheet name="${escapeXmlText(SHEET)}" sheetId="1" r:id="rId1"/><sheet name="${escapeXmlText(SUMMARY)}" sheetId="2" r:id="rId2"/></sheets>`
+    + `<sheets><sheet name="${escapeXmlText(SHEET)}" sheetId="1" r:id="rId1"/><sheet name="${escapeXmlText(SUMMARY)}" sheetId="2" r:id="rId2"/><sheet name="${escapeXmlText(TEAM)}" sheetId="3" r:id="rId5"/></sheets>`
     + `<definedNames><definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">'${escapeXmlText(SHEET)}'!$A$${HEADER_ROW}:$${colName(lastCol)}$${LAST}</definedName></definedNames>`
     + `<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`;
   const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -1526,7 +1603,9 @@ async function buildSampleWorkbookArrayBuffer() {
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>`
     + `<Override PartName="/xl/workbook.xml" ContentType="${CT}.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="${CT}.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="${CT}.worksheet+xml"/>`
     + `<Override PartName="/xl/styles.xml" ContentType="${CT}.styles+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="${CT}.sharedStrings+xml"/>`
-    + `<Override PartName="/xl/comments1.xml" ContentType="${CT}.comments+xml"/><Override PartName="/xl/comments2.xml" ContentType="${CT}.comments+xml"/></Types>`;
+    + `<Override PartName="/xl/worksheets/sheet3.xml" ContentType="${CT}.worksheet+xml"/><Override PartName="/xl/tables/table1.xml" ContentType="${CT}.table+xml"/>`
+    + `<Override PartName="/xl/metadata.xml" ContentType="${CT}.sheetMetadata+xml"/>`
+    + `<Override PartName="/xl/comments1.xml" ContentType="${CT}.comments+xml"/><Override PartName="/xl/comments2.xml" ContentType="${CT}.comments+xml"/><Override PartName="/xl/comments3.xml" ContentType="${CT}.comments+xml"/></Types>`;
   const sheetRels = (n) => rels([["rId1", `${REL}/comments`, `../comments${n}.xml`], ["rId2", `${REL}/vmlDrawing`, `../drawings/vmlDrawing${n}.vml`]]);
 
   const zip = new JSZip();
@@ -1536,16 +1615,22 @@ async function buildSampleWorkbookArrayBuffer() {
   zip.file("xl/_rels/workbook.xml.rels", rels([
     ["rId1", `${REL}/worksheet`, "worksheets/sheet1.xml"], ["rId2", `${REL}/worksheet`, "worksheets/sheet2.xml"],
     ["rId3", `${REL}/styles`, "styles.xml"], ["rId4", `${REL}/sharedStrings`, "sharedStrings.xml"],
+    ["rId5", `${REL}/worksheet`, "worksheets/sheet3.xml"], ["rId6", `${REL}/sheetMetadata`, "metadata.xml"],
   ]));
   zip.file("xl/worksheets/sheet1.xml", mainXml);
   zip.file("xl/worksheets/sheet2.xml", summaryXml);
+  zip.file("xl/worksheets/sheet3.xml", teamXml);
+  zip.file("xl/tables/table1.xml", TABLE_XML);
+  zip.file("xl/metadata.xml", METADATA);
   zip.file("xl/styles.xml", STYLES);
   // sharedStrings dopiero po sheetDataXml obu arkuszy (to on zbiera teksty)
   zip.file("xl/sharedStrings.xml", `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <sst xmlns="${SPREADSHEETML_NS}" count="${strings.length}" uniqueCount="${strings.length}">${strings.map((s) => `<si><t xml:space="preserve">${escapeXmlText(s)}</t></si>`).join("")}</sst>`);
   // Notatki tym samym kodem, którym apka zapisuje je do pliku (xlsx-patch.js): tekst + kształt VML.
-  [[notes, 1], [summaryNotes, 2]].forEach(([list, n]) => {
-    zip.file(`xl/worksheets/_rels/sheet${n}.xml.rels`, sheetRels(n));
+  [[notes, 1], [summaryNotes, 2], [teamNotes, 3]].forEach(([list, n]) => {
+    zip.file(`xl/worksheets/_rels/sheet${n}.xml.rels`, n === 3
+      ? rels([["rId1", `${REL}/comments`, "../comments3.xml"], ["rId2", `${REL}/vmlDrawing`, "../drawings/vmlDrawing3.vml"], ["rId3", `${REL}/table`, "../tables/table1.xml"]])
+      : sheetRels(n));
     zip.file(`xl/comments${n}.xml`, patchCommentsXml(null, list).xml);
     zip.file(`xl/drawings/vmlDrawing${n}.vml`, patchVmlXml(null, list, null, n).xml);
   });
