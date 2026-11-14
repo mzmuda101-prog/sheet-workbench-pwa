@@ -111,10 +111,18 @@ const swbRowGrow = (() => {
   // Wiersz roboczy za ostatnim wierszem danych arkusza. Zwraca klucz wiersza (do fokusu) albo "".
   // gap = ile pustych wierszy zostawić nad nowym (klik w 2./3. ducha). Jak w Excelu: wiersz za
   // odstępem nie jest ciągiem danych — bez formuł i wyglądu z góry, tabele i zakresy nie rosną.
-  function addDraft({ col = 0, gap = 0 } = {}) {
+  // row = numer wiersza arkusza (0-based) klikniętego ducha: nowy wiersz dokładnie tam, gdzie kliknięto
+  function addDraft({ col = 0, gap = 0, row: atRow = null } = {}) {
     if (!canAdd()) return "";
     if (filtered()) { toast(t("addRowFiltered"), "info"); return ""; }
     const name = currentSheetName;
+    if (atRow != null) {
+      // poprzednie puste wiersze robocze znikają od razu (kursor i tak przechodzi do nowego)
+      if (pruneEmptyDrafts({ ignoreFocus: true })) renderActiveTable();
+      let last = Math.max(lastRowOf(workbook.Sheets[name]), currentHeaderRow - 1);
+      baseRows.forEach((r) => { if (Number.isFinite(r.rowIndex0) && r.rowIndex0 > last) last = r.rowIndex0; });
+      gap = Math.max(0, atRow - last - 1);
+    }
     const tail = baseRows[baseRows.length - 1];
     // pusty wiersz roboczy już czeka na końcu — nie mnożymy pustych
     if (!gap && tail && tail.isDraftRow && isEmptyRow(tail)) {
@@ -136,7 +144,7 @@ const swbRowGrow = (() => {
     // Excel wstawia wtedy NAD sumą — to wstawianie w środku (Etap 4); na razie mówimy wprost.
     if (totalsTableEndingAt(name, lastData)) { toast(t("addRowTotalsTable"), "info"); return ""; }
     // pusty wiersz roboczy na końcu (np. po kliknięciu niżej) nie jest danymi — liczymy od treści
-    if (gap) baseRows.forEach((x) => { if (x.isDraftRow && isEmptyRow(x) && x.rowIndex0 === lastData) lastData = lastRowOf(workbook.Sheets[name]); });
+    if (gap) baseRows.forEach((x) => { if (x.isDraftRow && isEmptyRow(x) && x.rowIndex0 === lastData) lastData = Math.max(lastRowOf(workbook.Sheets[name]), currentHeaderRow - 1); });
     const r = lastData + 1 + gap;
     const n = currentDisplayModel.headers.length;
     const tpl = gap ? null : (baseRows.find((x) => x.rowIndex0 === lastData) || tail || null);
@@ -150,6 +158,14 @@ const swbRowGrow = (() => {
       cellStyles: tpl && Array.isArray(tpl.cellStyles) ? tpl.cellStyles.map((s) => (s ? cloneStyle(s) : s)) : new Array(n).fill(null),
       isDraftRow: true,
     };
+    // wiersze między danymi a klikniętym zostają widoczne jako puste (jak w Excelu numery nie skaczą);
+    // puste z końca i tak znikają przy przerysowaniu (pruneEmptyDrafts)
+    for (let rr = lastData + 1; rr < r; rr++) {
+      const filler = { values: new Array(n).fill(null), display: new Array(n).fill(""), rowIndex0: rr, cellStyles: new Array(n).fill(null), isDraftRow: true };
+      filler.rawValues = filler.values;
+      baseRows.push(filler);
+      viewRows.push(filler);
+    }
     baseRows.push(row);
     viewRows.push(row);
     if (!gap) drafts.add(keyOf(name, r)); // formuły tylko w wierszu przylegającym do danych
@@ -669,9 +685,9 @@ const swbRowGrow = (() => {
 
   let justAdded = null;
   // Puste wiersze robocze na końcu (oprócz tego z kursorem) — precz z widoku przed rysowaniem.
-  function pruneEmptyDrafts() {
+  function pruneEmptyDrafts({ ignoreFocus = false } = {}) {
     if (typeof baseRows === "undefined" || !Array.isArray(baseRows)) return false;
-    const focusKey = typeof focusedCellState !== "undefined" && focusedCellState ? focusedCellState.rowKey : "";
+    const focusKey = !ignoreFocus && typeof focusedCellState !== "undefined" && focusedCellState ? focusedCellState.rowKey : "";
     let changed = false;
     while (baseRows.length) {
       const r = baseRows[baseRows.length - 1];
@@ -686,15 +702,16 @@ const swbRowGrow = (() => {
 
   // ── „duchy”: blade puste wiersze pod danymi ────────────────────────────────
   const GHOSTS = 3;
-  const BLANK_GHOSTS = 24;
+  const MAX_GHOSTS = 60;
   let ghostBody = null;
   function onGhostClick(e) {
     const td = e.target && e.target.closest ? e.target.closest("td") : null;
     if (!td || !ghostBody || !ghostBody.contains(td)) return;
     const col = Number(td.dataset.ghostCol);
     const tr = td.parentElement;
+    const label = tr ? Number(tr.querySelector(".ghost-head")?.textContent) : NaN; // numer wiersza Excela na duchu
     const gap = tr && tr.parentElement === ghostBody ? Math.max(0, Array.prototype.indexOf.call(ghostBody.rows, tr)) : 0;
-    if (!addDraft({ col: Number.isInteger(col) ? col : 0, gap })) return;
+    if (!addDraft({ col: Number.isInteger(col) ? col : 0, gap, row: Number.isFinite(label) ? label - 1 : null })) return;
     requestAnimationFrame(() => {
       const cell = typeof findCellElement === "function" ? findCellElement(focusedCellState) : null;
       if (cell && typeof openCellEditor === "function") openCellEditor(cell);
@@ -715,10 +732,13 @@ const swbRowGrow = (() => {
     const n = currentDisplayModel.headers.length;
     let last = currentHeaderRow - 1; // pusty arkusz: duchy zaraz pod nagłówkiem
     baseRows.forEach((r) => { if (Number.isFinite(r.rowIndex0) && r.rowIndex0 > last) last = r.rowIndex0; });
-    // pusty arkusz: duchy wypełniają stronę jak w Excelu, nie trzy wiersze pod nagłówkiem
-    const ghosts = baseRows.length ? GHOSTS : BLANK_GHOSTS;
     const sample = tb.querySelector("tr[data-row-key]");
     const h = sample ? Math.round(sample.getBoundingClientRect().height) : 0;
+    // krótka tabela (np. nowy skoroszyt): duchy wypełniają widoczną część jak w Excelu, nie tylko trzy wiersze
+    const wrap = typeof tableWrapEl !== "undefined" && tableWrapEl ? tableWrapEl : null;
+    // od wysokości samej tabeli (nagłówek + dane), nie od położenia na ekranie: bez wpływu przewinięcia i już narysowanych duchów
+    const free = wrap ? wrap.clientHeight - ((table.tHead ? table.tHead.offsetHeight : 0) + tb.offsetHeight) : 0;
+    const ghosts = Math.max(GHOSTS, Math.min(MAX_GHOSTS, Math.ceil(free / (h || 31))));
     const key = `${n}|${last}|${h}|${ghosts}`;
     if (ghostBody.dataset.key === key) return;
     ghostBody.dataset.key = key;
