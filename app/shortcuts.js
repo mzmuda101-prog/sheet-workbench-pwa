@@ -45,7 +45,7 @@ const SWB_SHORTCUTS = [
   { cat: "table", keys: ["F6"], text: "regionCycle" },
   { cat: "table", keys: ["Tab"], text: "gridTabEnter" },
   // edycja
-  { cat: "edit", keys: ["Enter"], text: "editOpen" },
+  { cat: "edit", keys: ["F2"], text: "editOpen" },
   { cat: "edit", keys: [["Enter"], ["shift", "Enter"]], text: "editCommitVertical" },
   { cat: "edit", keys: [["Tab"], ["shift", "Tab"]], text: "editCommitHorizontal" },
   { cat: "edit", keys: ["shift", "@arrows"], text: "editMoveArrows" },

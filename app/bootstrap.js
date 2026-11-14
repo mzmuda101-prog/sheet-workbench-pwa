@@ -784,10 +784,11 @@ document.addEventListener("keydown", (e) => {
     && (e.getModifierState?.("AltGraph") || (e.altKey && !e.ctrlKey) || (e.altKey && e.ctrlKey && /\p{L}/u.test(e.key)));
   if (((!meta && !e.altKey) || altLetter) && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
     if (e.key === "Enter") {
-      const td = findCellElement(focusedCellState);
-      if (td) {
+      // Enter na zaznaczonej komórce = krok w dół, Shift+Enter w górę (jak w Excelu; edycja: F2, dwuklik
+      // albo pisanie). Dawniej otwierał edytor — Enter + pisanie w ostatnim wierszu nadpisywało go
+      // zamiast zacząć nowy (2026-11-14). W ostatnim wierszu danych: nowy wiersz roboczy.
+      if (moveFocusedCell(e.shiftKey ? -1 : 1, 0, { grow: !e.shiftKey })) {
         e.preventDefault();
-        openCellEditor(td);
         return;
       }
     } else if (e.key.length === 1) {

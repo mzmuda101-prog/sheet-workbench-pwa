@@ -68,7 +68,7 @@ async function run() {
     const pre = view.rows.find((r) => r.rowIndex0 === 1);
     setFocusedCell(getRowSelectionKey(pre), 1, { scroll: true });
   });
-  await page.keyboard.press("Enter");
+  await page.keyboard.press("F2");
   await page.waitForSelector("input.cell-editor", { timeout: 3000 });
   await page.keyboard.type("Maria Wójcik");
   await page.keyboard.press("Tab");

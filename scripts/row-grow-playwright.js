@@ -102,8 +102,8 @@ async function run() {
 
   // 3. Enter w ostatnim wierszu
   await p.evaluate((k) => setFocusedCell(k, 1, { scroll: true }), `wide:${R - 1}`);
-  await p.keyboard.press("Enter"); await sleep(100);
-  await p.keyboard.type("Zakres T-01 b"); await p.keyboard.press("Enter"); await sleep(300);
+  await p.keyboard.press("F2"); await sleep(100); // edycja: F2 (Enter na komórce schodzi w dół, 2026-11-14)
+  await p.keyboard.press("ControlOrMeta+a"); await p.keyboard.type("Zakres T-01 b"); await p.keyboard.press("Enter"); await sleep(300); // F2 stawia kursor na końcu — zastępujemy cały wpis
   const s3 = await p.evaluate(() => focusedCellState && focusedCellState.rowKey);
   check("3. Enter w ostatnim wierszu = kolejny nowy wiersz", s3 === `wide:${R}`, s3);
 
@@ -123,13 +123,13 @@ async function run() {
   check("4. Ponów ×2 przywraca wpis i formułę", redo4[0] && redo4[0].v === "Drugi" && redo4[1] && !!redo4[1].f, redo4);
   await p.evaluate(() => { undoLast(); undoLast(); }); await sleep(300);
   await p.evaluate((k) => setFocusedCell(k, 1, { scroll: true }), `wide:${R}`);
-  await p.keyboard.press("Enter"); await sleep(100);
+  await p.keyboard.press("F2"); await sleep(100); // edycja: F2 (Enter na komórce schodzi w dół, 2026-11-14)
   await p.keyboard.type("Drugi raz"); await p.keyboard.press("Tab"); await sleep(300);
   const again = await cell(`G${R + 1}`);
   check("4. po Cofnij ponowny wpis znów dostaje formuły", !!(again && again.f), again);
   // Delete w pustym wierszu roboczym (R+2)
   await p.evaluate((k) => setFocusedCell(k, 2, { scroll: true }), `wide:${R}`);
-  await p.keyboard.press("Enter"); await sleep(100);
+  await p.keyboard.press("F2"); await sleep(100); // edycja: F2 (Enter na komórce schodzi w dół, 2026-11-14)
   await p.keyboard.press("Enter"); await sleep(300); // pusty wpis w R+1 → Enter → nowy wiersz R+2
   const draftKey = await p.evaluate(() => focusedCellState && focusedCellState.rowKey);
   await p.keyboard.press("Delete"); await sleep(300);

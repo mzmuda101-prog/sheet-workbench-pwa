@@ -218,19 +218,31 @@ async function run() {
   check("po przebudowie tabeli fokus wraca do siatki",
     beforeSort === "TD" && afterSort.inGrid, `${beforeSort} → ${JSON.stringify(afterSort)}`);
 
-  // ── 9. REGRESJA: edytor komórki (Enter otwiera, Esc anuluje) ──────────────────
+  // ── 9. Enter jak w Excelu: krok w dół / Shift+Enter w górę; edytor otwiera F2 (Esc anuluje) ──
   await page.evaluate(() => {
     const cell = document.querySelector('#dataTable tbody tr[data-row-key] td[data-col-index="0"]');
     syncGridRovingTabindex(cell);
     cell.focus();
+    cell.click();
   });
   await sleep(150);
+  const rowAt = () => page.evaluate(() => (currentDisplayModel.rows || []).filter((r) => !r.isPreRow).findIndex((r) => getRowSelectionKey(r) === focusedCellState?.rowKey));
+  const r0 = await rowAt();
   await page.keyboard.press("Enter");
+  await sleep(200);
+  const r1 = await rowAt();
+  const noEditor = await page.evaluate(() => !document.querySelector(".cell-editor"));
+  await page.keyboard.press("Shift+Enter");
+  await sleep(200);
+  const r2 = await rowAt();
+  check("Enter na komórce = krok w dół bez edytora, Shift+Enter = w górę", r1 === r0 + 1 && r2 === r0 && noEditor, JSON.stringify({ r0, r1, r2, noEditor }));
+  await page.evaluate(() => sheetEditUi.setMode("edit"));
+  await page.keyboard.press("F2");
   await sleep(300);
   const editorOpen = await page.evaluate(() => ({
     isInput: document.activeElement?.classList?.contains("cell-editor"),
   }));
-  check("Enter na komórce nadal otwiera edytor", editorOpen.isInput, JSON.stringify(editorOpen));
+  check("F2 na komórce otwiera edytor", editorOpen.isInput, JSON.stringify(editorOpen));
   await page.keyboard.press("Escape");
   await sleep(250);
   const editorClosed = await page.evaluate(() => !document.querySelector(".cell-editor"));
@@ -672,6 +684,31 @@ async function run() {
   check("w trybie komórki kotwica wyróżnia się od sąsiadów",
     wKomorce.kotwica !== wKomorce.sasiad, JSON.stringify(wKomorce).slice(0, 150));
   await page.evaluate(() => setSelectionKind("row"));
+
+  // ── Pułapka z 2026-11-14: Enter w OSTATNIM wierszu danych + pisanie zaczyna NOWY wiersz,
+  //    nie nadpisuje ostatniego (dawniej Enter otwierał edytor na tej komórce) ──
+  const trap = await page.evaluate(() => {
+    sheetEditUi.setMode("edit");
+    if (!swbRowGrow.canAdd() || swbRowGrow.filtered()) return null;
+    const last = baseRows[baseRows.length - 1];
+    setFocusedCell(getRowSelectionKey(last), 0, { scroll: true });
+    if (typeof giveGridDomFocus === "function") giveGridDomFocus();
+    return { r: last.rowIndex0, ref: XLSX.utils.encode_cell({ r: last.rowIndex0, c: currentStartCol }) };
+  });
+  if (trap) {
+    const val = (ref) => page.evaluate((ref) => { const x = workbook.Sheets[currentSheetName][ref]; return x && x.v != null ? String(x.v) : ""; }, ref);
+    const before = await val(trap.ref);
+    await sleep(200);
+    await page.keyboard.press("Enter");
+    await sleep(300);
+    await page.keyboard.type("NOWY-WPIS");
+    await page.keyboard.press("Tab");
+    await sleep(400);
+    await page.keyboard.press("Escape");
+    const after = await val(trap.ref);
+    const below = await val(trap.ref.replace(/\d+$/, String(trap.r + 2)));
+    check("Enter w ostatnim wierszu + pisanie = nowy wiersz, ostatni wiersz nietknięty", after === before && below === "NOWY-WPIS", JSON.stringify({ before, after, below }));
+  } else check("Enter w ostatnim wierszu: test miał gdzie dodać wiersz", false, "canAdd=false albo filtr");
 
   console.log(`\n─── WYNIKI (${ENGINE}) ───`);
   let failed = 0;
