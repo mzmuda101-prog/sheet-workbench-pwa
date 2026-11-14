@@ -8544,6 +8544,13 @@ body.rp-active { overflow: hidden; }
   box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .mode-switch.has-pill .mode-btn { position: relative; z-index: 1; }
+/* Ikony trybów jak w Documents Workbench: szeroko napis, na telefonie sama ikona (napis w podpowiedzi i aria-label) */
+.mode-btn .mode-ico { display: none; }
+@media (max-width: 480px) {
+  .mode-btn .mode-txt { display: none; }
+  .mode-btn .mode-ico { display: block; }
+  .mode-btn { display: inline-flex; align-items: center; justify-content: center; padding-inline: 10px; min-height: 28px; }
+}
 .mode-switch.has-pill.pill-moving .mode-btn.is-active { background: transparent; }
 
 .edit-bars { flex: none; display: flex; flex-direction: column; gap: 6px; margin: -4px 0 8px; min-width: 0; }

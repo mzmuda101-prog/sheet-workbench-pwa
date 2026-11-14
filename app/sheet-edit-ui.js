@@ -120,7 +120,11 @@ var sheetEditUi = (() => {
   function applyLabels() {
     if (labelsLang === currentLang) return;
     labelsLang = currentLang;
-    modeBtns.forEach((b) => { b.textContent = t(b.dataset.mode === "view" ? "modeView" : "modeEdit"); });
+    modeBtns.forEach((b) => {
+      const label = t(b.dataset.mode === "view" ? "modeView" : "modeEdit");
+      b.querySelector(".mode-txt").textContent = label;
+      b.setAttribute("aria-label", label); // na telefonie widać tylko ikonę
+    });
     if (modeSwitchEl) modeSwitchEl.setAttribute("aria-label", t("modeGroupAria"));
     ribbonEl.setAttribute("aria-label", t("fmtRibbonAria"));
     const aria = {
