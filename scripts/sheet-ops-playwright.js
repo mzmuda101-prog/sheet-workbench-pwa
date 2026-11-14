@@ -90,6 +90,22 @@ async function run() {
   await sleep(300);
   await dropToasts();
 
+  // 1b. klikanie po pustych wierszach (nagranie 2026-11-14 19:47): bez duplikatów, bez skoków numerów,
+  //     puste wiersze nie liczą się jako „N wierszy”
+  const ghostClick = (i, c) => p.evaluate(([i, c]) => document.querySelectorAll(".ghost-row")[i].querySelectorAll("td")[c + 1].click(), [i, c]);
+  await ghostClick(1, 0); await sleep(300);
+  await ghostClick(4, 1); await sleep(300);
+  await ghostClick(2, 2); await sleep(300);
+  const clicks = await p.evaluate(() => ({ rows: baseRows.map((r) => r.rowIndex0 + 1), status: document.getElementById("status").textContent }));
+  const contiguous = clicks.rows.every((r, i) => r === i + 2);
+  check("1b. klikane puste wiersze: kolejne numery od 2, bez powtórek", contiguous && clicks.rows.length >= 3, clicks.rows);
+  check("1b. puste wiersze nie liczą się jako wiersze", !/[1-9]\d* wiersz/.test(clicks.status), clicks.status);
+  await p.keyboard.press("Escape");
+  await p.evaluate(() => { focusedCellState = null; renderActiveTable(); });
+  await sleep(300);
+  const pruned = await p.evaluate(() => baseRows.length);
+  check("1b. po odejściu kursora puste wiersze robocze znikają", pruned === 0, pruned);
+
   // 2. nazwa kolumny i dane
   const th0 = '#dataTable thead tr.header-row th[data-col-index="0"]';
   await tap(th0);

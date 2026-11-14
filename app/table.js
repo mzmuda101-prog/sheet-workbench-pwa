@@ -136,7 +136,8 @@ function buildFocusedRowStatusSuffix(model) {
 
 function updateTableStatus(model) {
   if (!model?.headers?.length) return;
-  const rows = Array.isArray(model.rows) ? model.rows : [];
+  // puste wiersze robocze (klik w pusty wiersz pod danymi) to jeszcze nie wiersze — nie liczymy ich
+  const rows = (Array.isArray(model.rows) ? model.rows : []).filter((r) => !(r && r.isDraftRow && Array.isArray(r.values) && r.values.every((v) => v == null || v === "")));
   if (!rows.length) return;
   const limit = effectiveRowLimit();
   const modeLabel = model.mode === "long" ? t("statusLongMode") : "";
