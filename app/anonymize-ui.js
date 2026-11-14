@@ -715,7 +715,7 @@ const swbAnon = (() => {
       }
       merged[ch.sheet][ref] = payload;
     });
-    const patched = await buildPatchedXlsx(originalFileBytes, merged, buildSheetFormulaMaps());
+    const patched = await buildPatchedXlsx(originalFileBytes, merged, buildSheetFormulaMaps(), { layout: pendingLayout });
     if (noClean) return { bytes: patched, report: null };
     return swbAnonCleanZip(patched, plan.session, traces, { personMethod: st.methods.person, headerCells: st.scan.headerCells, protectedCells: st.scan.protectedCells });
   }

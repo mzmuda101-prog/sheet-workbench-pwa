@@ -767,6 +767,8 @@ let originalFileBytes = null;
 // Zarejestrowane edycje komórek do naniesienia przy zapisie:
 // { [sheetName]: { [cellRef]: { v, t } | null } }  (null = usunięcie komórki)
 let pendingEdits = {};
+// szerokości kolumn / wysokości wierszy zmienione w Edycji: { arkusz: { cols: {kolumna0: szer.}, rows: {wiersz0: pkt} } } (layout-edit.js)
+let pendingLayout = {};
 // Edycje jednego arkusza (tworzy wpis). Nazwa arkusza pochodzi z pliku: „__proto__” jako
 // zwykłe przypisanie podmieniałoby prototyp pendingEdits (fantomowe komórki w innych arkuszach).
 function pendingSheetEdits(sheetName, target = pendingEdits) {

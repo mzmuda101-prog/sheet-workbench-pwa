@@ -82,7 +82,7 @@ const swbDrafts = (() => {
     clearTimeout(timer);
     timer = 0;
     if (!originalFileBytes || !workbook || !hasUnsavedChanges) return;
-    const count = editCount(pendingEdits);
+    const count = editCount(pendingEdits) + (typeof swbLayoutEdit !== "undefined" ? swbLayoutEdit.count() : 0);
     if (!count && !swbStructureDirty) { await delRec(sessionId); storedBytes = null; return; } // np. cofnięte do stanu z pliku
     const bytes = originalFileBytes;
     const id = sessionId;
@@ -93,7 +93,7 @@ const swbDrafts = (() => {
       id, fileName: currentFileName || "arkusz.xlsx", savedAt: Date.now(), stamp,
       // + wiersz nagłówka: bez tego arkusz po odzyskaniu wczytałby się z nagłówkiem w 1. wierszu
       data: {
-        edits: pendingEdits, sheet: currentSheetName || "", changes: count,
+        edits: pendingEdits, layout: pendingLayout, sheet: currentSheetName || "", changes: count,
         headerRow: headerRowEl?.value || "", autoHeader: !!autoHeaderRowEl?.checked,
         // anonimizacja „w miejscu” bez zapisu: po odzyskaniu zapis dalej czyści ślady
         anon: typeof swbAnon !== "undefined" ? swbAnon.draftState() : null,
@@ -223,6 +223,7 @@ const swbDrafts = (() => {
       await handleFile(new File([bytes], rec.fileName, { type: XLSX_MIME }), handle);
       if (!workbook) return false;
       applyEdits(rec.data?.edits);
+      if (rec.data?.layout && typeof swbLayoutEdit !== "undefined") swbLayoutEdit.restoreAll(rec.data.layout);
       if (rec.data?.anon && typeof swbAnon !== "undefined") swbAnon.restoreDraftState(rec.data.anon);
     } finally { suspended--; }
     sessionId = rec.id;

@@ -118,6 +118,8 @@ function undoCloseStep() {
 
 // Przywraca stan zapisany w kroku; zwraca krok odwrotny (do drugiego stosu).
 function undoApplyStep(step) {
+  // szerokość kolumny / wysokość wiersza (layout-edit.js)
+  if (step.layout) return typeof swbLayoutEdit !== "undefined" ? swbLayoutEdit.applyStep(step) : null;
   // Krok zbiorczy (anonimizacja całego pliku): kilka arkuszy jako jedno Cofnij.
   if (step.group) {
     const inv = [];
@@ -201,14 +203,14 @@ function undoRedo(direction) {
   // Cofnięte/ponowione dodanie kolumny: kolumny wynikają z arkusza — układ od nowa (row-grow.js)
   if (typeof swbRowGrow !== "undefined") swbRowGrow.afterUndo(step);
 
-  const count = step.changes.length;
+  const count = step.changes.length || 1; // krok układu (szerokość/wysokość) nie ma komórek
   if (step.sheet === currentSheetName) {
     renderActiveTable();
     scheduleViewRefresh({ analyses: true, filterBadge: true });
     // Pokaż, co się zmieniło: pierwsza komórka kroku (o ile jest w widoku).
     const first = step.changes[0];
-    const rowKey = `wide:${first.rowIndex0}`;
-    if (currentDisplayModel?.mode === "wide" && currentDisplayModel.rows.some((r) => getRowSelectionKey(r) === rowKey)) {
+    const rowKey = first ? `wide:${first.rowIndex0}` : "";
+    if (first && currentDisplayModel?.mode === "wide" && currentDisplayModel.rows.some((r) => getRowSelectionKey(r) === rowKey)) {
       setFocusedCell(rowKey, first.col, { scroll: true });
     }
     // po Cofnij z dymka (albo Ctrl+Z) — w dymku od razu „Ponów”, po Ponów — „Cofnij”

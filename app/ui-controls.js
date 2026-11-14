@@ -859,9 +859,11 @@ function attachResizeHandlers() {
     if (colHandle) {
       const th = handle.parentElement;
       active = { kind: "col", index: parseInt(handle.dataset.colIndex, 10), start: e.clientX, startSize: th.getBoundingClientRect().width, handle, pointerId: e.pointerId };
+      active.prevManual = manualColumnWidths[active.index]; // do Cofnij (layout-edit.js)
     } else {
       const tr = handle.closest("tr");
       active = { kind: "row", index: parseInt(handle.dataset.rowIndex, 10), start: e.clientY, startSize: tr ? tr.getBoundingClientRect().height : 28, handle, pointerId: e.pointerId };
+      active.prevManual = manualRowHeights[active.index];
     }
     document.body.classList.add("resizing");
     try { handle.setPointerCapture(e.pointerId); } catch {}
@@ -886,6 +888,9 @@ function attachResizeHandlers() {
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
     document.body.classList.remove("resizing");
     try { finished.handle.releasePointerCapture(finished.pointerId); } catch {}
+    // rozmiar naprawdę się zmienił → do pliku (layout-edit.js; w Podglądzie tylko widok)
+    const size = finished.kind === "col" ? manualColumnWidths[finished.index] : manualRowHeights[finished.index];
+    if (size && Math.abs(size - finished.startSize) >= 1 && typeof swbLayoutEdit !== "undefined") swbLayoutEdit.commit(finished.kind === "col" ? "cols" : "rows", finished.index, size, finished.prevManual);
     renderActiveTable(); // finalizacja: colgroup, pasek przewijania, itd.
   };
 
@@ -1111,6 +1116,7 @@ async function handleFile(file, fileHandle = null, opts = {}) {
     const data = await file.arrayBuffer();
     originalFileBytes = new Uint8Array(data); // do zapisu metodą ZIP-patch (zachowanie pliku)
     pendingEdits = {}; // świeży plik → brak naniesionych edycji
+    pendingLayout = {}; // (po operacji na arkuszu układ jest już w pliku — też od zera)
     if (typeof swbNotesOnly !== "undefined") swbNotesOnly = false; // filtr notatek nie przechodzi na inny plik
     try {
       workbook = XLSX.read(data, { cellDates: true, cellStyles: true });
@@ -2382,7 +2388,7 @@ async function buildOutputBytes(ext) {
     try {
       // grow: dane urosły w dół (nowe wiersze) → tabele, filtry, CF i listy wyboru rosną razem z nimi
       const grow = typeof swbRowGrow !== "undefined" ? swbRowGrow.growInfo() : null;
-      bytes = await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps(), { grow });
+      bytes = await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps(), { grow, layout: pendingLayout });
     } catch (err) {
       log("ZIP-patch nie powiódł się — zapis przez xlsx-js-style (możliwa utrata tabel/wykresów).", "warning");
     }
@@ -2793,7 +2799,7 @@ loadBtn.addEventListener("click", () => {
       // Inny arkusz TEGO SAMEGO pliku: zmiany z poprzedniego arkusza dalej czekają na zapis
       // (pendingEdits). Dawniej setDirtyState(false) gasiło „Zapisz” — brak ostrzeżenia przy
       // zamykaniu, a zmiany przepadały (znalezione 2026-10-01 przy szkicach).
-      setDirtyState(swbStructureDirty || Object.values(pendingEdits || {}).some((cells) => cells && Object.keys(cells).length > 0));
+      setDirtyState(swbStructureDirty || (typeof swbLayoutEdit !== "undefined" && swbLayoutEdit.count() > 0) || Object.values(pendingEdits || {}).some((cells) => cells && Object.keys(cells).length > 0));
       if ((currentSheetStats?.trimmedColumns || 0) > 0) {
         log(`Przycięto puste kolumny poza realnym zakresem danych: ${currentSheetStats.trimmedColumns}`, "info");
       }

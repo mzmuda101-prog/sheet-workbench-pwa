@@ -1321,6 +1321,8 @@ async function buildPatchedXlsx(originalBytes, edits, formulaMaps = {}, opts = {
   }
 
   if (dateStyler && dateStyler.changed) zipWriteUtf8Xml(zip, stylesPath, dateStyler.apply(stylesXml));
+  // szerokości kolumn / wysokości wierszy z aplikacji (layout-edit.js → xlsx-layout.js)
+  if (opts && opts.layout && typeof swbLayout !== "undefined") await swbLayout.applyToZip(zip, sheetPaths, opts.layout, zipWriteUtf8Xml);
 
   // dopisane wiersze pod danymi: tabele, autofiltr, formatowanie warunkowe, listy wyboru i wymiar
   // arkusza rosną razem z nimi (xlsx-grow.js). opts.grow = { arkusz: { fromRow, toRow } }, 1-based.

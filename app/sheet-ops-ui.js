@@ -69,7 +69,7 @@ const swbSheetOpsUi = (() => {
     try {
       if (typeof flushCellEditor === "function") flushCellEditor();
       const grow = typeof swbRowGrow !== "undefined" ? swbRowGrow.growInfo() : null;
-      const base = await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps(), { grow });
+      const base = await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps(), { grow, layout: pendingLayout });
       const zip = await JSZip.loadAsync(base);
       const target = await op(zip);
       const bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });

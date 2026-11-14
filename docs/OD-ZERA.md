@@ -28,7 +28,7 @@ wiersza nagłówka (w widoku).
 | # | Brak | Plików | Uwagi |
 |---|---|---|---|
 | 0 | ~~**Nowy skoroszyt**~~ — zrobione 2026-11-14 | — | Pusty skoroszyt, dodaj / usuń / zmień nazwę arkusza; zapis sprawdzony prawdziwym Excelem (szczegóły niżej). |
-| 1 | **Szerokość kolumn i wysokość wierszy w pliku** | 9 | Przeciąganie zmienia widok, ale zapis nie dopisuje `<cols>` / wysokości. |
+| 1 | ~~**Szerokość kolumn i wysokość wierszy w pliku**~~ — zrobione 2026-11-15 | 9 | Przeciągnięcie w Edycji trafia do pliku; szczegóły niżej. |
 | 2 | **Formatuj jako tabelę** | 8 | Pliki mają tabele Excela (z nich biorą listy i kolumny obliczeniowe). Aplikacja je obsługuje, ale nie tworzy. |
 | 3 | **Scalanie komórek** | 7 | Scal / Scal i wyśrodkuj / Rozdziel. Zapis dziś zostawia `mergeCells` bez zmian. |
 | 4 | **Poprawność danych: lista** | 7 | Dziś tylko odczyt z pliku (rozwijana lista działa). Brak „Dane → Poprawność danych → Lista” od zera. |
@@ -48,6 +48,7 @@ Każde polecenie ma jedno miejsce; telefon (do 480 px) — te same miejsca.
 |---|---|---|
 | Nowy skoroszyt | panel **Plik i arkusz**, przycisk pod wyborem pliku | ekran startowy: „Nowy skoroszyt” obok „Wybierz plik z dysku” |
 | Nowy arkusz, Zmień nazwę arkusza…, Usuń arkusz… | lista pod nazwą arkusza w nagłówku (▾), na dole listy; działa na bieżącym arkuszu | — |
+| Szerokość kolumny / wysokość wiersza | przeciągnięcie krawędzi litery kolumny / numeru wiersza (Edycja) | Cofnij / Ponów |
 | Nazwa kolumny w pustej siatce | klik w pusty nagłówek pustej kolumny (Edycja) | prawy klik / przytrzymanie nagłówka → „Zmień nazwę kolumny” |
 
 ### 0. Nowy skoroszyt — jak działa (2026-11-14)
@@ -72,6 +73,20 @@ Każde polecenie ma jedno miejsce; telefon (do 480 px) — te same miejsca.
 - **Na później**: odwołania 3D (`Arkusz1:Arkusz3!A1`) — zmiana nazwy pierwszego z pary i usuwanie skrajnego arkusza; przenoszenie / kopiowanie
   arkusza i kolejność zakładek; zmiana nazwy podwójnym kliknięciem; filtry i sortowanie widoku po operacji na
   arkuszu wracają do domyślnych (plik wczytuje się od nowa).
+
+### 1. Szerokości kolumn i wysokości wierszy — jak działa (2026-11-15)
+
+- Było: przeciąganie zmieniało tylko widok. Jest: w **Edycji** przeciągnięta szerokość kolumny i wysokość wiersza
+  idą do pliku (`app/layout-edit.js` → `app/xlsx-layout.js`), liczą się do „Zapisz (N)”, mają Cofnij / Ponów,
+  zostają po przełączeniu arkusza i w szkicu. W **Podglądzie** przeciąganie dalej zmienia tylko widok.
+- Przeliczenie jak Excel na Macu (sprawdzone): na ekranie znaki × 6 + 5 pkt, w pliku `width = px / 6`;
+  wysokość w punktach = px w aplikacji. Excel otwiera wynik z tą samą szerokością co aplikacja (138 px → 138 pkt).
+  Zakres `<col min max>` jest dzielony, styl kolumny i ukrycie zostają.
+- Uwaga: wiersze bez wysokości w pliku aplikacja rysuje w swojej gęstości (~29 px), Excel w 15–16 pkt — wiersz
+  przeciągnięty z 29 na 54 px będzie w Excelu miał 54 pkt.
+- Test: `scripts/layout-edit-playwright.js` (Chromium + Safari), Excel: `EXCEL_DIR=…` + `excel-real-check.py`.
+- **Na później**: dwuklik na krawędzi = dopasuj do zawartości (Excel), wpisanie szerokości liczbą
+  („Szerokość kolumny…”), zmiana kilku zaznaczonych kolumn naraz.
 
 ## Jak to sprawdzać
 

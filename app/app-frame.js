@@ -248,6 +248,7 @@ const appFrame = (() => {
     if (typeof pendingEdits === "undefined" || !pendingEdits) return 0;
     let n = 0;
     Object.values(pendingEdits).forEach((m) => { if (m) n += Object.keys(m).length; });
+    if (typeof swbLayoutEdit !== "undefined") n += swbLayoutEdit.count();
     return n;
   }
   function syncSave() {
