@@ -183,6 +183,31 @@ async function run() {
   const e5 = schemaErrors(f);
   if (e5) check("4. nowy skoroszyt po operacjach: bez błędów schematu", e5.length === 0, e5.slice(0, 3));
 
+  // 5. Formatuj jako tabelę (jak Excel: Tabela1, Kolumna1, Nazwa2, 2026, TableStyleMedium2, filtr w tabeli)
+  eq("5. nazwy kolumn jak Excel", S.tableColumnNames(["Nazwa", null, "Nazwa", "2026", ""]).join("|"), "Nazwa|Kolumna1|Nazwa2|2026|Kolumna2");
+  z = await JSZip.loadAsync(base); // „Dane”: nagłówek w wierszu 2, filtr arkusza A2:H42, notatki (rels istnieje)
+  await S.addTable(z, { sheet: "Dane", ref: "A2:H42", name: "Tabela1", columns: ["A", "B", "C", "D", "E", "F", "G", "H"].map((c) => XLSX.read(base).Sheets.Dane[`${c}2`].v) }); // nazwy = komórki nagłówka (Excel inaczej „naprawia”)
+  const t1 = await z.file("xl/tables/table2.xml").async("string");
+  check("5. część tabeli: id = największe + 1, nazwa, ref, filtr, styl", /\bid="2"/.test(t1) && /name="Tabela1" displayName="Tabela1" ref="A2:H42"/.test(t1) && /<autoFilter ref="A2:H42"\/>/.test(t1) && /TableStyleMedium2/.test(t1), t1);
+  const s1 = await z.file("xl/worksheets/sheet1.xml").async("string");
+  check("5. arkusz: <tableParts> przed końcem, bez filtra arkusza", /<tableParts count="1"><tablePart r:id="rId\d+"\/><\/tableParts>/.test(s1) && !/<autoFilter/.test(s1), s1.slice(-400));
+  check("5. relacja arkusza zostawia notatki", /comments/.test(await z.file("xl/worksheets/_rels/sheet1.xml.rels").async("string")), null);
+  check("5. bez _xlnm._FilterDatabase arkusza", !/_FilterDatabase/.test(await wbXml(z)), null);
+  f = await save(z, "tabela.xlsx");
+  noNewErrors("5. tabela na arkuszu z filtrem", f);
+  py = pyRead(f);
+  if (py) check("5. openpyxl: tabela Tabela1 na „Dane”", py.tables.Dane.includes("Tabela1"), py.tables);
+  z = await S.newWorkbook(JSZip);
+  // jak aplikacja: najpierw nazwy kolumn w komórkach nagłówka (Excel wymaga zgodności — bez tego „naprawia” plik)
+  global.XLSX = XLSX; global.JSZip = JSZip;
+  const P = require("../app/xlsx-patch.js");
+  const sx = await z.file("xl/worksheets/sheet1.xml").async("string");
+  z.file("xl/worksheets/sheet1.xml", P.patchSheetXml(sx, { A1: { v: "Kolumna1", t: "s" }, B1: { v: "Kolumna2", t: "s" } }, null, null));
+  await S.addTable(z, { sheet: "Arkusz1", ref: "A1:B2", name: "Tabela1", columns: ["Kolumna1", "Kolumna2"] });
+  f = await save(z, "tabela-nowy.xlsx");
+  const e6 = schemaErrors(f);
+  if (e6) check("5. nowy skoroszyt z tabelą: bez błędów schematu", e6.length === 0, e6.slice(0, 3));
+
   console.log(fails.length ? `\n❌ ${fails.length} nie przeszło` : "\n✅ wszystko przeszło");
   process.exit(fails.length ? 1 : 0);
 }

@@ -56,6 +56,7 @@ async function run() {
   await p.evaluate(() => document.getElementById("heroSplash")?.remove());
   const idle = () => p.waitForFunction(() => document.body.getAttribute("aria-busy") !== "true" && typeof workbook !== "undefined" && workbook && currentSheetName, null, { timeout: 20000 });
   const tap = (sel) => (TOUCH ? p.tap(sel) : p.click(sel));
+  const shot = (name) => (process.env.SHOTS ? p.screenshot({ path: path.join(process.env.SHOTS, `${tag}-${name}.png`) }) : null);
   const dropToasts = () => p.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
   const openSheetList = async () => {
     // telefon: nagłówek zwija się przy pracy w tabeli — jak użytkownik, najpierw rozwijamy go uchwytem
@@ -198,12 +199,44 @@ print(json.dumps({"sheets":wb.sheetnames,"a1":wb["Moje dane"]["A1"].value,"a2":w
   await sleep(500);
   s = await state();
   const f2 = await p.evaluate(() => workbook.Sheets.Arkusz2.A1 && workbook.Sheets.Arkusz2.A1.f);
+  const v2 = await p.evaluate(() => { const c = workbook.Sheets.Arkusz2.A1; return c && [c.t, c.v, c.w]; });
+  check("4. wartość formuły przeliczona na błąd (nie stara liczba)", v2 && v2[0] === "e", v2);
   check("4. usunięty, odwołanie → #REF!", s.names.join() === "Arkusz2" && s.cur === "Arkusz2" && /^#REF!/.test(f2 || ""), { s, f2 });
   await dropToasts();
   await sheetOp("delete");
   await sleep(400);
   s = await state();
   check("4. ostatniego arkusza nie da się usunąć", s.names.join() === "Arkusz2", s);
+
+  // 8. Formatuj jako tabelę (po usunięciu zostaje Arkusz2: A1 = formuła #REF!, C2 = „x”)
+  await p.evaluate(() => { updateSheetCell(0, 1, { value: 2026, type: "number" }); updateSheetCell(1, 1, { value: 7, type: "number" }); setDirtyState(true); });
+  await dropToasts();
+  await p.evaluate(() => { renderActiveTable(); setFocusedCell("wide:1", 0, { scroll: true }); }); // wstążka działa na aktywnej komórce
+  await sleep(300);
+  // telefon: wstążka formatu jest pod „Aa” (arkusz od dołu)
+  if (TOUCH) { await tap("#fmtSheetBtn"); await sleep(500); }
+  await shot("table-ribbon");
+  await tap("#fmtTableBtn");
+  await idle();
+  await sleep(800);
+  const tb = await p.evaluate(() => ({ t: [...new Set(Object.values(currentTables))].map((x) => [x.displayName, x.ref, x.styleName]), h: ["A1", "B1", "C1"].map((r) => { const c = workbook.Sheets.Arkusz2[r]; return c && [c.t, c.v]; }), toast: [...document.querySelectorAll(".toast")].map((x) => x.textContent).join("|") }));
+  check("8. Tabela1 na obszarze z danymi (A1:C2), styl jak Excel", JSON.stringify(tb.t) === JSON.stringify([["Tabela1", "A1:C2", "TableStyleMedium2"]]) && /Tabela1/.test(tb.toast), tb);
+  check("8. nagłówki jak Excel: formuła i liczba → tekst, pusty → Kolumna1", JSON.stringify(tb.h) === JSON.stringify([["s", "#REF!"], ["s", "2026"], ["s", "Kolumna1"]]), tb.h);
+  await dropToasts();
+  await p.evaluate(() => setFocusedCell("wide:1", 0, { scroll: true }));
+  await sleep(300);
+  if (TOUCH && !(await p.evaluate(() => document.documentElement.classList.contains("fmt-sheet-open")))) { await tap("#fmtSheetBtn"); await sleep(500); }
+  await tap("#fmtTableBtn");
+  await sleep(400);
+  const again = await p.evaluate(() => [...document.querySelectorAll(".toast")].map((x) => x.textContent).join("|"));
+  check("8. drugi raz na tym samym: komunikat zamiast drugiej tabeli", /już tabela/.test(again), again);
+  const outT = path.join(os.tmpdir(), `sheet-ops-table-${tag}.xlsx`);
+  fs.writeFileSync(outT, Buffer.from(await p.evaluate(async () => Array.from(await buildOutputBytes("xlsx")))));
+  if (process.env.EXCEL_DIR) fs.copyFileSync(outT, path.join(process.env.EXCEL_DIR, `sheet-ops-table-${tag}.xlsx`));
+  if (ooxmlOn()) {
+    const e = ooxml.validate([outT])[outT] || [];
+    check("8. plik z tabelą: bez błędów schematu", e.length === 0, e.slice(0, 3));
+  }
 
   // 6. istniejący plik: przykład + nowy arkusz
   await p.evaluate(() => { hasUnsavedChanges = false; swbStructureDirty = false; return loadSampleFile(); });

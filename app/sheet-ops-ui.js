@@ -85,7 +85,19 @@ const swbSheetOpsUi = (() => {
       if (typeof updateUndoButtons === "function") updateUndoButtons();
       swbStructureDirty = true;
       setDirtyState(true);
+      // formuły z odwołaniem do usuniętego arkusza mają w pliku „#REF!”, a w komórce starą wartość — przelicz
+      if (typeof swbFormulaRecalcCells === "function") {
+        const keys = [];
+        workbook.SheetNames.forEach((sn) => { const ws = workbook.Sheets[sn]; Object.keys(ws).forEach((ref) => { if (ref[0] !== "!" && ws[ref] && ws[ref].f && ws[ref].f.includes("#REF!")) keys.push(`${sn}\u0000${ref}`); }); });
+        swbFormulaRecalcCells(keys);
+      }
       openSheet(target);
+      // dymek po wczytaniu arkusza — inaczej „Wczytano …” przychodzi później i go zastępuje
+      const t0 = performance.now();
+      await new Promise((resolve) => {
+        const tick = () => (document.body.getAttribute("aria-busy") !== "true" || performance.now() - t0 > 15000 ? resolve() : setTimeout(tick, 40));
+        setTimeout(tick, 80);
+      });
       toast(okMessage(target), "success");
       return true;
     } catch (err) {
@@ -158,13 +170,64 @@ const swbSheetOpsUi = (() => {
   }
 
   function init() {
+    const tableBtn = document.getElementById("fmtTableBtn");
+    if (tableBtn) tableBtn.addEventListener("click", () => { formatAsTable(); });
     ["newWorkbookBtn", "emptyNewBtn"].forEach((id) => {
       const b = document.getElementById(id);
       if (b) b.addEventListener("click", () => { newWorkbook(); });
     });
   }
 
-  return { newWorkbook, addSheet, renameSheet, deleteSheet, menuActions, init, isBusy: () => busy };
+  // Formatuj jako tabelę: wiersz nagłówka + wszystkie wiersze danych; kolumny zaznaczone (gdy zaznaczono
+  // kilka) albo wszystkie. Nazwy kolumn jak Excel trafiają do komórek nagłówka, potem tabela w pliku.
+  async function formatAsTable() {
+    if (busy || !workbook || !currentSheetName) return false;
+    if (typeof swbEditGuard === "function" && !swbEditGuard()) return false;
+    if (!currentDisplayModel || currentDisplayModel.mode !== "wide") { toast(t("tableNotWide"), "info"); return false; }
+    const real = typeof swbRealHeaderCount === "function" ? swbRealHeaderCount() : currentHeaders.length;
+    if (!real) return false;
+    const rect = typeof getSelectionRectangle === "function" ? getSelectionRectangle() : null;
+    const c0 = rect && rect.colCount > 1 ? Math.min(rect.colMin, real - 1) : 0;
+    let c1 = rect && rect.colCount > 1 ? Math.min(rect.colMax, real - 1) : real - 1;
+    // bez zaznaczenia: puste kolumny z prawej (pusta siatka nowego skoroszytu) nie wchodzą — jak bieżący obszar w Excelu
+    const wsH = workbook.Sheets[currentSheetName];
+    const colEmpty = (c) => { const h = wsH[XLSX.utils.encode_cell({ r: currentHeaderRow - 1, c: currentStartCol + c })]; return !(h && h.v != null && h.v !== "") && !baseRows.some((row) => row && Array.isArray(row.values) && row.values[c] != null && row.values[c] !== ""); };
+    if (!(rect && rect.colCount > 1)) while (c1 > c0 && colEmpty(c1)) c1--;
+    const r0 = currentHeaderRow - 1;
+    let r1 = r0 + 1; // tabela bez danych: nagłówek + jeden pusty wiersz (jak Excel)
+    baseRows.forEach((row) => {
+      if (!row || !Number.isFinite(row.rowIndex0) || row.rowIndex0 <= r1) return;
+      if (Array.isArray(row.values) && row.values.slice(c0, c1 + 1).some((v) => v != null && v !== "")) r1 = row.rowIndex0;
+    });
+    const range = { s: { r: r0, c: currentStartCol + c0 }, e: { r: r1, c: currentStartCol + c1 } };
+    const cross = (a) => a.s.r <= range.e.r && a.e.r >= range.s.r && a.s.c <= range.e.c && a.e.c >= range.s.c;
+    const hit = [...new Set(Object.values(currentTables || {}))].find((tb) => {
+      if (!tb || tb.sheetName !== currentSheetName) return false;
+      try { return cross(XLSX.utils.decode_range(tb.ref)); } catch { return false; }
+    });
+    if (hit) { toast(t("tableOverlap", { name: hit.displayName || "" }), "info"); return false; }
+    if ((currentMerges || []).some((m) => m && m.s && m.e && cross(m))) { toast(t("tableMerged"), "info"); return false; }
+    const ws = workbook.Sheets[currentSheetName];
+    const raw = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({ r: r0, c })];
+      raw.push(cell && cell.v != null && cell.v !== "" ? String(cell.w != null ? cell.w : cell.v) : null);
+    }
+    const columns = swbSheetOps.tableColumnNames(raw, t("tableEmptyCol"));
+    // Excel: nagłówek tabeli to zawsze tekst równy nazwie kolumny (formuła i liczba też stają się tekstem)
+    columns.forEach((name, i) => {
+      const cell = ws[XLSX.utils.encode_cell({ r: r0, c: range.s.c + i })];
+      if (!cell || cell.f || cell.t !== "s" || cell.v !== name) updateSheetCell(r0, c0 + i, { value: name, type: "string" });
+    });
+    const taken = new Set(Object.keys(currentTables || {}).concat(((workbook.Workbook && workbook.Workbook.Names) || []).map((n) => String(n.Name || "").toLowerCase())));
+    let k = 1;
+    while (taken.has(`${t("tableBase")}${k}`.toLowerCase())) k++;
+    const name = `${t("tableBase")}${k}`;
+    const ref = XLSX.utils.encode_range(range);
+    return apply((zip) => swbSheetOps.addTable(zip, { sheet: currentSheetName, ref, name, columns }).then(() => currentSheetName), () => t("tableCreated", { name, ref }));
+  }
+
+  return { newWorkbook, addSheet, renameSheet, deleteSheet, formatAsTable, menuActions, init, isBusy: () => busy };
 })();
 
 document.addEventListener("DOMContentLoaded", () => swbSheetOpsUi.init());

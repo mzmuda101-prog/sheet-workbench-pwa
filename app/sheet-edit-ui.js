@@ -135,7 +135,7 @@ var sheetEditUi = (() => {
       '[data-align="left"]': "fmtAlignLeft", '[data-align="center"]': "fmtAlignCenter", '[data-align="right"]': "fmtAlignRight",
       "#fmtColorBtn": "fmtFontColor", "#fmtColorMore": "fmtFontColorPick", "#fmtFillBtn": "fmtFillColor",
       "#fmtFillMore": "fmtFillColorPick", "#fmtBorderBtn": "fmtBorders", "#fmtPainterBtn": "fmtPainter",
-      "#fmtClearBtn": "fmtClear", "#fmtDecLess": "fmtDecLess", "#fmtDecMore": "fmtDecMore",
+      "#fmtClearBtn": "fmtClear", "#fmtTableBtn": "tableBtn", "#fmtDecLess": "fmtDecLess", "#fmtDecMore": "fmtDecMore",
       "#fmtSize": "fmtSize", "#fmtNumFormat": "fmtNumFormat", "#nameBox": "fmtNameBox",
       "#formulaInput": "fmtFormulaInput", "#formulaOk": "fmtFormulaOk", "#formulaCancel": "fmtFormulaCancel",
     };

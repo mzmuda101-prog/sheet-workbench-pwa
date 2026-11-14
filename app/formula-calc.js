@@ -525,10 +525,25 @@ function swbFormulaTouched(sheet, r, c) {
   fcPending.add(`${sheet}\u0000${r}\u0000${c}`);
 }
 
+// Przelicz same te formuły (i ich zależne) — np. po usunięciu arkusza odwołania w pliku są już „#REF!”,
+// a w komórce została stara wartość (sheet-ops-ui.js). keys = ["arkusz\u0000A1", …]
+let fcForce = null;
+function swbFormulaRecalcCells(keys) {
+  if (!FC || !keys || !keys.length) return;
+  fcForce = (fcForce || []).concat(keys);
+  if (!fcPending) {
+    fcPending = new Set();
+    queueMicrotask(fcFlush);
+    if (typeof cfRepaintAfterEdit === "function") queueMicrotask(cfRepaintAfterEdit);
+  }
+}
+
 function fcFlush() {
   const pending = fcPending;
   fcPending = null;
-  if (!pending || !pending.size || !workbook) return;
+  const force = fcForce;
+  fcForce = null;
+  if (!pending || (!pending.size && !(force && force.length)) || !workbook) return;
   const idx = fcEnsureIndex();
   if (!idx || !idx.entries.size) return;
   const t0 = performance.now();
@@ -552,6 +567,7 @@ function fcFlush() {
       } catch { /* zły zakres */ }
     });
   });
+  (force || []).forEach((key) => { if (!seen.has(key) && idx.entries.has(key)) { seen.add(key); queue.push(key); } });
   while (queue.length) {
     const key = queue.shift();
     order.push(key);

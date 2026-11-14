@@ -59,6 +59,10 @@ def excel_resave(src):
     """Kopia rt-<plik> otwarta, przeliczona i zapisana przez Excela. Zwraca (ścieżka|None, opis)."""
     name = os.path.basename(src)
     rt = os.path.join(DIR, "rt-" + name)
+    # kopia o tej nazwie jeszcze otwarta w Excelu (np. po przerwanej próbie) — open -a by ją tylko
+    # pokazał, a my zapisalibyśmy starą zawartość zamiast nowego pliku
+    if os.path.basename(rt) in (workbook_names() or []):
+        osa('tell application "Microsoft Excel"', f'close workbook "{os.path.basename(rt)}" saving no', "end tell", timeout=30)
     shutil.copyfile(src, rt)
     subprocess.run(["open", "-a", "Microsoft Excel", rt], check=True)
     t0 = time.time()

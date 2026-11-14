@@ -29,7 +29,7 @@ wiersza nagłówka (w widoku).
 |---|---|---|---|
 | 0 | ~~**Nowy skoroszyt**~~ — zrobione 2026-11-14 | — | Pusty skoroszyt, dodaj / usuń / zmień nazwę arkusza; zapis sprawdzony prawdziwym Excelem (szczegóły niżej). |
 | 1 | ~~**Szerokość kolumn i wysokość wierszy w pliku**~~ — zrobione 2026-11-15 | 9 | Przeciągnięcie w Edycji trafia do pliku; szczegóły niżej. |
-| 2 | **Formatuj jako tabelę** | 8 | Pliki mają tabele Excela (z nich biorą listy i kolumny obliczeniowe). Aplikacja je obsługuje, ale nie tworzy. |
+| 2 | ~~**Formatuj jako tabelę**~~ — zrobione 2026-11-15 | 8 | Przycisk na wstążce formatu; szczegóły niżej. |
 | 3 | **Scalanie komórek** | 7 | Scal / Scal i wyśrodkuj / Rozdziel. Zapis dziś zostawia `mergeCells` bez zmian. |
 | 4 | **Poprawność danych: lista** | 7 | Dziś tylko odczyt z pliku (rozwijana lista działa). Brak „Dane → Poprawność danych → Lista” od zera. |
 | 5 | **Nazwy zakresów** | 7 | Menedżer nazw: utwórz / zmień. |
@@ -49,6 +49,7 @@ Każde polecenie ma jedno miejsce; telefon (do 480 px) — te same miejsca.
 | Nowy skoroszyt | panel **Plik i arkusz**, przycisk pod wyborem pliku | ekran startowy: „Nowy skoroszyt” obok „Wybierz plik z dysku” |
 | Nowy arkusz, Zmień nazwę arkusza…, Usuń arkusz… | lista pod nazwą arkusza w nagłówku (▾), na dole listy; działa na bieżącym arkuszu | — |
 | Szerokość kolumny / wysokość wiersza | przeciągnięcie krawędzi litery kolumny / numeru wiersza (Edycja) | Cofnij / Ponów |
+| Formatuj jako tabelę | wstążka formatu (Edycja), przycisk z siatką za Autosumowaniem | — (Ctrl+T / Ctrl+L zajmuje przeglądarka) |
 | Nazwa kolumny w pustej siatce | klik w pusty nagłówek pustej kolumny (Edycja) | prawy klik / przytrzymanie nagłówka → „Zmień nazwę kolumny” |
 
 ### 0. Nowy skoroszyt — jak działa (2026-11-14)
@@ -87,6 +88,22 @@ Każde polecenie ma jedno miejsce; telefon (do 480 px) — te same miejsca.
 - Test: `scripts/layout-edit-playwright.js` (Chromium + Safari), Excel: `EXCEL_DIR=…` + `excel-real-check.py`.
 - **Na później**: dwuklik na krawędzi = dopasuj do zawartości (Excel), wpisanie szerokości liczbą
   („Szerokość kolumny…”), zmiana kilku zaznaczonych kolumn naraz.
+
+### 2. Formatuj jako tabelę — jak działa (2026-11-15)
+
+- Było: aplikacja czytała tabele Excela (paski, kolor nagłówka, kolumny obliczeniowe, odwołania Tabela[Kolumna],
+  rośnięcie przy nowych wierszach), ale nie umiała ich tworzyć.
+- Jest: przycisk na wstążce formatu (działa na aktywnej komórce, jak w Excelu). Zakres = wiersz nagłówka + wszystkie
+  wiersze danych; kolumny zaznaczone (gdy zaznaczono kilka), inaczej wszystkie z treścią (puste z prawej odpadają).
+- Jak Excel (sprawdzone): nazwa `Tabela1`, `Tabela2`…; nagłówek pusty → „Kolumna1”, powtórzony → „Nazwa2”,
+  liczba / formuła → tekst; styl `TableStyleMedium2`, filtr na całej tabeli, filtr arkusza przechodzi do tabeli.
+  Odmowa z komunikatem: zakres nachodzi na inną tabelę albo na scalone komórki.
+- Plik: `swbSheetOps.addTable` (część tabeli, relacja, `<tableParts>`, typ zawartości); nazwy kolumn muszą być
+  równe komórkom nagłówka — aplikacja wpisuje je przed utworzeniem (inaczej Excel „naprawia” plik).
+- Jak operacje na arkuszach: plik wczytuje się od nowa, Cofnij zaczyna się od nowa (w Excelu Ctrl+T da się cofnąć —
+  **na później**). Też na później: wybór stylu z galerii, wiersz sumy, „Moja tabela nie ma nagłówków”,
+  konwersja tabeli z powrotem na zakres.
+- Przy okazji: po usunięciu arkusza formuły z `#REF!` przeliczają się od razu (wcześniej pokazywały starą wartość).
 
 ## Jak to sprawdzać
 
