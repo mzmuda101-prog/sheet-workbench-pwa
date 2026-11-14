@@ -1,5 +1,5 @@
 // Strażnik poprawek z polowania na błędy (2026-11-03) — tabela Sheet Workbench:
-//   1. pusty arkusz: „Arkusz bez danych” (nie „Zmień filtry”), bez przycisków ekranu startowego,
+//   1. pusty arkusz w Podglądzie: „Arkusz bez danych” (nie „Zmień filtry”); w Edycji siatka do wpisywania;, bez przycisków ekranu startowego,
 //      napis przetrwa zmianę języka; nowy silnik odmontowany, stare wiersze zdjęte,
 //   2. wylany tekst: otwarty edytor komórki przeżywa przeliczenie wylewania,
 //   3. przeniesienie bloku na komórkę z formułą zależną: wartość wygrywa (dawniej formuła cykliczna),
@@ -62,6 +62,8 @@ async function run() {
   check("2. edytor w wylanej komórce zostaje podłączony", spill.ok && spill.virt, spill);
 
   // 1. pusty arkusz
+  // Od 2026-11-14 pusty arkusz w Edycji = siatka do wpisywania (sheet-ops-ui.js); komunikat zostaje w Podglądzie
+  await p.evaluate(() => sheetEditUi.setMode("view"));
   await sheet("Pusty"); // arkusz bez <dimension> (SheetJS) — dawniej wyjątek, przełączenie nie działało
   const empty = await p.evaluate(() => ({
     title: emptyTitleEl.textContent, buttons: !!document.getElementById("emptyOpenBtn").offsetParent,
@@ -74,6 +76,14 @@ async function run() {
   check("1. po zmianie języka nadal pusty arkusz (nie ekran startowy)", en === "No data in this sheet", en);
   await p.evaluate(() => applyLanguage("pl"));
   await sleep(300);
+  await p.evaluate(() => sheetEditUi.setMode("edit"));
+  await sleep(400);
+  const grid = await p.evaluate(() => ({
+    shown: !document.getElementById("tableWrap").classList.contains("hidden"),
+    dataRows: document.querySelectorAll("#dataTable tbody tr[data-row-key]").length,
+    ghosts: document.querySelectorAll("#dataTable .ghost-row").length,
+  }));
+  check("1. Edycja: pusty arkusz = siatka z pustymi wierszami, bez starych wierszy danych", grid.shown && grid.dataRows === 0 && grid.ghosts > 0, grid);
 
   // 3. przeniesienie na komórkę z formułą zależną
   await sheet("Scalenia");

@@ -220,6 +220,8 @@
                   </svg>
                   <span id="fileNameText">Brak pliku</span>
                 </div>
+                <!-- „od zera”: dom polecenia Nowy skoroszyt (sheet-ops-ui.js, docs/OD-ZERA.md) -->
+                <button class="btn ghost new-workbook-btn" id="newWorkbookBtn" type="button">Nowy skoroszyt</button>
 
                 <!-- Arkusz na całą szerokość — nazwy arkuszy bywają długie (w pół szerokości były ucinane). -->
                 <label class="field">
@@ -1419,6 +1421,9 @@
                 <button class="btn" id="emptyOpenBtn" type="button" data-hint data-hint-pl="Otwórz plik XLSX z dysku — wszystko przetwarzane lokalnie" data-hint-en="Open an XLSX file from disk — everything is processed locally" data-hint-delay="1.1" data-hint-touch="on">
                   Wybierz plik z dysku
                 </button>
+                <button class="btn ghost" id="emptyNewBtn" type="button" data-hint data-hint-pl="Pusty arkusz do wpisywania od zera" data-hint-en="A blank sheet to start from scratch" data-hint-delay="1.1" data-hint-touch="on">
+                  Nowy skoroszyt
+                </button>
                 <button class="btn ghost" id="loadSampleBtn" type="button" data-hint data-hint-pl="Wczyta lokalnie wygenerowany przykładowy arkusz — bez wysyłania czegokolwiek" data-hint-en="Loads a locally generated sample sheet — nothing is uploaded" data-hint-delay="1.1" data-hint-touch="on">
                   Wypróbuj na przykładowym pliku
                 </button>
@@ -1965,6 +1970,7 @@
     <script defer src="app/virt-rows.js?v=v1.00.22"></script>
     <script defer src="app/conditional-formatting.js?v=v1.00.22"></script>
     <script defer src="app/formula-engine.js?v=v1.00.22"></script>
+    <script defer src="app/sheet-ops.js?v=v1.00.22"></script>
     <script defer src="app/formula-calc.js?v=v1.00.22"></script>
     <script defer src="app/formula-explain.js?v=v1.00.22"></script>
     <script defer src="app/data-validation.js?v=v1.00.22"></script>
@@ -2001,6 +2007,7 @@
     <script defer src="app/autofill.js?v=v1.00.22"></script>
     <script defer src="app/move-cells.js?v=v1.00.22"></script>
     <script defer src="app/header-edit.js?v=v1.00.22"></script>
+    <script defer src="app/sheet-ops-ui.js?v=v1.00.22"></script>
     <script defer src="app/formula-ui.js?v=v1.00.22"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy

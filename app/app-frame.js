@@ -136,14 +136,14 @@ const appFrame = (() => {
       if (hasFile) heroTitleEl.setAttribute("title", currentFileName); else heroTitleEl.removeAttribute("title");
     }
     const sheet = typeof currentSheetName === "string" ? currentSheetName : "";
-    const multi = hasFile && workbook.SheetNames && workbook.SheetNames.length > 1;
     if (heroSheetBtn) {
       heroSheetBtn.hidden = !(hasFile && sheet);
-      heroSheetBtn.disabled = !multi;
-      heroSheetBtn.classList.toggle("is-multi", !!multi);
+      // lista arkuszy ma też „Nowy arkusz / Zmień nazwę / Usuń” — otwiera się i przy jednym arkuszu
+      heroSheetBtn.disabled = !hasFile;
+      heroSheetBtn.classList.toggle("is-multi", !!hasFile);
       if (heroSheetName) heroSheetName.textContent = sheet;
-      heroSheetBtn.setAttribute("aria-label", multi ? `${t("heroSheetSwitch")}: ${sheet}` : sheet);
-      if (multi) heroSheetBtn.setAttribute("aria-expanded", heroSheetBtn.getAttribute("aria-expanded") || "false");
+      heroSheetBtn.setAttribute("aria-label", `${t("heroSheetSwitch")}: ${sheet}`);
+      if (hasFile) heroSheetBtn.setAttribute("aria-expanded", heroSheetBtn.getAttribute("aria-expanded") || "false");
       else heroSheetBtn.removeAttribute("aria-expanded");
     }
     syncSave();
@@ -167,7 +167,7 @@ const appFrame = (() => {
   sheetMenu.setAttribute("role", "listbox");
   sheetMenu.hidden = true;
   document.body.appendChild(sheetMenu);
-  function sheetMenuItems() { return Array.from(sheetMenu.querySelectorAll(".sheet-menu-item")); }
+  function sheetMenuItems() { return Array.from(sheetMenu.querySelectorAll(".sheet-menu-item, .sheet-op-item")); }
   function closeSheetMenu(returnFocus) {
     if (sheetMenu.hidden) return;
     sheetMenu.hidden = true;
@@ -200,6 +200,7 @@ const appFrame = (() => {
       });
       return b;
     }));
+    if (typeof swbSheetOpsUi !== "undefined") sheetMenu.append(...swbSheetOpsUi.menuActions(() => closeSheetMenu(false), "app-menu-item"));
     const r = heroSheetBtn.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
     const width = Math.min(300, vw - 16);

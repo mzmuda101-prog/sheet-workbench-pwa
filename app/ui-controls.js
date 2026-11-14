@@ -1102,7 +1102,7 @@ function describeFileLoadError(err, file) {
   return msg ? t("fileLoadFailedDetail", { detail: msg }) : t("fileLoadFailed");
 }
 
-async function handleFile(file, fileHandle = null) {
+async function handleFile(file, fileHandle = null, opts = {}) {
   if (!file) return;
   if (!(await ensureXlsxLibs(true))) return; // dogrywa xlsx/jszip przy pierwszym użyciu
   try {
@@ -1173,14 +1173,17 @@ async function handleFile(file, fileHandle = null) {
     fileNameEl.classList.remove("hidden");
     if (typeof appFrame !== "undefined") appFrame.syncFile();
     dropZone.classList.add("has-file");
+    if (!opts.reopen) swbStructureDirty = false;
     setDirtyState(false);
     setStatus(t("statusFileLoaded"));
     scheduleViewRefresh({ analyses: true });
     populateSortColumnSelect();
     populateEditColumnSelect();
     renderSortPresets();
-    toast(t("fileLoaded"), "success");
-    log(`Wczytano plik: ${file.name}`, "success");
+    if (!opts.reopen) { // ponowne wczytanie po operacji na arkuszu (sheet-ops-ui.js) — bez „Wczytano plik”
+      toast(t("fileLoaded"), "success");
+      log(`Wczytano plik: ${file.name}`, "success");
+    }
     return true;
   } catch (err) {
     toast(describeFileLoadError(err, file), "error");
@@ -2070,6 +2073,7 @@ function buildSheetPickerList(names) {
     });
     sheetPickerListEl.appendChild(btn);
   });
+  if (typeof swbSheetOpsUi !== "undefined" && names && names.length) sheetPickerListEl.append(...swbSheetOpsUi.menuActions(closeSheetPicker, "sheet-picker-item"));
   ensureKeyboardReachable(sheetPickerListEl);
 }
 
@@ -2789,7 +2793,7 @@ loadBtn.addEventListener("click", () => {
       // Inny arkusz TEGO SAMEGO pliku: zmiany z poprzedniego arkusza dalej czekają na zapis
       // (pendingEdits). Dawniej setDirtyState(false) gasiło „Zapisz” — brak ostrzeżenia przy
       // zamykaniu, a zmiany przepadały (znalezione 2026-10-01 przy szkicach).
-      setDirtyState(Object.values(pendingEdits || {}).some((cells) => cells && Object.keys(cells).length > 0));
+      setDirtyState(swbStructureDirty || Object.values(pendingEdits || {}).some((cells) => cells && Object.keys(cells).length > 0));
       if ((currentSheetStats?.trimmedColumns || 0) > 0) {
         log(`Przycięto puste kolumny poza realnym zakresem danych: ${currentSheetStats.trimmedColumns}`, "info");
       }

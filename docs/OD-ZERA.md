@@ -27,7 +27,7 @@ wiersza nagłówka (w widoku).
 
 | # | Brak | Plików | Uwagi |
 |---|---|---|---|
-| 0 | **Nowy skoroszyt** | — | Dziś nie ma „Nowy plik”: wszystko zaczyna się od otwarcia istniejącego. Podstawa „od zera”: pusty skoroszyt, dodaj / usuń / zmień nazwę arkusza. |
+| 0 | ~~**Nowy skoroszyt**~~ — zrobione 2026-11-14 | — | Pusty skoroszyt, dodaj / usuń / zmień nazwę arkusza; zapis sprawdzony prawdziwym Excelem (szczegóły niżej). |
 | 1 | **Szerokość kolumn i wysokość wierszy w pliku** | 9 | Przeciąganie zmienia widok, ale zapis nie dopisuje `<cols>` / wysokości. |
 | 2 | **Formatuj jako tabelę** | 8 | Pliki mają tabele Excela (z nich biorą listy i kolumny obliczeniowe). Aplikacja je obsługuje, ale nie tworzy. |
 | 3 | **Scalanie komórek** | 7 | Scal / Scal i wyśrodkuj / Rozdziel. Zapis dziś zostawia `mergeCells` bez zmian. |
@@ -39,6 +39,39 @@ wiersza nagłówka (w widoku).
 | 9 | **Ukryj wiersze / kolumny, ochrona arkusza** | 3 / 2 | |
 | 10 | **Wykresy** | 3 | Duży etap; pliki mają je w obiegu i kosztorysie. |
 | 11 | **Tabele przestawne** | 2 | Aplikacja ma własne zestawienia (agregacja) — do decyzji, czy zapisywać je jako tabelę przestawną Excela. |
+
+## Dom poleceń (gdzie co jest)
+
+Każde polecenie ma jedno miejsce; telefon (do 480 px) — te same miejsca.
+
+| Polecenie | Dom | Skróty / inne wejścia |
+|---|---|---|
+| Nowy skoroszyt | panel **Plik i arkusz**, przycisk pod wyborem pliku | ekran startowy: „Nowy skoroszyt” obok „Wybierz plik z dysku” |
+| Nowy arkusz, Zmień nazwę arkusza…, Usuń arkusz… | lista pod nazwą arkusza w nagłówku (▾), na dole listy; działa na bieżącym arkuszu | — |
+| Nazwa kolumny w pustej siatce | klik w pusty nagłówek pustej kolumny (Edycja) | prawy klik / przytrzymanie nagłówka → „Zmień nazwę kolumny” |
+
+### 0. Nowy skoroszyt — jak działa (2026-11-14)
+
+- **Nowy skoroszyt**: `Zeszyt1.xlsx` z jednym arkuszem `Arkusz1` (jak polski Excel; części pliku jak z Excela
+  Mac — Aptos Narrow 12, motyw Office 2023, bez autora). Otwiera się w Edycji. Pusty arkusz to siatka A–H
+  z wierszem 1 na nazwy kolumn i pustymi wierszami pod spodem; pierwszy wpis trafia do wiersza 2.
+  W Podglądzie pusty arkusz pokazuje komunikat. Nie trafia do „Ostatnio otwierane”; pierwsze „Zapisz” pyta o miejsce.
+- **Nowy arkusz**: `ArkuszN` z najniższym wolnym N, wstawiony za bieżącym (Excel po ponownym otwarciu liczy tak samo;
+  w jednej sesji Excel liczy dalej — po usunięciu Arkusz2 daje Arkusz3; tego nie naśladujemy).
+- **Zmiana nazwy**: zasady Excela (1–31 znaków, bez `: \ / ? * [ ]`, bez apostrofu na brzegach, bez powtórki,
+  nie „Historia”). Odwołania w formułach, nazwach zdefiniowanych, formatowaniu warunkowym, listach wyboru,
+  wykresach i źródle tabel przestawnych idą za nową nazwą; apostrofy jak w Excelu (`'Moje dane'!A1`, `'2025'!A1`).
+- **Usunięcie**: pytanie, gdy arkusz nie jest pusty; odwołania → `#ADR!` (w pliku `#REF!`, jak zapisuje Excel);
+  znikają części tylko tego arkusza (tabele, notatki, rysunki), nazwy lokalne arkusza, łańcuch obliczeń.
+  Ostatniego widocznego arkusza nie da się usunąć.
+- **Jak**: poprawki trafiają do pliku w pamięci, operacja zmienia plik (`app/sheet-ops.js`), skoroszyt wczytuje się
+  od nowa (`app/sheet-ops-ui.js`). Jak w Excelu, operacji na arkuszach nie da się cofnąć (historia Cofnij od nowa).
+- **Testy**: `node scripts/sheet-ops-test.js` (plik, bez przeglądarki) i `scripts/sheet-ops-playwright.js`
+  (aplikacja, też `ENGINE=webkit TOUCH=1`); `EXCEL_DIR=/private/tmp/swb-excel-check` + `scripts/excel-real-check.py`
+  — prawdziwy Excel otwiera wyniki bez naprawiania.
+- **Na później**: odwołania 3D (`Arkusz1:Arkusz3!A1`) — zmiana nazwy pierwszego z pary i usuwanie skrajnego arkusza; przenoszenie / kopiowanie
+  arkusza i kolejność zakładek; zmiana nazwy podwójnym kliknięciem; filtry i sortowanie widoku po operacji na
+  arkuszu wracają do domyślnych (plik wczytuje się od nowa).
 
 ## Jak to sprawdzać
 

@@ -111,6 +111,8 @@ var sheetEditUi = (() => {
     placeModePill(changed);
     if (next === "view") stopPainter();
     sync();
+    // pusty arkusz: siatka do wpisywania tylko w Edycji (table.js) — po zmianie trybu przerysuj
+    if (changed && typeof baseRows !== "undefined" && !baseRows.length && typeof workbook !== "undefined" && workbook && typeof renderActiveTable === "function") renderActiveTable();
     if (changed && announce) toast(t(next === "view" ? "viewModeOn" : "editModeOn"), "info");
   }
   modeBtns.forEach((b) => b.addEventListener("click", () => setMode(b.dataset.mode, { announce: true })));

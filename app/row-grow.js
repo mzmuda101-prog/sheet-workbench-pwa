@@ -129,7 +129,8 @@ const swbRowGrow = (() => {
     }
     // ostatni wiersz z TREŚCIĄ teraz, nie „dokąd kiedyś doszliśmy” (liveLast): po Cofnij nowego wiersza
     // kolejny stawał o jeden niżej, nad nim zostawał pusty wiersz i formuły już się nie kopiowały
-    let lastData = lastRowOf(workbook.Sheets[name]);
+    // nigdy nad nagłówkiem ani w nim (pusty arkusz: pierwszy wiersz danych = zaraz pod nagłówkiem)
+    let lastData = Math.max(lastRowOf(workbook.Sheets[name]), currentHeaderRow - 1);
     baseRows.forEach((r) => { if (Number.isFinite(r.rowIndex0) && r.rowIndex0 > lastData) lastData = r.rowIndex0; });
     // Tabela Excela z wierszem sumy na końcu danych: nowy wiersz pod sumą wypadłby z tabeli.
     // Excel wstawia wtedy NAD sumą — to wstawianie w środku (Etap 4); na razie mówimy wprost.
@@ -685,6 +686,7 @@ const swbRowGrow = (() => {
 
   // ── „duchy”: blade puste wiersze pod danymi ────────────────────────────────
   const GHOSTS = 3;
+  const BLANK_GHOSTS = 24;
   let ghostBody = null;
   function onGhostClick(e) {
     const td = e.target && e.target.closest ? e.target.closest("td") : null;
@@ -708,18 +710,20 @@ const swbRowGrow = (() => {
       ghostBody.setAttribute("aria-hidden", "true"); // tylko podpowiedź wzrokowa; klawiatura: Enter / „＋ Nowy wiersz”
       ghostBody.addEventListener("click", onGhostClick);
     }
-    if (!canAdd() || filtered() || !baseRows.length) { ghostBody.remove(); ghostBody.dataset.key = ""; return; }
+    if (!canAdd() || filtered()) { ghostBody.remove(); ghostBody.dataset.key = ""; return; }
     if (ghostBody.previousElementSibling !== tb) tb.after(ghostBody);
     const n = currentDisplayModel.headers.length;
-    let last = -1;
+    let last = currentHeaderRow - 1; // pusty arkusz: duchy zaraz pod nagłówkiem
     baseRows.forEach((r) => { if (Number.isFinite(r.rowIndex0) && r.rowIndex0 > last) last = r.rowIndex0; });
+    // pusty arkusz: duchy wypełniają stronę jak w Excelu, nie trzy wiersze pod nagłówkiem
+    const ghosts = baseRows.length ? GHOSTS : BLANK_GHOSTS;
     const sample = tb.querySelector("tr[data-row-key]");
     const h = sample ? Math.round(sample.getBoundingClientRect().height) : 0;
-    const key = `${n}|${last}|${h}`;
+    const key = `${n}|${last}|${h}|${ghosts}`;
     if (ghostBody.dataset.key === key) return;
     ghostBody.dataset.key = key;
     const frag = document.createDocumentFragment();
-    for (let g = 1; g <= GHOSTS; g++) {
+    for (let g = 1; g <= ghosts; g++) {
       const tr = document.createElement("tr");
       tr.className = "ghost-row";
       if (h) tr.style.height = `${h}px`;
@@ -745,7 +749,7 @@ const swbRowGrow = (() => {
     if (!table) return;
     table.querySelectorAll("col.ghost-col, .ghost-col-cell").forEach((el) => el.remove());
     const derived = typeof dcAppliedCount === "number" ? dcAppliedCount : 0;
-    if (!canAdd() || filtered() || derived > 0 || !baseRows.length) return;
+    if (!canAdd() || filtered() || derived > 0) return;
     const cg = table.querySelector("colgroup");
     const head = typeof theadEl !== "undefined" ? theadEl : table.tHead;
     if (!cg || !head) return;

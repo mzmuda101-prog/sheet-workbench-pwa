@@ -37,7 +37,8 @@ import { globalFingerprint, loadImpact, saveImpact, whyRun, makeRecord, unionExe
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const TIMINGS = path.join(ROOT, ".test-timings.json");
-const PORT = 4175;
+// TEST_PORT: gdy 4175 zajmuje inna aplikacja (równoległa praca) — testy dostają APP_URL na tym porcie
+const PORT = Number(process.env.TEST_PORT) || 4175;
 
 const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
 const chain = pkg.scripts["test:serial"];
@@ -130,7 +131,7 @@ async function ensureServer() {
 function runStep(step) {
   return new Promise((resolve) => {
     const t0 = Date.now();
-    const env = { ...process.env, ...step.env, SLEEP_SCALE: step.retry ? "1" : SLEEP_SCALE, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require ${JSON.stringify(COV_PRELOAD)}`.trim() };
+    const env = { APP_URL: `http://127.0.0.1:${PORT}/`, ...process.env, ...step.env, SLEEP_SCALE: step.retry ? "1" : SLEEP_SCALE, NODE_OPTIONS: `${process.env.NODE_OPTIONS || ""} --require ${JSON.stringify(COV_PRELOAD)}`.trim() };
     // Chromium: zapis funkcji apki wykonanych przez test (do pomijania przy kolejnych zmianach)
     if (isChromium(step)) {
       env.TEST_COV_OUT = covFile(step);

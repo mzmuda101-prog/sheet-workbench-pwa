@@ -83,7 +83,7 @@ const swbDrafts = (() => {
     timer = 0;
     if (!originalFileBytes || !workbook || !hasUnsavedChanges) return;
     const count = editCount(pendingEdits);
-    if (!count) { await delRec(sessionId); storedBytes = null; return; } // np. cofnięte do stanu z pliku
+    if (!count && !swbStructureDirty) { await delRec(sessionId); storedBytes = null; return; } // np. cofnięte do stanu z pliku
     const bytes = originalFileBytes;
     const id = sessionId;
     if (!stamp && currentFileHandle) {
@@ -228,6 +228,7 @@ const swbDrafts = (() => {
     sessionId = rec.id;
     storedBytes = null;
     stamp = handle ? rec.stamp : null;
+    swbStructureDirty = true; // szkic mógł zawierać zmiany arkuszy (sheet-ops-ui.js) — są w bajtach, nie w edycjach
     setDirtyState(true);
     // otwarty wtedy arkusz — od razu z powrotem w tabeli
     const sheetName = rec.data?.sheet;

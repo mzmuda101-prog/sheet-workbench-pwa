@@ -1439,6 +1439,7 @@ function isMeaningfulSheetCell(cell) {
   return false;
 }
 
+const BLANK_GRID_COLS = 8;
 function computeEffectiveSheetRange(sheet, headerRow) {
   const fallback = XLSX.utils.decode_range(sheet["!ref"]);
   const headerIndex0 = Math.max(0, (headerRow || 1) - 1);
@@ -1472,8 +1473,10 @@ function computeEffectiveSheetRange(sheet, headerRow) {
     found = true;
   }
 
+  // pusty arkusz (nowy skoroszyt, nowy arkusz): siatka kilku kolumn do wpisywania, jak w Excelu
+  // (ta sama reguła w build-rows-core.js — ścieżka przez wątek roboczy)
   if (!found) {
-    return fallback;
+    return { s: fallback.s, e: { r: fallback.e.r, c: Math.max(fallback.e.c, fallback.s.c + BLANK_GRID_COLS - 1) } };
   }
 
   const merges = Array.isArray(sheet["!merges"]) ? sheet["!merges"] : [];

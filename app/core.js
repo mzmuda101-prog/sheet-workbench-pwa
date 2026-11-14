@@ -1280,8 +1280,12 @@ function setDirtyState(isDirty) {
 
 // Po udanym zapisie: czysto tylko, jeśli od zbudowania pliku nic się nie zmieniło.
 function markSavedAfterBuild() {
+  if (dirtyEpoch === savedBuildEpoch) swbStructureDirty = false;
   setDirtyState(dirtyEpoch !== savedBuildEpoch);
 }
+// Zmiana arkuszy (dodaj / zmień nazwę / usuń, sheet-ops-ui.js) jest już w pliku w pamięci, więc nie ma
+// jej w pendingEdits — ta flaga trzyma „niezapisane” do zapisu albo otwarcia innego pliku.
+let swbStructureDirty = false;
 
 function updateExcelLayoutButtonLabel() {
   if (!excelLayoutToggleEl) return;

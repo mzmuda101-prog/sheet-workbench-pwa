@@ -184,7 +184,18 @@ function swbHeaderTh(col) {
   return theadEl ? theadEl.querySelector(`tr.header-row th[data-col-index="${col}"]`) : null;
 }
 
-function swbOpenHeaderEditor(col) {
+// Kolumna bez nazwy w arkuszu i bez żadnej wartości (pusta siatka nowego skoroszytu) — w Edycji.
+function swbHeaderIsBlankColumn(col) {
+  if (!Number.isInteger(col) || col < 0 || !workbook || !currentSheetName) return false;
+  if (typeof swbIsEditMode === "function" && !swbIsEditMode()) return false;
+  if (col >= swbRealHeaderCount()) return false;
+  const cell = workbook.Sheets[currentSheetName]?.[swbHeaderRef(col)];
+  if (cell && cell.v != null && cell.v !== "") return false;
+  return !(baseRows || []).some((r) => r && Array.isArray(r.values) && r.values[col] != null && r.values[col] !== "");
+}
+
+// opts.blank: pole startuje puste (nie z zastępczą nazwą „A”), puste przy wyjściu = bez zmian i bez komunikatu
+function swbOpenHeaderEditor(col, opts = {}) {
   const th = swbHeaderTh(col);
   if (!th || th.querySelector("input.hdr-editor")) return;
   if (typeof swbEditGuard === "function" && !swbEditGuard()) return;
@@ -194,7 +205,7 @@ function swbOpenHeaderEditor(col) {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "hdr-editor";
-  input.value = currentHeaders[col];
+  input.value = opts.blank ? "" : currentHeaders[col];
   input.setAttribute("aria-label", t("hdrRenameAria", { name: currentHeaders[col] }));
   th.classList.add("hdr-editing");
   th.appendChild(input);
@@ -207,6 +218,7 @@ function swbOpenHeaderEditor(col) {
   };
   const commit = () => {
     if (done) return;
+    if (opts.blank && !input.value.trim()) { close(); return; }
     if (swbRenameColumn(col, input.value)) close();
     else { input.focus(); input.select(); }
   };
@@ -218,7 +230,7 @@ function swbOpenHeaderEditor(col) {
   // wyjście z pola: zapisz; gdy się nie da (pusta/zdublowana nazwa) — komunikat i bez zmian
   input.addEventListener("blur", () => setTimeout(() => {
     if (done) return;
-    swbRenameColumn(col, input.value);
+    if (!(opts.blank && !input.value.trim())) swbRenameColumn(col, input.value);
     close();
   }, 0));
   input.addEventListener("click", (e) => e.stopPropagation()); // klik w pole ≠ sortowanie

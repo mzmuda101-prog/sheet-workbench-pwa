@@ -9769,3 +9769,10 @@ details.anon-sec[open] > summary::before { content: "▾ "; }
 /* Wylany tekst przechodzi przez krawędź komórki — jak w Excelu bez ramki na tej krawędzi (cell-spill.js) */
 :is(#dataTable, .fz-clone) td.cell-spill.spill-no-r { border-right-color: transparent !important; }
 :is(#dataTable, .fz-clone) td.cell-spill.spill-no-l { border-left-color: transparent !important; }
+
+/* Nowy skoroszyt i operacje na arkuszach (sheet-ops-ui.js) */
+.new-workbook-btn { inline-size: 100%; }
+.sheet-op-item { justify-content: flex-start; gap: 10px; }
+.sheet-op-item > svg { flex: none; opacity: .8; }
+.sheet-menu .sheet-op-item .app-menu-item-text { flex: 1; }
+.sheet-op-item.is-danger { color: var(--danger); }

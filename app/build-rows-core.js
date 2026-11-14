@@ -287,6 +287,7 @@
     return false;
   }
 
+  const BLANK_GRID_COLS = 8;
   function computeEffectiveSheetRange(sheet, headerRow) {
     const fallback = XLSX.utils.decode_range(sheet["!ref"]);
     const headerIndex0 = Math.max(0, (headerRow || 1) - 1);
@@ -317,7 +318,8 @@
       maxCol = Math.max(maxCol, c);
       found = true;
     }
-    if (!found) return fallback;
+    // pusty arkusz (nowy skoroszyt, nowy arkusz): siatka kilku kolumn do wpisywania, jak w Excelu
+    if (!found) return { s: fallback.s, e: { r: fallback.e.r, c: Math.max(fallback.e.c, fallback.s.c + BLANK_GRID_COLS - 1) } };
     const merges = Array.isArray(sheet["!merges"]) ? sheet["!merges"] : [];
     merges.forEach((merge) => {
       if (!merge || !merge.s || !merge.e) return;

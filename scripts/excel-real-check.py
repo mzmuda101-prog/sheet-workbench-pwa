@@ -25,9 +25,18 @@ import time
 import zipfile
 
 import openpyxl
+import openpyxl.worksheet.formula
 
 DIR = "/private/tmp/swb-excel-check"
 SKIP_PARTS = ("docProps/", "xl/calcChain", "xl/printerSettings")
+
+
+def cell_value(c):
+    # formuła tablicowa to obiekt openpyxl bez __eq__ — porównujemy jej tekst i zakres, nie adres w pamięci
+    v = c.value
+    # Excel dopisuje SORT/FILTER prefiks „_xlws.” (_xlfn._xlws.SORT); bez niego też czyta i liczy tak samo
+    norm = lambda f: f.replace("_xlfn._xlws.", "_xlfn.") if isinstance(f, str) else f
+    return ("array", v.ref, norm(v.text)) if isinstance(v, openpyxl.worksheet.formula.ArrayFormula) else norm(v)
 
 
 def osa(*lines, timeout=120):
@@ -108,8 +117,8 @@ def compare(ours, theirs):
                 if x.value is None and not x.has_style:
                     continue
                 y = wb[x.coordinate]
-                if (x.value, x.number_format) != (y.value, y.number_format):
-                    bad_cells.append(f"{x.coordinate}: {x.value!r}/{x.number_format} → {y.value!r}/{y.number_format}")
+                if (cell_value(x), x.number_format) != (cell_value(y), y.number_format):
+                    bad_cells.append(f"{x.coordinate}: {cell_value(x)!r}/{x.number_format} → {cell_value(y)!r}/{y.number_format}")
         if bad_cells:
             problems.append(f"[{name}] komórki ({len(bad_cells)}): " + "; ".join(bad_cells[:5]))
     return problems

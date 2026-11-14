@@ -3016,7 +3016,9 @@ function renderTable(modelOrHeaders, maybeRows) {
     updateCellStats();
     return;
   }
-  if (!rows.length) {
+  // pusty arkusz w Edycji: sama siatka (wiersz nagłówka + „duchy” pod nim) — gotowa do wpisywania
+  const blankGrid = !rows.length && typeof baseRows !== "undefined" && !baseRows.length && typeof swbIsEditMode === "function" && swbIsEditMode();
+  if (!rows.length && !blankGrid) {
     dropStaleBody();
     setStatus(t("statusTableRowsEmpty"));
     if (tableScrollbarEl) tableScrollbarEl.classList.add("hidden");
@@ -3412,6 +3414,9 @@ if (theadEl && !theadEl.dataset.sortClickBound) {
     if (!th) return;
     const h = th.dataset.sortHeader;
     if (!h) return;
+    // pusta kolumna bez nazwy (np. nowy skoroszyt): klik = wpisz nazwę, sortować i tak nie ma czego
+    const col = parseInt(th.dataset.colIndex || "", 10);
+    if (typeof swbHeaderIsBlankColumn === "function" && swbHeaderIsBlankColumn(col)) { swbOpenHeaderEditor(col, { blank: true }); return; }
     if (sortState.col === h) setPrimarySort(h, sortState.dir === "asc" ? "desc" : "asc");
     else setPrimarySort(h, "asc");
     if (tableViewMode !== "long") sortRows();
