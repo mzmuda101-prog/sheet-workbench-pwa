@@ -637,6 +637,7 @@ const swbEntry = (() => {
     else if (ui.step === 2) renderFields(stage, bar);
     else if (ui.step === "queue") renderQueue(stage, bar);
     else if (ui.step === "queueReview") renderQueueReview(stage, bar);
+    else if (ui.step === "queueAfter") renderQueueAfter(stage, bar);
     else renderReview(stage, bar);
   }
 
@@ -1698,6 +1699,23 @@ const swbEntry = (() => {
     (bar.querySelector("#enCommitBtn:not([disabled])") || stage.querySelector("#enQOverwrite") || bar.querySelector("#enBackBtn")).focus();
   }
 
+  // Po „Wpisz wszystkim naraz”: zakończyć (domyślnie, Enter) albo uzupełnić resztę po kolei.
+  function renderQueueAfter(stage, bar) {
+    const q = ui.queue;
+    const k = activeItems().filter(({ it }) => it.state === "pending").length;
+    stage.innerHTML = `<div class="tr-card en-card">
+      <h2 class="en-review-title">${esc(tn("entryQAfterTitle", q.series || 0))}</h2>
+      <p class="en-hint">${esc(t("entryQAfterHint"))}</p>
+      <ul class="en-q-list">${q.items.filter((it) => it.state === "pending" && it.choice !== "skip" && it.choice !== null).map((it) => `<li class="en-q-item"><span class="en-q-text">${esc(it.text)}</span>
+        <span class="en-q-st">${esc(Number.isInteger(it.choice) ? t("entryRowN", { n: excelRow(it.choice) }) : t("entryQNewOpt"))}</span></li>`).join("")}</ul>
+    </div>`;
+    bar.innerHTML = `<button class="btn ghost en-q-walk" id="enQAfterWalk" type="button" ${k ? "" : "disabled"}>${esc(t("entryQAfterWalk", { n: k }))}</button>
+      <button class="btn" id="enQAfterEnd" type="button">${esc(t("entryQCancel"))}</button>`;
+    bar.querySelector("#enQAfterWalk").addEventListener("click", () => { q.mode = "walk"; nextQueueItem(0); });
+    bar.querySelector("#enQAfterEnd").addEventListener("click", () => finishQueue());
+    bar.querySelector("#enQAfterEnd").focus();
+  }
+
   async function doCommitQueue() {
     if (committing) return;
     committing = true;
@@ -1721,8 +1739,13 @@ const swbEntry = (() => {
         action: t("entryDoneUndo"),
         onAction: () => { if (swbEntry.undoCard()) toast(t("entryUndone"), "info"); else toast(t("entryUndoGone"), "info"); },
       });
-      ui.queue = null; ui.queueDraft = null; ui.target = null; ui.fields = pinnedFields(); ui.query = "";
-      ui.step = 1;
+      // Kolejka zostaje: do wyboru „Zakończ” (jak dawniej) albo „po kolei” przez TE SAME wiersze, żeby dopisać
+      // to, co różne — bez wpisywania listy od nowa. Wspólne już są w arkuszu, więc nie podsuwamy ich drugi raz.
+      const series = new Set(qi.input.items ? qi.input.items.map((x) => x.rowIndex0) : qi.input.targets);
+      q.items.forEach((it) => { if (it.state === "pending" && it.choice !== "new" && !(Number.isInteger(it.choice) && series.has(it.choice))) it.state = "skipped"; });
+      q.action = "fields"; q.common = {}; q.mode = null; q.pos = -1; q.series = series.size;
+      ui.target = null; ui.query = "";
+      ui.step = "queueAfter";
       persist({ draft: false });
       render();
       drawPanel();

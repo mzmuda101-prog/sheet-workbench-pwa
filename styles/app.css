@@ -9908,6 +9908,7 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-smart-state { margin: 0; font-size: 15px; font-weight: 600; color: var(--muted-strong); overflow-wrap: anywhere; }
 .en-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .en-seg-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.en-bar #enQAfterWalk, .en-bar #enQAfterEnd { flex: 1 1 12rem; }
 .en-seg-btn {
   min-height: 54px; min-width: 0; padding: 6px 10px; font: inherit; font-size: 17px; font-weight: 700; color: var(--ink);
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); cursor: pointer; overflow-wrap: anywhere;

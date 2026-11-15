@@ -213,6 +213,8 @@ async function run() {
   ok("AI: zmyślony fragment odrzucony", !ai.terms.some((t) => /Nowakowski/.test(t)), ai.terms);
   ok("AI: propozycje odznaczone (tylko proponuje)", ai.aiVals.length >= 3 && ai.aiVals.every((v) => !v.on) && !ai.planHasZenek, ai);
   await page.locator("#anonModal .anon-value.is-ai", { hasText: "Zenkiem" }).locator("input").check();
+  // plan przelicza się po zaznaczeniu — czekamy na niego, zamiast czytać od razu (WebKit w tłoku bywał szybszy od planu)
+  await page.waitForFunction(() => swbAnon.state.plan.changes.some((ch) => /Zenkiem/.test(String(ch.before))), null, { timeout: 5000 }).catch(() => {});
   const picked = await page.evaluate(() => swbAnon.state.plan.changes.filter((ch) => /Zenkiem/.test(String(ch.before))).map((ch) => ch.after && ch.after.value));
   ok("AI: zaznaczona propozycja w planie", picked.length === 1 && !/Zenkiem/.test(picked[0]) && /Zaułka Rybaków/.test(picked[0]), picked);
   await page.evaluate(() => { delete window.__localAiMock; swbAnon.close(); });
