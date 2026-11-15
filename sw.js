@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v1.00.31";
+const CACHE_VERSION = "v1.01.00";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
