@@ -89,11 +89,20 @@ const SwbEntryCore = (() => {
     return out;
   }
 
-  function scoreOf(qWords, qFold, value, fuzzy) {
+  // foldCache (opcjonalnie, Map tekst → { f, w }): normalizacja każdej wartości klucza raz,
+  // a nie przy każdym naciśnięciu klawisza — przy dziesiątkach tysięcy wierszy to różnica w płynności
+  function folded(value, cache) {
+    const text = asText(value);
+    if (!cache) return { f: fold(text), w: words(text) };
+    let hit = cache.get(text);
+    if (!hit) { hit = { f: fold(text), w: words(text) }; cache.set(text, hit); }
+    return hit;
+  }
+
+  function scoreOf(qWords, qFold, value, fuzzy, cache) {
     if (isEmpty(value)) return 0;
-    const vFold = fold(asText(value));
+    const { f: vFold, w: vWords } = folded(value, cache);
     if (vFold === qFold) return 3;
-    const vWords = words(asText(value));
     if (vWords.length === qWords.length && [...vWords].sort().join(" ") === [...qWords].sort().join(" ")) return 2;
     // każde słowo zapytania do innego słowa wiersza
     const match = (test) => {
@@ -119,7 +128,7 @@ const SwbEntryCore = (() => {
     const out = [];
     (rows || []).forEach((r) => {
       const v = r && Array.isArray(r.values) ? r.values[keyCol] : null;
-      const score = scoreOf(qWords, qFold, v, fuzzy);
+      const score = scoreOf(qWords, qFold, v, fuzzy, opts.foldCache);
       if (score > 0) out.push({ rowIndex0: r.rowIndex0, score, exact: score === 3 });
     });
     out.sort((a, b) => b.score - a.score || a.rowIndex0 - b.rowIndex0);

@@ -90,11 +90,16 @@ async function run() {
 
   await open();
   ok("0. moduł dostępny", await page.evaluate(() => typeof window.__entry === "object"), null);
+  // pamięć listy wierszy: ta sama tablica, dopóki dane się nie zmienią (pisanie w polu celu nie sortuje arkusza co klawisz)
+  const memo = await page.evaluate(() => { const a = window.__entry.candidates(); const b = window.__entry.candidates(); return a === b; });
+  ok("0. candidates() z pamięci przy niezmienionych danych", memo === true, memo);
 
   // 1. uzupełnienie
   const r1 = await commit({ target: { rowIndex0: 2 }, fields: { 1: "12.03.2026", 2: "zdana" } });
   ok("1. commit ok", r1 && r1.ok === true && r1.rowIndex0 === 2, r1);
   ok("1. undoSteps = 1", r1 && r1.undoSteps === 1, r1);
+  const fresh = await page.evaluate(() => { const r = window.__entry.rowAt(2); return r && r.values[2]; });
+  ok("1. po zapisie candidates() widzi nowe wartości", fresh === "zdana", fresh);
   const b3 = await cell("B3"), c3 = await cell("C3");
   ok("1. B3 = 2026-03-12 (data)", b3 && b3.t === "d" && b3.v === "2026-03-12", b3);
   ok("1. C3 = zdana", c3 && c3.v === "zdana", c3);

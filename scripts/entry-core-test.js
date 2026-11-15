@@ -38,6 +38,14 @@ eq(C.findTargets(rows, 0, "zzzz"), [], "cel: nic nie pasuje");
 eq(C.findTargets(rows, 0, "an").map((x) => x.score), [0.5], "cel: prefiks słowa (Anna) → score 0.5");
 ok(C.findTargets(rows, 0, "Łukasz").length === 0, "cel: nie wybucha na polskich znakach");
 
+// ── foldCache: te same wyniki, normalizacja raz na wartość ──
+const cache = new Map();
+eq(C.findTargets(rows, 0, "jan kowalski", { foldCache: cache }).map((x) => x.rowIndex0), [5, 9, 12], "foldCache: te same wyniki");
+ok(cache.get("Jan Kowalski") && cache.get("Jan Kowalski").f === "jan kowalski", "foldCache: zapamiętana postać — " + JSON.stringify([...cache]));
+const size = cache.size;
+C.findTargets(rows, 0, "anna", { foldCache: cache });
+eq(cache.size, size, "foldCache: drugie szukanie nie dokłada wartości");
+
 // ── distinguishingCols ───────────────────────────────
 eq(C.distinguishingCols(["Osoba", "Dział", "Tel", "Miasto"], [["a", "b", "c", "d"], ["X", "X", "X", "X"], ["1", "2", "3", "4"], ["K", "L", "M", "K"]], 0), [2, 3], "rozróżniające: unikalność ≥ 50%, bez klucza");
 

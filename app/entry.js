@@ -31,14 +31,23 @@ const swbEntry = (() => {
   };
 
   // Wiersze danych (bez wierszy widoku long i tego, co nad/w nagłówku), w kolejności arkusza.
-  function candidates() {
-    if (!ready() || !Array.isArray(baseRows)) return [];
-    return baseRows
+  // Z pamięci, dopóki dane się nie zmienią (sheetDataStamp rośnie przy każdym zapisie komórki,
+  // baseRows podmienia się przy przebudowie) — pole celu woła to przy każdym klawiszu.
+  let memo = null; // { rows, base, len, stamp, sheet, byIndex, foldCache }
+  function memoNow() {
+    if (!ready() || !Array.isArray(baseRows)) return null;
+    const stamp = typeof sheetDataStamp === "number" ? sheetDataStamp : 0;
+    if (memo && memo.base === baseRows && memo.len === baseRows.length && memo.stamp === stamp && memo.sheet === currentSheetName) return memo;
+    const rows = baseRows
       .filter((r) => r && !r.isLongViewRow && Number.isFinite(r.rowIndex0) && r.rowIndex0 >= currentHeaderRow
         && Array.isArray(r.values) && r.values.some((v) => !isBlank(v)))
-      .slice().sort((a, b) => a.rowIndex0 - b.rowIndex0);
+      .sort((a, b) => a.rowIndex0 - b.rowIndex0);
+    memo = { rows, base: baseRows, len: baseRows.length, stamp, sheet: currentSheetName, byIndex: new Map(rows.map((r) => [r.rowIndex0, r])), foldCache: new Map() };
+    return memo;
   }
-  const rowAt = (rowIndex0) => candidates().find((r) => r.rowIndex0 === rowIndex0) || null;
+  const candidates = () => { const m = memoNow(); return m ? m.rows : []; };
+  const rowAt = (rowIndex0) => { const m = memoNow(); return (m && m.byIndex.get(rowIndex0)) || null; };
+  const foldCache = () => { const m = memoNow(); return m ? m.foldCache : null; };
   const lastDataRow = () => { const c = candidates(); return c.length ? c[c.length - 1] : null; };
 
   const sameValue = (a, b) => {
@@ -175,7 +184,7 @@ const swbEntry = (() => {
     return filled.target ? plan({ target: filled.target, fields: filled.fields }) : null;
   }
 
-  const api = { candidates, plan, commit, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, _filled: () => filled };
+  const api = { candidates, plan, commit, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, _filled: () => filled };
   return api;
 })();
 
@@ -428,7 +437,7 @@ const swbEntry = (() => {
 
   function search() {
     const rows = swbEntry.candidates();
-    ui.targets = C.findTargets(rows, ui.keyCol, ui.query, { fuzzy: ui.options.fuzzyTarget });
+    ui.targets = C.findTargets(rows, ui.keyCol, ui.query, { fuzzy: ui.options.fuzzyTarget, foldCache: swbEntry.foldCache() });
     // jeden dokładny kandydat = podświetlony (Enter go wybiera); kilka albo literówki — wybiera człowiek
     const exact = ui.targets.filter((x) => x.exact);
     ui.active = exact.length === 1 && ui.targets[0] && ui.targets[0].exact ? 0 : -1;
