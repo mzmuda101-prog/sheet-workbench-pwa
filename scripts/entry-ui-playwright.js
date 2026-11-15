@@ -431,8 +431,10 @@ async function run() {
   const stat = s20.queue ? s20.queue.items.map((x) => x.status) : [];
   ok("20. statusy: kilka wierszy / ok / brak / ok", stat.join() === "ambiguous,ok,missing,ok", stat);
   ok("20. przyciski zablokowane, dopóki „Ewa Lis” bez wyboru", await page.$eval("#enQWalk", (b) => b.disabled) && await page.$eval("#enQAll", (b) => b.disabled), null);
+  ok("20. kolumna-klucz (Osoba) NIE jest polem wspólnym — nadałaby wszystkim ten sam klucz", !(await page.$('#entryOverlay [data-en-qf="0"]')), null);
   await page.selectOption('#entryOverlay [data-en-q-choose="0"]', "4"); await sleep(100);
   ok("20. po wyborze — „Po kolei” aktywne, „naraz” czeka na pole wspólne", !(await page.$eval("#enQWalk", (b) => b.disabled)) && await page.$eval("#enQAll", (b) => b.disabled), null);
+  ok("20. wyszarzone „naraz” mówi dlaczego", /pole wspólne/.test(await page.textContent("#enQHint")) && await page.isVisible("#enQHint"), await page.textContent("#enQHint").catch(() => ""));
   await page.fill('#entryOverlay [data-en-qf="2"]', "zdana"); await sleep(100);
   ok("20. pole wspólne wypełnione — „naraz” dla 3 wierszy (bez brakującego)", /3/.test(await page.textContent("#enQAll")) && !(await page.$eval("#enQAll", (b) => b.disabled)), await page.textContent("#enQAll"));
   const before20 = await cv("C5");

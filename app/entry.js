@@ -1025,7 +1025,7 @@ const swbEntry = (() => {
         choice: x.status === "ok" ? x.rowIndex0 : x.status === "missing" ? ui.options.queueMissing : x.status === "same-row" ? "skip" : null,
         state: "pending",
       })),
-      pos: -1, mode: null, common: pinnedFields(), dupes: list.dupes || [], done: 0, ow: false,
+      pos: -1, mode: null, common: (() => { const c = pinnedFields(); delete c[ui.keyCol]; return c; })(), dupes: list.dupes || [], done: 0, ow: false,
     };
     ui.list = null; ui.query = ""; ui.target = null; ui.queueDraft = null;
     ui.step = "queue";
@@ -1059,7 +1059,8 @@ const swbEntry = (() => {
       else ctl = `<span class="en-q-st is-miss">${esc(t("entryQSameRow"))}</span>`;
       return `<li class="en-q-item" data-en-q="${i}"><span class="en-q-text">${esc(it.text)}</span>${ctl}</li>`;
     }).join("");
-    const cols = ui.fieldOrder.filter((c) => ui.selected.has(c) && !isFormulaCol(c));
+    // bez kolumny-klucza: wspólny klucz nadałby wszystkim wierszom ten sam numer/nazwisko
+    const cols = ui.fieldOrder.filter((c) => ui.selected.has(c) && !isFormulaCol(c) && c !== ui.keyCol);
     const commonHtml = cols.map((c) => `<div class="tr-field en-field" data-en-qcol="${c}">
         <label class="tr-field-label" for="enQF${c}">${esc(headers()[c])}</label>
         <input class="en-input" id="enQF${c}" data-en-qf="${c}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next" value="${esc(q.common[c] ?? "")}">
@@ -1121,7 +1122,8 @@ const swbEntry = (() => {
     walk.disabled = unresolved || k === 0;
     all.disabled = unresolved || m === 0 || !commonFilled();
     const hint = overlay.querySelector("#enQHint");
-    if (hint) hint.hidden = !unresolved;
+    const why = unresolved ? t("entryQNeedChoice") : (m > 0 && !commonFilled() ? t("entryQNeedCommon") : "");
+    if (hint) { hint.textContent = why; hint.hidden = !why; }
   }
 
   function queueProgressHtml() {
