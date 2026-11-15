@@ -9925,3 +9925,11 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
   .en-bar #enQWalk, .en-bar #enQAll { flex: 1 1 40%; margin-inline-start: 0; }
   .en-bar #enQCancel { order: 3; flex: 1 1 100%; min-height: 44px; }
 }
+.en-help { margin: 0; padding: 12px 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); font-size: 14px; }
+.en-help[hidden] { display: none; }
+.en-help dt { font-weight: 700; color: var(--ink); margin-top: 6px; }
+.en-help dt:first-child { margin-top: 0; }
+.en-help dd { margin: 0; color: var(--muted-strong); overflow-wrap: anywhere; }
+.en-queue-all { align-self: flex-start; min-height: 44px; }
+/* podpowiedź w polu celu jest przykładem, nie treścią — mniejsza, żeby zmieściła się na telefonie */
+.en-target-input::placeholder { font-size: 15px; font-weight: 500; }

@@ -447,7 +447,7 @@ async function run() {
   await page.click("#enCommitBtn"); await sleep(500);
   ok("20. naraz — C2, C4, C5 = zdana", [await cv("C2"), await cv("C4"), await cv("C5")].every((v) => v === "zdana"), [await cv("C2"), await cv("C4"), await cv("C5")]);
   const t20 = await toastMsgs();
-  ok("20. dymek mówi prawdę: 2 wiersze zmienione, 1 już miał tę wartość", t20.some((m) => /2 wierszy/.test(m) && /1 bez zmian/.test(m)), t20);
+  ok("20. dymek mówi prawdę: 2 wiersze zmienione, 1 już miał tę wartość", t20.some((m) => /do 2 wierszy/.test(m) && /bez zmian: 1/.test(m)), t20);
   await page.evaluate(() => [...document.querySelectorAll(".toast .toast-action")].find((b) => b.textContent === "Cofnij")?.click());
   await sleep(300);
   ok("20. Cofnij z dymku cofa całą serię", (await cv("C5")) === before20, { c5: await cv("C5"), before20 });
@@ -517,6 +517,43 @@ async function run() {
   ok("20. fillQueue (pod OCR) — kolejka z 2 pozycjami, powtórka wyłapana", fq && sfq.step === "queue" && sfq.queue.items.length === 2, sfq.queue);
   if (await page.isVisible("#enQCancel")) await page.click("#enQCancel");
   await sleep(150);
+  await page.keyboard.press("Escape"); await sleep(150);
+
+  // 21. zgłoszenie „032||023||019||052||545”: numery z || = kolejka; wyniki zapytania → „wszystkie do kolejki”; odmiana liczebników
+  await openEntry(); await sleep(250);
+  // ściągawka przy polu celu (prośba: „napisz gdzieś, jak to działa”) — przycisk, bo na dotyku nie ma najechania
+  ok("21. ściągawka domyślnie zwinięta", !(await page.isVisible("#enHelp")), null);
+  await page.click("#enHelpBtn"); await sleep(100);
+  const help = await page.textContent("#enHelp").catch(() => "");
+  ok("21. „Jak to działa?” pokazuje przykłady: jeden wiersz, lista, ||, zapytanie", await page.isVisible("#enHelp") && /031, 032, 045-048/.test(help) && /\|\|/.test(help) && /Status:=/.test(help), help);
+  ok("21. przycisk ma aria-expanded", (await page.getAttribute("#enHelpBtn", "aria-expanded")) === "true", null);
+  await page.click("#enHelpBtn"); await sleep(100);
+  await toggleSettings(); await page.selectOption("#enKeyCol", "3"); await toggleSettings();
+  await typeTarget("2||3||99");
+  const q21 = await page.textContent("#enCandidates [data-en-queue]").catch(() => "");
+  ok("21. numery połączone || → propozycja kolejki „3 pozycje”", /3 pozycje\b/.test(q21), q21);
+  ok("21. bez trybu zapytania", !(await page.isVisible("#enQueryHint")), null);
+  // opcja: numery z || jako zapytanie (szukaj wszędzie) zamiast listy
+  await toggleSettings(); await page.uncheck('#enSettings [data-en-opt="orNumbersAsList"]'); await toggleSettings();
+  await typeTarget("2||3||99");
+  ok("21. opcja wyłączona — „2||3||99” to zapytanie, nie kolejka", await page.isVisible("#enQueryHint") && !(await page.isVisible("#enCandidates [data-en-queue]")), null);
+  await toggleSettings(); await page.check('#enSettings [data-en-opt="orNumbersAsList"]'); await toggleSettings();
+  await toggleSettings(); await page.selectOption("#enKeyCol", "0"); await toggleSettings();
+  await typeTarget("Status:=zdana");
+  const all21 = await page.textContent("#enCandidates [data-en-queue-all]").catch(() => "");
+  const n21 = await page.evaluate(() => window.__entry.candidates().filter((r) => String(r.values[2]).toLowerCase() === "zdana").length);
+  ok("21. zapytanie z kilkoma wynikami → „Wszystkie wyniki do kolejki (N)”", n21 >= 2 && all21.includes(`(${n21})`), { all21, n21 });
+  await page.click("#enCandidates [data-en-queue-all]"); await sleep(250);
+  const s21 = await st();
+  ok("21. kolejka z wyników — wszystkie pozycje od razu „ok” (bez ponownego szukania)", s21.step === "queue" && s21.queue.items.length === n21 && s21.queue.items.every((x) => x.status === "ok"), s21.queue);
+  const title21 = await page.textContent("#entryOverlay .en-review-title");
+  const wantWord = n21 === 1 ? "pozycja" : (n21 % 10 >= 2 && n21 % 10 <= 4 && !(n21 % 100 >= 12 && n21 % 100 <= 14)) ? "pozycje" : "pozycji";
+  ok("21. tytuł kolejki z poprawną odmianą", title21.includes(`${n21} ${wantWord}`), title21);
+  await page.click("#enQCancel"); await sleep(150);
+  const plural = await page.evaluate(() => [1, 2, 5, 12, 22].map((n) => window.__entry.countWords(n)));
+  ok("21. odmiana: 1 pozycja/wiersza, 2 pozycje, 5 pozycji, 12 pozycji, 22 pozycje", JSON.stringify(plural.map((x) => [x.items, x.rowsGen, x.rowsLoc])) === JSON.stringify([
+    ["pozycja", "wiersza", "wierszu"], ["pozycje", "wierszy", "wierszach"], ["pozycji", "wierszy", "wierszach"], ["pozycji", "wierszy", "wierszach"], ["pozycje", "wierszy", "wierszach"],
+  ]), plural);
   await page.keyboard.press("Escape"); await sleep(150);
 
   ok("10. brak pageerror", errors.length === 0, errors);

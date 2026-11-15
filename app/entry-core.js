@@ -186,8 +186,14 @@ const SwbEntryCore = (() => {
     for (let n = a; n <= b; n++) out.push(String(n).padStart(width, "0"));
     return out;
   }
-  function parseTargetList(text, headers) {
-    const raw = String(text ?? "").trim();
+  function parseTargetList(text, headers, opts = {}) {
+    let raw = String(text ?? "").trim();
+    // „032||023||019” — same numery połączone „lub” to w karcie LISTA (zgłoszenie 2026-11-16),
+    // bo człowiek wpisuje tak kilka kart; „Kowalski || Nowak” albo warunek kolumny zostają zapytaniem
+    if (opts.orList !== false && /\|\|/.test(raw) && !/&&/.test(raw)) {
+      const parts = raw.split("||").map((x) => x.trim()).filter(Boolean);
+      if (parts.length >= 2 && parts.every((x) => /^\d+(\s*-\s*\d+)?$/.test(x))) raw = parts.join(", ");
+    }
     if (!raw || looksLikeQuery(raw, headers)) return null;
     const glued = raw.replace(/(\d)\s*-\s*(\d)/g, "$1-$2"); // „045 - 048” → „045-048”
     let parts;

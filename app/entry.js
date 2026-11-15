@@ -311,7 +311,7 @@ const swbEntry = (() => {
   if (!overlay || !C) return;
 
   const DEFAULT_OPTIONS = { fuzzyTarget: true, typoHints: true, typeHints: true, suggestions: true, duplicateGuard: true, confirmStep: true, queryOperators: true,
-    queueLists: true, queueAutoNext: true, queueMissing: "skip" };
+    queueLists: true, queueAutoNext: true, queueMissing: "skip", orNumbersAsList: true };
   const ui = {
     open: false, step: 1, keyCol: 0, query: "", targets: [], active: -1,
     target: null, fields: {}, overwrite: new Set(), pinned: new Set(), font: 2,
@@ -402,6 +402,13 @@ const swbEntry = (() => {
     return !!(cell && cell.f);
   };
   const excelRow = (rowIndex0) => rowIndex0 + 1;
+  // Odmiana do komunikatów z liczbą: „1 pozycja / 3 pozycje / 5 pozycji”, „do 1 wiersza”, „w 2 wierszach”.
+  function countWords(n) {
+    if (typeof currentLang !== "undefined" && currentLang === "en") return { items: n === 1 ? "item" : "items", rowsGen: n === 1 ? "row" : "rows", rowsLoc: n === 1 ? "row" : "rows" };
+    const f = typeof plPluralForm === "function" ? plPluralForm(n) : (n === 1 ? "one" : "many");
+    return { items: f === "one" ? "pozycja" : f === "few" ? "pozycje" : "pozycji", rowsGen: f === "one" ? "wiersza" : "wierszy", rowsLoc: f === "one" ? "wierszu" : "wierszach" };
+  }
+  const tn = (key, n, extra = {}) => t(key, { n, ...countWords(n), ...extra });
   const keyText = (row) => (row ? String(getDisplayValue(row, ui.keyCol) ?? "") : "");
 
   const ICON_PIN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>';
@@ -459,7 +466,7 @@ const swbEntry = (() => {
         ${opts.map(([k, label]) => `<label class="en-check"><input type="checkbox" data-en-opt="${k}" ${ui.options[k] ? "checked" : ""}> ${esc(t(label))}</label>`).join("")}
         <p class="en-hint">${esc(t("entryOptionsNote"))}</p>
         <h2 class="en-panel-title">${esc(t("entryQueueTitle"))}</h2>
-        ${[["queueLists", "entryOptQueueLists"], ["queueAutoNext", "entryOptQueueAutoNext"]].map(([k, label]) => `<label class="en-check"><input type="checkbox" data-en-opt="${k}" ${ui.options[k] ? "checked" : ""}> ${esc(t(label))}</label>`).join("")}
+        ${[["queueLists", "entryOptQueueLists"], ["orNumbersAsList", "entryOptOrList"], ["queueAutoNext", "entryOptQueueAutoNext"]].map(([k, label]) => `<label class="en-check"><input type="checkbox" data-en-opt="${k}" ${ui.options[k] ? "checked" : ""}> ${esc(t(label))}</label>`).join("")}
         <label class="en-label" for="enQueueMissing">${esc(t("entryQueueMissingLabel"))}</label>
         <select class="en-select" id="enQueueMissing">
           <option value="skip" ${ui.options.queueMissing !== "new" ? "selected" : ""}>${esc(t("entryQSkipOpt"))}</option>
@@ -526,7 +533,14 @@ const swbEntry = (() => {
   function renderTarget(stage, bar) {
     stage.innerHTML = `
       <div class="tr-card en-card">
-        <label class="en-label" for="enTargetInput">${esc(t("entryTargetLabel"))}</label>
+        <div class="en-target-line"><label class="en-label" for="enTargetInput">${esc(t("entryTargetLabel"))}</label>
+          <button class="btn btn-xs ghost" id="enHelpBtn" type="button" aria-expanded="${!!ui.helpOpen}" aria-controls="enHelp">${esc(t("entryHelpBtn"))}</button></div>
+        <dl class="en-help" id="enHelp" ${ui.helpOpen ? "" : "hidden"}>
+          <dt>${esc(t("entryHelpOne"))}</dt><dd>${esc(t("entryHelpOneEx"))}</dd>
+          <dt>${esc(t("entryHelpList"))}</dt><dd>${esc(t("entryHelpListEx"))}</dd>
+          <dt>${esc(t("entryHelpQuery"))}</dt><dd>${esc(t("entryHelpQueryEx"))}</dd>
+          <dt>${esc(t("entryHelpNew"))}</dt><dd>${esc(t("entryHelpNewEx"))}</dd>
+        </dl>
         <input class="en-input en-target-input" id="enTargetInput" type="text" autocomplete="off" spellcheck="false"
           enterkeyhint="go" role="combobox" aria-expanded="false" aria-controls="enCandidates" aria-autocomplete="list"
           placeholder="${esc(t("entryTargetPlaceholder"))}" value="${esc(ui.query)}">
@@ -582,6 +596,11 @@ const swbEntry = (() => {
         overlay.querySelector("#enTargetInput")?.focus();
       });
     }
+    stage.querySelector("#enHelpBtn").addEventListener("click", (e) => {
+      ui.helpOpen = !ui.helpOpen;
+      e.currentTarget.setAttribute("aria-expanded", String(ui.helpOpen));
+      stage.querySelector("#enHelp").hidden = !ui.helpOpen;
+    });
     const input = stage.querySelector("#enTargetInput");
     input.addEventListener("input", () => { ui.query = input.value; search(); });
     input.addEventListener("keydown", onTargetKey);
@@ -593,7 +612,7 @@ const swbEntry = (() => {
     const rows = swbEntry.candidates();
     const q = C.trimQuery(ui.query);
     // lista celów („031, 032, 045-048”) = propozycja kolejki zamiast szukania jednego wiersza
-    ui.list = ui.options.queueLists ? C.parseTargetList(q, headers()) : null;
+    ui.list = ui.options.queueLists ? C.parseTargetList(q, headers(), { orList: ui.options.orNumbersAsList }) : null;
     if (ui.list) { ui.queryMode = false; ui.queryCrit = null; ui.targets = []; ui.active = 0; drawCandidates(); return; }
     ui.queryMode = !!ui.options.queryOperators && C.looksLikeQuery(q, headers());
     ui.queryCrit = null;
@@ -604,6 +623,7 @@ const swbEntry = (() => {
       let hits = [];
       try { hits = rows.filter((r) => rowMatchesTextFilter(r, [criterion], false)); } catch { hits = []; }
       ui.queryTotal = hits.length;
+      ui.queryHits = hits.map((r) => r.rowIndex0);
       ui.targets = hits.slice(0, 6).map((r) => ({ rowIndex0: r.rowIndex0, score: 3, exact: false }));
       ui.active = hits.length === 1 ? 0 : -1; // zapytanie jest precyzyjne — jedno trafienie = wybrane
     } else {
@@ -625,7 +645,7 @@ const swbEntry = (() => {
     const q = C.trimQuery(ui.query);
     if (ui.list) {
       const dup = ui.list.dupes.length ? `<div class="en-hint">${esc(t("entryQueueDupes", { list: ui.list.dupes.join(", ") }))}</div>` : "";
-      box.innerHTML = `<div class="en-cand en-cand-new en-cand-queue" role="option" id="enCand0" data-en-queue aria-selected="true">${esc(t("entryQueueOpen", { n: ui.list.items.length }))}</div>${dup}`;
+      box.innerHTML = `<div class="en-cand en-cand-new en-cand-queue" role="option" id="enCand0" data-en-queue aria-selected="true">${esc(tn("entryQueueOpen", ui.list.items.length))}</div>${dup}`;
       input.setAttribute("aria-expanded", "true");
       input.setAttribute("aria-activedescendant", "enCand0");
       const opt = box.querySelector("[data-en-queue]");
@@ -655,10 +675,14 @@ const swbEntry = (() => {
     if (q) items.push(`<div class="en-cand en-cand-new" role="option" id="enCand${newIdx}" data-en-new aria-selected="${ui.active === newIdx}">${esc(newLabel)}</div>`);
     const keyHint = overlay.querySelector("#enKeyHint");
     if (keyHint) keyHint.hidden = ui.queryMode; // zapytanie szuka we wszystkich kolumnach, nie tylko w kluczu
-    box.innerHTML = (ui.queryMode ? `<div class="en-hint en-query-hint" id="enQueryHint">${esc(t("entryQueryHint", { n: ui.queryTotal }))}</div>` : "") + items.join("");
+    // przy kilku wynikach zapytania: wszystkie naraz do kolejki (np. „Status:=wzięta” → przejdź po każdym)
+    const allBtn = ui.queryMode && ui.queryTotal >= 2
+      ? `<button class="btn btn-xs en-queue-all" type="button" data-en-queue-all>${esc(t("entryQueueAll", { n: ui.queryTotal }))}</button>` : "";
+    box.innerHTML = (ui.queryMode ? `<div class="en-hint en-query-hint" id="enQueryHint">${esc(t("entryQueryHint", { n: ui.queryTotal }))}</div>${allBtn}` : "") + items.join("");
+    box.querySelector("[data-en-queue-all]")?.addEventListener("click", () => openQueueRows(ui.queryHits || []));
     input.setAttribute("aria-expanded", items.length ? "true" : "false");
     if (ui.active >= 0) input.setAttribute("aria-activedescendant", `enCand${ui.active}`); else input.removeAttribute("aria-activedescendant");
-    box.querySelectorAll(".en-cand").forEach((el, i) => {
+    box.querySelectorAll(".en-cand").forEach((el, i) => { // przycisk „wszystkie do kolejki” nie jest opcją listy
       // indeks = pozycja wśród opcji (podpowiedź o zapytaniu nie jest opcją)
       el.addEventListener("pointerdown", (e) => e.preventDefault()); // fokus zostaje w polu
       el.addEventListener("click", () => { ui.active = i; choose(); });
@@ -1033,6 +1057,20 @@ const swbEntry = (() => {
     persistNow();
   }
 
+  // Kolejka z wyników zapytania: wiersze już znalezione — każda pozycja od razu „ok”.
+  function openQueueRows(rowIdx) {
+    const rows = rowIdx.map((r) => swbEntry.rowAt(r)).filter(Boolean);
+    if (!rows.length) return;
+    ui.queue = {
+      items: rows.map((r) => ({ text: keyText(r) || t("entryRowN", { n: excelRow(r.rowIndex0) }), status: "ok", rowIndex0: r.rowIndex0, options: null, choice: r.rowIndex0, state: "pending" })),
+      pos: -1, mode: null, common: (() => { const c = pinnedFields(); delete c[ui.keyCol]; return c; })(), dupes: [], done: 0, ow: false,
+    };
+    ui.list = null; ui.query = ""; ui.target = null; ui.queueDraft = null; ui.queryHits = null;
+    ui.step = "queue";
+    render();
+    persistNow();
+  }
+
   const activeItems = () => (ui.queue ? ui.queue.items.map((it, i) => ({ it, i })).filter(({ it }) => it.choice !== "skip" && it.choice !== null) : []);
   const commonFilled = () => !!ui.queue && Object.values(ui.queue.common || {}).some((v) => String(v ?? "").trim());
 
@@ -1066,7 +1104,7 @@ const swbEntry = (() => {
         <input class="en-input" id="enQF${c}" data-en-qf="${c}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next" value="${esc(q.common[c] ?? "")}">
       </div>`).join("");
     stage.innerHTML = `<div class="tr-card en-card">
-      <h2 class="en-review-title">${esc(t("entryQTitle", { n: q.items.length }))}</h2>
+      <h2 class="en-review-title">${esc(tn("entryQTitle", q.items.length))}</h2>
       ${q.dupes && q.dupes.length ? `<p class="en-hint">${esc(t("entryQueueDupes", { list: q.dupes.join(", ") }))}</p>` : ""}
       <ul class="en-q-list">${itemHtml}</ul>
       <p class="en-warn" id="enQHint" hidden>${esc(t("entryQNeedChoice"))}</p>
@@ -1201,9 +1239,9 @@ const swbEntry = (() => {
     const skipped = q.items.filter((it) => !Number.isInteger(it.choice)).map((it) => it.text);
     const owCount = p.overwriteCount;
     stage.innerHTML = `<div class="tr-card en-card">
-      <h2 class="en-review-title">${esc(t("entryQReviewTitle", { n: targets.length }))}</h2>
+      <h2 class="en-review-title">${esc(tn("entryQReviewTitle", targets.length))}</h2>
       ${skipped.length ? `<p class="en-hint">${esc(t("entryQSkippedNote", { list: skipped.join(", ") }))}</p>` : ""}
-      ${owCount ? `<label class="en-ow"><input type="checkbox" id="enQOverwrite" ${q.ow ? "checked" : ""}> ${esc(t("entryQOverwrite", { n: owCount }))}</label>` : ""}
+      ${owCount ? `<label class="en-ow"><input type="checkbox" id="enQOverwrite" ${q.ow ? "checked" : ""}> ${esc(tn("entryQOverwrite", owCount))}</label>` : ""}
       <ul class="en-changes">${rowsHtml}</ul>
     </div>`;
     bar.innerHTML = `<button class="btn ghost" id="enBackBtn" type="button">${esc(t("entryBack"))}</button>
@@ -1234,7 +1272,7 @@ const swbEntry = (() => {
       res.rows.forEach((r) => ui.sessionLog.unshift({ key: keyText(swbEntry.rowAt(r.rowIndex0)), rowIndex0: r.rowIndex0, at: Date.now() }));
       ui.profiles.clear();
       const same = queueTargets().length - res.rows.length; // wiersze, które już miały te wartości
-      toast(same > 0 ? t("entryQDoneAllSame", { n: res.rows.length, same }) : t("entryQDoneAll", { n: res.rows.length }), "success", {
+      toast(same > 0 ? tn("entryQDoneAllSame", res.rows.length, { same }) : tn("entryQDoneAll", res.rows.length), "success", {
         action: t("entryDoneUndo"),
         onAction: () => { if (swbEntry.undoCard()) toast(t("entryUndone"), "info"); else toast(t("entryUndoGone"), "info"); },
       });
@@ -1345,6 +1383,7 @@ const swbEntry = (() => {
   swbEntry.close = close;
   swbEntry.ui = ui;
 
+  swbEntry.countWords = countWords;
   swbEntry.state = () => ({
     queue: ui.queue ? { items: ui.queue.items.map((x) => ({ text: x.text, status: x.status, choice: x.choice, state: x.state })), pos: ui.queue.pos, mode: ui.queue.mode, common: { ...ui.queue.common } } : null,
     open: ui.open, step: ui.step, target: ui.target ? { ...ui.target } : null, fields: { ...ui.fields },
