@@ -103,6 +103,8 @@ const SwbEntryCore = (() => {
     if (isEmpty(value)) return 0;
     const { f: vFold, w: vWords } = folded(value, cache);
     if (vFold === qFold) return 3;
+    // numer z kartki bez względu na zera wiodące: „032” = „32” = liczba 32 (kolumna „Nr.” w formacie 000)
+    if (/^\d+$/.test(qFold) && /^\d+$/.test(vFold) && Number(qFold) === Number(vFold)) return 3;
     if (vWords.length === qWords.length && [...vWords].sort().join(" ") === [...qWords].sort().join(" ")) return 2;
     // każde słowo zapytania do innego słowa wiersza
     const match = (test) => {

@@ -38,6 +38,14 @@ eq(C.findTargets(rows, 0, "zzzz"), [], "cel: nic nie pasuje");
 eq(C.findTargets(rows, 0, "an").map((x) => x.score), [0.5], "cel: prefiks słowa (Anna) → score 0.5");
 ok(C.findTargets(rows, 0, "Łukasz").length === 0, "cel: nie wybucha na polskich znakach");
 
+// ── numery z zerami wiodącymi (kolumna „Nr.” = liczba 32 w formacie 000 → widać „032”) ──
+const nr = [{ rowIndex0: 33, values: ["031"] }, { rowIndex0: 34, values: ["032"] }, { rowIndex0: 35, values: ["033"] }, { rowIndex0: 40, values: [32] }];
+eq(C.findTargets(nr, 0, "032").map((x) => [x.rowIndex0, x.score]), [[34, 3], [40, 3]], "numer: „032” = tekst „032” i liczba 32");
+eq(C.findTargets(nr, 0, "32").map((x) => x.rowIndex0), [34, 40], "numer: „32” znajduje „032” (bez zer wiodących)");
+eq(C.findTargets(nr, 0, "03").map((x) => x.rowIndex0).slice(0, 3), [33, 34, 35], "numer: początek „03” — wszystkie 03x");
+ok(C.isDuplicateRisk(C.findTargets(nr, 0, "032")), "numer: istniejący numer = ryzyko duplikatu");
+eq(C.findTargets([{ rowIndex0: 1, values: ["3,20"] }], 0, "3.2").length, 0, "numer: „3.2” nie łapie tekstu „3,20” jako tego samego numeru (tylko liczby całkowite)");
+
 // ── foldCache: te same wyniki, normalizacja raz na wartość ──
 const cache = new Map();
 eq(C.findTargets(rows, 0, "jan kowalski", { foldCache: cache }).map((x) => x.rowIndex0), [5, 9, 12], "foldCache: te same wyniki");
