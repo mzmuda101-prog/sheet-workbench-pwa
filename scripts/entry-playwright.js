@@ -169,6 +169,15 @@ async function run() {
   ok("10. Podgląd — guard", r10b && !r10b.ok && r10b.reason === "guard", r10b);
   await page.evaluate(() => sheetEditUi.setMode("edit"));
 
+  // 12. plik po wszystkich kartkach (uzupełnienia + nadpisania): tabela bez zmian zakresu, OOXML czysty
+  const s12 = await saveTableRef("entry-uzupelnienie.xlsx");
+  ok("12. tabela po uzupełnieniach A1:E6", s12.ref === "A1:E6", s12.ref);
+  if (ooxml && ooxml.available && ooxml.available()) {
+    const [b0, a0] = ooxml.validate([FILE, s12.out]);
+    const fresh = ooxml.newErrors(b0, a0).map(ooxml.short);
+    ok("12. OOXML bez nowych błędów", fresh.length === 0, fresh);
+  }
+
   ok("11. brak pageerror", errors.length === 0, errors);
   await browser.close();
   if (failures.length) {
