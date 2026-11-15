@@ -1021,6 +1021,56 @@ const TOAST_MERGE_MS = 2000;
 const TOAST_MS = { info: 2800, success: 2800, warning: 5000, error: 5000 };
 const TOAST_ACTION_MS = 6000;
 
+// ── stos dymków jak Sonner (Emil Kowalski; to samo co Documents Workbench v1.00.59) ──────────
+// Kilka naraz: najnowszy z przodu, dwa starsze wystają spod niego pomniejszone (treść schowana),
+// dalsze ukryte. Najechanie / fokus / stuknięcie rozkłada stos w listę i wstrzymuje znikanie
+// wszystkich; zjechanie / stuknięcie obok składa (dymki wracają z resztą czasu, ≥ 1,6 s).
+// Dymki leżą absolutnie, transform z --ty/--ts. Kontener u góry (telefon, spisywanie) —
+// starsze wystają w dół. Pierwszy stos w sesji raz lekko rozsuwa brzegi (podpowiedź).
+const TOAST_GAP = 8, TOAST_PEEK = 10, TOAST_VISIBLE = 3;
+let toastStackOpen = false;
+let toastNudge = false, toastNudged = false;
+const liveToasts = () => [...toastContainerEl.children].filter((el) => el.classList.contains("toast") && !el.classList.contains("out")).reverse(); // najnowszy pierwszy
+function layoutToasts() {
+  const list = liveToasts();
+  const top = toastContainerEl.getBoundingClientRect().top < innerHeight / 2; // u góry: telefon, tryb spisywania
+  toastContainerEl.classList.toggle("is-top", top);
+  const lift = top ? 1 : -1;
+  list.forEach((el) => { el.style.height = ""; });
+  const hs = list.map((el) => el.offsetHeight);
+  let y = 0;
+  list.forEach((el, i) => {
+    const open = toastStackOpen;
+    const off = open ? y : i * (toastNudge ? TOAST_PEEK * 2 : TOAST_PEEK);
+    el.style.setProperty("--ty", `${lift * off}px`);
+    el.style.setProperty("--ts", open ? "1" : String(Math.max(0, 1 - i * 0.05)));
+    el.style.height = !open && i > 0 ? `${hs[0]}px` : ""; // schowany = rozmiar przedniego, jak w Sonnerze
+    el.style.zIndex = String(list.length - i);
+    el.classList.toggle("is-behind", !open && i > 0);
+    el.classList.toggle("is-hidden", !open && i >= TOAST_VISIBLE);
+    y += hs[i] + TOAST_GAP;
+  });
+  toastContainerEl.style.height = list.length ? `${toastStackOpen ? y - TOAST_GAP : hs[0]}px` : "";
+  toastContainerEl.classList.toggle("is-open", toastStackOpen);
+}
+function setToastStack(open) {
+  if (open === toastStackOpen) return;
+  if (open && liveToasts().length < 2) return; // jeden dymek — pauzę robi on sam (pointermove / fokus)
+  toastStackOpen = open;
+  liveToasts().forEach((el) => (open ? el._toastPause?.() : el._toastResume?.()));
+  layoutToasts();
+}
+new MutationObserver(layoutToasts).observe(toastContainerEl, { childList: true }); // także testy usuwające dymki
+addEventListener("resize", () => { if (toastContainerEl.childElementCount) layoutToasts(); });
+// RUCH myszy nad stosem, nie samo wejście: dymek, który pojawił się pod nieruchomym kursorem, też
+// dostaje „enter” — rozłożony stos nie znika, więc wisiałby bez końca nad przyciskami pod spodem
+toastContainerEl.addEventListener("pointermove", (e) => { if (e.pointerType === "mouse") setToastStack(true); });
+toastContainerEl.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") setToastStack(false); });
+toastContainerEl.addEventListener("focusin", () => setToastStack(true));
+toastContainerEl.addEventListener("focusout", (e) => { if (!toastContainerEl.contains(e.relatedTarget)) setToastStack(false); });
+toastContainerEl.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse" && !toastStackOpen && liveToasts().length > 1) setToastStack(true); });
+document.addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse" && toastStackOpen && !toastContainerEl.contains(e.target)) setToastStack(false); }, true);
+
 function toastDuration(type, opts, hasAction) {
   if (opts && Number(opts.duration) > 0) return Number(opts.duration);
   const base = TOAST_MS[type] || TOAST_MS.info;
@@ -1071,8 +1121,18 @@ function toast(msg, type = "info", opts = null) {
     toastEl.classList.add("out");
     setTimeout(() => toastEl.remove(), 200);
     if (_lastMergeToast && _lastMergeToast.el === toastEl) _lastMergeToast = null;
+    if (liveToasts().length < 2) toastStackOpen = false; // ostatni zostaje sam — znów zwykły dymek
+    layoutToasts(); // reszta stosu dosuwa się od razu
   };
-  const arm = (ms) => { clearTimeout(timer); timer = setTimeout(close, ms); };
+  let endAt = 0, left = 0;
+  const arm = (ms) => {
+    clearTimeout(timer);
+    if (toastStackOpen) { left = ms; return; } // rozłożony stos — czas stoi
+    endAt = performance.now() + ms;
+    timer = setTimeout(close, ms);
+  };
+  toastEl._toastPause = () => { clearTimeout(timer); left = Math.max(0, endAt - performance.now()); };
+  toastEl._toastResume = () => { if (!closed && !hold) arm(Math.max(left, 1600)); };
 
   const render = (text, o, withAction) => {
     label.textContent = text;
@@ -1138,10 +1198,19 @@ function toast(msg, type = "info", opts = null) {
   const api = {
     el: toastEl,
     close,
-    update(text, o, withAction) { if (!closed) render(text, o, withAction); },
+    update(text, o, withAction) { if (!closed) { render(text, o, withAction); layoutToasts(); } },
   };
   render(msg, opts, hasAction);
   toastContainerEl.appendChild(toastEl);
+  // pierwszy stos w sesji: brzegi pod spodem raz się lekko rozchodzą i wracają (sam transform)
+  if (!toastNudged && liveToasts().length === 2 && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    toastNudged = true;
+    setTimeout(() => {
+      if (toastStackOpen || liveToasts().length < 2) return;
+      toastNudge = true; layoutToasts();
+      setTimeout(() => { toastNudge = false; layoutToasts(); }, 260);
+    }, 450);
+  }
   if (TOAST_MERGE_TYPES.has(type)) _lastMergeToast = { el: toastEl, type, at: performance.now(), api };
   return api;
 }

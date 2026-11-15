@@ -116,6 +116,7 @@
   --font-mono: "SF Mono","Fira Code","Cascadia Code", ui-monospace, monospace;
 
   --t-fast: 100ms ease;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); /* jak Documents Workbench — stos dymków */
   --t:      150ms ease;
   --t-slow: 250ms ease;
 }
@@ -5777,17 +5778,19 @@ html.low-power .loading-overlay.is-file {
 /* ===================================================
    TOASTS
    =================================================== */
+/* stos dymków jak Sonner (core.js layoutToasts): dymki leżą absolutnie od dołu kontenera
+   (.is-top — od góry), kontener ma wysokość przedniego dymka albo całej rozłożonej listy;
+   rozłożony łapie wskaźnik także w szczelinach, żeby nie składał się między dymkami */
 .toast-container {
   position: fixed;
   bottom: max(20px, env(safe-area-inset-bottom));
   right: max(20px, env(safe-area-inset-right));
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 8px;
+  width: min(320px, calc(100vw - 40px));
   z-index: 300;
   pointer-events: none;
-  max-width: 320px;
+  transition: height 300ms var(--ease-out);
 }
+.toast-container.is-open { pointer-events: auto; }
 
 /* „Wklej" przy PUSTEJ komórce (tylko dotyk). Pozycję ustawia JS z prostokąta pola —
    `position: fixed` na iOS trzyma się layout viewportu, a klawiatura rusza visual viewport.
@@ -5825,11 +5828,8 @@ html.low-power .loading-overlay.is-file {
     top: max(12px, calc(env(safe-area-inset-top) + 8px));
     left: 12px;
     right: 12px;
-    max-width: none;
-    flex-direction: column;
-    align-items: center;
+    width: auto;
   }
-  .toast { width: fit-content; max-width: 100%; }
 }
 
 .toast {
@@ -5849,10 +5849,27 @@ html.low-power .loading-overlay.is-file {
   font-weight: 500;
   color: var(--ink);
   animation: toastIn 230ms cubic-bezier(.34,1.56,.64,1);
-  transition: opacity var(--t-fast), transform var(--t-fast);
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  box-sizing: border-box;
+  transform-origin: 50% 100%;
+  transform: translateY(var(--ty, 0px)) scale(var(--ts, 1));
+  transition: opacity var(--t-fast), transform 300ms var(--ease-out);
+}
+.toast-container.is-top .toast { top: 0; bottom: auto; transform-origin: 50% 0; }
+/* schowany w stosie: widać tylko jego brzeg — treść znika, nie da się w nią trafić */
+.toast > * { transition: opacity 200ms var(--ease-out); }
+.toast.is-behind { overflow: hidden; }
+.toast.is-behind > * { opacity: 0; pointer-events: none; }
+.toast.is-hidden { opacity: 0; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) {
+  .toast, .toast > * { transition-property: opacity; }
+  .toast-container { transition: none; }
 }
 
-.toast.out { opacity: 0; transform: translateX(12px); }
+.toast.out { opacity: 0; pointer-events: none; transform: translateY(var(--ty, 0px)) translateX(12px) scale(var(--ts, 1)); }
 
 @keyframes toastIn {
   from { opacity: 0; transform: translateX(16px) scale(.95); }
@@ -6010,7 +6027,7 @@ html.low-power .loading-overlay.is-file {
     max-height: var(--table-panel-height, calc(100dvh - 118px));
   }
   .table-wrap { min-height: 0; }
-  .toast-container { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); max-width: none; }
+  .toast-container { left: 12px; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; }
   .sidebar {
     top: 74px;
     left: 8px;

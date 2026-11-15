@@ -80,6 +80,41 @@ async function run() {
   });
   check("2. błąd: role=alert + ✕; info: role=status bez ✕; akcja działa", ts.eRole === "alert" && ts.eClose && ts.iRole === "status" && !ts.iClose && ts.aBtn === "Cofnij" && ts.aClose && ts.hit === 1, ts);
 
+  // 2b. stos dymków (jak Sonner, to samo co Documents Workbench): złożony — przedni na wierzchu,
+  // starsze wystają; najechanie rozkłada bez nakładania i wstrzymuje znikanie; zjechanie składa
+  await page.evaluate(() => {
+    document.querySelectorAll(".toast").forEach((x) => x.remove());
+    toast("stos A", "warning", { duration: 60000 }); toast("stos B", "error", { duration: 60000 }); toast("stos C krótki", "warning", { duration: 2000 });
+  });
+  await sleep(800); // przejścia + jednorazowa podpowiedź
+  const geo = () => page.evaluate(() => [...document.querySelectorAll(".toast:not(.out)")].reverse().map((el) => { const r = el.getBoundingClientRect(); return { t: el.textContent, top: Math.round(r.top), bottom: Math.round(r.bottom), behind: el.classList.contains("is-behind") }; }));
+  let g = await geo();
+  check("2b. stos złożony: przedni bez is-behind, starsze schowane i wystają najwyżej ~25 px", g.length === 3 && !g[0].behind && g[1].behind && g[2].behind && g[0].top - g[2].top <= 25 && g[0].top - g[2].top > 0, g);
+  await page.mouse.move(0, 0);
+  const box = await page.locator(".toast:not(.out)").last().boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await sleep(2200); // dłużej niż 2 s „stosu C” — rozłożony stos nie znika
+  g = await geo();
+  check("2b. najechanie: stos rozłożony, dymki się nie nakładają, krótki dymek nie zniknął", g.length === 3 && g.every((x, i) => i === 0 || x.bottom <= g[i - 1].top) && g.every((x) => !x.behind), g);
+  await page.mouse.move(5, 5);
+  await sleep(500);
+  g = await geo();
+  check("2b. zjechanie: stos znów złożony", g.length >= 2 && g.slice(1).every((x) => x.behind), g);
+  // kursor stoi tam, gdzie wyskakują nowe dymki (np. po kliknięciu przycisku) — bez ruchu stos się
+  // nie rozkłada i dymki znikają same (inaczej wisiałyby nad przyciskami bez końca)
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach((x) => x.remove()));
+  await page.evaluate(() => toast("pod kursorem 1", "warning", { duration: 60000 }));
+  await sleep(400);
+  const under = await page.locator(".toast:not(.out)").last().boundingBox();
+  await page.mouse.move(under.x + under.width / 2, under.y + under.height / 2);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach((x) => x.remove()));
+  await page.evaluate(() => { toast("pod kursorem 2", "warning", { duration: 700 }); toast("pod kursorem 3", "error", { duration: 700 }); });
+  await sleep(1600);
+  const left = await page.evaluate(() => document.querySelectorAll(".toast:not(.out)").length);
+  check("dymki pod nieruchomym kursorem: stos się nie rozkłada, znikają same", left === 0, left);
+  await page.mouse.move(5, 5);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach((x) => x.remove()));
+
   // 3. skróty
   await page.keyboard.press(ENGINE_NAME === "webkit" ? "Meta+Slash" : "Control+Slash");
   await page.waitForSelector(".sc-dialog", { timeout: 3000 }).catch(() => {});
