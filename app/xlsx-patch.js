@@ -238,7 +238,9 @@ function rowNum(ref) {
 // Wstawia nową komórkę w istniejącym wierszu (zachowuje rosnącą kolejność kolumn).
 function insertCellInRow(rowInner, ref, cellXml) {
   const targetCol = colIndex0(ref);
-  const cellRe = /<c r="([A-Z]+\d+)"[^>]*(?:\/>|>[\s\S]*?<\/c>)/g;
+  // [^>/]* — „/” nie może wejść w atrybuty: dawniej <c r="B7" s="1"/> pasowało jako komórka
+  // OTWARTA aż do </c> następnej, więc nowa komórka lądowała za nią (D7 po E7) i Excel naprawiał plik
+  const cellRe = /<c r="([A-Z]+\d+)"[^>/]*(?:\/>|>[\s\S]*?<\/c>)/g;
   let m;
   while ((m = cellRe.exec(rowInner))) {
     if (colIndex0(m[1]) > targetCol) {
@@ -1113,8 +1115,11 @@ function patchVmlXml(xml, notes, skip, idmap) {
 }
 
 // <legacyDrawing r:id="…"/> w arkuszu: wstawienie w miejscu ze schematu / usunięcie.
+// Tylko z GŁÓWNEGO <worksheet>: openpyxl deklaruje xmlns:r lokalnie na <tablePart>, a taka
+// deklaracja nie obejmuje <legacyDrawing r:id> — dawniej brak xmlns:r na korzeniu = plik z błędem.
 function sheetRelPrefix(xml) {
-  const m = xml.match(new RegExp(`xmlns:([\\w-]+)="${OOXML_REL_NS.replace(/[.]/g, "\\.")}"`));
+  const root = (xml.match(/<(?:[\w-]+:)?worksheet\b[^>]*>/) || [""])[0];
+  const m = root.match(new RegExp(`xmlns:([\\w-]+)="${OOXML_REL_NS.replace(/[.]/g, "\\.")}"`));
   return m ? m[1] : null;
 }
 

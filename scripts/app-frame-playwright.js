@@ -343,11 +343,11 @@ async function run() {
   const d2 = await dock();
   check("R6. ‹ chowa i odpina panel, tabela wraca obok paska", !d2.open && d2.mainLeft < 150 && !(await railState()).pinned, JSON.stringify(d2));
   check("R6. odpięcie zapamiętane", (await page.evaluate(() => localStorage.getItem("swb-panel-pinned-v1"))) === "0", "");
-  // R7. menu „Więcej ▾” ma Spisywanie/Raport/Eksport; Eksport otwiera okno
+  // R7. menu „Więcej ▾” ma Spisywanie/Wpisywanie/Raport/Eksport; Eksport otwiera okno
   await page.click("#moreMenuBtn");
   await sleep(200);
   const more = await page.evaluate(() => ({ open: !document.getElementById("moreMenu").hidden, ids: [...document.querySelectorAll("#moreMenu > button")].map((b) => b.id) }));
-  check("R7. „Więcej ▾”: Spisywanie, Raport, Eksport", more.open && more.ids.join() === "transcribeBtn,reportBtn,exportCsvBtn", JSON.stringify(more));
+  check("R7. „Więcej ▾”: Spisywanie, Wpisywanie, Raport, Eksport", more.open && more.ids.join() === "transcribeBtn,entryBtn,reportBtn,exportCsvBtn", JSON.stringify(more));
   await page.click("#exportCsvBtn");
   await sleep(300);
   check("R7. Eksport z menu otwiera okno eksportu i zamyka menu", await page.evaluate(() => !document.getElementById("exportModal").classList.contains("hidden") && document.getElementById("moreMenu").hidden), "");
