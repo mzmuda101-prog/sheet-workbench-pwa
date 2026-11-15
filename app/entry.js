@@ -165,14 +165,7 @@ const swbEntry = (() => {
     const expect = input && input.expect ? input.expect : (lastPlan && lastPlan.key === keyOf(input && input.target) ? lastPlan.before : null);
     const p = plan(input);
     if (p.errors.some((e) => e.reason === "no-target")) return { ok: false, reason: "stale", plan: p };
-    if (!isNew && expect) {
-      const row = rowAt(input.target.rowIndex0);
-      const moved = Object.keys(expect).some((k) => {
-        if (k[0] === "n") { const cur = noteAt(row.rowIndex0, Number(k.slice(1))); return (cur ? cur.text : "") !== expect[k]; }
-        return String(getDisplayValue(row, Number(k)) ?? "") !== expect[k];
-      });
-      if (moved) return { ok: false, reason: "stale", plan: p };
-    }
+    if (!isNew && expect && isStale(rowAt(input.target.rowIndex0), expect)) return { ok: false, reason: "stale", plan: p };
     if (!p.ok) return { ok: false, reason: "invalid", plan: p };
     if (!p.changes.length) return { ok: false, reason: "empty", plan: p };
 
@@ -186,20 +179,51 @@ const swbEntry = (() => {
     } else {
       row = rowAt(input.target.rowIndex0);
     }
+    const failed = writeChanges(row, p.changes);
+    const steps = await finishWrite(topBefore, depthBefore);
+    if (failed.length) return { ok: false, reason: "write-failed", failed, rowIndex0: row.rowIndex0, undoSteps: steps };
+    return { ok: true, rowIndex0: row.rowIndex0, undoSteps: steps };
+  }
+
+  function snapshotOf(row, fields, notes) {
+    const out = {};
+    if (!row) return out;
+    Object.keys(fields || {}).forEach((k) => { if (!isBlank(fields[k])) out[k] = String(getDisplayValue(row, Number(k)) ?? ""); });
+    Object.keys(notes || {}).forEach((k) => { if (!isBlank(notes[k])) { const cur = noteAt(row.rowIndex0, Number(k)); out[`n${k}`] = cur ? cur.text : ""; } });
+    return out;
+  }
+
+  // Arkusz zmieniony od podglądu? expect = { "kol": tekst wartości, "n<kol>": tekst notatki }.
+  function isStale(row, expect) {
+    if (!row) return true;
+    return Object.keys(expect || {}).some((k) => {
+      if (k[0] === "n") { const cur = noteAt(row.rowIndex0, Number(k.slice(1))); return (cur ? cur.text : "") !== expect[k]; }
+      return String(getDisplayValue(row, Number(k)) ?? "") !== expect[k];
+    });
+  }
+
+  // Zapis zmian jednego wiersza (wartości, potem notatki). Wołane w tym samym zadaniu JS dla całej
+  // kartki albo całej serii — undo.js składa to w jeden krok Cofnij. Zwraca listę nieudanych.
+  function writeChanges(row, changes) {
     const failed = [];
-    p.changes.filter((c) => c.kind === "value").forEach((c) => {
+    changes.filter((c) => c.kind === "value").forEach((c) => {
       const res = writeCellFromInput(currentDisplayModel, row, c.col, c.raw);
-      if (res !== "ok") failed.push({ col: c.col, reason: res });
+      if (res !== "ok") failed.push({ rowIndex0: row.rowIndex0, col: c.col, reason: res });
       else if (typeof rememberColumnValue === "function") {
         const v = row.values[c.col];
         rememberColumnValue(c.col, v instanceof Date && typeof formatDateForEdit === "function" ? formatDateForEdit(v) : v);
       }
     });
     // notatki po wartościach (nowy wiersz już istnieje), w tym samym zadaniu = ten sam krok Cofnij
-    p.changes.filter((c) => c.kind === "note").forEach((c) => {
+    changes.filter((c) => c.kind === "note").forEach((c) => {
       const okNote = typeof swbSetNote === "function" && swbSetNote(row.rowIndex0, c.col, c.raw, typeof swbNoteAuthor === "function" ? swbNoteAuthor() : "");
-      if (!okNote) failed.push({ col: c.col, reason: "note" });
+      if (!okNote) failed.push({ rowIndex0: row.rowIndex0, col: c.col, reason: "note" });
     });
+    return failed;
+  }
+
+  // Po zapisie: odśwież tabelę, policz kroki Cofnij (domykają się mikro-zadaniem) i zapamiętaj je.
+  async function finishWrite(topBefore, depthBefore) {
     if (typeof setDirtyState === "function") setDirtyState(true);
     if (typeof renderActiveTable === "function") renderActiveTable();
     await nextTask();
@@ -211,8 +235,52 @@ const swbEntry = (() => {
     }
     lastCard = steps ? { top, steps } : null;
     lastPlan = null;
-    if (failed.length) return { ok: false, reason: "write-failed", failed, rowIndex0: row.rowIndex0, undoSteps: steps };
-    return { ok: true, rowIndex0: row.rowIndex0, undoSteps: steps };
+    return steps;
+  }
+
+  // ── Kolejka „wszystkim naraz”: te same pola w wielu ISTNIEJĄCYCH wierszach ──
+  // overwriteAll = jedna zgoda na nadpisania we wszystkich wierszach (pokazana z liczbą w podglądzie).
+  function planMany(input) {
+    const targets = Array.isArray(input && input.targets) ? input.targets : [];
+    const all = currentDisplayModel && Array.isArray(currentDisplayModel.headers) ? currentDisplayModel.headers.map((_, i) => i) : [];
+    const rows = targets.map((r) => ({
+      rowIndex0: r,
+      plan: plan({ target: { rowIndex0: r }, fields: input.fields || {}, notes: input.notes || {}, overwrite: input.overwriteAll ? all : [], overwriteNotes: input.overwriteAll ? all : [] }),
+    }));
+    const ow = rows.reduce((n, r) => n + (r.plan.changes.some((c) => c.overwrite) ? 1 : 0), 0);
+    const changes = rows.reduce((n, r) => n + r.plan.changes.length, 0);
+    lastPlan = null;
+    return {
+      ok: rows.length > 0 && rows.every((r) => r.plan.ok) && changes > 0,
+      rows, overwriteCount: ow, changes,
+      // „było” dla KAŻDEGO pola z formularza, także bez zmiany w podglądzie — inaczej komórka zmieniona
+      // w międzyczasie (np. Cofnij w tabeli) zostałaby nadpisana zgodą „we wszystkich” bez pokazania
+      expect: Object.fromEntries(rows.map((r) => [r.rowIndex0, snapshotOf(rowAt(r.rowIndex0), input.fields, input.notes)])),
+    };
+  }
+
+  async function commitMany(input) {
+    if (!ready()) return { ok: false, reason: "guard" };
+    if (typeof swbIsEditMode === "function" && !swbIsEditMode()) return { ok: false, reason: "guard" };
+    const p = planMany(input);
+    if (!p.rows.length) return { ok: false, reason: "empty", plan: p };
+    if (p.rows.some((r) => r.plan.errors.some((e) => e.reason === "no-target"))) return { ok: false, reason: "stale", plan: p };
+    const expect = input && input.expect;
+    if (expect && p.rows.some((r) => expect[r.rowIndex0] && isStale(rowAt(r.rowIndex0), expect[r.rowIndex0]))) return { ok: false, reason: "stale", plan: p };
+    if (!p.rows.every((r) => r.plan.ok)) return { ok: false, reason: "invalid", plan: p };
+    if (!p.changes) return { ok: false, reason: "empty", plan: p };
+    const topBefore = undoTop();
+    const depthBefore = typeof undoStack !== "undefined" ? undoStack.length : 0;
+    const failed = [];
+    const written = [];
+    p.rows.forEach((r) => {
+      if (!r.plan.changes.length) return;
+      failed.push(...writeChanges(rowAt(r.rowIndex0), r.plan.changes));
+      written.push({ rowIndex0: r.rowIndex0, changes: r.plan.changes.length });
+    });
+    const steps = await finishWrite(topBefore, depthBefore);
+    if (failed.length) return { ok: false, reason: "write-failed", failed, rows: written, undoSteps: steps };
+    return { ok: true, rows: written, undoSteps: steps };
   }
 
   // Cofnij ostatnią kartkę — tylko gdy na wierzchu historii nadal leży jej krok.
@@ -229,7 +297,7 @@ const swbEntry = (() => {
     return filled.target ? plan({ target: filled.target, fields: filled.fields }) : null;
   }
 
-  const api = { candidates, plan, commit, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, searchRows, _filled: () => filled };
+  const api = { candidates, plan, commit, planMany, commitMany, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, searchRows, _filled: () => filled };
   return api;
 })();
 
