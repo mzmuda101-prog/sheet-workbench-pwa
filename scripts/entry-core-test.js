@@ -68,9 +68,20 @@ ok(!C.looksLikeQuery("Ewa Lis-Nowak", H), "nie zapytanie: myślnik w nazwisku");
 ok(!C.looksLikeQuery("Godz 8:30", H), "nie zapytanie: dwukropek nie po nazwie kolumny");
 ok(!C.looksLikeQuery("Wykrzyknik!", H), "nie zapytanie: ! na końcu");
 ok(!C.looksLikeQuery("", H), "nie zapytanie: puste");
+ok(!C.looksLikeQuery("032||", H), "nie zapytanie: wiszące || (pisanie w trakcie albo literówka)");
+ok(!C.looksLikeQuery("Ewa Lis &&  ", H), "nie zapytanie: wiszące &&");
+ok(C.looksLikeQuery("032 || 033", H), "zapytanie: || z obu stron");
+eq(C.trimQuery("032||"), "032", "trimQuery: zdejmuje wiszący operator");
+eq(C.trimQuery(" Ewa Lis && Status:=wzięta && "), "Ewa Lis && Status:=wzięta", "trimQuery: tylko końcówka");
 
 // ── distinguishingCols ───────────────────────────────
 eq(C.distinguishingCols(["Osoba", "Dział", "Tel", "Miasto"], [["a", "b", "c", "d"], ["X", "X", "X", "X"], ["1", "2", "3", "4"], ["K", "L", "M", "K"]], 0), [2, 3], "rozróżniające: unikalność ≥ 50%, bez klucza");
+
+// rozróżniające: kolumna prawie pusta (29 z 563 w pliku Mateusza) nie opisuje wierszy, choć ma unikalne wartości
+const many = (f) => Array.from({ length: 20 }, (_, i) => f(i));
+eq(C.distinguishingCols(["Nr", "Imię", "od", "Imię2", "Długość"], [
+  many((i) => String(i)), many((i) => `Osoba ${i % 7}`), many((i) => `0${i % 4}.03`), many((i) => (i < 2 ? `X${i}` : "")), many((i) => `${i % 5}m`),
+], 0), [1, 4], "rozróżniające: wypełnione i najbardziej zróżnicowane, w kolejności kolumn; prawie pusta odpada");
 
 // ── profileColumn ────────────────────────────────────
 const d = new Date(2026, 0, 1);
