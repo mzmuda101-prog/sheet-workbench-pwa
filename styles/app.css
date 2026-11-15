@@ -9902,6 +9902,20 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-q-st { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; margin-inline-start: auto; min-width: 0; }
 .en-q-st.is-ok { color: var(--success); }
 .en-q-st.is-warn { color: var(--warning); }
+/* Tryb smart (cykle od/do): przełącznik akcji Zdaj/Wydaj (aria-pressed) i linia stanu cyklu */
+.en-smart-state { margin: 0; font-size: 15px; font-weight: 600; color: var(--muted-strong); overflow-wrap: anywhere; }
+.en-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.en-seg-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.en-seg-btn {
+  min-height: 54px; min-width: 0; padding: 6px 10px; font: inherit; font-size: 17px; font-weight: 700; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); cursor: pointer; overflow-wrap: anywhere;
+}
+.en-seg-btn[aria-pressed="true"] { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.en-seg-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+@media (hover: hover) { .en-seg-btn:not([aria-pressed="true"]):hover { border-color: var(--accent-border); } }
+.en-smart-toggle { align-self: flex-start; min-height: 44px; }
+.en-q-st .en-select { max-inline-size: 100%; min-inline-size: 0; }
+.en-role-label { min-width: 0; overflow-wrap: anywhere; font-size: 15px; }
 .en-q-st.is-miss { color: var(--muted-strong); }
 .en-q-st .en-select { min-width: 0; max-inline-size: 100%; }
 .en-q-progress { display: flex; align-items: center; gap: 12px; min-width: 0; }

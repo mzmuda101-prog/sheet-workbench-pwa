@@ -165,7 +165,8 @@ function cfmtDisplayFor(row, col) {
   let code = fmt && "numFmt" in fmt ? fmt.numFmt : null;
   if (code == null) {
     const cell = sheetCell;
-    if (cell && cell.z && cell.z !== "General" && !(v instanceof Date)) code = cell.z;
+    // data też: wpisana do „d mmm yy” ma wyglądać jak wczytana obok („15 lis 26”, nie „15-11-26”)
+    if (cell && cell.z && cell.z !== "General") code = cell.z;
   }
   if (code != null) {
     const out = cfmtFormatValue(v, code);
