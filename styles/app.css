@@ -9818,6 +9818,8 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
   border-radius: var(--r);
 }
 .en-input::placeholder { color: var(--placeholder); font-weight: 500; }
+/* obecna wartość komórki pokazana w pustym polu: czarna jak tekst (szara myliła się z pustym polem); wpisane = grubsze */
+.en-input[data-en-now]::placeholder { color: var(--ink); opacity: 1; }
 .en-input:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 .en-input[readonly] { background: transparent; border-style: dashed; color: var(--muted-strong); }
 .en-hint, .en-keys { font-size: 12px; color: var(--muted-strong); }
