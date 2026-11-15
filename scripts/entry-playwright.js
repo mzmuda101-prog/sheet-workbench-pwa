@@ -232,6 +232,8 @@ async function run() {
   const r14t = await many({ targets: [1, 3], fields: { 2: "zdana" }, overwriteAll: true, expect: p14.expect });
   ok("14. arkusz zmieniony między podglądem a zapisem — stale", !r14t.ok && r14t.reason === "stale", r14t);
   ok("14. pusta lista celów — odmowa", !(await many({ targets: [], fields: { 2: "zdana" } })).ok, null);
+  const r14k = await many({ targets: [1, 3, 5], fields: { 1: "05.12.2026" }, overwriteAll: true });
+  ok("14. seria zostaje w pliku (do sprawdzenia w Excelu): B2, B4, B6 = 2026-12-05", r14k.ok && ["B2", "B4", "B6"].every(Boolean) && (await cell("B6")).v === "2026-12-05", r14k);
 
   // 12. plik po wszystkich kartkach (uzupełnienia + nadpisania): tabela bez zmian zakresu, OOXML czysty
   const s12 = await saveTableRef("entry-uzupelnienie.xlsx");
