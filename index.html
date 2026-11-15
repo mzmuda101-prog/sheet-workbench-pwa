@@ -1646,6 +1646,7 @@
                   <button class="btn btn-sm ghost hidden" id="resetSortBtn" type="button">Domyślne sortowanie</button>
     </div>
     <div class="app-menu tb-menu" id="moreMenu" role="menu" aria-label="Więcej" hidden>
+                  <button class="btn btn-sm ghost" id="entryBtn" type="button" data-hint data-hint-pl="" data-hint-en="" data-hint-delay="1.1" data-hint-touch="on">Wpisywanie</button>
                   <button class="btn btn-sm ghost" id="transcribeBtn" type="button" data-hint data-hint-pl="Tryb spisywania — jeden wiersz naraz, dużą czcionką, z odhaczaniem. Do przepisywania danych ręcznie na papier." data-hint-en="Transcribe mode — one row at a time, large type, with tick-off. For copying data onto paper by hand." data-hint-delay="1.1" data-hint-touch="on">Spisywanie</button>
                   <button class="btn btn-sm ghost" id="reportBtn" type="button" data-hint data-hint-pl="Raport — jedna kartka A4: najważniejsze liczby, wnioski i wykres z bieżącego widoku. Do druku albo zapisania jako PDF." data-hint-en="Report — one A4 page: key numbers, findings and a chart from the current view. Print it or save as PDF." data-hint-delay="1.1" data-hint-touch="on">Raport</button>
                   <button class="btn btn-sm ghost" id="exportCsvBtn" type="button">Eksport…</button>
@@ -1714,6 +1715,8 @@
     </div>
 
     <!-- Tryb spisywania (pełny ekran) -->
+    <!-- Wpisywanie (app/entry.js): kartka papieru → arkusz. Treść budowana w JS. -->
+    <div class="tr-overlay en-overlay hidden" id="entryOverlay" role="dialog" aria-modal="true" aria-labelledby="entryTitle" data-font="2"></div>
     <div class="tr-overlay hidden" id="transcribeOverlay" role="dialog" aria-modal="true" aria-labelledby="trTitle" data-font="2">
       <div class="tr-head">
         <div class="tr-head-main">
