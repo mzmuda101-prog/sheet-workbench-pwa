@@ -193,7 +193,65 @@ const swbEntry = (() => {
     open: false, step: 1, keyCol: 0, query: "", targets: [], active: -1,
     target: null, fields: {}, overwrite: new Set(), pinned: new Set(), font: 2,
     options: { ...DEFAULT_OPTIONS }, profiles: new Map(), lastPlan: null, sessionLog: [], returnFocus: null,
+    fieldOrder: [], selected: new Set(), panel: null, draft: null, reminded: false,
   };
+
+  // ── Pamięć (localStorage, tylko na tym urządzeniu) ──
+  // { options, scopes: { "plik\tarkusz": { keyCol, fieldOrder, selected, pinned: {kol: wartość}, draft, at } } }
+  // Opcje są wspólne dla wszystkich plików; reszta per arkusz. Brak localStorage = działa bez pamięci.
+  const STORE_KEY = "excel-workbench-entry";
+  const MAX_SCOPES = 30;
+  const loadStore = () => { try { const x = JSON.parse(localStorage.getItem(STORE_KEY) || "{}"); return x && typeof x === "object" ? x : {}; } catch { return {}; } };
+  function saveStore(store) {
+    try {
+      const scopes = store.scopes || {};
+      const keys = Object.keys(scopes);
+      if (keys.length > MAX_SCOPES) keys.sort((a, b) => (scopes[a]?.at || 0) - (scopes[b]?.at || 0)).slice(0, keys.length - MAX_SCOPES).forEach((k) => delete scopes[k]);
+      localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    } catch { /* brak miejsca / tryb prywatny — karta działa dalej, bez pamięci */ }
+  }
+  const scopeKey = () => `${typeof currentFileName !== "undefined" && currentFileName ? currentFileName : ""}\t${currentSheetName || ""}`;
+  function cleanFields(obj) {
+    const out = {};
+    Object.keys(obj || {}).forEach((k) => { const v = obj[k]; if (v != null && String(v) !== "") out[k] = String(v); });
+    return out;
+  }
+  function persist({ draft = true } = {}) {
+    if (!currentSheetName) return;
+    const store = loadStore();
+    store.options = { ...ui.options };
+    store.scopes = store.scopes || {};
+    const pinned = {};
+    ui.pinned.forEach((c) => { if (ui.fields[c] != null && ui.fields[c] !== "") pinned[c] = String(ui.fields[c]); else pinned[c] = ""; });
+    const rec = { keyCol: ui.keyCol, fieldOrder: ui.fieldOrder.slice(), selected: [...ui.selected], pinned, at: Date.now() };
+    const own = Object.keys(cleanFields(ui.fields)).filter((c) => !ui.pinned.has(Number(c)));
+    rec.draft = draft && ui.target && own.length ? { target: { ...ui.target }, fields: cleanFields(ui.fields), query: ui.query, savedAt: Date.now() } : null;
+    store.scopes[scopeKey()] = rec;
+    saveStore(store);
+  }
+  let persistTimer = null;
+  const persistSoon = () => { clearTimeout(persistTimer); persistTimer = setTimeout(() => persist(), 300); };
+  const persistNow = () => { clearTimeout(persistTimer); persistTimer = null; persist(); };
+  function restore() {
+    const store = loadStore();
+    ui.options = { ...DEFAULT_OPTIONS, ...(store.options || {}) };
+    const rec = (store.scopes || {})[scopeKey()] || null;
+    const n = headers().length;
+    const valid = (c) => Number.isInteger(c) && c >= 0 && c < n;
+    const cols = realCols();
+    const order = rec && Array.isArray(rec.fieldOrder) ? rec.fieldOrder.filter((c) => valid(c) && cols.includes(c)) : [];
+    cols.forEach((c) => { if (!order.includes(c)) order.push(c); });
+    ui.fieldOrder = order;
+    ui.selected = new Set(rec && Array.isArray(rec.selected) ? rec.selected.filter(valid) : cols);
+    cols.forEach((c) => { if (rec && Array.isArray(rec.fieldOrder) && !rec.fieldOrder.includes(c)) ui.selected.add(c); }); // nowa kolumna = na karcie
+    ui.keyColSaved = rec && valid(rec.keyCol) ? rec.keyCol : null;
+    ui.pinned = new Set();
+    const pinnedVals = {};
+    if (rec && rec.pinned) Object.keys(rec.pinned).forEach((k) => { const c = Number(k); if (valid(c)) { ui.pinned.add(c); if (rec.pinned[k]) pinnedVals[c] = rec.pinned[k]; } });
+    if (!ui.target) ui.fields = { ...pinnedVals };
+    ui.draft = rec && rec.draft && rec.draft.target ? rec.draft : null;
+    if (ui.draft && !ui.draft.target.newRow && !swbEntry.rowAt(ui.draft.target.rowIndex0)) ui.draft = null;
+  }
   const suggests = [];
   let wakeLock = null;
 
@@ -227,19 +285,87 @@ const swbEntry = (() => {
           <div class="tr-source">${src}</div>
         </div>
         <div class="tr-head-tools">
+          <button class="btn btn-sm ghost" id="enLogBtn" type="button" aria-expanded="false" aria-controls="enLog">${esc(t("entryLog", { n: ui.sessionLog.length }))}</button>
+          <button class="btn btn-sm ghost" id="enSettingsBtn" type="button" aria-expanded="false" aria-controls="enSettings">${esc(t("entrySettings"))}</button>
           <button class="btn btn-sm ghost" id="enFontBtn" type="button" aria-label="${esc(t("entryFont"))}">A</button>
           <button class="modal-close" id="enCloseBtn" type="button" aria-label="${esc(t("entryClose"))}">${ICON_X}</button>
         </div>
       </div>
       <div class="en-live visually-hidden" id="enLive" aria-live="polite"></div>
-      <div class="tr-stage-wrap en-stage-wrap"><div class="tr-stage en-stage" id="enStage"></div></div>
+      <div class="tr-stage-wrap en-stage-wrap"><div class="en-panel-slot" id="enPanelSlot"></div><div class="tr-stage en-stage" id="enStage"></div></div>
       <div class="tr-bar en-bar" id="enBar"></div>`;
     overlay.querySelector("#enCloseBtn").addEventListener("click", close);
+    overlay.querySelector("#enSettingsBtn").addEventListener("click", () => togglePanel("settings"));
+    overlay.querySelector("#enLogBtn").addEventListener("click", () => togglePanel("log"));
     overlay.querySelector("#enFontBtn").addEventListener("click", () => {
       ui.font = ui.font % 3 + 1;
       overlay.dataset.font = String(ui.font);
     });
   }
+  function togglePanel(which) {
+    ui.panel = ui.panel === which ? null : which;
+    drawPanel();
+    if (!ui.panel) render();
+  }
+
+  function drawPanel() {
+    const slot = overlay.querySelector("#enPanelSlot");
+    if (!slot) return;
+    overlay.querySelector("#enSettingsBtn")?.setAttribute("aria-expanded", String(ui.panel === "settings"));
+    overlay.querySelector("#enLogBtn")?.setAttribute("aria-expanded", String(ui.panel === "log"));
+    const logBtn = overlay.querySelector("#enLogBtn");
+    if (logBtn) logBtn.textContent = t("entryLog", { n: ui.sessionLog.length });
+    if (ui.panel === "settings") {
+      const opts = [["fuzzyTarget", "entryOptFuzzy"], ["typoHints", "entryOptTypo"], ["typeHints", "entryOptType"], ["suggestions", "entryOptSuggest"], ["duplicateGuard", "entryOptDup"], ["confirmStep", "entryOptConfirm"]];
+      const textCols = realCols();
+      slot.innerHTML = `<section class="tr-card en-card en-panel" id="enSettings" aria-label="${esc(t("entrySettings"))}">
+        <label class="en-label" for="enKeyCol">${esc(t("entryKeyColLabel"))}</label>
+        <select class="en-select" id="enKeyCol">${textCols.map((c) => `<option value="${c}" ${c === ui.keyCol ? "selected" : ""}>${esc(headers()[c])}</option>`).join("")}</select>
+        <h2 class="en-panel-title">${esc(t("entryOptionsTitle"))}</h2>
+        ${opts.map(([k, label]) => `<label class="en-check"><input type="checkbox" data-en-opt="${k}" ${ui.options[k] ? "checked" : ""}> ${esc(t(label))}</label>`).join("")}
+        <p class="en-hint">${esc(t("entryOptionsNote"))}</p>
+        <h2 class="en-panel-title">${esc(t("entryFieldsTitle"))}</h2>
+        <ul class="en-fieldlist">${ui.fieldOrder.map((c, i) => `<li class="en-fieldrow" data-en-fieldrow="${c}">
+          <label class="en-check"><input type="checkbox" data-en-field-on ${ui.selected.has(c) ? "checked" : ""}> ${esc(headers()[c])}</label>
+          <span class="en-move">
+            <button class="btn btn-xs ghost" type="button" data-en-move="up" ${i === 0 ? "disabled" : ""} aria-label="${esc(t("entryMoveUp", { name: headers()[c] }))}">↑</button>
+            <button class="btn btn-xs ghost" type="button" data-en-move="down" ${i === ui.fieldOrder.length - 1 ? "disabled" : ""} aria-label="${esc(t("entryMoveDown", { name: headers()[c] }))}">↓</button>
+          </span></li>`).join("")}</ul>
+      </section>`;
+      slot.querySelector("#enKeyCol").addEventListener("change", (e) => { ui.keyCol = Number(e.target.value); ui.keyColSaved = ui.keyCol; persistNow(); });
+      slot.querySelectorAll("[data-en-opt]").forEach((cb) => cb.addEventListener("change", () => { ui.options[cb.dataset.enOpt] = cb.checked; persistNow(); }));
+      slot.querySelectorAll("[data-en-fieldrow]").forEach((li) => {
+        const c = Number(li.dataset.enFieldrow);
+        li.querySelector("[data-en-field-on]").addEventListener("change", (e) => { if (e.target.checked) ui.selected.add(c); else ui.selected.delete(c); persistNow(); });
+        li.querySelectorAll("[data-en-move]").forEach((b) => b.addEventListener("click", () => {
+          const i = ui.fieldOrder.indexOf(c);
+          const j = b.dataset.enMove === "up" ? i - 1 : i + 1;
+          if (j < 0 || j >= ui.fieldOrder.length) return;
+          [ui.fieldOrder[i], ui.fieldOrder[j]] = [ui.fieldOrder[j], ui.fieldOrder[i]];
+          persistNow();
+          drawPanel();
+          slot.querySelector(`[data-en-fieldrow="${c}"] [data-en-move="${b.dataset.enMove}"]`)?.focus();
+        }));
+      });
+    } else if (ui.panel === "log") {
+      const fmt = (ms) => new Date(ms).toLocaleTimeString(currentLang === "en" ? "en-GB" : "pl-PL", { hour: "2-digit", minute: "2-digit" });
+      slot.innerHTML = `<section class="tr-card en-card en-panel" id="enLog" aria-label="${esc(t("entryLogTitle"))}">
+        <h2 class="en-panel-title">${esc(t("entryLogTitle"))}</h2>
+        ${ui.sessionLog.length ? `<ul class="en-fieldlist">${ui.sessionLog.map((x) => `<li class="en-fieldrow">
+          <span class="en-log-key">${esc(x.key)} · ${esc(t("entryRowN", { n: x.rowIndex0 + 1 }))} · ${esc(fmt(x.at))}</span>
+          <button class="btn btn-xs ghost" type="button" data-en-log-row="${x.rowIndex0}">${esc(t("entryDoneShow"))}</button></li>`).join("")}</ul>` : `<p class="en-hint">${esc(t("entryLogEmpty"))}</p>`}
+      </section>`;
+      slot.querySelectorAll("[data-en-log-row]").forEach((b) => b.addEventListener("click", () => showInTable(Number(b.dataset.enLogRow))));
+    } else {
+      slot.innerHTML = "";
+    }
+  }
+
+  function showInTable(rowIndex0) {
+    close();
+    setFocusedCell(`wide:${rowIndex0}`, ui.keyCol, { scroll: true });
+  }
+
   const live = (msg) => { const el = overlay.querySelector("#enLive"); if (el) el.textContent = msg; };
 
   function render() {
@@ -264,6 +390,35 @@ const swbEntry = (() => {
         <div class="en-candidates" id="enCandidates" role="listbox" aria-label="${esc(t("entryTargetLabel"))}"></div>
       </div>`;
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>`;
+    if (ui.draft) {
+      const d = ui.draft;
+      const row = d.target.newRow ? null : swbEntry.rowAt(d.target.rowIndex0);
+      const own = Object.keys(d.fields || {}).filter((c) => !ui.pinned.has(Number(c))).length;
+      const note = document.createElement("div");
+      note.className = "tr-notice en-draft";
+      note.id = "enDraft";
+      note.setAttribute("role", "status");
+      note.innerHTML = `<div class="tr-notice-text">${esc(t("entryDraft", { key: row ? keyText(row) : (d.query || t("entryDraftNew")), n: own }))}</div>
+        <div class="tr-notice-actions"><button class="btn btn-xs" id="enDraftResume" type="button">${esc(t("entryDraftResume"))}</button>
+        <button class="btn btn-xs ghost" id="enDraftDiscard" type="button">${esc(t("entryDraftDiscard"))}</button></div>`;
+      stage.prepend(note);
+      note.querySelector("#enDraftResume").addEventListener("click", () => {
+        const dd = ui.draft;
+        ui.draft = null;
+        ui.query = dd.query || "";
+        ui.target = { ...dd.target };
+        ui.fields = { ...pinnedFields(), ...dd.fields };
+        ui.overwrite = new Set();
+        ui.step = 2;
+        render();
+      });
+      note.querySelector("#enDraftDiscard").addEventListener("click", () => {
+        ui.draft = null;
+        persist({ draft: false });
+        note.remove();
+        overlay.querySelector("#enTargetInput")?.focus();
+      });
+    }
     const input = stage.querySelector("#enTargetInput");
     input.addEventListener("input", () => { ui.query = input.value; search(); });
     input.addEventListener("keydown", onTargetKey);
@@ -360,14 +515,17 @@ const swbEntry = (() => {
     if (target.newRow && ui.query.trim()) ui.fields[ui.keyCol] = ui.query.trim();
     ui.overwrite = new Set();
     ui.step = 2;
+    ui.draft = null;
     render();
+    persistNow();
   }
 
   // ── Krok 2: pola ──
   function renderFields(stage, bar) {
     const row = ui.target.newRow ? null : swbEntry.rowAt(ui.target.rowIndex0);
     const head = ui.target.newRow ? t("entryNewRow") : t("entryTargetExisting", { n: excelRow(ui.target.rowIndex0), key: keyText(row) });
-    const fieldsHtml = realCols().map((col) => {
+    const cardCols = ui.fieldOrder.filter((c) => ui.selected.has(c));
+    const fieldsHtml = cardCols.map((col) => {
       const formula = isFormulaCol(col);
       const now = row ? String(getDisplayValue(row, col) ?? "") : "";
       const val = formula ? now : (ui.fields[col] ?? "");
@@ -389,13 +547,15 @@ const swbEntry = (() => {
       ${fieldsHtml}</div>`;
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>
       <button class="btn" id="enReviewBtn" type="button">${esc(ui.options.confirmStep ? t("entryReview") : t("entryCommit"))}</button>`;
-    stage.querySelector("#enChangeTarget").addEventListener("click", () => { ui.step = 1; render(); });
+    stage.querySelector("#enChangeTarget").addEventListener("click", () => {
+      ui.target = null; ui.fields = pinnedFields(); ui.step = 1; render(); persistNow();
+    });
     bar.querySelector("#enReviewBtn").addEventListener("click", toReview);
     const inputs = [...stage.querySelectorAll(".en-field:not(.is-formula) input")];
     inputs.forEach((input, i) => {
       const col = Number(input.closest("[data-en-col]").dataset.enCol);
       if (ui.options.suggestions || (fieldDv(col))) attachSuggest(input, col, () => focusField(inputs, i + 1));
-      input.addEventListener("input", () => { ui.fields[col] = input.value; hint(col); });
+      input.addEventListener("input", () => { ui.fields[col] = input.value; hint(col); persistSoon(); });
       input.addEventListener("keydown", (e) => {
         if (e.key !== "Enter" || e.ctrlKey || e.metaKey) return;
         e.preventDefault();
@@ -410,6 +570,7 @@ const swbEntry = (() => {
         b.setAttribute("aria-pressed", String(on));
         b.setAttribute("aria-label", on ? t("entryUnpin") : t("entryPin"));
         b.title = on ? t("entryUnpin") : t("entryPin");
+        persistNow();
       });
       hint(col);
     });
@@ -562,10 +723,9 @@ const swbEntry = (() => {
     ui.query = "";
     ui.overwrite = new Set();
     ui.step = 1;
-    if (ui.open) render();
-    if (typeof onCardDone === "function") onCardDone();
+    persist({ draft: false });
+    if (ui.open) { render(); drawPanel(); }
   }
-  let onCardDone = null;
 
   // ── Otwieranie / zamykanie ──
   function setInert(on) {
@@ -593,8 +753,10 @@ const swbEntry = (() => {
     }
     ui.returnFocus = document.activeElement;
     ui.profiles.clear();
+    if (ui.scope !== scopeKey()) { ui.target = null; ui.fields = {}; ui.step = 1; ui.sessionLog = ui.scope ? [] : ui.sessionLog; ui.scope = scopeKey(); }
+    restore();
     const rows = swbEntry.candidates();
-    if (!Number.isInteger(ui.keyColOverride)) ui.keyCol = C.pickKeyColumn(headers(), headers().map((_, i) => rows.map((r) => r.values[i])));
+    ui.keyCol = Number.isInteger(ui.keyColSaved) ? ui.keyColSaved : C.pickKeyColumn(headers(), headers().map((_, i) => rows.map((r) => r.values[i])));
     ui.open = true;
     ui.step = ui.target ? ui.step : 1;
     overlay.dataset.font = String(ui.font);
@@ -603,6 +765,7 @@ const swbEntry = (() => {
     document.body.classList.add("en-active");
     setInert(true);
     requestWake();
+    ui.panel = null;
     render();
     return true;
   }
@@ -618,11 +781,15 @@ const swbEntry = (() => {
     wakeLock = null;
     const back = ui.returnFocus;
     ui.returnFocus = null;
-    if (typeof onClose === "function") onClose();
+    persistNow();
     if (back && document.contains(back) && back.getClientRects().length) back.focus();
     else document.getElementById("moreMenuBtn")?.focus();
+    // raz na sesję: kartki są w aplikacji, plik trzeba jeszcze zapisać
+    if (!ui.reminded && ui.sessionLog.length && typeof hasUnsavedChanges !== "undefined" && hasUnsavedChanges) {
+      ui.reminded = true;
+      toast(t("entryUnsaved"), "info");
+    }
   }
-  let onClose = null;
 
   // Klawisze: Esc i Ctrl/⌘+Enter tu; reszta zostaje w karcie (nie dochodzi do tabeli i Cofnij).
   document.addEventListener("keydown", (e) => {
@@ -633,6 +800,7 @@ const swbEntry = (() => {
       // najpierw zamyka się lista podpowiedzi pod polem, dopiero drugie Esc — karta
       const open = document.querySelectorAll(".cell-suggest:not(.hidden)");
       if (open.length) { open.forEach((b) => b.classList.add("hidden")); return; }
+      if (ui.panel) { togglePanel(ui.panel); overlay.querySelector("#enSettingsBtn")?.focus(); return; }
       close(); return;
     }
     if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
@@ -642,7 +810,12 @@ const swbEntry = (() => {
     }
   }, true);
   overlay.addEventListener("keydown", (e) => e.stopPropagation());
-  document.addEventListener("visibilitychange", () => { if (ui.open && document.visibilityState === "visible" && !wakeLock) requestWake(); });
+  document.addEventListener("visibilitychange", () => {
+    if (!ui.open) return;
+    if (document.visibilityState === "hidden") persistNow(); // iOS potrafi zamknąć aplikację w tle bez ostrzeżenia
+    else if (!wakeLock) requestWake();
+  });
+  window.addEventListener("pagehide", () => { if (ui.open) persistNow(); });
   if (btn) btn.addEventListener("click", () => {
     open();
   });
@@ -651,14 +824,11 @@ const swbEntry = (() => {
   swbEntry.open = open;
   swbEntry.close = close;
   swbEntry.ui = ui;
-  swbEntry.hooks = {
-    set onCardDone(fn) { onCardDone = fn; },
-    set onClose(fn) { onClose = fn; },
-    render: () => { if (ui.open) render(); },
-  };
+
   swbEntry.state = () => ({
     open: ui.open, step: ui.step, target: ui.target ? { ...ui.target } : null, fields: { ...ui.fields },
     pinned: [...ui.pinned], keyCol: ui.keyCol, options: { ...ui.options }, sessionLog: ui.sessionLog.map((x) => ({ ...x })),
+    fieldOrder: ui.fieldOrder.slice(), selected: [...ui.selected],
   });
   // fill() z silnika + przejście do kroku 2 (wejście programowe, np. przyszły skan karty)
   const engineFill = swbEntry.fill;

@@ -202,6 +202,129 @@ async function run() {
   ok("9. po akceptacji filtr wyczyszczony i nakładka otwarta", (await st()).open && (await page.evaluate(() => !swbRowGrow.filtered())), await st());
   await page.keyboard.press("Escape");
 
+  // ── Task 4: pamięć ─────────────────────────────────────────────────────────
+  const reloadFile = async () => {
+    await page.reload({ waitUntil: "load" });
+    await page.evaluate(() => { document.getElementById("heroSplash")?.remove(); return ensureXlsxLibs(false); });
+    await page.setInputFiles("#fileInput", FILE);
+    await page.waitForFunction(() => currentHeaderRow === 1 && !!document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
+    await page.evaluate(() => { sheetEditUi.setMode("edit"); window.__appDialogMode = "accept"; });
+    await sleep(300);
+  };
+  const toggleSettings = async () => { await page.click("#enSettingsBtn"); await sleep(150); };
+
+  // 11. ustawienia arkusza: klucz, kolejność i wybór pól
+  await openEntry(); await sleep(250);
+  await toggleSettings();
+  ok("11. panel ustawień widoczny", await page.isVisible("#enSettings"), null);
+  await page.selectOption("#enKeyCol", "2");
+  await page.click('#enSettings [data-en-fieldrow="2"] [data-en-move="up"]');
+  await page.uncheck('#enSettings [data-en-fieldrow="3"] [data-en-field-on]');
+  await sleep(100);
+  const s11 = await st();
+  ok("11. klucz = 2, kolejność 0,2,1…, pole 3 wyłączone", s11.keyCol === 2 && s11.fieldOrder.slice(0, 3).join() === "0,2,1" && !s11.selected.includes(3), s11);
+  await page.keyboard.press("Escape"); await sleep(150);
+  await reloadFile();
+  await openEntry(); await sleep(250);
+  const s11b = await st();
+  ok("11. ustawienia po przeładowaniu", s11b.keyCol === 2 && s11b.fieldOrder.slice(0, 3).join() === "0,2,1" && !s11b.selected.includes(3), s11b);
+  await toggleSettings();
+  await page.selectOption("#enKeyCol", "0");
+  await page.check('#enSettings [data-en-fieldrow="3"] [data-en-field-on]');
+  await toggleSettings();
+
+  // 12. opcje silnika
+  await toggleSettings();
+  for (const o of ["fuzzyTarget", "typeHints", "typoHints", "duplicateGuard"]) await page.uncheck(`#enSettings [data-en-opt="${o}"]`);
+  await toggleSettings();
+  await typeTarget("Jan Kowalsky");
+  const c12 = await page.$$eval("#enCandidates [data-en-row]", (els) => els.length);
+  ok("12. fuzzy wyłączone — literówka nie znajduje", c12 === 0, c12);
+  await page.evaluate(() => { window.__appDialogLog = []; });
+  await page.click("#enCandidates [data-en-new]"); await sleep(250);
+  ok("12. strażnik wyłączony — bez okna, krok 2", (await page.evaluate(() => window.__appDialogLog.length)) === 0 && (await st()).step === 2, await st());
+  await page.fill(field(1), "12.03"); await sleep(150);
+  ok("12. typeHints/typoHints wyłączone — brak podglądu i ostrzeżeń", (await page.$$eval('#entryOverlay [data-en-col="1"] .en-will, #entryOverlay [data-en-col="1"] .en-warn', (e) => e.length)) === 0, null);
+  await page.fill(field(1), "");
+  await page.click("#enChangeTarget"); await sleep(150);
+  await toggleSettings();
+  await page.uncheck('#enSettings [data-en-opt="confirmStep"]');
+  await toggleSettings();
+  await typeTarget("Zofia Kruk");
+  await page.click("#enCandidates [data-en-new]"); await sleep(250);
+  await page.keyboard.press("ControlOrMeta+Enter"); await sleep(400);
+  const kruk = await page.evaluate(() => baseRows.some((r) => r.values[0] === "Zofia Kruk"));
+  ok("12. confirmStep wyłączone — zapis od razu", kruk && (await st()).step === 1, { kruk, st: await st() });
+  await typeTarget("anna nowak"); await page.press("#enTargetInput", "Enter"); await sleep(200);
+  await page.fill(field(3), "9");
+  await page.keyboard.press("ControlOrMeta+Enter"); await sleep(250);
+  ok("12. confirmStep wyłączone, ale nadpisanie pokazuje krok 3", (await st()).step === 3, await st());
+  await page.click("#enBackBtn"); await sleep(100);
+  await page.fill(field(3), "");
+  await page.click("#enChangeTarget"); await sleep(100);
+  await page.keyboard.press("Escape"); await sleep(150);
+  await reloadFile();
+  await openEntry(); await sleep(250);
+  const o12 = (await st()).options;
+  ok("12. opcje po przeładowaniu", !o12.fuzzyTarget && !o12.typeHints && !o12.typoHints && !o12.duplicateGuard && !o12.confirmStep && o12.suggestions, o12);
+  await toggleSettings();
+  for (const o of ["fuzzyTarget", "typeHints", "typoHints", "duplicateGuard", "confirmStep"]) await page.check(`#enSettings [data-en-opt="${o}"]`);
+  await toggleSettings();
+
+  // 13. niedokończona kartka
+  await typeTarget("Piotr Zając"); await page.press("#enTargetInput", "Enter"); await sleep(200);
+  await page.fill(field(2), "wzięta");
+  await page.fill(field(3), "8");
+  await page.evaluate(() => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, get: () => "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  const d13 = await page.evaluate(() => { const x = JSON.parse(localStorage.getItem("excel-workbench-entry") || "{}"); return Object.values(x.scopes || {}).map((r) => r.draft).find(Boolean) || null; });
+  ok("13. visibilitychange hidden — kartka zapisana od razu", d13 && d13.fields && d13.fields[3] === "8" && d13.target.rowIndex0 === 5, d13);
+  await reloadFile();
+  await openEntry(); await sleep(300);
+  const n13 = await page.isVisible("#enDraft") ? await page.textContent("#enDraft") : "";
+  ok("13. komunikat o niedokończonej kartce", /Piotr Zając/.test(n13) && /2/.test(n13), n13);
+  await page.click("#enDraftResume"); await sleep(250);
+  const s13 = await st();
+  ok("13. Wróć do niej — cel i pola", s13.step === 2 && s13.target.rowIndex0 === 5 && s13.fields[2] === "wzięta" && (await page.inputValue(field(3))) === "8", s13);
+  await page.click("#enChangeTarget"); await sleep(100);
+  await page.keyboard.press("Escape"); await sleep(150);
+  await openEntry(); await sleep(250);
+  if (await page.isVisible("#enDraft")) await page.click("#enDraftDiscard");
+  await sleep(150);
+  const d13b = await page.evaluate(() => { const x = JSON.parse(localStorage.getItem("excel-workbench-entry") || "{}"); return Object.values(x.scopes || {}).some((r) => r.draft); });
+  ok("13. Odrzuć — kartka usunięta", !d13b && !(await page.isVisible("#enDraft")), d13b);
+
+  // 14. limit zakresów
+  await page.evaluate(() => {
+    const x = JSON.parse(localStorage.getItem("excel-workbench-entry") || "{}");
+    x.scopes = x.scopes || {};
+    for (let i = 0; i < 31; i++) x.scopes[`stary${i}.xlsx\tA`] = { at: i + 1, keyCol: 0 };
+    localStorage.setItem("excel-workbench-entry", JSON.stringify(x));
+  });
+  await toggleSettings(); await page.selectOption("#enKeyCol", "0"); await toggleSettings();
+  const n14 = await page.evaluate(() => { const x = JSON.parse(localStorage.getItem("excel-workbench-entry")); return { n: Object.keys(x.scopes).length, hasOldest: "stary0.xlsx\tA" in x.scopes }; });
+  ok("14. max 30 zakresów, najstarszy usunięty", n14.n === 30 && !n14.hasOldest, n14);
+
+  // 15. dziennik sesji i przypomnienie o zapisie
+  await typeTarget("anna nowak"); await page.press("#enTargetInput", "Enter"); await sleep(200);
+  await page.fill(field(1), "05.05.2026"); await page.keyboard.press("ControlOrMeta+Enter"); await sleep(200);
+  await page.check('#entryOverlay [data-en-overwrite="1"]'); await page.click("#enCommitBtn"); await sleep(400);
+  const log15 = await page.textContent("#enLogBtn");
+  ok("15. licznik wpisanych w sesji", /1/.test(log15), log15);
+  await page.click("#enLogBtn"); await sleep(150);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
+  await page.click('#enLog [data-en-log-row="3"]'); await sleep(300);
+  const f15 = await page.evaluate(() => focusedCellState && focusedCellState.rowKey);
+  ok("15. Pokaż w tabeli — nakładka zamknięta, kursor w wierszu", !(await st()).open && f15 === "wide:3", { f15 });
+  const t15 = await page.evaluate(() => [...document.querySelectorAll(".toast .toast-msg")].map((e) => e.textContent));
+  ok("15. przypomnienie o zapisie przy zamknięciu", t15.some((m) => /nie w pliku/.test(m)), t15);
+  await page.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
+  await openEntry(); await sleep(200); await page.keyboard.press("Escape"); await sleep(200);
+  const t15b = await page.evaluate(() => [...document.querySelectorAll(".toast .toast-msg")].map((e) => e.textContent));
+  ok("15. przypomnienie tylko raz", !t15b.some((m) => /nie w pliku/.test(m)), t15b);
+
   ok("10. brak pageerror", errors.length === 0, errors);
   await browser.close();
   const tag = `${ENGINE}${TOUCH ? " touch" : ""}`;
