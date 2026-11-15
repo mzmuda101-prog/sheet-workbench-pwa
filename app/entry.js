@@ -71,6 +71,11 @@ const swbEntry = (() => {
     return typeof swbGeneralText === "function" ? swbGeneralText(v) : toDisplay(v);
   }
 
+  const noteAt = (rowIndex0, col) => (typeof swbNoteOf === "function"
+    ? swbNoteOf(currentSheetName, XLSX.utils.encode_cell({ r: rowIndex0, c: currentStartCol + col })) : null);
+  // „było” każdej zmiany: wartość pod kluczem kolumny, notatka pod „n<kolumna>” (wykrycie „stale”)
+  const expectOf = (p) => Object.fromEntries(p.changes.map((c) => [c.kind === "note" ? `n${c.col}` : String(c.col), c.before]));
+
   const keyOf = (target) => (target && target.newRow ? "new" : `r${target && target.rowIndex0}`);
 
   // Podgląd kartki: co się zmieni, co blokuje, przed czym ostrzec. Niczego nie zapisuje.
@@ -108,10 +113,27 @@ const swbEntry = (() => {
         if (!hit && dv.mode === "stop") out.errors.push({ col, reason: "dv-stop" });
         else if (!hit && dv.mode === "warning") out.warnings.push({ col, reason: "dv-warning" });
       }
-      out.changes.push({ col, raw: text, before, after, parsedType: parsed ? parsed.type : "empty", overwrite: isOverwrite });
+      out.changes.push({ col, kind: "value", raw: text, before, after, parsedType: parsed ? parsed.type : "empty", overwrite: isOverwrite });
     });
+    // Notatki komórek (cell-notes.js): te same zasady co wartości — puste pole nic nie usuwa,
+    // zmiana istniejącej notatki tylko ze zgodą; wolno też w kolumnie z formułą (jak w Excelu).
+    const overwriteNotes = new Set((input.overwriteNotes || []).map(Number));
+    Object.keys(input.notes || {}).map(Number).sort((a, b) => a - b).forEach((col) => {
+      const raw = input.notes[col];
+      if (!Number.isInteger(col) || col < 0 || col >= n) return;
+      if (isBlank(raw)) return;
+      const text = String(raw).replace(/\r\n?/g, "\n").replace(/\s+$/, "");
+      if (typeof cfmtIsRealCol === "function" && !cfmtIsRealCol(col)) { out.errors.push({ col, reason: "not-real-col", kind: "note" }); return; }
+      const cur = row ? noteAt(row.rowIndex0, col) : null;
+      if (cur && cur.threaded) { out.errors.push({ col, reason: "note-threaded", kind: "note" }); return; }
+      if (cur && cur.text === text) return;
+      if (cur && !overwriteNotes.has(col)) out.errors.push({ col, reason: "note-overwrite-not-allowed", kind: "note" });
+      out.changes.push({ col, kind: "note", raw: text, before: cur ? cur.text : "", after: text, parsedType: "note", overwrite: !!cur });
+    });
+    // nowy wiersz z samymi notatkami nie jest wierszem danych — tabela by nie urosła, a notatka wisiałaby pod nią
+    if (isNew && out.changes.length && !out.changes.some((c) => c.kind === "value")) out.errors.push({ col: -1, reason: "new-row-needs-value" });
     out.ok = out.errors.length === 0;
-    lastPlan = { key: keyOf(input.target), before: Object.fromEntries(out.changes.map((c) => [c.col, c.before])) };
+    lastPlan = { key: keyOf(input.target), before: expectOf(out) };
     return out;
   }
 
@@ -130,7 +152,10 @@ const swbEntry = (() => {
     if (p.errors.some((e) => e.reason === "no-target")) return { ok: false, reason: "stale", plan: p };
     if (!isNew && expect) {
       const row = rowAt(input.target.rowIndex0);
-      const moved = Object.keys(expect).some((col) => String(getDisplayValue(row, Number(col)) ?? "") !== expect[col]);
+      const moved = Object.keys(expect).some((k) => {
+        if (k[0] === "n") { const cur = noteAt(row.rowIndex0, Number(k.slice(1))); return (cur ? cur.text : "") !== expect[k]; }
+        return String(getDisplayValue(row, Number(k)) ?? "") !== expect[k];
+      });
       if (moved) return { ok: false, reason: "stale", plan: p };
     }
     if (!p.ok) return { ok: false, reason: "invalid", plan: p };
@@ -147,13 +172,18 @@ const swbEntry = (() => {
       row = rowAt(input.target.rowIndex0);
     }
     const failed = [];
-    p.changes.forEach((c) => {
+    p.changes.filter((c) => c.kind === "value").forEach((c) => {
       const res = writeCellFromInput(currentDisplayModel, row, c.col, c.raw);
       if (res !== "ok") failed.push({ col: c.col, reason: res });
       else if (typeof rememberColumnValue === "function") {
         const v = row.values[c.col];
         rememberColumnValue(c.col, v instanceof Date && typeof formatDateForEdit === "function" ? formatDateForEdit(v) : v);
       }
+    });
+    // notatki po wartościach (nowy wiersz już istnieje), w tym samym zadaniu = ten sam krok Cofnij
+    p.changes.filter((c) => c.kind === "note").forEach((c) => {
+      const okNote = typeof swbSetNote === "function" && swbSetNote(row.rowIndex0, c.col, c.raw, typeof swbNoteAuthor === "function" ? swbNoteAuthor() : "");
+      if (!okNote) failed.push({ col: c.col, reason: "note" });
     });
     if (typeof setDirtyState === "function") setDirtyState(true);
     if (typeof renderActiveTable === "function") renderActiveTable();

@@ -189,9 +189,33 @@ async function run() {
   ok("10. Podgląd — guard", r10b && !r10b.ok && r10b.reason === "guard", r10b);
   await page.evaluate(() => sheetEditUi.setMode("edit"));
 
+  // 13. notatki z karty (jak notatki komórek: Recenzja → Notatki)
+  const note = (ref) => page.evaluate((ref) => { const n = swbNoteOf(currentSheetName, ref); return n ? n.text : null; }, ref);
+  const p13 = await plan({ target: { rowIndex0: 5 }, fields: {}, notes: { 2: "Oddana po terminie" } });
+  ok("13. notatka w podglądzie jako zmiana kind=note", p13.ok && p13.changes.length === 1 && p13.changes[0].kind === "note" && p13.changes[0].col === 2 && p13.changes[0].after === "Oddana po terminie", p13);
+  const r13 = await commit({ target: { rowIndex0: 5 }, fields: { 3: "6" }, notes: { 2: "Oddana po terminie" }, overwrite: [3] });
+  ok("13. zapis wartości i notatki", r13.ok && (await note("C6")) === "Oddana po terminie" && (await cell("D6")).v === 6, { r13, n: await note("C6") });
+  const p13b = await plan({ target: { rowIndex0: 5 }, fields: {}, notes: { 2: "Inna notatka" } });
+  ok("13. zmiana istniejącej notatki wymaga zgody", !p13b.ok && p13b.errors.some((e) => e.col === 2 && e.reason === "note-overwrite-not-allowed"), p13b);
+  const p13c = await plan({ target: { rowIndex0: 5 }, fields: {}, notes: { 2: "" } });
+  ok("13. puste pole notatki nie usuwa notatki", p13c.changes.length === 0, p13c);
+  const p13d = await plan({ target: { rowIndex0: 5 }, fields: {}, notes: { 4: "Sprawdzić wzór" } });
+  ok("13. notatka w kolumnie z formułą dozwolona", p13d.ok && p13d.changes[0]?.kind === "note", p13d);
+  const p13e = await plan({ target: { newRow: true }, fields: {}, notes: { 0: "Sama notatka" } });
+  ok("13. nowy wiersz z samą notatką — błąd (wiersz bez danych)", !p13e.ok && p13e.errors.some((e) => e.reason === "new-row-needs-value"), p13e);
+  const u13 = await page.evaluate(() => window.__entry.undoCard());
+  await sleep(200);
+  ok("13. Cofnij kartki zdejmuje też notatkę", u13 && (await note("C6")) === null && (await cell("D6")).v === 4, { u13, n: await note("C6"), d6: await cell("D6") });
+  const r13f = await commit({ target: { rowIndex0: 5 }, fields: {}, notes: { 2: "Oddana po terminie" } });
+  ok("13. sama notatka — zapis", r13f.ok && (await note("C6")) === "Oddana po terminie", r13f);
+
   // 12. plik po wszystkich kartkach (uzupełnienia + nadpisania): tabela bez zmian zakresu, OOXML czysty
   const s12 = await saveTableRef("entry-uzupelnienie.xlsx");
   ok("12. tabela po uzupełnieniach A1:E6", s12.ref === "A1:E6", s12.ref);
+  const zip12 = await JSZip.loadAsync(fs.readFileSync(s12.out));
+  const cm = Object.keys(zip12.files).find((k) => /^xl\/comments\d*\.xml$/.test(k));
+  const cmXml = cm ? await zip12.file(cm).async("string") : "";
+  ok("12. notatka C6 w pliku (comments)", /ref="C6"/.test(cmXml) && /Oddana po terminie/.test(cmXml), cm || "brak comments");
   if (ooxml && ooxml.available && ooxml.available()) {
     const [b0, a0] = ooxml.validate([FILE, s12.out]);
     const fresh = ooxml.newErrors(b0, a0).map(ooxml.short);

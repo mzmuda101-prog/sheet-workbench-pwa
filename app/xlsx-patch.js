@@ -1115,8 +1115,11 @@ function patchVmlXml(xml, notes, skip, idmap) {
 }
 
 // <legacyDrawing r:id="…"/> w arkuszu: wstawienie w miejscu ze schematu / usunięcie.
+// Tylko z GŁÓWNEGO <worksheet>: openpyxl deklaruje xmlns:r lokalnie na <tablePart>, a taka
+// deklaracja nie obejmuje <legacyDrawing r:id> — dawniej brak xmlns:r na korzeniu = plik z błędem.
 function sheetRelPrefix(xml) {
-  const m = xml.match(new RegExp(`xmlns:([\\w-]+)="${OOXML_REL_NS.replace(/[.]/g, "\\.")}"`));
+  const root = (xml.match(/<(?:[\w-]+:)?worksheet\b[^>]*>/) || [""])[0];
+  const m = root.match(new RegExp(`xmlns:([\\w-]+)="${OOXML_REL_NS.replace(/[.]/g, "\\.")}"`));
   return m ? m[1] : null;
 }
 

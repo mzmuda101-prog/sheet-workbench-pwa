@@ -144,9 +144,23 @@ const SwbEntryCore = (() => {
     return hits.length === 1 ? hits[0] : null;
   }
 
+  // Pole celu jako zapytanie w składni szybkiego szukania (&&, ||, !słowo, "fraza", >> <<,
+  // Kolumna:…) — wtedy karta szuka jak tabela, a nie po samym kluczu z tolerancją literówek.
+  // Zwykły tekst (nazwisko, „Lis-Nowak”, „8:30”) zostaje zwykłym szukaniem.
+  function looksLikeQuery(q, headers) {
+    const s = String(q ?? "").trim();
+    if (!s) return false;
+    if (/&&|\|\||>>|<<|"/.test(s)) return true;
+    if (/^!\S/.test(s)) return true;
+    const m = /^([^:]+):/.exec(s);
+    if (!m) return false;
+    const name = fold(m[1]);
+    return (headers || []).some((h) => fold(h) === name);
+  }
+
   const isDuplicateRisk = (targets) => (targets || []).some((t) => t.score >= 1);
 
-  return { fold, pickKeyColumn, findTargets, distinguishingCols, profileColumn, typoSuggest, isDuplicateRisk, within1 };
+  return { fold, pickKeyColumn, findTargets, distinguishingCols, profileColumn, typoSuggest, isDuplicateRisk, looksLikeQuery, within1 };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = SwbEntryCore;

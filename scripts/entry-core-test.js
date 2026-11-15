@@ -46,6 +46,21 @@ const size = cache.size;
 C.findTargets(rows, 0, "anna", { foldCache: cache });
 eq(cache.size, size, "foldCache: drugie szukanie nie dokłada wartości");
 
+// ── looksLikeQuery: kiedy pole celu to zapytanie z operatorami (jak szybkie szukanie) ──
+const H = ["Osoba", "Data", "Status", "Ilość"];
+ok(C.looksLikeQuery("Ewa Lis && Status:=wzięta", H), "zapytanie: &&");
+ok(C.looksLikeQuery("Lis || Nowak", H), "zapytanie: ||");
+ok(C.looksLikeQuery("!Ewa", H), "zapytanie: wykluczenie na początku");
+ok(C.looksLikeQuery('"Ewa Lis"', H), "zapytanie: cudzysłów");
+ok(C.looksLikeQuery("Ilość:>>2", H), "zapytanie: porównanie");
+ok(C.looksLikeQuery("status: zdana", H), "zapytanie: nazwa kolumny z dwukropkiem (bez wielkości liter)");
+ok(C.looksLikeQuery("ilosc:2", H), "zapytanie: nazwa kolumny bez polskich znaków");
+ok(!C.looksLikeQuery("Jan Kowalski", H), "nie zapytanie: zwykłe nazwisko");
+ok(!C.looksLikeQuery("Ewa Lis-Nowak", H), "nie zapytanie: myślnik w nazwisku");
+ok(!C.looksLikeQuery("Godz 8:30", H), "nie zapytanie: dwukropek nie po nazwie kolumny");
+ok(!C.looksLikeQuery("Wykrzyknik!", H), "nie zapytanie: ! na końcu");
+ok(!C.looksLikeQuery("", H), "nie zapytanie: puste");
+
 // ── distinguishingCols ───────────────────────────────
 eq(C.distinguishingCols(["Osoba", "Dział", "Tel", "Miasto"], [["a", "b", "c", "d"], ["X", "X", "X", "X"], ["1", "2", "3", "4"], ["K", "L", "M", "K"]], 0), [2, 3], "rozróżniające: unikalność ≥ 50%, bez klucza");
 
