@@ -1,6 +1,6 @@
 # Wpisywanie — tryb smart: cykle „od lewej do prawej” (SZKIC, 2026-11-16)
 
-Status: **plan z decyzjami Mateusza, nic nie zbudowane.** Prośba Mateusza 2026-11-16: „smart ogarnia
+Status: **zbudowane 2026-11-15 — projekt: `2026-11-16-wpisywanie-smart-cykle-design.md`.** (Szkic poniżej bez zmian.) Prośba Mateusza 2026-11-16: „smart ogarnia
 powtórzenia … od do, od2 do2 … wypełnia to co trzeba, tam gdzie trzeba, tyle co trzeba”, w opcjach,
 na różnych arkuszach.
 
