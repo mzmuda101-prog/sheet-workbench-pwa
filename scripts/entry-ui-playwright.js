@@ -41,7 +41,7 @@ async function run() {
   });
   const page = await context.newPage();
   const errors = [];
-  page.on("pageerror", (e) => errors.push(e.message));
+  page.on("pageerror", (e) => { errors.push(e.message); if (process.env.DEBUG) console.log("PAGEERROR", e.message, e.stack); });
   await autoAnswerAppDialogs(page);
   const failures = [];
   const ok = (name, cond, got) => { if (!cond) failures.push(`${name} — dostałem: ${JSON.stringify(got)}`); };
@@ -381,6 +381,26 @@ async function run() {
   await page.check('#entryOverlay [data-en-overwrite-note="2"]'); await sleep(100);
   await page.click("#enCommitBtn"); await sleep(400);
   ok("17. notatka zmieniona", (await page.evaluate(() => swbNoteOf(currentSheetName, "C2")?.text)) === "Zwrot w poniedziałek", null);
+  await page.keyboard.press("Escape"); await sleep(150);
+
+  // 18. klucz liczbowy w formacie z zerami (zgłoszenie: „Nr.” = 32 pokazywane jako „032”, karta proponowała nowy wiersz)
+  await openEntry(); await sleep(250);
+  await page.evaluate(() => {
+    // komórka trzyma liczbę, a pokazuje ją w formacie 000 — tak jak plik Mateusza
+    baseRows.forEach((r) => { if (r.rowIndex0 >= 1 && Array.isArray(r.display) && typeof r.values[3] === "number") r.display[3] = String(r.values[3]).padStart(3, "0"); });
+    bumpSheetDataStamp();
+  });
+  await toggleSettings(); await page.selectOption("#enKeyCol", "3"); await toggleSettings();
+  const want = await page.evaluate(() => { const r = baseRows.find((x) => x.rowIndex0 === 5); return { shown: r.display[3], raw: r.values[3] }; });
+  await typeTarget(want.shown);
+  const rows18 = await page.$$eval("#enCandidates [data-en-row]", (els) => els.map((e) => e.dataset.enRow));
+  ok("18. „0NN” znajduje wiersz z liczbą NN w formacie 000", rows18.includes("5"), { want, rows18 });
+  const newText = await page.textContent("#enCandidates [data-en-new]").catch(() => "");
+  await page.evaluate(() => { window.__appDialogLog = []; window.__appDialogMode = "dismiss"; });
+  await page.click("#enCandidates [data-en-new]"); await sleep(250);
+  ok("18. „Nowy wiersz” z istniejącym numerem pyta o duplikat", (await page.evaluate(() => window.__appDialogLog.length)) === 1, newText);
+  await page.evaluate(() => { window.__appDialogMode = "accept"; });
+  await toggleSettings(); await page.selectOption("#enKeyCol", "0"); await toggleSettings();
   await page.keyboard.press("Escape"); await sleep(150);
 
   ok("10. brak pageerror", errors.length === 0, errors);

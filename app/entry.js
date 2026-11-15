@@ -48,6 +48,21 @@ const swbEntry = (() => {
   const candidates = () => { const m = memoNow(); return m ? m.rows : []; };
   const rowAt = (rowIndex0) => { const m = memoNow(); return (m && m.byIndex.get(rowIndex0)) || null; };
   const foldCache = () => { const m = memoNow(); return m ? m.foldCache : null; };
+  // Wiersze do szukania celu: klucz jako TEKST Z KOMÓRKI (to, co widać i co jest na kartce) —
+  // liczba 32 w formacie 000 to dla człowieka „032”; surowa wartość dawała „32” i brak trafienia.
+  const searchRows = (keyCol) => {
+    const m = memoNow();
+    if (!m) return [];
+    if (!m.search) m.search = new Map();
+    if (!m.search.has(keyCol)) {
+      m.search.set(keyCol, m.rows.map((r) => {
+        const v = []; // tablica — silnik czyta values[keyCol] tylko z tablicy
+        v[keyCol] = String(getDisplayValue(r, keyCol) ?? "");
+        return { rowIndex0: r.rowIndex0, values: v };
+      }));
+    }
+    return m.search.get(keyCol);
+  };
   const lastDataRow = () => { const c = candidates(); return c.length ? c[c.length - 1] : null; };
 
   const sameValue = (a, b) => {
@@ -214,7 +229,7 @@ const swbEntry = (() => {
     return filled.target ? plan({ target: filled.target, fields: filled.fields }) : null;
   }
 
-  const api = { candidates, plan, commit, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, _filled: () => filled };
+  const api = { candidates, plan, commit, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, searchRows, _filled: () => filled };
   return api;
 })();
 
@@ -482,7 +497,7 @@ const swbEntry = (() => {
       ui.active = hits.length === 1 ? 0 : -1; // zapytanie jest precyzyjne — jedno trafienie = wybrane
     } else {
       ui.queryTotal = 0;
-      ui.targets = C.findTargets(rows, ui.keyCol, ui.query, { fuzzy: ui.options.fuzzyTarget, foldCache: swbEntry.foldCache() });
+      ui.targets = C.findTargets(swbEntry.searchRows(ui.keyCol), ui.keyCol, ui.query, { fuzzy: ui.options.fuzzyTarget, foldCache: swbEntry.foldCache() });
       // jeden dokładny kandydat = podświetlony (Enter go wybiera); kilka albo literówki — wybiera człowiek
       const exact = ui.targets.filter((x) => x.exact);
       ui.active = exact.length === 1 && ui.targets[0] && ui.targets[0].exact ? 0 : -1;
