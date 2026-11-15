@@ -209,6 +209,32 @@ async function run() {
   const r13f = await commit({ target: { rowIndex0: 5 }, fields: {}, notes: { 2: "Oddana po terminie" } });
   ok("13. sama notatka — zapis", r13f.ok && (await note("C6")) === "Oddana po terminie", r13f);
 
+  // 14. kolejka „wszystkim naraz”: te same pola w wielu wierszach, walidacja całości, jeden krok Cofnij
+  const many = (input) => page.evaluate((input) => window.__entry.commitMany(input), input);
+  const planM = (input) => page.evaluate((input) => window.__entry.planMany(input), input);
+  const pm = await planM({ targets: [1, 3, 5], fields: { 2: "zdana" } });
+  ok("14. planMany: plan dla każdego wiersza, nadpisania policzone", pm.rows.length === 3 && pm.overwriteCount === 1 && !pm.ok, { n: pm.rows.length, ow: pm.overwriteCount, ok: pm.ok });
+  const before14 = [await cell("C2"), await cell("C4"), await cell("C6")].map((x) => x && x.v);
+  const r14a = await many({ targets: [1, 3, 5], fields: { 2: "zdana" } });
+  ok("14. bez zgody na nadpisanie — nic nie zapisane", r14a && !r14a.ok && r14a.reason === "invalid", r14a);
+  ok("14. C2/C4/C6 bez zmian", JSON.stringify([await cell("C2"), await cell("C4"), await cell("C6")].map((x) => x && x.v)) === JSON.stringify(before14), before14);
+  const r14 = await many({ targets: [1, 3, 5], fields: { 2: "zdana", 1: "20.11.2026" }, overwriteAll: true });
+  ok("14. z „nadpisz we wszystkich” — zapis", r14.ok && r14.rows.length === 3 && r14.undoSteps === 1, r14);
+  ok("14. wszystkie trzy wiersze mają zdana + datę", (await Promise.all(["C2", "C4", "C6"].map(cell))).every((x) => x.v === "zdana") && (await cell("B4")).v === "2026-11-20", null);
+  const u14 = await page.evaluate(() => window.__entry.undoCard());
+  await sleep(200);
+  ok("14. jedno Cofnij zdejmuje całą serię", u14 && JSON.stringify([await cell("C2"), await cell("C4"), await cell("C6")].map((x) => x && x.v)) === JSON.stringify(before14), [await cell("C2"), await cell("C6")]);
+  const r14s = await many({ targets: [1, 3], fields: { 4: "1" } });
+  ok("14. błąd w polu (formuła) — zero zapisów", !r14s.ok && r14s.reason === "invalid", r14s);
+  const p14 = await planM({ targets: [1, 3], fields: { 2: "zdana" }, overwriteAll: true });
+  await page.evaluate(() => { const row = baseRows.find((r) => r.rowIndex0 === 3); writeCellFromInput(currentDisplayModel, row, 2, "wzięta"); });
+  await sleep(50);
+  const r14t = await many({ targets: [1, 3], fields: { 2: "zdana" }, overwriteAll: true, expect: p14.expect });
+  ok("14. arkusz zmieniony między podglądem a zapisem — stale", !r14t.ok && r14t.reason === "stale", r14t);
+  ok("14. pusta lista celów — odmowa", !(await many({ targets: [], fields: { 2: "zdana" } })).ok, null);
+  const r14k = await many({ targets: [1, 3, 5], fields: { 1: "05.12.2026" }, overwriteAll: true });
+  ok("14. seria zostaje w pliku (do sprawdzenia w Excelu): B2, B4, B6 = 2026-12-05", r14k.ok && ["B2", "B4", "B6"].every(Boolean) && (await cell("B6")).v === "2026-12-05", r14k);
+
   // 12. plik po wszystkich kartkach (uzupełnienia + nadpisania): tabela bez zmian zakresu, OOXML czysty
   const s12 = await saveTableRef("entry-uzupelnienie.xlsx");
   ok("12. tabela po uzupełnieniach A1:E6", s12.ref === "A1:E6", s12.ref);

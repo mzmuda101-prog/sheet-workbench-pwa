@@ -9894,3 +9894,34 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-change.is-note .en-diff { font-size: 16px; font-weight: 500; }
 .en-query-hint { padding-inline: 4px; }
 .en-cand-why { flex: 1 0 100%; font-size: 13px; color: var(--accent-h); overflow-wrap: anywhere; }
+/* Wpisywanie — kolejka */
+.en-cand-queue { color: var(--accent-h); }
+.en-q-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.en-q-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 48px; padding: 8px 14px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); }
+.en-q-text { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+.en-q-st { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; margin-inline-start: auto; min-width: 0; }
+.en-q-st.is-ok { color: var(--success); }
+.en-q-st.is-warn { color: var(--warning); }
+.en-q-st.is-miss { color: var(--muted-strong); }
+.en-q-st .en-select { min-width: 0; max-inline-size: 100%; }
+.en-q-progress { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.en-q-pos { flex: 0 0 auto; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent-h); }
+/* pasek pozycji przewija się w bok — maska przy krawędziach mówi, że jest więcej */
+.en-q-chips { display: flex; gap: 8px; overflow-x: auto; min-width: 0; padding: 4px 2px; scrollbar-width: thin;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent 100%); }
+.en-q-chip { flex: 0 0 auto; min-height: 36px; padding: 4px 12px; font: inherit; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-full); cursor: pointer; }
+.en-q-chip.is-current { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.en-q-chip.is-done { color: var(--success); background: var(--success-bg); border-color: transparent; text-decoration: none; }
+.en-q-chip.is-skip, .en-q-chip:disabled { color: var(--muted); text-decoration: line-through; cursor: default; }
+.en-q-chip:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+.en-q-diff { font-size: 16px; font-weight: 500; }
+.en-q-diff .tr-field-label { margin: 0; min-width: 6rem; }
+.en-bar { flex-wrap: wrap; row-gap: 8px; }
+.en-bar #enQWalk, .en-bar #enQAll { white-space: normal; line-height: 1.2; }
+/* telefon: dwa główne przyciski obok siebie, „Zakończ kolejkę” pod nimi na całą szerokość */
+@media (max-width: 480px) {
+  .en-bar #enQWalk, .en-bar #enQAll { flex: 1 1 40%; margin-inline-start: 0; }
+  .en-bar #enQCancel { order: 3; flex: 1 1 100%; min-height: 44px; }
+}

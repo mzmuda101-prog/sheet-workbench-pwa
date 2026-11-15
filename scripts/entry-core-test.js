@@ -107,5 +107,37 @@ ok(C.isDuplicateRisk([{ score: 1 }]), "duplikat: literówka → też ryzyko (spe
 ok(!C.isDuplicateRisk([{ score: 0.5 }]), "duplikat: sam prefiks → bez ryzyka");
 ok(!C.isDuplicateRisk([]), "duplikat: pusto → bez ryzyka");
 
+// ── parseTargetList: kolejka numerów / nazwisk ──
+const L = (t) => { const r = C.parseTargetList(t, H); return r ? r.items : null; };
+eq(L("031, 032, 045-048"), ["031", "032", "045", "046", "047", "048"], "lista: przecinki + zakres z zerami wiodącymi");
+eq(L("031 032 033"), ["031", "032", "033"], "lista: same liczby po spacji");
+eq(L("031\n032\n\n033"), ["031", "032", "033"], "lista: nowe linie, puste pomijane");
+eq(L("Jan Kowalski, Anna Nowak"), ["Jan Kowalski", "Anna Nowak"], "lista: nazwiska po przecinku");
+eq(L("Jan Kowalski; Anna Nowak"), ["Jan Kowalski", "Anna Nowak"], "lista: średnik");
+eq(L("8-10"), ["8", "9", "10"], "lista: sam zakres bez zer");
+eq(L("Jan Kowalski"), null, "nie lista: jedno nazwisko ze spacją");
+eq(L("032"), null, "nie lista: jeden numer");
+eq(L("Lis-Nowak"), null, "nie lista: nazwisko z myślnikiem");
+eq(L("Ewa Lis && Status:=wzięta"), null, "nie lista: zapytanie z operatorami");
+eq(L("032 || 033"), null, "nie lista: zapytanie z ||");
+eq(L("10-8"), null, "nie lista: zakres malejący");
+eq(L("1-9999"), null, "nie lista: zakres ponad 500 pozycji");
+const dl = C.parseTargetList("031, 032, 031", H);
+eq([dl.items, dl.dupes], [["031", "032"], ["031"]], "lista: duplikaty usunięte i zgłoszone");
+eq(L("031,"), null, "nie lista: jedna pozycja z przecinkiem (pisanie w trakcie)");
+
+// ── resolveList: pozycje kolejki → wiersze (tylko dokładne trafienia) ──
+const rl = [{ rowIndex0: 1, values: ["031"] }, { rowIndex0: 2, values: ["032"] }, { rowIndex0: 3, values: ["Ewa Lis"] }, { rowIndex0: 4, values: ["Ewa Lis"] }, { rowIndex0: 5, values: [32] }];
+const res = C.resolveList(["031", "Ewa Lis", "099", "Ewa Lyss", "32"], rl, 0);
+eq(res.map((x) => [x.text, x.status, x.rowIndex0 ?? null, x.options || null]), [
+  ["031", "ok", 1, null],
+  ["Ewa Lis", "ambiguous", null, [3, 4]],
+  ["099", "missing", null, null],
+  ["Ewa Lyss", "missing", null, null],
+  ["32", "ambiguous", null, [2, 5]],
+], "kolejka: ok / kilka wierszy / brak; bez literówek; numer = numer");
+const res2 = C.resolveList(["031", "31"], rl, 0);
+eq(res2.map((x) => x.status), ["ok", "same-row"], "kolejka: dwie pozycje na ten sam wiersz — druga oznaczona");
+
 console.log(`entry-core: ${passes} ✓, ${fails} ✗`);
 process.exit(fails ? 1 : 0);

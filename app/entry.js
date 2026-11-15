@@ -165,14 +165,7 @@ const swbEntry = (() => {
     const expect = input && input.expect ? input.expect : (lastPlan && lastPlan.key === keyOf(input && input.target) ? lastPlan.before : null);
     const p = plan(input);
     if (p.errors.some((e) => e.reason === "no-target")) return { ok: false, reason: "stale", plan: p };
-    if (!isNew && expect) {
-      const row = rowAt(input.target.rowIndex0);
-      const moved = Object.keys(expect).some((k) => {
-        if (k[0] === "n") { const cur = noteAt(row.rowIndex0, Number(k.slice(1))); return (cur ? cur.text : "") !== expect[k]; }
-        return String(getDisplayValue(row, Number(k)) ?? "") !== expect[k];
-      });
-      if (moved) return { ok: false, reason: "stale", plan: p };
-    }
+    if (!isNew && expect && isStale(rowAt(input.target.rowIndex0), expect)) return { ok: false, reason: "stale", plan: p };
     if (!p.ok) return { ok: false, reason: "invalid", plan: p };
     if (!p.changes.length) return { ok: false, reason: "empty", plan: p };
 
@@ -186,20 +179,51 @@ const swbEntry = (() => {
     } else {
       row = rowAt(input.target.rowIndex0);
     }
+    const failed = writeChanges(row, p.changes);
+    const steps = await finishWrite(topBefore, depthBefore);
+    if (failed.length) return { ok: false, reason: "write-failed", failed, rowIndex0: row.rowIndex0, undoSteps: steps };
+    return { ok: true, rowIndex0: row.rowIndex0, undoSteps: steps };
+  }
+
+  function snapshotOf(row, fields, notes) {
+    const out = {};
+    if (!row) return out;
+    Object.keys(fields || {}).forEach((k) => { if (!isBlank(fields[k])) out[k] = String(getDisplayValue(row, Number(k)) ?? ""); });
+    Object.keys(notes || {}).forEach((k) => { if (!isBlank(notes[k])) { const cur = noteAt(row.rowIndex0, Number(k)); out[`n${k}`] = cur ? cur.text : ""; } });
+    return out;
+  }
+
+  // Arkusz zmieniony od podglądu? expect = { "kol": tekst wartości, "n<kol>": tekst notatki }.
+  function isStale(row, expect) {
+    if (!row) return true;
+    return Object.keys(expect || {}).some((k) => {
+      if (k[0] === "n") { const cur = noteAt(row.rowIndex0, Number(k.slice(1))); return (cur ? cur.text : "") !== expect[k]; }
+      return String(getDisplayValue(row, Number(k)) ?? "") !== expect[k];
+    });
+  }
+
+  // Zapis zmian jednego wiersza (wartości, potem notatki). Wołane w tym samym zadaniu JS dla całej
+  // kartki albo całej serii — undo.js składa to w jeden krok Cofnij. Zwraca listę nieudanych.
+  function writeChanges(row, changes) {
     const failed = [];
-    p.changes.filter((c) => c.kind === "value").forEach((c) => {
+    changes.filter((c) => c.kind === "value").forEach((c) => {
       const res = writeCellFromInput(currentDisplayModel, row, c.col, c.raw);
-      if (res !== "ok") failed.push({ col: c.col, reason: res });
+      if (res !== "ok") failed.push({ rowIndex0: row.rowIndex0, col: c.col, reason: res });
       else if (typeof rememberColumnValue === "function") {
         const v = row.values[c.col];
         rememberColumnValue(c.col, v instanceof Date && typeof formatDateForEdit === "function" ? formatDateForEdit(v) : v);
       }
     });
     // notatki po wartościach (nowy wiersz już istnieje), w tym samym zadaniu = ten sam krok Cofnij
-    p.changes.filter((c) => c.kind === "note").forEach((c) => {
+    changes.filter((c) => c.kind === "note").forEach((c) => {
       const okNote = typeof swbSetNote === "function" && swbSetNote(row.rowIndex0, c.col, c.raw, typeof swbNoteAuthor === "function" ? swbNoteAuthor() : "");
-      if (!okNote) failed.push({ col: c.col, reason: "note" });
+      if (!okNote) failed.push({ rowIndex0: row.rowIndex0, col: c.col, reason: "note" });
     });
+    return failed;
+  }
+
+  // Po zapisie: odśwież tabelę, policz kroki Cofnij (domykają się mikro-zadaniem) i zapamiętaj je.
+  async function finishWrite(topBefore, depthBefore) {
     if (typeof setDirtyState === "function") setDirtyState(true);
     if (typeof renderActiveTable === "function") renderActiveTable();
     await nextTask();
@@ -211,8 +235,52 @@ const swbEntry = (() => {
     }
     lastCard = steps ? { top, steps } : null;
     lastPlan = null;
-    if (failed.length) return { ok: false, reason: "write-failed", failed, rowIndex0: row.rowIndex0, undoSteps: steps };
-    return { ok: true, rowIndex0: row.rowIndex0, undoSteps: steps };
+    return steps;
+  }
+
+  // ── Kolejka „wszystkim naraz”: te same pola w wielu ISTNIEJĄCYCH wierszach ──
+  // overwriteAll = jedna zgoda na nadpisania we wszystkich wierszach (pokazana z liczbą w podglądzie).
+  function planMany(input) {
+    const targets = Array.isArray(input && input.targets) ? input.targets : [];
+    const all = currentDisplayModel && Array.isArray(currentDisplayModel.headers) ? currentDisplayModel.headers.map((_, i) => i) : [];
+    const rows = targets.map((r) => ({
+      rowIndex0: r,
+      plan: plan({ target: { rowIndex0: r }, fields: input.fields || {}, notes: input.notes || {}, overwrite: input.overwriteAll ? all : [], overwriteNotes: input.overwriteAll ? all : [] }),
+    }));
+    const ow = rows.reduce((n, r) => n + (r.plan.changes.some((c) => c.overwrite) ? 1 : 0), 0);
+    const changes = rows.reduce((n, r) => n + r.plan.changes.length, 0);
+    lastPlan = null;
+    return {
+      ok: rows.length > 0 && rows.every((r) => r.plan.ok) && changes > 0,
+      rows, overwriteCount: ow, changes,
+      // „było” dla KAŻDEGO pola z formularza, także bez zmiany w podglądzie — inaczej komórka zmieniona
+      // w międzyczasie (np. Cofnij w tabeli) zostałaby nadpisana zgodą „we wszystkich” bez pokazania
+      expect: Object.fromEntries(rows.map((r) => [r.rowIndex0, snapshotOf(rowAt(r.rowIndex0), input.fields, input.notes)])),
+    };
+  }
+
+  async function commitMany(input) {
+    if (!ready()) return { ok: false, reason: "guard" };
+    if (typeof swbIsEditMode === "function" && !swbIsEditMode()) return { ok: false, reason: "guard" };
+    const p = planMany(input);
+    if (!p.rows.length) return { ok: false, reason: "empty", plan: p };
+    if (p.rows.some((r) => r.plan.errors.some((e) => e.reason === "no-target"))) return { ok: false, reason: "stale", plan: p };
+    const expect = input && input.expect;
+    if (expect && p.rows.some((r) => expect[r.rowIndex0] && isStale(rowAt(r.rowIndex0), expect[r.rowIndex0]))) return { ok: false, reason: "stale", plan: p };
+    if (!p.rows.every((r) => r.plan.ok)) return { ok: false, reason: "invalid", plan: p };
+    if (!p.changes) return { ok: false, reason: "empty", plan: p };
+    const topBefore = undoTop();
+    const depthBefore = typeof undoStack !== "undefined" ? undoStack.length : 0;
+    const failed = [];
+    const written = [];
+    p.rows.forEach((r) => {
+      if (!r.plan.changes.length) return;
+      failed.push(...writeChanges(rowAt(r.rowIndex0), r.plan.changes));
+      written.push({ rowIndex0: r.rowIndex0, changes: r.plan.changes.length });
+    });
+    const steps = await finishWrite(topBefore, depthBefore);
+    if (failed.length) return { ok: false, reason: "write-failed", failed, rows: written, undoSteps: steps };
+    return { ok: true, rows: written, undoSteps: steps };
   }
 
   // Cofnij ostatnią kartkę — tylko gdy na wierzchu historii nadal leży jej krok.
@@ -229,7 +297,7 @@ const swbEntry = (() => {
     return filled.target ? plan({ target: filled.target, fields: filled.fields }) : null;
   }
 
-  const api = { candidates, plan, commit, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, searchRows, _filled: () => filled };
+  const api = { candidates, plan, commit, planMany, commitMany, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, searchRows, _filled: () => filled };
   return api;
 })();
 
@@ -242,13 +310,15 @@ const swbEntry = (() => {
   const btn = document.getElementById("entryBtn");
   if (!overlay || !C) return;
 
-  const DEFAULT_OPTIONS = { fuzzyTarget: true, typoHints: true, typeHints: true, suggestions: true, duplicateGuard: true, confirmStep: true, queryOperators: true };
+  const DEFAULT_OPTIONS = { fuzzyTarget: true, typoHints: true, typeHints: true, suggestions: true, duplicateGuard: true, confirmStep: true, queryOperators: true,
+    queueLists: true, queueAutoNext: true, queueMissing: "skip" };
   const ui = {
     open: false, step: 1, keyCol: 0, query: "", targets: [], active: -1,
     target: null, fields: {}, overwrite: new Set(), pinned: new Set(), font: 2,
     options: { ...DEFAULT_OPTIONS }, profiles: new Map(), lastPlan: null, sessionLog: [], returnFocus: null,
     fieldOrder: [], selected: new Set(), panel: null, draft: null, reminded: false,
     notes: {}, overwriteNotes: new Set(), queryMode: false, queryTotal: 0,
+    list: null, queue: null, queueDraft: null,
   };
 
   // ── Pamięć (localStorage, tylko na tym urządzeniu) ──
@@ -281,6 +351,7 @@ const swbEntry = (() => {
     const rec = { keyCol: ui.keyCol, fieldOrder: ui.fieldOrder.slice(), selected: [...ui.selected], pinned, at: Date.now() };
     const own = Object.keys(cleanFields(ui.fields)).filter((c) => !ui.pinned.has(Number(c))).length + Object.keys(cleanFields(ui.notes)).length;
     rec.draft = draft && ui.target && own ? { target: { ...ui.target }, fields: cleanFields(ui.fields), notes: cleanFields(ui.notes), query: ui.query, savedAt: Date.now() } : null;
+    rec.queue = ui.queue ? JSON.parse(JSON.stringify(ui.queue)) : null;
     store.scopes[scopeKey()] = rec;
     saveStore(store);
   }
@@ -305,6 +376,13 @@ const swbEntry = (() => {
     if (rec && rec.pinned) Object.keys(rec.pinned).forEach((k) => { const c = Number(k); if (valid(c)) { ui.pinned.add(c); if (rec.pinned[k]) pinnedVals[c] = rec.pinned[k]; } });
     if (!ui.target) ui.fields = { ...pinnedVals };
     ui.draft = rec && rec.draft && rec.draft.target ? rec.draft : null;
+    // niedokończona kolejka: wiersze mogły zniknąć (inny plik pod tą nazwą) — wtedy pozycja wraca do wyboru
+    ui.queueDraft = null;
+    if (!ui.queue && rec && rec.queue && Array.isArray(rec.queue.items) && rec.queue.items.length) {
+      const q = rec.queue;
+      q.items.forEach((it) => { if (Number.isInteger(it.choice) && !swbEntry.rowAt(it.choice)) { it.choice = null; it.status = "missing"; } });
+      ui.queueDraft = q;
+    }
     if (ui.draft && !ui.draft.target.newRow && !swbEntry.rowAt(ui.draft.target.rowIndex0)) ui.draft = null;
   }
   const suggests = [];
@@ -380,6 +458,13 @@ const swbEntry = (() => {
         <h2 class="en-panel-title">${esc(t("entryOptionsTitle"))}</h2>
         ${opts.map(([k, label]) => `<label class="en-check"><input type="checkbox" data-en-opt="${k}" ${ui.options[k] ? "checked" : ""}> ${esc(t(label))}</label>`).join("")}
         <p class="en-hint">${esc(t("entryOptionsNote"))}</p>
+        <h2 class="en-panel-title">${esc(t("entryQueueTitle"))}</h2>
+        ${[["queueLists", "entryOptQueueLists"], ["queueAutoNext", "entryOptQueueAutoNext"]].map(([k, label]) => `<label class="en-check"><input type="checkbox" data-en-opt="${k}" ${ui.options[k] ? "checked" : ""}> ${esc(t(label))}</label>`).join("")}
+        <label class="en-label" for="enQueueMissing">${esc(t("entryQueueMissingLabel"))}</label>
+        <select class="en-select" id="enQueueMissing">
+          <option value="skip" ${ui.options.queueMissing !== "new" ? "selected" : ""}>${esc(t("entryQSkipOpt"))}</option>
+          <option value="new" ${ui.options.queueMissing === "new" ? "selected" : ""}>${esc(t("entryQNewOpt"))}</option>
+        </select>
         <h2 class="en-panel-title">${esc(t("entryFieldsTitle"))}</h2>
         <ul class="en-fieldlist">${ui.fieldOrder.map((c, i) => `<li class="en-fieldrow" data-en-fieldrow="${c}">
           <label class="en-check"><input type="checkbox" data-en-field-on ${ui.selected.has(c) ? "checked" : ""}> ${esc(headers()[c])}</label>
@@ -390,6 +475,7 @@ const swbEntry = (() => {
       </section>`;
       slot.querySelector("#enKeyCol").addEventListener("change", (e) => { ui.keyCol = Number(e.target.value); ui.keyColSaved = ui.keyCol; persistNow(); });
       slot.querySelectorAll("[data-en-opt]").forEach((cb) => cb.addEventListener("change", () => { ui.options[cb.dataset.enOpt] = cb.checked; persistNow(); }));
+      slot.querySelector("#enQueueMissing").addEventListener("change", (e) => { ui.options.queueMissing = e.target.value === "new" ? "new" : "skip"; persistNow(); });
       slot.querySelectorAll("[data-en-fieldrow]").forEach((li) => {
         const c = Number(li.dataset.enFieldrow);
         li.querySelector("[data-en-field-on]").addEventListener("change", (e) => { if (e.target.checked) ui.selected.add(c); else ui.selected.delete(c); persistNow(); });
@@ -431,6 +517,8 @@ const swbEntry = (() => {
     if (!stage || !bar) return;
     if (ui.step === 1) renderTarget(stage, bar);
     else if (ui.step === 2) renderFields(stage, bar);
+    else if (ui.step === "queue") renderQueue(stage, bar);
+    else if (ui.step === "queueReview") renderQueueReview(stage, bar);
     else renderReview(stage, bar);
   }
 
@@ -446,6 +534,23 @@ const swbEntry = (() => {
         <div class="en-candidates" id="enCandidates" role="listbox" aria-label="${esc(t("entryTargetLabel"))}"></div>
       </div>`;
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>`;
+    if (ui.queueDraft && !ui.queue) {
+      const qd = ui.queueDraft;
+      const note = document.createElement("div");
+      note.className = "tr-notice en-draft";
+      note.id = "enQueueDraft";
+      note.setAttribute("role", "status");
+      note.innerHTML = `<div class="tr-notice-text">${esc(t("entryQDraft", { done: qd.done || 0, n: qd.items.length }))}</div>
+        <div class="tr-notice-actions"><button class="btn btn-xs" id="enQueueDraftResume" type="button">${esc(t("entryDraftResume"))}</button>
+        <button class="btn btn-xs ghost" id="enQueueDraftDiscard" type="button">${esc(t("entryDraftDiscard"))}</button></div>`;
+      stage.prepend(note);
+      note.querySelector("#enQueueDraftResume").addEventListener("click", () => {
+        ui.queue = ui.queueDraft; ui.queueDraft = null; ui.queue.mode = null; ui.target = null; ui.step = "queue"; render();
+      });
+      note.querySelector("#enQueueDraftDiscard").addEventListener("click", () => {
+        ui.queueDraft = null; persistNow(); note.remove(); overlay.querySelector("#enTargetInput")?.focus();
+      });
+    }
     if (ui.draft) {
       const d = ui.draft;
       const row = d.target.newRow ? null : swbEntry.rowAt(d.target.rowIndex0);
@@ -487,6 +592,9 @@ const swbEntry = (() => {
   function search() {
     const rows = swbEntry.candidates();
     const q = C.trimQuery(ui.query);
+    // lista celów („031, 032, 045-048”) = propozycja kolejki zamiast szukania jednego wiersza
+    ui.list = ui.options.queueLists ? C.parseTargetList(q, headers()) : null;
+    if (ui.list) { ui.queryMode = false; ui.queryCrit = null; ui.targets = []; ui.active = 0; drawCandidates(); return; }
     ui.queryMode = !!ui.options.queryOperators && C.looksLikeQuery(q, headers());
     ui.queryCrit = null;
     if (ui.queryMode) {
@@ -515,6 +623,18 @@ const swbEntry = (() => {
     const rows = swbEntry.candidates();
     const cols = C.distinguishingCols(headers(), headers().map((_, i) => rows.map((r) => r.values[i])), ui.keyCol, 2);
     const q = C.trimQuery(ui.query);
+    if (ui.list) {
+      const dup = ui.list.dupes.length ? `<div class="en-hint">${esc(t("entryQueueDupes", { list: ui.list.dupes.join(", ") }))}</div>` : "";
+      box.innerHTML = `<div class="en-cand en-cand-new en-cand-queue" role="option" id="enCand0" data-en-queue aria-selected="true">${esc(t("entryQueueOpen", { n: ui.list.items.length }))}</div>${dup}`;
+      input.setAttribute("aria-expanded", "true");
+      input.setAttribute("aria-activedescendant", "enCand0");
+      const opt = box.querySelector("[data-en-queue]");
+      opt.addEventListener("pointerdown", (e) => e.preventDefault());
+      opt.addEventListener("click", () => openQueue(ui.list));
+      const keyHint = overlay.querySelector("#enKeyHint");
+      if (keyHint) keyHint.hidden = false;
+      return;
+    }
     const items = ui.targets.map((tg, i) => {
       const row = swbEntry.rowAt(tg.rowIndex0);
       const extra = cols.map((c) => `${esc(headers()[c])}: ${esc(getDisplayValue(row, c) || "—")}`).join(" · ");
@@ -557,6 +677,7 @@ const swbEntry = (() => {
       drawCandidates();
     } else if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
+      if (ui.list) { openQueue(ui.list); return; }
       if (ui.active >= 0) choose();
       else if (ui.query.trim() && !ui.targets.length && !ui.queryMode) { ui.active = 0; choose(); }
       else if (ui.queryMode && !ui.targets.length) live(t("entryQueryNone"));
@@ -637,15 +758,21 @@ const swbEntry = (() => {
         ${noteArea}
       </div>`;
     }).join("");
+    const walking = !!(ui.queue && ui.queue.mode === "walk");
+    const targetTools = walking
+      ? `<span class="en-field-tools"><button class="btn btn-xs ghost" id="enQBack" type="button">${esc(t("entryQBack"))}</button>
+         <button class="btn btn-xs ghost" id="enQSkip" type="button">${esc(t("entryQSkip"))}</button></span>`
+      : `<button class="btn btn-xs ghost" id="enChangeTarget" type="button">${esc(t("entryChangeTarget"))}</button>`;
     stage.innerHTML = `<div class="tr-card en-card">
-      <div class="en-target-line"><span class="en-target-name">${esc(head)}</span>
-        <button class="btn btn-xs ghost" id="enChangeTarget" type="button">${esc(t("entryChangeTarget"))}</button></div>
+      ${walking ? queueProgressHtml() : ""}
+      <div class="en-target-line"><span class="en-target-name">${esc(head)}</span>${targetTools}</div>
       ${fieldsHtml}</div>`;
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>
-      <button class="btn" id="enReviewBtn" type="button">${esc(ui.options.confirmStep ? t("entryReview") : t("entryCommit"))}</button>`;
-    stage.querySelector("#enChangeTarget").addEventListener("click", () => {
+      <button class="btn" id="enReviewBtn" type="button">${esc(ui.options.confirmStep ? t("entryReview") : (walking ? t("entryQCommitNext") : t("entryCommit")))}</button>`;
+    stage.querySelector("#enChangeTarget")?.addEventListener("click", () => {
       ui.target = null; ui.fields = pinnedFields(); ui.notes = {}; ui.overwriteNotes = new Set(); ui.step = 1; render(); persistNow();
     });
+    if (walking) wireQueueWalk(stage);
     bar.querySelector("#enReviewBtn").addEventListener("click", toReview);
     stage.querySelectorAll(".en-field").forEach((f) => {
       const col = Number(f.dataset.enCol);
@@ -709,12 +836,16 @@ const swbEntry = (() => {
     try { return getCellDataValidation(currentSheetName, ref, currentStartCol + col); } catch { return null; }
   }
 
-  function attachSuggest(input, col, next) {
+  function attachSuggest(input, col, next, onValue) {
     if (typeof createCellSuggestions !== "function") return null;
     const dv = fieldDv(col);
     const values = dv && dv.values.length ? dv.values : (ui.options.suggestions && typeof buildColumnSuggestions === "function" ? buildColumnSuggestions(col) : []);
     if (!values.length) return null;
-    const api = createCellSuggestions(input, values, (v) => { input.value = v; ui.fields[col] = v; hint(col); persistSoon(); next(); },
+    const api = createCellSuggestions(input, values, (v) => {
+      input.value = v;
+      if (onValue) onValue(v); else { ui.fields[col] = v; hint(col); }
+      persistSoon(); next();
+    },
       dv && dv.values.length ? {} : { variant: "soft", minChars: 1 });
     suggests.push(api);
     return api;
@@ -813,7 +944,7 @@ const swbEntry = (() => {
       ${p.changes.length || blocked.length ? `<ul class="en-changes">${items}${extra}</ul>` : `<p class="en-nothing">${esc(t("entryNothing"))}</p>`}
     </div>`;
     bar.innerHTML = `<button class="btn ghost" id="enBackBtn" type="button">${esc(t("entryBack"))}</button>
-      <button class="btn" id="enCommitBtn" type="button" ${p.ok && p.changes.length ? "" : "disabled"}>${esc(t("entryCommit"))}</button>`;
+      <button class="btn" id="enCommitBtn" type="button" ${p.ok && p.changes.length ? "" : "disabled"}>${esc(ui.queue && ui.queue.mode === "walk" ? t("entryQCommitNext") : t("entryCommit"))}</button>`;
     bar.querySelector("#enBackBtn").addEventListener("click", () => { ui.step = 2; render(); });
     bar.querySelector("#enCommitBtn").addEventListener("click", doCommit);
     stage.querySelectorAll("[data-en-overwrite], [data-en-overwrite-note]").forEach((cb) => cb.addEventListener("change", () => {
@@ -860,6 +991,17 @@ const swbEntry = (() => {
       action2: t("entryDoneShow"),
       onAction2: () => { close(); setFocusedCell(`wide:${res.rowIndex0}`, ui.keyCol, { scroll: true }); },
     });
+    if (ui.queue && ui.queue.mode === "walk") {
+      const it = ui.queue.items[ui.queue.pos];
+      if (it) { it.state = "done"; it.rowIndex0 = res.rowIndex0; }
+      ui.queue.done = (ui.queue.done || 0) + 1;
+      ui.notes = {}; ui.overwriteNotes = new Set(); ui.overwrite = new Set(); ui.target = null;
+      if (ui.options.queueAutoNext) nextQueueItem(ui.queue.pos + 1);
+      else { ui.step = "queue"; ui.queue.mode = null; render(); }
+      persist({ draft: false });
+      drawPanel();
+      return;
+    }
     ui.fields = pinnedFields();
     ui.notes = {};
     ui.overwriteNotes = new Set();
@@ -869,6 +1011,239 @@ const swbEntry = (() => {
     ui.step = 1;
     persist({ draft: false });
     if (ui.open) { render(); drawPanel(); }
+  }
+
+  // ── Kolejka ────────────────────────────────────────────────────────────────
+  // Jedna kolejka, dwa sposoby: pola wypełnione na ekranie kolejki są WSPÓLNE (idą do wszystkich),
+  // reszta jest OSOBNA dla każdej pozycji. „Naraz” zapisuje same wspólne w istniejących wierszach
+  // (jedno Cofnij), „po kolei” prowadzi kartą za kartą ze wspólnymi już wpisanymi.
+  function openQueue(list) {
+    const resolved = C.resolveList(list.items, swbEntry.searchRows(ui.keyCol), ui.keyCol, { foldCache: swbEntry.foldCache() });
+    ui.queue = {
+      items: resolved.map((x) => ({
+        text: x.text, status: x.status, rowIndex0: Number.isInteger(x.rowIndex0) ? x.rowIndex0 : null, options: x.options || null,
+        choice: x.status === "ok" ? x.rowIndex0 : x.status === "missing" ? ui.options.queueMissing : x.status === "same-row" ? "skip" : null,
+        state: "pending",
+      })),
+      pos: -1, mode: null, common: (() => { const c = pinnedFields(); delete c[ui.keyCol]; return c; })(), dupes: list.dupes || [], done: 0, ow: false,
+    };
+    ui.list = null; ui.query = ""; ui.target = null; ui.queueDraft = null;
+    ui.step = "queue";
+    render();
+    persistNow();
+  }
+
+  const activeItems = () => (ui.queue ? ui.queue.items.map((it, i) => ({ it, i })).filter(({ it }) => it.choice !== "skip" && it.choice !== null) : []);
+  const commonFilled = () => !!ui.queue && Object.values(ui.queue.common || {}).some((v) => String(v ?? "").trim());
+
+  function rowLabel(rowIndex0) {
+    const row = swbEntry.rowAt(rowIndex0);
+    const rows = swbEntry.candidates();
+    const cols = C.distinguishingCols(headers(), headers().map((_, i) => rows.map((r) => r.values[i])), ui.keyCol, 1);
+    const extra = row && cols.length ? ` · ${getDisplayValue(row, cols[0]) || "—"}` : "";
+    return `${t("entryRowN", { n: excelRow(rowIndex0) })}${extra}`;
+  }
+
+  function renderQueue(stage, bar) {
+    const q = ui.queue;
+    const itemHtml = q.items.map((it, i) => {
+      let ctl = "";
+      if (it.status === "ok") ctl = `<span class="en-q-st is-ok">${esc(t("entryQOk", { n: excelRow(it.rowIndex0) }))}</span>`;
+      else if (it.status === "ambiguous") ctl = `<label class="en-q-st is-warn"><span class="visually-hidden">${esc(it.text)}: </span>${esc(t("entryQAmbiguous"))}
+        <select class="en-select" data-en-q-choose="${i}"><option value="">${esc(t("entryQChoose"))}</option>
+        ${(it.options || []).map((r) => `<option value="${r}" ${it.choice === r ? "selected" : ""}>${esc(rowLabel(r))}</option>`).join("")}
+        <option value="skip" ${it.choice === "skip" ? "selected" : ""}>${esc(t("entryQSkipOpt"))}</option></select></label>`;
+      else if (it.status === "missing") ctl = `<label class="en-q-st is-miss">${esc(t("entryQMissing"))}
+        <select class="en-select" data-en-q-missing="${i}"><option value="skip" ${it.choice !== "new" ? "selected" : ""}>${esc(t("entryQSkipOpt"))}</option>
+        <option value="new" ${it.choice === "new" ? "selected" : ""}>${esc(t("entryQNewOpt"))}</option></select></label>`;
+      else ctl = `<span class="en-q-st is-miss">${esc(t("entryQSameRow"))}</span>`;
+      return `<li class="en-q-item" data-en-q="${i}"><span class="en-q-text">${esc(it.text)}</span>${ctl}</li>`;
+    }).join("");
+    // bez kolumny-klucza: wspólny klucz nadałby wszystkim wierszom ten sam numer/nazwisko
+    const cols = ui.fieldOrder.filter((c) => ui.selected.has(c) && !isFormulaCol(c) && c !== ui.keyCol);
+    const commonHtml = cols.map((c) => `<div class="tr-field en-field" data-en-qcol="${c}">
+        <label class="tr-field-label" for="enQF${c}">${esc(headers()[c])}</label>
+        <input class="en-input" id="enQF${c}" data-en-qf="${c}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next" value="${esc(q.common[c] ?? "")}">
+      </div>`).join("");
+    stage.innerHTML = `<div class="tr-card en-card">
+      <h2 class="en-review-title">${esc(t("entryQTitle", { n: q.items.length }))}</h2>
+      ${q.dupes && q.dupes.length ? `<p class="en-hint">${esc(t("entryQueueDupes", { list: q.dupes.join(", ") }))}</p>` : ""}
+      <ul class="en-q-list">${itemHtml}</ul>
+      <p class="en-warn" id="enQHint" hidden>${esc(t("entryQNeedChoice"))}</p>
+      <h2 class="en-panel-title">${esc(t("entryQCommonTitle"))}</h2>
+      ${commonHtml}
+    </div>`;
+    bar.innerHTML = `<button class="btn ghost" id="enQCancel" type="button">${esc(t("entryQCancel"))}</button>
+      <button class="btn ghost en-q-walk" id="enQWalk" type="button"></button>
+      <button class="btn" id="enQAll" type="button"></button>`;
+    stage.querySelectorAll("[data-en-q-choose]").forEach((sel) => sel.addEventListener("change", () => {
+      const it = q.items[Number(sel.dataset.enQChoose)];
+      it.choice = sel.value === "" ? null : sel.value === "skip" ? "skip" : Number(sel.value);
+      updateQueueButtons(); persistSoon();
+    }));
+    stage.querySelectorAll("[data-en-q-missing]").forEach((sel) => sel.addEventListener("change", () => {
+      q.items[Number(sel.dataset.enQMissing)].choice = sel.value === "new" ? "new" : "skip";
+      updateQueueButtons(); persistSoon();
+    }));
+    const inputs = [...stage.querySelectorAll("[data-en-qf]")];
+    inputs.forEach((input, i) => {
+      const col = Number(input.dataset.enQf);
+      let sug = null;
+      input.addEventListener("focus", () => {
+        if (sug || !(ui.options.suggestions || fieldDv(col))) return;
+        sug = attachSuggest(input, col, () => focusField(inputs, i + 1), (v) => { q.common[col] = v; updateQueueButtons(); });
+      });
+      input.addEventListener("blur", () => setTimeout(() => {
+        if (!sug || document.activeElement === input || (sug.isInteracting && sug.isInteracting())) return;
+        const k = suggests.indexOf(sug);
+        if (k >= 0) suggests.splice(k, 1);
+        try { sug.destroy(); } catch { /* już zamknięta */ }
+        sug = null;
+      }, 0));
+      input.addEventListener("input", () => { q.common[col] = input.value; updateQueueButtons(); persistSoon(); });
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); focusField(inputs, e.shiftKey ? i - 1 : i + 1); } });
+    });
+    bar.querySelector("#enQCancel").addEventListener("click", () => finishQueue());
+    bar.querySelector("#enQWalk").addEventListener("click", () => { q.mode = "walk"; nextQueueItem(0); });
+    bar.querySelector("#enQAll").addEventListener("click", () => { q.ow = false; ui.step = "queueReview"; render(); });
+    updateQueueButtons();
+  }
+
+  function updateQueueButtons() {
+    const q = ui.queue;
+    const walk = overlay.querySelector("#enQWalk");
+    const all = overlay.querySelector("#enQAll");
+    if (!q || !walk || !all) return;
+    const unresolved = q.items.some((it) => it.choice === null);
+    const k = activeItems().filter(({ it }) => it.state !== "done").length;
+    const m = q.items.filter((it) => Number.isInteger(it.choice) && it.state !== "done").length;
+    walk.textContent = t("entryQWalk", { n: k });
+    all.textContent = t("entryQAll", { n: m });
+    walk.disabled = unresolved || k === 0;
+    all.disabled = unresolved || m === 0 || !commonFilled();
+    const hint = overlay.querySelector("#enQHint");
+    const why = unresolved ? t("entryQNeedChoice") : (m > 0 && !commonFilled() ? t("entryQNeedCommon") : "");
+    if (hint) { hint.textContent = why; hint.hidden = !why; }
+  }
+
+  function queueProgressHtml() {
+    const q = ui.queue;
+    const act = activeItems();
+    const at = act.findIndex(({ i }) => i === q.pos);
+    const chips = q.items.map((it, i) => {
+      const cls = i === q.pos ? " is-current" : it.state === "done" ? " is-done" : it.choice === "skip" || it.state === "skipped" ? " is-skip" : "";
+      return `<button class="en-q-chip${cls}" type="button" data-en-q-jump="${i}" ${it.choice === "skip" || it.choice === null ? "disabled" : ""} aria-current="${i === q.pos ? "step" : "false"}">${esc(it.text)}</button>`;
+    }).join("");
+    return `<div class="en-q-progress"><span class="en-q-pos" id="enQProgress">${esc(t("entryQPos", { i: at + 1, n: act.length }))}</span>
+      <div class="en-q-chips" role="list">${chips}</div></div>`;
+  }
+
+  function wireQueueWalk(stage) {
+    stage.querySelector("#enQBack")?.addEventListener("click", () => { ui.queue.mode = null; ui.target = null; ui.step = "queue"; render(); persistNow(); });
+    stage.querySelector("#enQSkip")?.addEventListener("click", () => {
+      const it = ui.queue.items[ui.queue.pos];
+      if (it && it.state !== "done") it.state = "skipped";
+      nextQueueItem(ui.queue.pos + 1);
+    });
+    stage.querySelectorAll("[data-en-q-jump]").forEach((b) => b.addEventListener("click", () => startQueueItem(Number(b.dataset.enQJump))));
+    stage.querySelector(".en-q-chip.is-current")?.scrollIntoView?.({ block: "nearest", inline: "center" });
+  }
+
+  function nextQueueItem(from) {
+    const q = ui.queue;
+    for (let i = from; i < q.items.length; i++) {
+      const it = q.items[i];
+      if (it.choice !== "skip" && it.choice !== null && it.state === "pending") { startQueueItem(i); return; }
+    }
+    finishQueue();
+  }
+
+  function startQueueItem(i) {
+    const q = ui.queue;
+    const it = q.items[i];
+    if (!it) return;
+    q.pos = i;
+    q.mode = "walk";
+    ui.target = it.choice === "new" ? { newRow: true } : { rowIndex0: it.choice };
+    ui.fields = { ...q.common };
+    if (it.choice === "new") ui.fields[ui.keyCol] = it.text;
+    ui.notes = {}; ui.overwrite = new Set(); ui.overwriteNotes = new Set();
+    ui.step = 2;
+    render();
+    persistNow();
+  }
+
+  function finishQueue() {
+    const q = ui.queue;
+    if (q && (q.done || 0) > 0) toast(t("entryQSummary", { done: q.done, skipped: q.items.length - q.done }), "success");
+    ui.queue = null; ui.queueDraft = null; ui.target = null; ui.fields = pinnedFields(); ui.notes = {}; ui.query = "";
+    ui.step = 1;
+    render();
+    persist({ draft: false });
+  }
+
+  function queueTargets() { return ui.queue.items.filter((it) => Number.isInteger(it.choice) && it.state !== "done").map((it) => it.choice); }
+
+  function renderQueueReview(stage, bar) {
+    const q = ui.queue;
+    const targets = queueTargets();
+    const p = swbEntry.planMany({ targets, fields: q.common, overwriteAll: q.ow });
+    ui.queuePlan = p;
+    const rowsHtml = p.rows.map((r) => {
+      const row = swbEntry.rowAt(r.rowIndex0);
+      const changes = r.plan.changes.map((c) => `<div class="en-diff en-q-diff"><span class="tr-field-label">${esc(headers()[c.col])}</span>
+        <span class="en-before${c.before ? "" : " is-empty"}">${esc(c.before || t("entryEmptyVal"))}</span><span aria-hidden="true">→</span><span class="en-after">${esc(c.after)}</span></div>`).join("");
+      const errs = r.plan.errors.filter((e) => !GATE.has(e.reason)).map((e) => `<div class="en-err" role="alert">${esc(headers()[e.col] || "")}: ${esc(t(ERR[e.reason] || "entryErrNotReal"))}</div>`).join("");
+      const ow = r.plan.changes.some((c) => c.overwrite);
+      return `<li class="en-change en-q-row${ow ? " is-overwrite" : ""}"><div class="en-target-name">${esc(t("entryTargetExisting", { n: excelRow(r.rowIndex0), key: keyText(row) }))}</div>
+        ${changes || `<div class="en-hint">${esc(t("entryQNoChange"))}</div>`}${errs}</li>`;
+    }).join("");
+    const skipped = q.items.filter((it) => !Number.isInteger(it.choice)).map((it) => it.text);
+    const owCount = p.overwriteCount;
+    stage.innerHTML = `<div class="tr-card en-card">
+      <h2 class="en-review-title">${esc(t("entryQReviewTitle", { n: targets.length }))}</h2>
+      ${skipped.length ? `<p class="en-hint">${esc(t("entryQSkippedNote", { list: skipped.join(", ") }))}</p>` : ""}
+      ${owCount ? `<label class="en-ow"><input type="checkbox" id="enQOverwrite" ${q.ow ? "checked" : ""}> ${esc(t("entryQOverwrite", { n: owCount }))}</label>` : ""}
+      <ul class="en-changes">${rowsHtml}</ul>
+    </div>`;
+    bar.innerHTML = `<button class="btn ghost" id="enBackBtn" type="button">${esc(t("entryBack"))}</button>
+      <button class="btn" id="enCommitBtn" type="button" ${p.ok ? "" : "disabled"}>${esc(t("entryCommit"))}</button>`;
+    bar.querySelector("#enBackBtn").addEventListener("click", () => { ui.step = "queue"; render(); });
+    bar.querySelector("#enCommitBtn").addEventListener("click", doCommitQueue);
+    stage.querySelector("#enQOverwrite")?.addEventListener("change", (e) => {
+      q.ow = e.target.checked;
+      const pp = swbEntry.planMany({ targets, fields: q.common, overwriteAll: q.ow });
+      bar.querySelector("#enCommitBtn").disabled = !pp.ok;
+    });
+    (bar.querySelector("#enCommitBtn:not([disabled])") || stage.querySelector("#enQOverwrite") || bar.querySelector("#enBackBtn")).focus();
+  }
+
+  async function doCommitQueue() {
+    if (committing) return;
+    committing = true;
+    try {
+      const q = ui.queue;
+      const res = await swbEntry.commitMany({ targets: queueTargets(), fields: q.common, overwriteAll: q.ow, expect: ui.queuePlan ? ui.queuePlan.expect : null });
+      if (!res.ok && res.reason !== "write-failed") {
+        if (res.reason === "stale") toast(t("entryStale"), "warning");
+        else if (res.reason === "guard") toast(t("entryNeedEdit"), "warning");
+        render();
+        return;
+      }
+      if (res.reason === "write-failed") toast(t("entryWriteFailed", { n: res.failed.map((f) => excelRow(f.rowIndex0)).join(", ") }), "error");
+      res.rows.forEach((r) => ui.sessionLog.unshift({ key: keyText(swbEntry.rowAt(r.rowIndex0)), rowIndex0: r.rowIndex0, at: Date.now() }));
+      ui.profiles.clear();
+      const same = queueTargets().length - res.rows.length; // wiersze, które już miały te wartości
+      toast(same > 0 ? t("entryQDoneAllSame", { n: res.rows.length, same }) : t("entryQDoneAll", { n: res.rows.length }), "success", {
+        action: t("entryDoneUndo"),
+        onAction: () => { if (swbEntry.undoCard()) toast(t("entryUndone"), "info"); else toast(t("entryUndoGone"), "info"); },
+      });
+      ui.queue = null; ui.queueDraft = null; ui.target = null; ui.fields = pinnedFields(); ui.query = "";
+      ui.step = 1;
+      persist({ draft: false });
+      render();
+      drawPanel();
+    } finally { committing = false; }
   }
 
   // ── Otwieranie / zamykanie ──
@@ -897,12 +1272,12 @@ const swbEntry = (() => {
     }
     ui.returnFocus = document.activeElement;
     ui.profiles.clear();
-    if (ui.scope !== scopeKey()) { ui.target = null; ui.fields = {}; ui.step = 1; ui.sessionLog = ui.scope ? [] : ui.sessionLog; ui.scope = scopeKey(); }
+    if (ui.scope !== scopeKey()) { ui.target = null; ui.fields = {}; ui.step = 1; ui.queue = null; ui.sessionLog = ui.scope ? [] : ui.sessionLog; ui.scope = scopeKey(); }
     restore();
     const rows = swbEntry.candidates();
     ui.keyCol = Number.isInteger(ui.keyColSaved) ? ui.keyColSaved : C.pickKeyColumn(headers(), headers().map((_, i) => rows.map((r) => r.values[i])));
     ui.open = true;
-    ui.step = ui.target ? ui.step : 1;
+    ui.step = ui.queue ? (ui.queue.mode === "walk" && ui.target ? ui.step : "queue") : (ui.target ? ui.step : 1);
     overlay.dataset.font = String(ui.font);
     shell();
     overlay.classList.remove("hidden");
@@ -951,6 +1326,7 @@ const swbEntry = (() => {
       e.preventDefault(); e.stopPropagation();
       if (ui.step === 2) toReview();
       else if (ui.step === 3) { const b = overlay.querySelector("#enCommitBtn"); if (b && !b.disabled) doCommit(); }
+      else if (ui.step === "queueReview") { const b = overlay.querySelector("#enCommitBtn"); if (b && !b.disabled) doCommitQueue(); }
     }
   }, true);
   overlay.addEventListener("keydown", (e) => e.stopPropagation());
@@ -970,10 +1346,21 @@ const swbEntry = (() => {
   swbEntry.ui = ui;
 
   swbEntry.state = () => ({
+    queue: ui.queue ? { items: ui.queue.items.map((x) => ({ text: x.text, status: x.status, choice: x.choice, state: x.state })), pos: ui.queue.pos, mode: ui.queue.mode, common: { ...ui.queue.common } } : null,
     open: ui.open, step: ui.step, target: ui.target ? { ...ui.target } : null, fields: { ...ui.fields },
     pinned: [...ui.pinned], keyCol: ui.keyCol, options: { ...ui.options }, sessionLog: ui.sessionLog.map((x) => ({ ...x })),
     fieldOrder: ui.fieldOrder.slice(), selected: [...ui.selected], notes: { ...ui.notes },
   });
+  // Wejście programowe kolejki (przyszły skan stosu kart): lista tekstów → ekran kolejki.
+  swbEntry.fillQueue = (texts) => {
+    const seen = new Set();
+    const items = [];
+    const dupes = [];
+    (texts || []).map((x) => String(x ?? "").trim()).filter(Boolean).forEach((x) => { const k = C.fold(x); if (seen.has(k)) dupes.push(x); else { seen.add(k); items.push(x); } });
+    if (!items.length || !ui.open) return false;
+    openQueue({ items, dupes });
+    return true;
+  };
   // fill() z silnika + przejście do kroku 2 (wejście programowe, np. przyszły skan karty)
   const engineFill = swbEntry.fill;
   swbEntry.fill = (input) => {

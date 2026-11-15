@@ -171,9 +171,64 @@ const SwbEntryCore = (() => {
     return (headers || []).some((h) => fold(h) === name);
   }
 
+  // ── Kolejka: lista celów w jednym wpisie („031, 032, 045-048”, „Jan Kowalski; Anna Nowak”) ──
+  // Separatory: przecinek, średnik, nowa linia; same liczby rozdzielone spacjami też; zakres liczb
+  // całkowitych a-b (rosnąco, max 500, zera wiodące jak w pierwszej). Jedno nazwisko ze spacją,
+  // nazwisko z myślnikiem i zapytanie z operatorami to NIE lista. null = zwykłe szukanie.
+  const MAX_RANGE = 500;
+  function expandToken(tok) {
+    const m = /^(\d+)\s*-\s*(\d+)$/.exec(tok);
+    if (!m) return [tok];
+    const a = Number(m[1]), b = Number(m[2]);
+    if (!(b >= a) || b - a + 1 > MAX_RANGE) return null;
+    const width = m[1].length;
+    const out = [];
+    for (let n = a; n <= b; n++) out.push(String(n).padStart(width, "0"));
+    return out;
+  }
+  function parseTargetList(text, headers) {
+    const raw = String(text ?? "").trim();
+    if (!raw || looksLikeQuery(raw, headers)) return null;
+    const glued = raw.replace(/(\d)\s*-\s*(\d)/g, "$1-$2"); // „045 - 048” → „045-048”
+    let parts;
+    if (/[,;\n]/.test(glued)) parts = glued.split(/[,;\n]+/).map((x) => x.trim()).filter(Boolean);
+    else if (/^\d+(-\d+)?(\s+\d+(-\d+)?)*$/.test(glued)) parts = glued.split(/\s+/);
+    else return null;
+    // „031 032, 045” — liczby po spacji wewnątrz pozycji też rozdzielamy
+    parts = parts.flatMap((p) => (/^\d+(-\d+)?(\s+\d+(-\d+)?)+$/.test(p) ? p.split(/\s+/) : [p]));
+    const items = [];
+    for (const p of parts) {
+      const ex = expandToken(p);
+      if (!ex) return null;
+      items.push(...ex);
+    }
+    if (items.length < 2) return null;
+    const seen = new Set();
+    const uniq = [];
+    const dupes = [];
+    items.forEach((it) => { const k = fold(it); if (seen.has(k)) dupes.push(it); else { seen.add(k); uniq.push(it); } });
+    return { items: uniq, dupes };
+  }
+
+  // Pozycje kolejki → wiersze. Tylko DOKŁADNE trafienia (lista ma być precyzyjna — literówka
+  // w kolejce to „brak”, nie zgadywanie): ok (jeden), ambiguous (kilka), missing (żaden),
+  // same-row (wiersz już zajęty przez wcześniejszą pozycję).
+  function resolveList(items, rows, keyCol, opts = {}) {
+    const used = new Set();
+    return (items || []).map((text) => {
+      const exact = findTargets(rows, keyCol, text, { fuzzy: false, limit: 50, foldCache: opts.foldCache }).filter((x) => x.score === 3);
+      if (!exact.length) return { text, status: "missing" };
+      if (exact.length > 1) return { text, status: "ambiguous", options: exact.map((x) => x.rowIndex0) };
+      const r = exact[0].rowIndex0;
+      if (used.has(r)) return { text, status: "same-row", rowIndex0: r };
+      used.add(r);
+      return { text, status: "ok", rowIndex0: r };
+    });
+  }
+
   const isDuplicateRisk = (targets) => (targets || []).some((t) => t.score >= 1);
 
-  return { fold, pickKeyColumn, findTargets, distinguishingCols, profileColumn, typoSuggest, isDuplicateRisk, looksLikeQuery, trimQuery, within1 };
+  return { fold, pickKeyColumn, findTargets, distinguishingCols, profileColumn, typoSuggest, isDuplicateRisk, looksLikeQuery, trimQuery, parseTargetList, resolveList, within1 };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = SwbEntryCore;

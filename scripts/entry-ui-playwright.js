@@ -416,6 +416,109 @@ async function run() {
   ok("19. trafienie w samej kolumnie-kluczu — bez powtarzania klucza", why19b === 0, why19b);
   await page.keyboard.press("Escape"); await sleep(150);
 
+  // 20. KOLEJKA: lista w polu celu → ekran kolejki → „wszystkim naraz” / „po kolei”
+  const cv = (ref) => page.evaluate((ref) => { const x = workbook.Sheets[currentSheetName][ref]; return x ? x.v : null; }, ref);
+  const toastMsgs = () => page.evaluate(() => [...document.querySelectorAll(".toast .toast-msg")].map((e) => e.textContent));
+  const clearToasts = () => page.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
+  await openEntry(); await sleep(250);
+  if (await page.isVisible("#enQueueDraftDiscard")) await page.click("#enQueueDraftDiscard");
+  await typeTarget("Ewa Lis, Jan Kowalski, Zenon Nowy, Anna Nowak");
+  const qopt = await page.textContent("#enCandidates [data-en-queue]").catch(() => "");
+  ok("20. lista rozpoznana — propozycja kolejki z liczbą pozycji", /4/.test(qopt), qopt);
+  await page.press("#enTargetInput", "Enter"); await sleep(250);
+  const s20 = await st();
+  ok("20. Enter → ekran kolejki", s20.step === "queue" && s20.queue && s20.queue.items.length === 4, s20.queue);
+  const stat = s20.queue ? s20.queue.items.map((x) => x.status) : [];
+  ok("20. statusy: kilka wierszy / ok / brak / ok", stat.join() === "ambiguous,ok,missing,ok", stat);
+  ok("20. przyciski zablokowane, dopóki „Ewa Lis” bez wyboru", await page.$eval("#enQWalk", (b) => b.disabled) && await page.$eval("#enQAll", (b) => b.disabled), null);
+  ok("20. kolumna-klucz (Osoba) NIE jest polem wspólnym — nadałaby wszystkim ten sam klucz", !(await page.$('#entryOverlay [data-en-qf="0"]')), null);
+  await page.selectOption('#entryOverlay [data-en-q-choose="0"]', "4"); await sleep(100);
+  ok("20. po wyborze — „Po kolei” aktywne, „naraz” czeka na pole wspólne", !(await page.$eval("#enQWalk", (b) => b.disabled)) && await page.$eval("#enQAll", (b) => b.disabled), null);
+  ok("20. wyszarzone „naraz” mówi dlaczego", /pole wspólne/.test(await page.textContent("#enQHint")) && await page.isVisible("#enQHint"), await page.textContent("#enQHint").catch(() => ""));
+  await page.fill('#entryOverlay [data-en-qf="2"]', "zdana"); await sleep(100);
+  ok("20. pole wspólne wypełnione — „naraz” dla 3 wierszy (bez brakującego)", /3/.test(await page.textContent("#enQAll")) && !(await page.$eval("#enQAll", (b) => b.disabled)), await page.textContent("#enQAll"));
+  const before20 = await cv("C5");
+  await page.click("#enQAll"); await sleep(250);
+  ok("20. podgląd serii", (await st()).step === "queueReview" && (await page.$$eval("#entryOverlay .en-q-row", (e) => e.length)) >= 1, await st());
+  if (await page.isVisible("#enQOverwrite")) {
+    ok("20. nadpisania — „Wpisz” zablokowane do zgody", await page.$eval("#enCommitBtn", (b) => b.disabled), null);
+    await page.check("#enQOverwrite"); await sleep(100);
+  }
+  await page.click("#enCommitBtn"); await sleep(500);
+  ok("20. naraz — C2, C4, C5 = zdana", [await cv("C2"), await cv("C4"), await cv("C5")].every((v) => v === "zdana"), [await cv("C2"), await cv("C4"), await cv("C5")]);
+  const t20 = await toastMsgs();
+  ok("20. dymek mówi prawdę: 2 wiersze zmienione, 1 już miał tę wartość", t20.some((m) => /2 wierszy/.test(m) && /1 bez zmian/.test(m)), t20);
+  await page.evaluate(() => [...document.querySelectorAll(".toast .toast-action")].find((b) => b.textContent === "Cofnij")?.click());
+  await sleep(300);
+  ok("20. Cofnij z dymku cofa całą serię", (await cv("C5")) === before20, { c5: await cv("C5"), before20 });
+  ok("20. po serii — karta wraca do pola celu", (await st()).step === 1 && !(await st()).queue, await st());
+  await clearToasts();
+
+  // po kolei
+  await typeTarget("Jan Kowalski, Anna Nowak"); await page.press("#enTargetInput", "Enter"); await sleep(250);
+  await page.fill('#entryOverlay [data-en-qf="1"]', "01.12.2026");
+  await page.click("#enQWalk"); await sleep(250);
+  const w1 = await st();
+  ok("20. po kolei — 1. karta: Jan (wiersz 2), data wspólna wpisana", w1.step === 2 && w1.target.rowIndex0 === 1 && w1.fields[1] === "01.12.2026", w1);
+  ok("20. pasek postępu „1 z 2”", /1 z 2/.test(await page.textContent("#enQProgress").catch(() => "")), await page.textContent("#enQProgress").catch(() => ""));
+  await page.fill(field(3), "7");
+  await page.keyboard.press("ControlOrMeta+Enter"); await sleep(200);
+  for (const cb of await page.$$("#entryOverlay [data-en-overwrite]")) await cb.check();
+  await sleep(100);
+  await page.click("#enCommitBtn"); await sleep(500);
+  const w2 = await st();
+  ok("20. „Wpisz i dalej” — od razu 2. karta: Anna (wiersz 4) z datą wspólną", w2.step === 2 && w2.target && w2.target.rowIndex0 === 3 && w2.fields[1] === "01.12.2026", w2);
+  ok("20. zapisane w 1. karcie: D2 = 7", (await cv("D2")) === 7, await cv("D2"));
+  await clearToasts();
+  await page.click("#enQSkip"); await sleep(300);
+  const t20b = await toastMsgs();
+  ok("20. koniec kolejki — podsumowanie wpisano 1 · pominięto 1", t20b.some((m) => /1/.test(m) && /pomini/i.test(m)), t20b);
+  ok("20. po kolejce — pole celu", (await st()).step === 1 && !(await st()).queue, await st());
+
+  // brak w arkuszu → nowy wiersz w trybie po kolei
+  await typeTarget("Zenon Nowy, Jan Kowalski"); await page.press("#enTargetInput", "Enter"); await sleep(250);
+  await page.selectOption('#entryOverlay [data-en-q-missing="0"]', "new"); await sleep(100);
+  await page.click("#enQWalk"); await sleep(250);
+  const wq3 = await st();
+  ok("20. pozycja spoza arkusza → karta nowego wiersza z kluczem", wq3.step === 2 && wq3.target && wq3.target.newRow && wq3.fields[0] === "Zenon Nowy", wq3);
+  await page.click("#enQBack"); await sleep(200);
+  ok("20. „Wróć do kolejki”", (await st()).step === "queue", await st());
+
+  // przywrócenie po przeładowaniu
+  await page.keyboard.press("Escape"); await sleep(150);
+  await reloadFile();
+  await openEntry(); await sleep(300);
+  ok("20. po przeładowaniu — komunikat o niedokończonej kolejce", await page.isVisible("#enQueueDraft"), null);
+  if (await page.isVisible("#enQueueDraftResume")) await page.click("#enQueueDraftResume");
+  await sleep(250);
+  ok("20. Wróć — ekran kolejki z 2 pozycjami", (await st()).step === "queue" && (await st()).queue && (await st()).queue.items.length === 2, await st());
+  if (await page.isVisible("#enQCancel")) await page.click("#enQCancel");
+  await sleep(200);
+  ok("20. Zakończ kolejkę — pole celu", (await st()).step === 1 && !(await st()).queue, await st());
+
+  // ustawienia kolejki
+  await toggleSettings();
+  await page.uncheck('#enSettings [data-en-opt="queueLists"]');
+  await toggleSettings();
+  await typeTarget("Ewa Lis, Jan Kowalski");
+  ok("20. listy wyłączone — brak propozycji kolejki", !(await page.isVisible("#enCandidates [data-en-queue]")), null);
+  await toggleSettings();
+  await page.check('#enSettings [data-en-opt="queueLists"]');
+  await page.selectOption("#enQueueMissing", "new");
+  await toggleSettings();
+  await typeTarget("Zenon Nowy, Jan Kowalski"); await page.press("#enTargetInput", "Enter"); await sleep(250);
+  ok("20. ustawienie „brak w arkuszu → nowy wiersz” jako domyślne", (await page.inputValue('#entryOverlay [data-en-q-missing="0"]').catch(() => "")) === "new", null);
+  if (await page.isVisible("#enQCancel")) await page.click("#enQCancel");
+  await sleep(150);
+  await toggleSettings(); await page.selectOption("#enQueueMissing", "skip"); await toggleSettings();
+  const fq = await page.evaluate(() => window.__entry.fillQueue(["Jan Kowalski", "Anna Nowak", "jan kowalski"]));
+  await sleep(200);
+  const sfq = await st();
+  ok("20. fillQueue (pod OCR) — kolejka z 2 pozycjami, powtórka wyłapana", fq && sfq.step === "queue" && sfq.queue.items.length === 2, sfq.queue);
+  if (await page.isVisible("#enQCancel")) await page.click("#enQCancel");
+  await sleep(150);
+  await page.keyboard.press("Escape"); await sleep(150);
+
   ok("10. brak pageerror", errors.length === 0, errors);
   await browser.close();
   const tag = `${ENGINE}${TOUCH ? " touch" : ""}`;
