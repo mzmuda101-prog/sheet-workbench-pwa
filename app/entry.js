@@ -311,7 +311,7 @@ const swbEntry = (() => {
   if (!overlay || !C) return;
 
   const DEFAULT_OPTIONS = { fuzzyTarget: true, typoHints: true, typeHints: true, suggestions: true, duplicateGuard: true, confirmStep: true, queryOperators: true,
-    queueLists: true, queueAutoNext: true, queueMissing: "skip", orNumbersAsList: true };
+    queueLists: true, queueAutoNext: true, queueMissing: "skip", orNumbersAsList: false }; // || domyślnie = „lub” jak w szybkim szukaniu (decyzja Mateusza 2026-11-16)
   const ui = {
     open: false, step: 1, keyCol: 0, query: "", targets: [], active: -1,
     target: null, fields: {}, overwrite: new Set(), pinned: new Set(), font: 2,

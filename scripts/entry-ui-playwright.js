@@ -528,16 +528,18 @@ async function run() {
   ok("21. „Jak to działa?” pokazuje przykłady: jeden wiersz, lista, ||, zapytanie", await page.isVisible("#enHelp") && /031, 032, 045-048/.test(help) && /\|\|/.test(help) && /Status:=/.test(help), help);
   ok("21. przycisk ma aria-expanded", (await page.getAttribute("#enHelpBtn", "aria-expanded")) === "true", null);
   await page.click("#enHelpBtn"); await sleep(100);
+  ok("21. ściągawka mówi o liście po przecinku, a || wskazuje Ustawienia", /031, 032, 045-048/.test(help) && /Ustawieni/.test(help), help);
   await toggleSettings(); await page.selectOption("#enKeyCol", "3"); await toggleSettings();
+  // domyślnie (decyzja Mateusza 2026-11-16) numery z || to zwykłe szukanie „lub”
+  await typeTarget("2||3||99");
+  ok("21. domyślnie „2||3||99” to zapytanie, nie kolejka", await page.isVisible("#enQueryHint") && !(await page.isVisible("#enCandidates [data-en-queue]")), null);
+  ok("21. opcja domyślnie wyłączona", (await st()).options.orNumbersAsList === false, (await st()).options);
+  // po włączeniu w Ustawieniach — kolejka
+  await toggleSettings(); await page.check('#enSettings [data-en-opt="orNumbersAsList"]'); await toggleSettings();
   await typeTarget("2||3||99");
   const q21 = await page.textContent("#enCandidates [data-en-queue]").catch(() => "");
-  ok("21. numery połączone || → propozycja kolejki „3 pozycje”", /3 pozycje\b/.test(q21), q21);
-  ok("21. bez trybu zapytania", !(await page.isVisible("#enQueryHint")), null);
-  // opcja: numery z || jako zapytanie (szukaj wszędzie) zamiast listy
+  ok("21. opcja włączona — numery połączone || → kolejka „3 pozycje”", /3 pozycje\b/.test(q21) && !(await page.isVisible("#enQueryHint")), q21);
   await toggleSettings(); await page.uncheck('#enSettings [data-en-opt="orNumbersAsList"]'); await toggleSettings();
-  await typeTarget("2||3||99");
-  ok("21. opcja wyłączona — „2||3||99” to zapytanie, nie kolejka", await page.isVisible("#enQueryHint") && !(await page.isVisible("#enCandidates [data-en-queue]")), null);
-  await toggleSettings(); await page.check('#enSettings [data-en-opt="orNumbersAsList"]'); await toggleSettings();
   await toggleSettings(); await page.selectOption("#enKeyCol", "0"); await toggleSettings();
   await typeTarget("Status:=zdana");
   const all21 = await page.textContent("#enCandidates [data-en-queue-all]").catch(() => "");
