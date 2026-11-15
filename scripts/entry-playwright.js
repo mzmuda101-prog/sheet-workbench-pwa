@@ -74,7 +74,18 @@ async function run() {
     const zip = await JSZip.loadAsync(bytes);
     const tbl = Object.keys(zip.files).find((k) => /^xl\/tables\/table\d+\.xml$/.test(k));
     const xml = tbl ? await zip.file(tbl).async("string") : "";
-    return { out, ref: (/<table[^>]*\sref="([^"]+)"/.exec(xml) || [])[1] || null };
+    const sheetXml = await zip.file("xl/worksheets/sheet1.xml").async("string");
+    // Excel wymaga komórek w wierszu rosnąco po kolumnach — inaczej okno „naprawić plik?”
+    const disorder = [];
+    for (const row of sheetXml.matchAll(/<row r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
+      const cols = [...row[2].matchAll(/<c r="([A-Z]+)\d+"/g)].map((m) => m[1].split("").reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0));
+      if (cols.some((c, i) => i && c <= cols[i - 1])) disorder.push(row[1]);
+    }
+    const wbXml = await zip.file("xl/workbook.xml").async("string");
+    // wyniki formuł liczonych z innych komórek nie są przepisywane do pliku (formula-calc.js) —
+    // dlatego plik MUSI kazać Excelowi przeliczyć wszystko przy otwarciu
+    const fullCalc = /<calcPr\b[^>]*fullCalcOnLoad="1"/.test(wbXml);
+    return { out, ref: (/<table[^>]*\sref="([^"]+)"/.exec(xml) || [])[1] || null, disorder, fullCalc };
   };
 
   await open();
@@ -99,6 +110,10 @@ async function run() {
   ok("2. wygląd B7 (pusta, format daty) = B6", sB6 != null && sB6 === sB7, { sB6, sB7 });
   const s2 = await saveTableRef("entry-nowy-wiersz.xlsx");
   ok("2. tabela w zapisie A1:E7", s2.ref === "A1:E7", s2.ref);
+  ok("2. komórki w każdym wierszu rosnąco po kolumnach (Excel bez naprawy)", s2.disorder.length === 0, s2.disorder);
+  ok("2. plik wymusza przeliczenie przy otwarciu (fullCalcOnLoad)", s2.fullCalc === true, s2.fullCalc);
+  const ins = await page.evaluate(() => insertCellInRow('<c r="A7" t="s"><v>1</v></c><c r="B7" s="1"/><c r="E7"><f>D7*2</f><v>0</v></c>', "D7", '<c r="D7"><v>4</v></c>'));
+  ok("2c. insertCellInRow: komórka samozamykająca nie połyka następnej", /<c r="D7"><v>4<\/v><\/c><c r="E7">/.test(ins), ins);
   if (ooxml && ooxml.available && ooxml.available()) {
     const [b0, a0] = ooxml.validate([FILE, s2.out]);
     const fresh = ooxml.newErrors(b0, a0).map(ooxml.short);

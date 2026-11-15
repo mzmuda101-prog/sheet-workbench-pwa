@@ -1,6 +1,6 @@
 // entry-fixture.js — wspólny plik testowy Wpisywania (openpyxl).
 // Arkusz „Prace”, tabela Excela „Prace” A1:E6:
-//   Osoba (5 osób, „Ewa Lis” dwa razy), Data (dd.mm.yyyy), Status (lista „wzięta,zdana”, stop),
+//   Osoba (5 osób, „Ewa Lis” dwa razy), Data (dd\.mm\.yyyy — zapis kanoniczny Excela), Status (lista „wzięta,zdana”, stop),
 //   Ilość (liczby), Razem (kolumna obliczeniowa =D2*2).
 // Wiersz 3 (2. Ewa Lis) ma puste Data i Status — do uzupełniania.
 const path = require("path");
@@ -27,8 +27,8 @@ for i, (o, d, s, n) in enumerate(data):
     r = i + 2
     ws.cell(r, 1, o); ws.cell(r, 4, n); ws.cell(r, 5, "=D%d*2" % r)
     if s: ws.cell(r, 3, s)
-    c = ws.cell(r, 2, d); c.number_format = "dd.mm.yyyy"
-ws.cell(3, 2).number_format = "dd.mm.yyyy"
+    c = ws.cell(r, 2, d); c.number_format = "dd\\\\.mm\\\\.yyyy"
+ws.cell(3, 2).number_format = "dd\\\\.mm\\\\.yyyy"
 dv = DataValidation(type="list", formula1='"wzięta,zdana"', allow_blank=True, errorStyle="stop")
 dv.add("C2:C6"); ws.add_data_validation(dv)
 t = Table(displayName="Prace", ref="A1:E6"); t.tableStyleInfo = TableStyleInfo(name="TableStyleMedium2", showRowStripes=True)

@@ -238,7 +238,9 @@ function rowNum(ref) {
 // Wstawia nową komórkę w istniejącym wierszu (zachowuje rosnącą kolejność kolumn).
 function insertCellInRow(rowInner, ref, cellXml) {
   const targetCol = colIndex0(ref);
-  const cellRe = /<c r="([A-Z]+\d+)"[^>]*(?:\/>|>[\s\S]*?<\/c>)/g;
+  // [^>/]* — „/” nie może wejść w atrybuty: dawniej <c r="B7" s="1"/> pasowało jako komórka
+  // OTWARTA aż do </c> następnej, więc nowa komórka lądowała za nią (D7 po E7) i Excel naprawiał plik
+  const cellRe = /<c r="([A-Z]+\d+)"[^>/]*(?:\/>|>[\s\S]*?<\/c>)/g;
   let m;
   while ((m = cellRe.exec(rowInner))) {
     if (colIndex0(m[1]) > targetCol) {
