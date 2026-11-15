@@ -486,10 +486,13 @@ const swbEntry = (() => {
 
   function search() {
     const rows = swbEntry.candidates();
-    ui.queryMode = !!ui.options.queryOperators && C.looksLikeQuery(ui.query, headers());
+    const q = C.trimQuery(ui.query);
+    ui.queryMode = !!ui.options.queryOperators && C.looksLikeQuery(q, headers());
+    ui.queryCrit = null;
     if (ui.queryMode) {
       // ta sama składnia i ten sam silnik co szybkie szukanie (workbook.js) — po wszystkich kolumnach pliku
-      const criterion = { query: ui.query.trim(), mode: "contains", indexes: realCols(), headers: headers(), operatorsEnabled: true, negated: false, emptyMode: "all" };
+      const criterion = { query: q, mode: "contains", indexes: realCols(), headers: headers(), operatorsEnabled: true, negated: false, emptyMode: "all" };
+      ui.queryCrit = criterion;
       let hits = [];
       try { hits = rows.filter((r) => rowMatchesTextFilter(r, [criterion], false)); } catch { hits = []; }
       ui.queryTotal = hits.length;
@@ -497,7 +500,7 @@ const swbEntry = (() => {
       ui.active = hits.length === 1 ? 0 : -1; // zapytanie jest precyzyjne — jedno trafienie = wybrane
     } else {
       ui.queryTotal = 0;
-      ui.targets = C.findTargets(swbEntry.searchRows(ui.keyCol), ui.keyCol, ui.query, { fuzzy: ui.options.fuzzyTarget, foldCache: swbEntry.foldCache() });
+      ui.targets = C.findTargets(swbEntry.searchRows(ui.keyCol), ui.keyCol, q, { fuzzy: ui.options.fuzzyTarget, foldCache: swbEntry.foldCache() });
       // jeden dokładny kandydat = podświetlony (Enter go wybiera); kilka albo literówki — wybiera człowiek
       const exact = ui.targets.filter((x) => x.exact);
       ui.active = exact.length === 1 && ui.targets[0] && ui.targets[0].exact ? 0 : -1;
@@ -511,13 +514,20 @@ const swbEntry = (() => {
     if (!box || !input) return;
     const rows = swbEntry.candidates();
     const cols = C.distinguishingCols(headers(), headers().map((_, i) => rows.map((r) => r.values[i])), ui.keyCol, 2);
-    const q = ui.query.trim();
+    const q = C.trimQuery(ui.query);
     const items = ui.targets.map((tg, i) => {
       const row = swbEntry.rowAt(tg.rowIndex0);
       const extra = cols.map((c) => `${esc(headers()[c])}: ${esc(getDisplayValue(row, c) || "—")}`).join(" · ");
+      // przy zapytaniu: DLACZEGO ten wiersz pasuje (np. „032” w innej kolumnie niż numer)
+      let why = "";
+      if (ui.queryCrit && typeof collectMatchingCellsForRow === "function") {
+        let hitCols = [];
+        try { hitCols = [...collectMatchingCellsForRow(row, [ui.queryCrit], null)].filter((c) => c !== ui.keyCol).sort((a, b) => a - b).slice(0, 2); } catch { hitCols = []; }
+        if (hitCols.length) why = `<span class="en-cand-why">${esc(t("entryWhy", { where: hitCols.map((c) => `${headers()[c]}: ${getDisplayValue(row, c)}`).join(" · ") }))}</span>`;
+      }
       return `<div class="en-cand" role="option" id="enCand${i}" data-en-row="${tg.rowIndex0}" aria-selected="${i === ui.active}">
         <span class="en-cand-key">${esc(keyText(row))}</span>
-        <span class="en-cand-extra">${extra}</span>
+        <span class="en-cand-extra">${extra}</span>${why}
         <span class="en-cand-row">${esc(t("entryRowN", { n: excelRow(tg.rowIndex0) }))}</span></div>`;
     });
     const newIdx = ui.targets.length;
@@ -587,7 +597,7 @@ const swbEntry = (() => {
     const keep = pinnedFields();
     ui.target = target;
     ui.fields = { ...keep };
-    if (target.newRow && ui.query.trim() && !ui.queryMode) ui.fields[ui.keyCol] = ui.query.trim();
+    if (target.newRow && C.trimQuery(ui.query) && !ui.queryMode) ui.fields[ui.keyCol] = C.trimQuery(ui.query);
     ui.overwrite = new Set();
     ui.notes = {};
     ui.overwriteNotes = new Set();

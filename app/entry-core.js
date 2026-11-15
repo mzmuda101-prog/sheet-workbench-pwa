@@ -18,7 +18,7 @@ const SwbEntryCore = (() => {
   const DICT_SHARE = 0.3;      // kolumna „słownikowa”: mniej niż 30% unikalnych
   const DICT_MIN = 5;          // za mało wartości, żeby mówić o słowniku
   const TYPO_MIN_LEN = 5;      // literówki tylko w dłuższych słowach
-  const DISTINCT_SHARE = 0.5;  // kolumna rozróżniająca kandydatów
+  const FILL_SHARE = 0.5;     // kolumna rozróżniająca: wypełniona w co najmniej połowie wierszy
 
   function fold(s) {
     if (s == null) return "";
@@ -80,13 +80,20 @@ const SwbEntryCore = (() => {
     return best < 0 ? 0 : best;
   }
 
+  // Kolumny opisujące kandydata obok klucza: WYPEŁNIONE (≥ połowa wierszy) i najbardziej
+  // zróżnicowane. Sama unikalność wybierała kolumny prawie puste (29 z 563 wierszy w pliku
+  // Mateusza) — przy każdym kandydacie „—”. Zwracane w kolejności kolumn arkusza.
   function distinguishingCols(headers, columns, keyCol, n = 2) {
-    const out = [];
-    for (let i = 0; i < (columns || []).length && out.length < n; i++) {
-      if (i === keyCol) continue;
-      if (uniqueShare(columns[i]) >= DISTINCT_SHARE) out.push(i);
-    }
-    return out;
+    const scored = [];
+    (columns || []).forEach((col, i) => {
+      if (i === keyCol || !Array.isArray(col) || !col.length) return;
+      const ne = col.filter((v) => !isEmpty(v));
+      if (ne.length / col.length < FILL_SHARE) return;
+      const distinct = new Set(ne.map((v) => fold(asText(v)))).size;
+      if (distinct < 2) return;
+      scored.push({ i, distinct });
+    });
+    return scored.sort((a, b) => b.distinct - a.distinct || a.i - b.i).slice(0, n).map((x) => x.i).sort((a, b) => a - b);
   }
 
   // foldCache (opcjonalnie, Map tekst → { f, w }): normalizacja każdej wartości klucza raz,
@@ -149,8 +156,12 @@ const SwbEntryCore = (() => {
   // Pole celu jako zapytanie w składni szybkiego szukania (&&, ||, !słowo, "fraza", >> <<,
   // Kolumna:…) — wtedy karta szuka jak tabela, a nie po samym kluczu z tolerancją literówek.
   // Zwykły tekst (nazwisko, „Lis-Nowak”, „8:30”) zostaje zwykłym szukaniem.
+  // Wiszący operator na końcu („032||”, „Ewa Lis && ”) to pisanie w trakcie albo literówka —
+  // pusta połówka nie może przełączać karty w zapytanie ani zmieniać wyników.
+  const trimQuery = (q) => String(q ?? "").replace(/(\s*(&&|\|\|)\s*)+$/, "").trim();
+
   function looksLikeQuery(q, headers) {
-    const s = String(q ?? "").trim();
+    const s = trimQuery(q);
     if (!s) return false;
     if (/&&|\|\||>>|<<|"/.test(s)) return true;
     if (/^!\S/.test(s)) return true;
@@ -162,7 +173,7 @@ const SwbEntryCore = (() => {
 
   const isDuplicateRisk = (targets) => (targets || []).some((t) => t.score >= 1);
 
-  return { fold, pickKeyColumn, findTargets, distinguishingCols, profileColumn, typoSuggest, isDuplicateRisk, looksLikeQuery, within1 };
+  return { fold, pickKeyColumn, findTargets, distinguishingCols, profileColumn, typoSuggest, isDuplicateRisk, looksLikeQuery, trimQuery, within1 };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = SwbEntryCore;

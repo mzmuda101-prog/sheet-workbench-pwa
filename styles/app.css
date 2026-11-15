@@ -9893,3 +9893,4 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-note { font-size: 16px; font-weight: 500; min-height: 64px; resize: vertical; line-height: 1.4; }
 .en-change.is-note .en-diff { font-size: 16px; font-weight: 500; }
 .en-query-hint { padding-inline: 4px; }
+.en-cand-why { flex: 1 0 100%; font-size: 13px; color: var(--accent-h); overflow-wrap: anywhere; }

@@ -403,6 +403,19 @@ async function run() {
   await toggleSettings(); await page.selectOption("#enKeyCol", "0"); await toggleSettings();
   await page.keyboard.press("Escape"); await sleep(150);
 
+  // 19. zgłoszenie „032||”: wiszący operator nie przełącza w zapytanie; przy zapytaniu widać, DLACZEGO wiersz pasuje
+  await openEntry(); await sleep(250);
+  await typeTarget("Ewa Lis||");
+  ok("19. „Ewa Lis||” — zwykłe szukanie (bez trybu zapytania)", !(await page.isVisible("#enQueryHint")), null);
+  ok("19. „Ewa Lis||” — obie Ewy Lis", (await page.$$eval("#enCandidates [data-en-row]", (e) => e.map((x) => x.dataset.enRow))).join() === "2,4", null);
+  await typeTarget("Status:=wzięta");
+  const why19 = await page.$$eval("#enCandidates [data-en-row] .en-cand-why", (e) => e.map((x) => x.textContent));
+  ok("19. zapytanie — przy każdym wierszu kolumna i wartość, która pasuje", why19.length >= 2 && why19.every((w) => /Status/.test(w) && /wzięta/.test(w)), why19);
+  await typeTarget("Osoba:Lis");
+  const why19b = await page.$$eval("#enCandidates [data-en-row] .en-cand-why", (e) => e.length);
+  ok("19. trafienie w samej kolumnie-kluczu — bez powtarzania klucza", why19b === 0, why19b);
+  await page.keyboard.press("Escape"); await sleep(150);
+
   ok("10. brak pageerror", errors.length === 0, errors);
   await browser.close();
   const tag = `${ENGINE}${TOUCH ? " touch" : ""}`;
