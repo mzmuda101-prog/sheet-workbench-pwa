@@ -9885,3 +9885,4 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-move .btn { min-width: 44px; min-height: 44px; }
 .en-log-key { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 .en-draft { margin-bottom: 8px; }
+.en-before.is-empty { text-decoration: none; font-style: italic; }

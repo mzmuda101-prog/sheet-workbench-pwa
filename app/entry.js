@@ -604,6 +604,15 @@ const swbEntry = (() => {
       dv && dv.values.length ? {} : { variant: "soft", minChars: 1 }));
   }
 
+  // Wpis innego typu niż reszta kolumny (daty / liczby): ostrzeżenie, nie blokada — pod polem i w podglądzie.
+  function typeWarn(col, parsedType) {
+    if (!ui.options.typeHints || parsedType === "formula") return [];
+    const p = profile(col);
+    if (p.type === "date" && parsedType !== "date") return ["entryTypeWarnDate"];
+    if (p.type === "number" && parsedType !== "number") return ["entryTypeWarnNumber"];
+    return [];
+  }
+
   // Podpowiedź pod polem: jak się zapisze, ostrzeżenie o typie, literówka, nadpisanie.
   function hint(col) {
     const box = overlay.querySelector(`[data-en-col="${col}"] .en-preview`);
@@ -616,8 +625,7 @@ const swbEntry = (() => {
     const parts = [];
     if (ui.options.typeHints && parsed && parsed.type !== "formula") {
       parts.push(`<span class="en-will">${esc(t("entryWillSave", { v: swbEntry.previewText(parsed, refIdx, col, raw) }))}</span>`);
-      const p = profile(col);
-      if (p.type === "date" && parsed.type !== "date") {
+      if (typeWarn(col, parsed.type).includes("entryTypeWarnDate")) {
         // „12.03” z kartki to w kolumnie dat prawie na pewno dzień i miesiąc — proponujemy pełną datę
         const m = /^(\d{1,2})[.,](\d{1,2})$/.exec(raw);
         const full = m ? `${m[1]}.${m[2]}.${new Date().getFullYear()}` : null;
@@ -625,7 +633,7 @@ const swbEntry = (() => {
         const fix = fp && fp.type === "date" ? ` <button class="btn btn-xs ghost en-date-fix" type="button" data-v="${esc(full)}">${esc(t("entryTypoFix", { v: full }))}</button>` : "";
         parts.push(`<span class="en-warn">${esc(t("entryTypeWarnDate"))}${fix}</span>`);
       }
-      if (p.type === "number" && parsed.type !== "number") parts.push(`<span class="en-warn">${esc(t("entryTypeWarnNumber"))}</span>`);
+      if (typeWarn(col, parsed.type).includes("entryTypeWarnNumber")) parts.push(`<span class="en-warn">${esc(t("entryTypeWarnNumber"))}</span>`);
     }
     if (ui.options.typoHints) {
       const p = profile(col);
@@ -667,11 +675,12 @@ const swbEntry = (() => {
     const errsOf = (col) => p.errors.filter((e) => e.col === col && e.reason !== "overwrite-not-allowed");
     const items = p.changes.map((c) => {
       const errs = errsOf(c.col).map((e) => `<div class="en-err" role="alert">${esc(t(ERR[e.reason] || "entryErrNotReal"))}</div>`).join("");
-      const warns = p.warnings.filter((w) => w.col === c.col).map(() => `<div class="en-warn">${esc(t("entryWarnDv"))}</div>`).join("");
+      const warns = p.warnings.filter((w) => w.col === c.col).map(() => `<div class="en-warn">${esc(t("entryWarnDv"))}</div>`).join("")
+        + typeWarn(c.col, c.parsedType).map((k) => `<div class="en-warn">${esc(t(k))}</div>`).join("");
       const ow = c.overwrite ? `<label class="en-ow"><input type="checkbox" data-en-overwrite="${c.col}" ${ui.overwrite.has(c.col) ? "checked" : ""}> ${esc(t("entryOverwriteOk"))}</label>` : "";
       return `<li class="en-change${c.overwrite ? " is-overwrite" : ""}">
         <div class="tr-field-label">${esc(headers()[c.col])}</div>
-        <div class="en-diff"><span class="en-before">${esc(c.before || t("entryEmptyVal"))}</span><span aria-hidden="true">→</span><span class="en-after">${esc(c.after)}</span></div>
+        <div class="en-diff"><span class="en-before${c.before ? "" : " is-empty"}">${esc(c.before || t("entryEmptyVal"))}</span><span aria-hidden="true">→</span><span class="en-after">${esc(c.after)}</span></div>
         ${ow}${errs}${warns}</li>`;
     }).join("");
     const blocked = p.errors.filter((e) => e.reason !== "overwrite-not-allowed" && !p.changes.some((c) => c.col === e.col));

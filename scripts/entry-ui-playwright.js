@@ -109,6 +109,13 @@ async function run() {
   const prevNum = await page.$eval('#entryOverlay [data-en-col="1"] .en-will', (e) => e.textContent);
   ok("4a. podgląd liczby w formacie daty (nie „12.03”)", prevNum === "Zapisze się jako: 12.01.1900", prevNum);
   const year = new Date().getFullYear();
+  // podgląd zmian też ostrzega — kto przeoczy żółty tekst pod polem, nie zatwierdzi 12.01.1900 po cichu
+  await page.keyboard.press("ControlOrMeta+Enter"); await sleep(200);
+  const w3 = await page.$$eval("#entryOverlay .en-change .en-warn", (els) => els.map((e) => e.textContent));
+  ok("4a. krok 3 ostrzega o typie", w3.some((x) => /daty/.test(x)), w3);
+  const struck = await page.$$eval("#entryOverlay .en-change .en-before", (els) => els.map((e) => ({ t: e.textContent, empty: e.classList.contains("is-empty") })));
+  ok("4a. puste „było” nie jest przekreślane", struck.every((x) => x.t !== "(puste)" || x.empty), struck);
+  await page.click("#enBackBtn"); await sleep(200);
   const fixBtn = await page.$('#entryOverlay [data-en-col="1"] .en-date-fix');
   ok("4a. propozycja pełnej daty", !!fixBtn && (await fixBtn.textContent()).includes(`12.03.${year}`), fixBtn && await fixBtn.textContent());
   if (fixBtn) await fixBtn.click();
