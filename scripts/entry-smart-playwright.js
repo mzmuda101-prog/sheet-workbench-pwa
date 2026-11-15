@@ -217,6 +217,8 @@ async function run() {
   const f2 = await page.evaluate(() => ({ step: window.__entry.state().step, rows: document.querySelectorAll(".en-q-row").length, txt: document.querySelector("#enStage").textContent }));
   ok("F. podgląd: 3 wiersze, do i do2", f2.step === "queueReview" && f2.rows === 3 && /do2/.test(f2.txt), f2);
   await page.click("#enCommitBtn"); await sleep(500);
+  ok("F. po naraz — wybór Zakończ / uzupełnij resztę", await page.evaluate(() => window.__entry.state().step === "queueAfter" && !!document.querySelector("#enQAfterWalk")), null);
+  await page.click("#enQAfterEnd"); await sleep(200);
   ok("F. D3, H38 i H6 (po poprawie) = dziś", (await cell("D3")) === todayYmd && (await cell("H38")) === todayYmd && (await cell("H6")) === todayYmd, [await cell("D3"), await cell("H38"), await cell("H6")]);
   ok("F. jedno Cofnij", (await undoCard()) && (await cell("D3")) === null && (await cell("H38")) === null && (await cell("H6")) === null, null);
   await page.evaluate(() => undoLast()); await sleep(200); // poprawka G6 to osobny krok
@@ -249,6 +251,7 @@ async function run() {
   await page.fill("#enTargetInput", "001, 036"); await sleep(200); await page.press("#enTargetInput", "Enter"); await sleep(400);
   await page.click('[data-en-q-action="close"]'); await sleep(200);
   await page.click("#enQAll"); await sleep(300); await page.click("#enCommitBtn"); await sleep(500);
+  await page.click("#enQAfterEnd"); await sleep(200);
   await pick("002");
   await page.click('[data-en-action="issue"]'); await sleep(100);
   await page.fill('[data-en-smart-data="0"]', "Anna Testowa"); await sleep(100);

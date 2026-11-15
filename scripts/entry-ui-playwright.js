@@ -451,7 +451,25 @@ async function run() {
   await page.evaluate(() => [...document.querySelectorAll(".toast .toast-action")].find((b) => b.textContent === "Cofnij")?.click());
   await sleep(300);
   ok("20. Cofnij z dymku cofa całą serię", (await cv("C5")) === before20, { c5: await cv("C5"), before20 });
-  ok("20. po serii — karta wraca do pola celu", (await st()).step === 1 && !(await st()).queue, await st());
+  const a20 = await page.evaluate(() => ({ step: window.__entry.state().step, end: !!document.querySelector("#enQAfterEnd"), walk: !!document.querySelector("#enQAfterWalk"), focus: document.activeElement?.id }));
+  ok("20. po serii — wybór: Zakończ (domyślnie) albo uzupełnij resztę po kolei", a20.step === "queueAfter" && a20.end && a20.walk && a20.focus === "enQAfterEnd", a20);
+  await page.click("#enQAfterEnd"); await sleep(200);
+  ok("20. „Zakończ kolejkę” — jak dawniej: pole celu", (await st()).step === 1 && !(await st()).queue, await st());
+  await clearToasts();
+
+  // naraz → „Po kolei — uzupełnij resztę”: te same wiersze, bez szukania od nowa, wspólne już wpisane (nie podsuwane drugi raz)
+  await typeTarget("Jan Kowalski, Anna Nowak"); await page.press("#enTargetInput", "Enter"); await sleep(250);
+  await page.fill('#entryOverlay [data-en-qf="2"]', "zdana"); await sleep(100);
+  await page.click("#enQAll"); await sleep(250);
+  if (await page.isVisible("#enQOverwrite")) { await page.check("#enQOverwrite"); await sleep(100); }
+  await page.click("#enCommitBtn"); await sleep(500);
+  await page.click("#enQAfterWalk"); await sleep(300);
+  const r20 = await st();
+  ok("20. uzupełnij resztę — 1. karta: Jan (wiersz 2), pole wspólne nie podsunięte drugi raz", r20.step === 2 && r20.target && r20.target.rowIndex0 === 1 && !r20.fields[2], r20);
+  ok("20. uzupełnij resztę — „1 z 2”, zwykłe pola", /1 z 2/.test(await page.textContent("#enQProgress").catch(() => "")) && (await page.$$eval("#entryOverlay .en-field[data-en-col]", (e) => e.length)) >= 4, await page.textContent("#enQProgress").catch(() => ""));
+  ok("20. naraz zapisane przed „po kolei”", (await cv("C2")) === "zdana", await cv("C2"));
+  await page.click("#enQBack"); await sleep(200); await page.click("#enQCancel"); await sleep(200);
+  await page.evaluate(() => window.__entry.undoCard()); await sleep(200);
   await clearToasts();
 
   // po kolei
