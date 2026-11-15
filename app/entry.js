@@ -79,7 +79,7 @@ const swbEntry = (() => {
     const v = parsed.value;
     const fileFmt = typeof cfmtNumFmtAt === "function" ? cfmtNumFmtAt(refIdx, col) : "General";
     const code = parsed.numFmt && fileFmt === "General" ? parsed.numFmt : fileFmt;
-    if (code && code !== "General" && !(v instanceof Date) && typeof cfmtFormatValue === "function") {
+    if (code && code !== "General" && typeof cfmtFormatValue === "function") { // także data: „d mmm yy” → „15 lis 26”, jak komórka
       const out = cfmtFormatValue(v, code);
       if (out != null) return out;
     }
@@ -240,12 +240,15 @@ const swbEntry = (() => {
 
   // ── Kolejka „wszystkim naraz”: te same pola w wielu ISTNIEJĄCYCH wierszach ──
   // overwriteAll = jedna zgoda na nadpisania we wszystkich wierszach (pokazana z liczbą w podglądzie).
+  // items = [{ rowIndex0, fields, notes, overwriteNotes }] — każdy wiersz z WŁASNYMI polami (tryb smart:
+  // data w kolumnie swojego cyklu); bez items: te same fields/notes w każdym z targets.
   function planMany(input) {
-    const targets = Array.isArray(input && input.targets) ? input.targets : [];
+    const items = Array.isArray(input && input.items) ? input.items
+      : (Array.isArray(input && input.targets) ? input.targets : []).map((r) => ({ rowIndex0: r, fields: input.fields || {}, notes: input.notes || {} }));
     const all = currentDisplayModel && Array.isArray(currentDisplayModel.headers) ? currentDisplayModel.headers.map((_, i) => i) : [];
-    const rows = targets.map((r) => ({
-      rowIndex0: r,
-      plan: plan({ target: { rowIndex0: r }, fields: input.fields || {}, notes: input.notes || {}, overwrite: input.overwriteAll ? all : [], overwriteNotes: input.overwriteAll ? all : [] }),
+    const rows = items.map((it) => ({
+      rowIndex0: it.rowIndex0,
+      plan: plan({ target: { rowIndex0: it.rowIndex0 }, fields: it.fields || {}, notes: it.notes || {}, overwrite: input.overwriteAll ? all : [], overwriteNotes: input.overwriteAll ? all : (it.overwriteNotes || []) }),
     }));
     const ow = rows.reduce((n, r) => n + (r.plan.changes.some((c) => c.overwrite) ? 1 : 0), 0);
     const changes = rows.reduce((n, r) => n + r.plan.changes.length, 0);
@@ -255,7 +258,7 @@ const swbEntry = (() => {
       rows, overwriteCount: ow, changes,
       // „było” dla KAŻDEGO pola z formularza, także bez zmiany w podglądzie — inaczej komórka zmieniona
       // w międzyczasie (np. Cofnij w tabeli) zostałaby nadpisana zgodą „we wszystkich” bez pokazania
-      expect: Object.fromEntries(rows.map((r) => [r.rowIndex0, snapshotOf(rowAt(r.rowIndex0), input.fields, input.notes)])),
+      expect: Object.fromEntries(items.map((it) => [it.rowIndex0, snapshotOf(rowAt(it.rowIndex0), it.fields, it.notes)])),
     };
   }
 
@@ -297,7 +300,34 @@ const swbEntry = (() => {
     return filled.target ? plan({ target: filled.target, fields: filled.fields }) : null;
   }
 
-  const api = { candidates, plan, commit, planMany, commitMany, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, searchRows, _filled: () => filled };
+  // ── Tryb smart: źródło cykli dla bieżącego arkusza (z pamięci, jak lista wierszy) ──
+  // roles = ręczna poprawka z Ustawień (null = zgadywanie). Formuła = kolumna z formułą w którymś z pierwszych wierszy.
+  function cycleSource(roles = null) {
+    const m = memoNow();
+    if (!m || typeof SwbEntryCore === "undefined") return null;
+    const key = JSON.stringify(roles || null);
+    if (!m.cycles) m.cycles = new Map();
+    if (!m.cycles.has(key)) {
+      const hs = currentDisplayModel.headers;
+      const probe = m.rows.slice(0, 20);
+      const info = hs.map((_, c) => ({
+        type: SwbEntryCore.profileColumn(m.rows.map((r) => r.values[c])).type,
+        formula: probe.some((r) => { const x = sheetCell(r.rowIndex0, c); return !!(x && x.f); }),
+      }));
+      m.cycles.set(key, SwbEntryCore.detectCycleColumns(hs, info, { roles }));
+    }
+    return m.cycles.get(key);
+  }
+  // Decyzja smart dla wiersza: planCycleAction + stan cykli (do paska stanu i okna „poprzedni otwarty”).
+  function smartPlan(rowIndex0, action, opts = {}) {
+    const src = cycleSource(opts.roles || null);
+    const row = rowAt(rowIndex0);
+    if (!src || !row) return { status: "no-source" };
+    const cycles = SwbEntryCore.cyclesOfRow(row.values, src);
+    return { ...SwbEntryCore.planCycleAction(cycles, action, opts), state: SwbEntryCore.cycleState(cycles), cycles };
+  }
+
+  const api = { candidates, plan, commit, planMany, commitMany, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, searchRows, cycleSource, smartPlan, _filled: () => filled };
   return api;
 })();
 
@@ -319,6 +349,7 @@ const swbEntry = (() => {
     fieldOrder: [], selected: new Set(), panel: null, draft: null, reminded: false,
     notes: {}, overwriteNotes: new Set(), queryMode: false, queryTotal: 0,
     list: null, queue: null, queueDraft: null,
+    smartCfg: null, smart: null, smartLast: null,
   };
 
   // ── Pamięć (localStorage, tylko na tym urządzeniu) ──
@@ -352,6 +383,7 @@ const swbEntry = (() => {
     const own = Object.keys(cleanFields(ui.fields)).filter((c) => !ui.pinned.has(Number(c))).length + Object.keys(cleanFields(ui.notes)).length;
     rec.draft = draft && ui.target && own ? { target: { ...ui.target }, fields: cleanFields(ui.fields), notes: cleanFields(ui.notes), query: ui.query, savedAt: Date.now() } : null;
     rec.queue = ui.queue ? JSON.parse(JSON.stringify(ui.queue)) : null;
+    rec.smart = { ...ui.smartCfg };
     store.scopes[scopeKey()] = rec;
     saveStore(store);
   }
@@ -371,6 +403,8 @@ const swbEntry = (() => {
     ui.selected = new Set(rec && Array.isArray(rec.selected) ? rec.selected.filter(valid) : cols);
     cols.forEach((c) => { if (rec && Array.isArray(rec.fieldOrder) && !rec.fieldOrder.includes(c)) ui.selected.add(c); }); // nowa kolumna = na karcie
     ui.keyColSaved = rec && valid(rec.keyCol) ? rec.keyCol : null;
+    ui.smartCfg = { ...DEFAULT_SMART, ...((rec && rec.smart) || {}) };
+    if (!ui.smart) ui.smart = newSmart();
     ui.pinned = new Set();
     const pinnedVals = {};
     if (rec && rec.pinned) Object.keys(rec.pinned).forEach((k) => { const c = Number(k); if (valid(c)) { ui.pinned.add(c); if (rec.pinned[k]) pinnedVals[c] = rec.pinned[k]; } });
@@ -410,6 +444,36 @@ const swbEntry = (() => {
   }
   const tn = (key, n, extra = {}) => t(key, { n, ...countWords(n), ...extra });
   const keyText = (row) => (row ? String(getDisplayValue(row, ui.keyCol) ?? "") : "");
+
+  // ── Tryb smart (cykle od/do): karta pokazuje akcję, a silnik sam wybiera kolumny ──
+  // Nazwy akcji i słowo na pozycję są per arkusz (Ustawienia), bo z kart korzystają różne osoby z różnymi arkuszami.
+  const DEFAULT_SMART = { on: true, issueName: "", closeName: "", item: "", dateDefault: "today", anomalies: "ask", roles: null };
+  const cfg = () => ui.smartCfg || DEFAULT_SMART;
+  const smartSrc = () => (cfg().on && swbEntry.ready() ? swbEntry.cycleSource(cfg().roles) : null);
+  const smartName = (a) => cfg()[a === "issue" ? "issueName" : "closeName"] || t(a === "issue" ? "entrySmartIssue" : "entrySmartClose");
+  const itemWord = () => cfg().item || t("entrySmartItem");
+  const smartDefaultDate = () => (cfg().dateDefault === "empty" ? "" : C.todayText());
+  function newSmart(over = {}) { return { off: false, action: null, date: null, data: {}, resolve: null, note: "", ...over }; }
+  const smartActive = () => !!(ui.target && !ui.target.newRow && ui.smart && !ui.smart.off && smartSrc());
+  const smartOpts = (s, resolve = s.resolve) => ({ date: s.date ?? smartDefaultDate(), data: s.data, resolve, roles: cfg().roles });
+  const cellOf = (row, col) => String(getDisplayValue(row, col) ?? "");
+  function cycleStateText(row, p) {
+    if (!row || !p || !p.state) return "";
+    const st = p.state, cy = p.cycles;
+    const who = (c) => c.data.map((d) => cellOf(row, d.col)).filter(Boolean).join(" · ");
+    const parts = [];
+    if (st.issues.length) parts.push(t("entrySmartCheck", { why: st.issues.map((x) => t(x === "odd" ? "entrySmartOdd" : "entrySmartManyOpen")).join(", ") }));
+    st.open.forEach((i) => { const c = cy[i]; parts.push([t("entrySmartOpenSince", { n: c.n, date: cellOf(row, c.start.col) }), who(c)].filter(Boolean).join(": ")); });
+    if (!st.issues.length && !st.open.length) parts.push(st.free >= 0 ? t("entrySmartFree", { n: st.free + 1 }) : t("entrySmartFull"));
+    return parts.join(" · ");
+  }
+  // Nota „Tylko notatka”: w komórce klucza; istniejąca notatka zostaje, nowa treść dochodzi pod nią.
+  function smartNote(rowIndex0, text) {
+    const cur = typeof swbNoteOf === "function" ? swbNoteOf(currentSheetName, XLSX.utils.encode_cell({ r: rowIndex0, c: currentStartCol + ui.keyCol })) : null;
+    return { notes: { [ui.keyCol]: cur && cur.text ? `${cur.text}\n${text}` : text }, overwriteNotes: cur ? [ui.keyCol] : [] };
+  }
+  // główna kolumna decyzji (do pokazania „→ do2”): koniec przy Zdaj, start przy Wydaj
+  const smartCol = (p, action) => (p.cycles && p.cycle ? p.cycles[p.cycle - 1][action === "close" ? "end" : "start"].col : null);
 
   const ICON_PIN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>';
   const ICON_NOTE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
@@ -472,6 +536,7 @@ const swbEntry = (() => {
           <option value="skip" ${ui.options.queueMissing !== "new" ? "selected" : ""}>${esc(t("entryQSkipOpt"))}</option>
           <option value="new" ${ui.options.queueMissing === "new" ? "selected" : ""}>${esc(t("entryQNewOpt"))}</option>
         </select>
+        ${smartSettingsHtml()}
         <h2 class="en-panel-title">${esc(t("entryFieldsTitle"))}</h2>
         <ul class="en-fieldlist">${ui.fieldOrder.map((c, i) => `<li class="en-fieldrow" data-en-fieldrow="${c}">
           <label class="en-check"><input type="checkbox" data-en-field-on ${ui.selected.has(c) ? "checked" : ""}> ${esc(headers()[c])}</label>
@@ -483,6 +548,7 @@ const swbEntry = (() => {
       slot.querySelector("#enKeyCol").addEventListener("change", (e) => { ui.keyCol = Number(e.target.value); ui.keyColSaved = ui.keyCol; persistNow(); });
       slot.querySelectorAll("[data-en-opt]").forEach((cb) => cb.addEventListener("change", () => { ui.options[cb.dataset.enOpt] = cb.checked; persistNow(); }));
       slot.querySelector("#enQueueMissing").addEventListener("change", (e) => { ui.options.queueMissing = e.target.value === "new" ? "new" : "skip"; persistNow(); });
+      wireSmartSettings(slot);
       slot.querySelectorAll("[data-en-fieldrow]").forEach((li) => {
         const c = Number(li.dataset.enFieldrow);
         li.querySelector("[data-en-field-on]").addEventListener("change", (e) => { if (e.target.checked) ui.selected.add(c); else ui.selected.delete(c); persistNow(); });
@@ -508,6 +574,51 @@ const swbEntry = (() => {
     } else {
       slot.innerHTML = "";
     }
+  }
+
+  // Ustawienia → Tryb smart (per arkusz). Sekcja tylko, gdy arkusz ma cykle (wykrycie automatyczne).
+  function smartSettingsHtml() {
+    const auto = swbEntry.ready() ? swbEntry.cycleSource(null) : null;
+    if (!auto) return "";
+    const c = cfg();
+    const src = swbEntry.cycleSource(c.roles) || auto;
+    const roleOpt = (p, r) => `<option value="${r}" ${src.roles[p] === r ? "selected" : ""}>${esc(t({ data: "entrySmartRoleData", start: "entrySmartRoleStart", end: "entrySmartRoleEnd", skip: "entrySmartRoleSkip" }[r]))}</option>`;
+    const sel = (id, label, val, opts) => `<label class="en-label" for="${id}">${esc(t(label))}</label>
+      <select class="en-select" id="${id}">${opts.map(([v, k]) => `<option value="${v}" ${val === v ? "selected" : ""}>${esc(t(k))}</option>`).join("")}</select>`;
+    const txt = (id, label, val, ph) => `<label class="en-label" for="${id}">${esc(t(label))}</label>
+      <input class="en-input" id="${id}" type="text" autocomplete="off" value="${esc(val)}" placeholder="${esc(ph)}">`;
+    return `<h2 class="en-panel-title">${esc(t("entrySmartTitle"))}</h2>
+      <p class="en-hint">${esc(t("entrySmartDetected", { count: src.count, span: src.span, labels: src.labels.join(", ") }))}</p>
+      <label class="en-check"><input type="checkbox" id="enSmartOnOpt" ${c.on ? "checked" : ""}> ${esc(t("entrySmartOptOn"))}</label>
+      ${txt("enSmartIssueName", "entrySmartIssueNameLabel", c.issueName, t("entrySmartIssue"))}
+      ${txt("enSmartCloseName", "entrySmartCloseNameLabel", c.closeName, t("entrySmartClose"))}
+      ${txt("enSmartItemWord", "entrySmartItemLabel", c.item, t("entrySmartItem"))}
+      ${sel("enSmartDateDefault", "entrySmartDateLabel", c.dateDefault, [["today", "entrySmartDateToday"], ["empty", "entrySmartDateEmpty"]])}
+      ${sel("enSmartAnomalies", "entrySmartAnomLabel", c.anomalies, [["ask", "entrySmartAnomAsk"], ["skip", "entrySmartAnomSkip"]])}
+      <div class="en-label">${esc(t("entrySmartRolesLabel"))}</div>
+      <ul class="en-fieldlist">${src.labels.map((l, p) => `<li class="en-fieldrow"><label class="en-role-label" for="enRole${p}">${esc(l)}</label>
+        <select class="en-select" id="enRole${p}" data-en-role="${p}">${["data", "start", "end", "skip"].map((r) => roleOpt(p, r)).join("")}</select></li>`).join("")}</ul>
+      <p class="en-warn" id="enSmartRolesBad" hidden>${esc(t("entrySmartRolesBad"))}</p>`;
+  }
+  function wireSmartSettings(slot) {
+    if (!slot.querySelector("#enSmartOnOpt")) return;
+    const c = ui.smartCfg;
+    const save = () => { persistNow(); };
+    slot.querySelector("#enSmartOnOpt").addEventListener("change", (e) => { c.on = e.target.checked; save(); });
+    [["enSmartIssueName", "issueName"], ["enSmartCloseName", "closeName"], ["enSmartItemWord", "item"]].forEach(([id, k]) => {
+      const el = slot.querySelector(`#${id}`);
+      const set = () => { c[k] = el.value.trim(); save(); };
+      el.addEventListener("input", set); el.addEventListener("change", set);
+    });
+    slot.querySelector("#enSmartDateDefault").addEventListener("change", (e) => { c.dateDefault = e.target.value === "empty" ? "empty" : "today"; save(); });
+    slot.querySelector("#enSmartAnomalies").addEventListener("change", (e) => { c.anomalies = e.target.value === "skip" ? "skip" : "ask"; save(); });
+    slot.querySelectorAll("[data-en-role]").forEach((el) => el.addEventListener("change", () => {
+      const roles = [...slot.querySelectorAll("[data-en-role]")].map((x) => x.value);
+      const good = roles.filter((r) => r === "start").length === 1 && roles.filter((r) => r === "end").length === 1;
+      slot.querySelector("#enSmartRolesBad").hidden = good;
+      c.roles = good ? roles : null;
+      save();
+    }));
   }
 
   function showInTable(rowIndex0) {
@@ -586,6 +697,7 @@ const swbEntry = (() => {
         ui.notes = { ...(dd.notes || {}) };
         ui.overwrite = new Set();
         ui.overwriteNotes = new Set();
+        ui.smart = newSmart({ off: true }); // szkic to wpisane pola — wraca zwykła karta
         ui.step = 2;
         render();
       });
@@ -746,6 +858,8 @@ const swbEntry = (() => {
     ui.overwrite = new Set();
     ui.notes = {};
     ui.overwriteNotes = new Set();
+    ui.smart = newSmart();
+    ui.smartLast = null;
     ui.step = 2;
     ui.draft = null;
     render();
@@ -754,6 +868,7 @@ const swbEntry = (() => {
 
   // ── Krok 2: pola ──
   function renderFields(stage, bar) {
+    if (smartActive()) { renderSmart(stage, bar); return; }
     const row = ui.target.newRow ? null : swbEntry.rowAt(ui.target.rowIndex0);
     const head = ui.target.newRow ? t("entryNewRow") : t("entryTargetExisting", { n: excelRow(ui.target.rowIndex0), key: keyText(row) });
     const cardCols = ui.fieldOrder.filter((c) => ui.selected.has(c));
@@ -787,10 +902,13 @@ const swbEntry = (() => {
       ? `<span class="en-field-tools"><button class="btn btn-xs ghost" id="enQBack" type="button">${esc(t("entryQBack"))}</button>
          <button class="btn btn-xs ghost" id="enQSkip" type="button">${esc(t("entryQSkip"))}</button></span>`
       : `<button class="btn btn-xs ghost" id="enChangeTarget" type="button">${esc(t("entryChangeTarget"))}</button>`;
+    const smartBack = !ui.target.newRow && ui.smart && ui.smart.off && smartSrc()
+      ? `<button class="btn btn-xs ghost en-smart-toggle" id="enSmartOn" type="button">${esc(t("entrySmartBack"))}</button>` : "";
     stage.innerHTML = `<div class="tr-card en-card">
       ${walking ? queueProgressHtml() : ""}
       <div class="en-target-line"><span class="en-target-name">${esc(head)}</span>${targetTools}</div>
-      ${fieldsHtml}</div>`;
+      ${smartBack}${fieldsHtml}</div>`;
+    stage.querySelector("#enSmartOn")?.addEventListener("click", () => { ui.smart.off = false; render(); });
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>
       <button class="btn" id="enReviewBtn" type="button">${esc(ui.options.confirmStep ? t("entryReview") : (walking ? t("entryQCommitNext") : t("entryCommit")))}</button>`;
     stage.querySelector("#enChangeTarget")?.addEventListener("click", () => {
@@ -850,6 +968,149 @@ const swbEntry = (() => {
     });
     const firstEmpty = inputs.find((x) => !x.value) || inputs[0];
     if (firstEmpty) firstEmpty.focus();
+  }
+
+  // ── Karta smart jednego wiersza ──
+  function renderSmart(stage, bar) {
+    const src = smartSrc();
+    const row = swbEntry.rowAt(ui.target.rowIndex0);
+    const s = ui.smart;
+    if (s.date === null) s.date = smartDefaultDate();
+    const now = swbEntry.smartPlan(row.rowIndex0, "close", smartOpts(s, null));
+    if (!s.action) s.action = now.state && now.state.open.length ? "close" : "issue";
+    const walking = !!(ui.queue && ui.queue.mode === "walk");
+    const head = t("entryTargetExisting", { n: excelRow(row.rowIndex0), key: keyText(row) });
+    const targetTools = walking
+      ? `<span class="en-field-tools"><button class="btn btn-xs ghost" id="enQBack" type="button">${esc(t("entryQBack"))}</button>
+         <button class="btn btn-xs ghost" id="enQSkip" type="button">${esc(t("entryQSkip"))}</button></span>`
+      : `<button class="btn btn-xs ghost" id="enChangeTarget" type="button">${esc(t("entryChangeTarget"))}</button>`;
+    const dataPos = src.roles.map((r, p) => (r === "data" ? p : -1)).filter((p) => p >= 0);
+    const dateLabel = src.labels[src.roles.indexOf(s.action === "close" ? "end" : "start")];
+    const dataHtml = s.action !== "issue" ? "" : dataPos.map((p, i) => `<div class="tr-field en-field">
+        <label class="tr-field-label" for="enSD${i}">${esc(src.labels[p])}</label>
+        <input class="en-input" id="enSD${i}" data-en-smart-data="${i}" data-col="${src.first + p}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next" value="${esc(s.data[i] ?? "")}"></div>`).join("");
+    stage.innerHTML = `<div class="tr-card en-card" id="enSmart">
+      ${walking ? queueProgressHtml() : ""}
+      <div class="en-target-line"><span class="en-target-name">${esc(head)}</span>${targetTools}</div>
+      <p class="en-smart-state" id="enSmartState">${esc(`${itemWord()} ${keyText(row)} · ${cycleStateText(row, now)}`)}</p>
+      <div class="en-seg" role="group" aria-label="${esc(t("entrySmartAction"))}">
+        ${["close", "issue"].map((a) => `<button class="en-seg-btn" type="button" data-en-action="${a}" aria-pressed="${s.action === a}">${esc(smartName(a))}</button>`).join("")}
+      </div>
+      ${dataHtml}
+      <div class="tr-field en-field">
+        <label class="tr-field-label" for="enSmartDate">${esc(t("entrySmartDate", { col: dateLabel }))}</label>
+        <input class="en-input" id="enSmartDate" type="text" autocomplete="off" spellcheck="false" enterkeyhint="go" value="${esc(s.date)}">
+      </div>
+      <p class="en-warn" id="enSmartMsg" role="status" hidden></p>
+      <button class="btn btn-xs ghost en-smart-toggle" id="enSmartOff" type="button">${esc(t("entrySmartAllFields"))}</button>
+    </div>`;
+    bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>
+      <button class="btn" id="enReviewBtn" type="button">${esc(walking && !ui.options.confirmStep ? t("entryQCommitNext") : (ui.options.confirmStep ? t("entryReview") : t("entryCommit")))}</button>`;
+    stage.querySelector("#enChangeTarget")?.addEventListener("click", () => {
+      ui.target = null; ui.fields = pinnedFields(); ui.notes = {}; ui.overwriteNotes = new Set(); ui.step = 1; render(); persistNow();
+    });
+    if (walking) wireQueueWalk(stage);
+    bar.querySelector("#enReviewBtn").addEventListener("click", toReview);
+    stage.querySelectorAll("[data-en-action]").forEach((b) => b.addEventListener("click", () => {
+      s.action = b.dataset.enAction; render(); overlay.querySelector(`[data-en-action="${s.action}"]`)?.focus();
+    }));
+    stage.querySelector("#enSmartOff").addEventListener("click", () => { s.off = true; render(); });
+    const inputs = [...stage.querySelectorAll("[data-en-smart-data], #enSmartDate")];
+    inputs.forEach((input, i) => {
+      const isDate = input.id === "enSmartDate";
+      const k = isDate ? -1 : Number(input.dataset.enSmartData);
+      const set = (v) => { if (isDate) s.date = v; else s.data[k] = v; const m = stage.querySelector("#enSmartMsg"); if (m) m.hidden = true; };
+      if (!isDate) {
+        let sug = null;
+        input.addEventListener("focus", () => {
+          if (sug || !(ui.options.suggestions || fieldDv(Number(input.dataset.col)))) return;
+          sug = attachSuggest(input, Number(input.dataset.col), () => focusField(inputs, i + 1), set);
+        });
+        input.addEventListener("blur", () => setTimeout(() => {
+          if (!sug || document.activeElement === input || (sug.isInteracting && sug.isInteracting())) return;
+          const j = suggests.indexOf(sug);
+          if (j >= 0) suggests.splice(j, 1);
+          try { sug.destroy(); } catch { /* już zamknięta */ }
+          sug = null;
+        }, 0));
+      }
+      input.addEventListener("input", () => set(input.value));
+      input.addEventListener("keydown", (e) => {
+        if (e.key !== "Enter" || e.ctrlKey || e.metaKey) return;
+        e.preventDefault();
+        if (e.shiftKey) focusField(inputs, i - 1);
+        else if (i === inputs.length - 1) toReview();
+        else focusField(inputs, i + 1);
+      });
+    });
+    // Zdaj: data już jest (dziś) — fokus na przycisku, bez klawiatury na telefonie; Wydaj: pierwsze pole danych
+    const first = s.action === "issue" ? inputs[0] : (s.date ? bar.querySelector("#enReviewBtn") : stage.querySelector("#enSmartDate"));
+    first?.focus();
+  }
+
+  function smartMsg(text) {
+    const m = overlay.querySelector("#enSmartMsg");
+    if (m) { m.textContent = text; m.hidden = !text; }
+    live(text);
+  }
+
+  // Okno przy nietypowym wierszu (decyzja Mateusza 3): stan + wybór, nigdy automat.
+  async function smartAsk(p, row) {
+    const key = keyText(row);
+    const state = cycleStateText(row, p);
+    const cancel = { label: t("entryCancel"), value: null, kind: "secondary" };
+    if (p.status === "open-prev") {
+      const issue = smartName("issue");
+      return appDialog({
+        title: t("entrySmartPrevTitle"), message: t("entrySmartPrevMsg", { key, state }),
+        actions: [
+          { label: t("entrySmartCloseIssue", { date: ui.smart.date || "—", issue: issue.toLocaleLowerCase(currentLang === "en" ? "en" : "pl") }), value: "close-issue", kind: "primary" },
+          { label: t("entrySmartIssueAnyway", { issue }), value: "issue-anyway", kind: "secondary" },
+          { label: t("entrySmartNoteOnly"), value: "note", kind: "secondary" }, cancel],
+      });
+    }
+    return appDialog({
+      title: t("entrySmartCheckTitle"), message: t("entrySmartCheckMsg", { key, state }),
+      actions: [{ label: t("entrySmartNoteOnly"), value: "note", kind: "primary" }, { label: t("entrySmartAllFields"), value: "fields", kind: "secondary" }, cancel],
+    });
+  }
+
+  async function smartToReview() {
+    const s = ui.smart;
+    const row = swbEntry.rowAt(ui.target.rowIndex0);
+    if (!row) return;
+    s.resolve = null; // pytamy przy każdym podejściu — stan wiersza mógł się zmienić
+    let p = swbEntry.smartPlan(row.rowIndex0, s.action, smartOpts(s));
+    if (p.status === "open-prev" || p.status === "check") {
+      const ans = await smartAsk(p, row);
+      if (!ans) { overlay.querySelector("#enReviewBtn")?.focus(); return; }
+      if (ans === "fields") { s.off = true; render(); return; }
+      if (ans === "note") {
+        const text = await appDialog({
+          title: t("entrySmartNoteTitle"), message: t("entrySmartNoteMsg", { col: headers()[ui.keyCol], key: keyText(row) }),
+          input: { label: t("entrySmartNoteLabel"), value: s.note || "" },
+          actions: [{ label: t("entrySmartNoteSave"), value: true, kind: "primary" }, { label: t("entryCancel"), value: null, kind: "secondary" }],
+        });
+        if (!text || !String(text).trim()) { overlay.querySelector("#enReviewBtn")?.focus(); return; }
+        s.note = String(text).trim();
+        const n = smartNote(row.rowIndex0, s.note);
+        ui.fields = {}; ui.notes = n.notes; ui.overwriteNotes = new Set(n.overwriteNotes); ui.overwrite = new Set();
+        ui.smartLast = { action: s.action, note: true };
+        reviewNow();
+        return;
+      }
+      s.resolve = ans;
+      p = swbEntry.smartPlan(row.rowIndex0, s.action, smartOpts(s));
+    }
+    if (p.status !== "ok") {
+      const key = keyText(row);
+      smartMsg(p.status === "not-out" ? t("entrySmartNotOut", { key, close: smartName("close") })
+        : p.status === "full" ? t("entrySmartFullMsg", { key }) : p.status === "need-date" ? t("entrySmartNeedDate") : t("entrySmartCheckMsg", { key, state: cycleStateText(row, p) }));
+      return;
+    }
+    ui.fields = { ...p.writes }; ui.notes = {}; ui.overwrite = new Set(); ui.overwriteNotes = new Set();
+    ui.smartLast = { action: s.action, opts: smartOpts(s), writes: p.writes, cycle: p.cycle, closeCycle: p.closeCycle || null, note: false };
+    reviewNow();
   }
 
   const focusField = (inputs, i) => { if (inputs[i]) { inputs[i].focus(); inputs[i].select?.(); } };
@@ -930,6 +1191,11 @@ const swbEntry = (() => {
   }
 
   function toReview() {
+    if (smartActive()) { smartToReview(); return; }
+    ui.smartLast = null;
+    reviewNow();
+  }
+  function reviewNow() {
     ui.lastPlan = swbEntry.plan(planInput());
     const needsLook = ui.lastPlan.changes.some((c) => c.overwrite) || !ui.lastPlan.ok || !ui.lastPlan.changes.length;
     if (!ui.options.confirmStep && !needsLook) { doCommit(); return; }
@@ -962,8 +1228,12 @@ const swbEntry = (() => {
     }).join("");
     const blocked = p.errors.filter((e) => !GATE.has(e.reason) && !p.changes.some((c) => c.col === e.col && c.kind === kindOf(e)));
     const extra = blocked.map((e) => `<li class="en-change"><div class="tr-field-label">${esc(headers()[e.col] || "")}</div><div class="en-err" role="alert">${esc(t(ERR[e.reason] || "entryErrNotReal"))}</div></li>`).join("");
+    const sl = smartActive() && ui.smartLast;
+    const smartLine = !sl ? "" : `<p class="en-smart-state" id="enSmartCycle">${esc(sl.note ? t("entrySmartNoteLine")
+      : t("entrySmartCycleLine", { action: smartName(sl.action), n: sl.cycle }) + (sl.closeCycle ? t("entrySmartCloseLine", { n: sl.closeCycle }) : ""))}</p>`;
     stage.innerHTML = `<div class="tr-card en-card">
       <div class="en-target-line"><span class="en-target-name">${esc(head)}</span></div>
+      ${smartLine}
       <h2 class="en-review-title">${esc(t("entryReviewTitle"))}</h2>
       ${p.changes.length || blocked.length ? `<ul class="en-changes">${items}${extra}</ul>` : `<p class="en-nothing">${esc(t("entryNothing"))}</p>`}
     </div>`;
@@ -988,6 +1258,11 @@ const swbEntry = (() => {
     if (committing) return;
     committing = true;
     try {
+      const sl = smartActive() && ui.smartLast;
+      if (sl && !sl.note) {
+        const again = swbEntry.smartPlan(ui.target.rowIndex0, sl.action, sl.opts);
+        if (again.status !== "ok" || JSON.stringify(again.writes) !== JSON.stringify(sl.writes)) { toast(t("entryStale"), "warning"); ui.step = 2; render(); return; }
+      }
       const input = planInput();
       if (ui.lastPlan) input.expect = swbEntry.expectOf(ui.lastPlan);
       const res = await swbEntry.commit(input);
@@ -1050,6 +1325,7 @@ const swbEntry = (() => {
         state: "pending",
       })),
       pos: -1, mode: null, common: (() => { const c = pinnedFields(); delete c[ui.keyCol]; return c; })(), dupes: list.dupes || [], done: 0, ow: false,
+      action: "fields", smart: { date: null, data: {}, note: "" },
     };
     ui.list = null; ui.query = ""; ui.target = null; ui.queueDraft = null;
     ui.step = "queue";
@@ -1064,6 +1340,7 @@ const swbEntry = (() => {
     ui.queue = {
       items: rows.map((r) => ({ text: keyText(r) || t("entryRowN", { n: excelRow(r.rowIndex0) }), status: "ok", rowIndex0: r.rowIndex0, options: null, choice: r.rowIndex0, state: "pending" })),
       pos: -1, mode: null, common: (() => { const c = pinnedFields(); delete c[ui.keyCol]; return c; })(), dupes: [], done: 0, ow: false,
+      action: "fields", smart: { date: null, data: {}, note: "" },
     };
     ui.list = null; ui.query = ""; ui.target = null; ui.queueDraft = null; ui.queryHits = null;
     ui.step = "queue";
@@ -1082,10 +1359,74 @@ const swbEntry = (() => {
     return `${t("entryRowN", { n: excelRow(rowIndex0) })}${extra}`;
   }
 
-  function renderQueue(stage, bar) {
+  // ── Kolejka z akcją smart: każda pozycja dostaje decyzję dla SWOJEGO wiersza ──
+  const qSmartOn = () => !!(ui.queue && ui.queue.action && ui.queue.action !== "fields" && smartSrc());
+  function qSmart() { const q = ui.queue; q.smart = q.smart || { date: null, data: {}, note: "" }; if (q.smart.date === null) q.smart.date = smartDefaultDate(); return q.smart; }
+  // { p, base, needs } dla pozycji z wierszem; needs = wymaga wyboru (poprzedni otwarty / do sprawdzenia)
+  function queueDecision(it) {
+    const q = ui.queue, sm = qSmart();
+    if (!Number.isInteger(it.choice) || it.state === "done") return null;
+    const base = swbEntry.smartPlan(it.choice, q.action, { date: sm.date, data: sm.data, roles: cfg().roles });
+    const needs = base.status === "open-prev" || base.status === "check";
+    if (needs && it.resolve === undefined) it.resolve = base.status === "check" && cfg().anomalies === "skip" ? "skip" : null;
+    if (!needs) return { p: base, base, needs };
+    const r = it.resolve;
+    const p = r && r !== "skip" && r !== "note" ? swbEntry.smartPlan(it.choice, q.action, { date: sm.date, data: sm.data, resolve: r, roles: cfg().roles }) : base;
+    return { p, base, needs };
+  }
+  // pozycje do zapisu „naraz” (pola per wiersz) + czy coś czeka na decyzję
+  function queueSmartItems() {
+    const q = ui.queue, sm = qSmart();
+    const items = [], meta = {};
+    let unresolved = false, needNote = false;
+    q.items.forEach((it) => {
+      const d = queueDecision(it);
+      if (!d) return;
+      if (d.needs && it.resolve === null) { unresolved = true; return; }
+      if (d.needs && it.resolve === "skip") return;
+      if (d.needs && it.resolve === "note") {
+        if (!String(sm.note || "").trim()) { needNote = true; return; }
+        const n = smartNote(it.choice, String(sm.note).trim());
+        items.push({ rowIndex0: it.choice, fields: {}, notes: n.notes, overwriteNotes: n.overwriteNotes });
+        meta[it.choice] = { note: true };
+        return;
+      }
+      if (d.p.status !== "ok") return;
+      items.push({ rowIndex0: it.choice, fields: { ...d.p.writes }, notes: {} });
+      meta[it.choice] = { cycle: d.p.cycle, closeCycle: d.p.closeCycle || null, writes: d.p.writes };
+    });
+    return { items, meta, unresolved, needNote };
+  }
+
+  function queueSmartStatus(it, i) {
+    const d = queueDecision(it);
+    if (!d) return null;
+    const row = swbEntry.rowAt(it.choice);
+    const rowN = esc(t("entryRowN", { n: excelRow(it.choice) }));
+    if (d.needs) {
+      const opts = d.base.status === "open-prev" ? ["close-issue", "issue-anyway", "note", "skip"] : ["note", "skip"];
+      const label = (v) => (v === "close-issue" ? t("entrySmartCloseIssue", { date: qSmart().date || "—", issue: smartName("issue").toLocaleLowerCase(currentLang === "en" ? "en" : "pl") })
+        : v === "issue-anyway" ? t("entrySmartIssueAnyway", { issue: smartName("issue") }) : v === "note" ? t("entrySmartNoteOnly") : t("entryQSkipOpt"));
+      const after = it.resolve && it.resolve !== "skip" && it.resolve !== "note" && d.p.status === "ok" ? ` ${esc(t("entrySmartQOk", { col: headers()[smartCol(d.p, ui.queue.action)], n: d.p.cycle }))}` : "";
+      return `<label class="en-q-st is-warn"><span data-en-q-smart="${i}">${rowN} · ${esc(cycleStateText(row, d.base))}${after}</span>
+        <select class="en-select" data-en-q-resolve="${i}"><option value="" ${it.resolve === null ? "selected" : ""}>${esc(t("entrySmartQChoose"))}</option>
+        ${opts.map((v) => `<option value="${v}" ${it.resolve === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label>`;
+    }
+    const p = d.p;
+    if (p.status === "ok") return `<span class="en-q-st is-ok" data-en-q-smart="${i}">${rowN} ${esc(t("entrySmartQOk", { col: headers()[smartCol(p, ui.queue.action)], n: p.cycle }))}</span>`;
+    const why = p.status === "not-out" ? t("entrySmartQNotOut") : p.status === "full" ? t("entrySmartQFull") : t("entrySmartQNeedDate");
+    return `<span class="en-q-st is-miss" data-en-q-smart="${i}">${rowN} · ${esc(why)}</span>`;
+  }
+
+  // lista pozycji (rysowana też po zmianie daty/akcji — bez przebudowy pól, fokus zostaje)
+  function drawQueueList() {
     const q = ui.queue;
-    const itemHtml = q.items.map((it, i) => {
-      let ctl = "";
+    const ul = overlay.querySelector("#enQList");
+    if (!q || !ul) return;
+    const smart = qSmartOn();
+    ul.innerHTML = q.items.map((it, i) => {
+      let ctl = smart ? queueSmartStatus(it, i) : null;
+      if (ctl) return `<li class="en-q-item" data-en-q="${i}"><span class="en-q-text">${esc(it.text)}</span>${ctl}</li>`;
       if (it.status === "ok") ctl = `<span class="en-q-st is-ok">${esc(t("entryQOk", { n: excelRow(it.rowIndex0) }))}</span>`;
       else if (it.status === "ambiguous") ctl = `<label class="en-q-st is-warn"><span class="visually-hidden">${esc(it.text)}: </span>${esc(t("entryQAmbiguous"))}
         <select class="en-select" data-en-q-choose="${i}"><option value="">${esc(t("entryQChoose"))}</option>
@@ -1097,32 +1438,84 @@ const swbEntry = (() => {
       else ctl = `<span class="en-q-st is-miss">${esc(t("entryQSameRow"))}</span>`;
       return `<li class="en-q-item" data-en-q="${i}"><span class="en-q-text">${esc(it.text)}</span>${ctl}</li>`;
     }).join("");
-    // bez kolumny-klucza: wspólny klucz nadałby wszystkim wierszom ten sam numer/nazwisko
-    const cols = ui.fieldOrder.filter((c) => ui.selected.has(c) && !isFormulaCol(c) && c !== ui.keyCol);
-    const commonHtml = cols.map((c) => `<div class="tr-field en-field" data-en-qcol="${c}">
+    ul.querySelectorAll("[data-en-q-choose]").forEach((sel) => sel.addEventListener("change", () => {
+      const it = q.items[Number(sel.dataset.enQChoose)];
+      it.choice = sel.value === "" ? null : sel.value === "skip" ? "skip" : Number(sel.value);
+      it.resolve = undefined;
+      if (qSmartOn()) drawQueueList();
+      updateQueueButtons(); persistSoon();
+    }));
+    ul.querySelectorAll("[data-en-q-missing]").forEach((sel) => sel.addEventListener("change", () => {
+      q.items[Number(sel.dataset.enQMissing)].choice = sel.value === "new" ? "new" : "skip";
+      updateQueueButtons(); persistSoon();
+    }));
+    ul.querySelectorAll("[data-en-q-resolve]").forEach((sel) => sel.addEventListener("change", () => {
+      const i = Number(sel.dataset.enQResolve);
+      q.items[i].resolve = sel.value === "" ? null : sel.value;
+      drawQueueList();
+      ul.querySelector(`[data-en-q-resolve="${i}"]`)?.focus();
+      const note = overlay.querySelector("#enQNoteField");
+      if (note) note.hidden = !q.items.some((it) => it.resolve === "note");
+      updateQueueButtons(); persistSoon();
+    }));
+  }
+
+  function renderQueue(stage, bar) {
+    const q = ui.queue;
+    const src = smartSrc();
+    if (!src) q.action = "fields";
+    const smart = qSmartOn();
+    const seg = !src ? "" : `<div class="en-seg en-seg-3" role="group" aria-label="${esc(t("entrySmartAction"))}">
+        ${["fields", "close", "issue"].map((a) => `<button class="en-seg-btn" type="button" data-en-q-action="${a}" aria-pressed="${q.action === a}">${esc(a === "fields" ? t("entrySmartFieldsAction") : smartName(a))}</button>`).join("")}</div>`;
+    let commonHtml;
+    if (smart) {
+      const sm = qSmart();
+      const dataPos = src.roles.map((r, p) => (r === "data" ? p : -1)).filter((p) => p >= 0);
+      const dateLabel = src.labels[src.roles.indexOf(q.action === "close" ? "end" : "start")];
+      commonHtml = (q.action === "issue" ? dataPos.map((p, i) => `<div class="tr-field en-field">
+          <label class="tr-field-label" for="enQSD${i}">${esc(src.labels[p])}</label>
+          <input class="en-input" id="enQSD${i}" data-en-q-smart-data="${i}" data-col="${src.first + p}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next" value="${esc(sm.data[i] ?? "")}"></div>`).join("") : "")
+        + `<div class="tr-field en-field"><label class="tr-field-label" for="enQSmartDate">${esc(t("entrySmartDate", { col: dateLabel }))}</label>
+          <input class="en-input" id="enQSmartDate" data-en-q-smart-date type="text" autocomplete="off" spellcheck="false" enterkeyhint="done" value="${esc(sm.date)}"></div>
+        <div class="tr-field en-field" id="enQNoteField" ${q.items.some((it) => it.resolve === "note") ? "" : "hidden"}><label class="tr-field-label" for="enQNote">${esc(t("entrySmartQNote"))}</label>
+          <input class="en-input" id="enQNote" type="text" autocomplete="off" value="${esc(sm.note || "")}"></div>`;
+    } else {
+      // bez kolumny-klucza: wspólny klucz nadałby wszystkim wierszom ten sam numer/nazwisko
+      const cols = ui.fieldOrder.filter((c) => ui.selected.has(c) && !isFormulaCol(c) && c !== ui.keyCol);
+      commonHtml = cols.map((c) => `<div class="tr-field en-field" data-en-qcol="${c}">
         <label class="tr-field-label" for="enQF${c}">${esc(headers()[c])}</label>
         <input class="en-input" id="enQF${c}" data-en-qf="${c}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next" value="${esc(q.common[c] ?? "")}">
       </div>`).join("");
+    }
     stage.innerHTML = `<div class="tr-card en-card">
       <h2 class="en-review-title">${esc(tn("entryQTitle", q.items.length))}</h2>
       ${q.dupes && q.dupes.length ? `<p class="en-hint">${esc(t("entryQueueDupes", { list: q.dupes.join(", ") }))}</p>` : ""}
-      <ul class="en-q-list">${itemHtml}</ul>
+      ${seg}
+      <ul class="en-q-list" id="enQList"></ul>
       <p class="en-warn" id="enQHint" hidden>${esc(t("entryQNeedChoice"))}</p>
       <h2 class="en-panel-title">${esc(t("entryQCommonTitle"))}</h2>
       ${commonHtml}
     </div>`;
+    drawQueueList();
+    stage.querySelectorAll("[data-en-q-action]").forEach((b) => b.addEventListener("click", () => {
+      q.action = b.dataset.enQAction;
+      q.items.forEach((it) => { it.resolve = undefined; });
+      render(); persistSoon();
+      overlay.querySelector(`[data-en-q-action="${q.action}"]`)?.focus();
+    }));
+    stage.querySelectorAll("[data-en-q-smart-data], #enQSmartDate, #enQNote").forEach((input) => {
+      input.addEventListener("input", () => {
+        const sm = qSmart();
+        if (input.id === "enQSmartDate") sm.date = input.value;
+        else if (input.id === "enQNote") sm.note = input.value;
+        else sm.data[Number(input.dataset.enQSmartData)] = input.value;
+        if (input.id !== "enQNote") drawQueueList();
+        updateQueueButtons(); persistSoon();
+      });
+    });
     bar.innerHTML = `<button class="btn ghost" id="enQCancel" type="button">${esc(t("entryQCancel"))}</button>
       <button class="btn ghost en-q-walk" id="enQWalk" type="button"></button>
       <button class="btn" id="enQAll" type="button"></button>`;
-    stage.querySelectorAll("[data-en-q-choose]").forEach((sel) => sel.addEventListener("change", () => {
-      const it = q.items[Number(sel.dataset.enQChoose)];
-      it.choice = sel.value === "" ? null : sel.value === "skip" ? "skip" : Number(sel.value);
-      updateQueueButtons(); persistSoon();
-    }));
-    stage.querySelectorAll("[data-en-q-missing]").forEach((sel) => sel.addEventListener("change", () => {
-      q.items[Number(sel.dataset.enQMissing)].choice = sel.value === "new" ? "new" : "skip";
-      updateQueueButtons(); persistSoon();
-    }));
     const inputs = [...stage.querySelectorAll("[data-en-qf]")];
     inputs.forEach((input, i) => {
       const col = Number(input.dataset.enQf);
@@ -1152,15 +1545,17 @@ const swbEntry = (() => {
     const walk = overlay.querySelector("#enQWalk");
     const all = overlay.querySelector("#enQAll");
     if (!q || !walk || !all) return;
-    const unresolved = q.items.some((it) => it.choice === null);
+    const smart = qSmartOn();
+    const si = smart ? queueSmartItems() : null;
+    const unresolved = q.items.some((it) => it.choice === null) || !!(si && si.unresolved);
     const k = activeItems().filter(({ it }) => it.state !== "done").length;
-    const m = q.items.filter((it) => Number.isInteger(it.choice) && it.state !== "done").length;
+    const m = si ? si.items.length : q.items.filter((it) => Number.isInteger(it.choice) && it.state !== "done").length;
     walk.textContent = t("entryQWalk", { n: k });
     all.textContent = t("entryQAll", { n: m });
     walk.disabled = unresolved || k === 0;
-    all.disabled = unresolved || m === 0 || !commonFilled();
+    all.disabled = unresolved || m === 0 || (!smart && !commonFilled()) || !!(si && si.needNote);
     const hint = overlay.querySelector("#enQHint");
-    const why = unresolved ? t("entryQNeedChoice") : (m > 0 && !commonFilled() ? t("entryQNeedCommon") : "");
+    const why = unresolved ? t(q.items.some((it) => it.choice === null) ? "entryQNeedChoice" : "entrySmartQNeedChoice") : si && si.needNote ? t("entrySmartQNeedNote") : (!smart && m > 0 && !commonFilled() ? t("entryQNeedCommon") : "");
     if (hint) { hint.textContent = why; hint.hidden = !why; }
   }
 
@@ -1206,6 +1601,9 @@ const swbEntry = (() => {
     ui.fields = { ...q.common };
     if (it.choice === "new") ui.fields[ui.keyCol] = it.text;
     ui.notes = {}; ui.overwrite = new Set(); ui.overwriteNotes = new Set();
+    const sm = q.smart || {};
+    ui.smart = q.action && q.action !== "fields" ? newSmart({ action: q.action, date: sm.date ?? null, data: { ...(sm.data || {}) } }) : newSmart({ off: true });
+    ui.smartLast = null;
     ui.step = 2;
     render();
     persistNow();
@@ -1222,21 +1620,33 @@ const swbEntry = (() => {
 
   function queueTargets() { return ui.queue.items.filter((it) => Number.isInteger(it.choice) && it.state !== "done").map((it) => it.choice); }
 
+  // wejście planMany/commitMany kolejki: przy akcji smart pola per wiersz, inaczej wspólne
+  function queueInput() {
+    const q = ui.queue;
+    if (!qSmartOn()) return { input: { targets: queueTargets(), fields: q.common, overwriteAll: q.ow }, meta: null };
+    const si = queueSmartItems();
+    return { input: { items: si.items }, meta: si.meta };
+  }
   function renderQueueReview(stage, bar) {
     const q = ui.queue;
-    const targets = queueTargets();
-    const p = swbEntry.planMany({ targets, fields: q.common, overwriteAll: q.ow });
+    const qi = queueInput();
+    const targets = qi.input.items ? qi.input.items.map((x) => x.rowIndex0) : qi.input.targets;
+    const p = swbEntry.planMany(qi.input);
     ui.queuePlan = p;
+    ui.queueMeta = qi.meta;
     const rowsHtml = p.rows.map((r) => {
       const row = swbEntry.rowAt(r.rowIndex0);
       const changes = r.plan.changes.map((c) => `<div class="en-diff en-q-diff"><span class="tr-field-label">${esc(headers()[c.col])}</span>
         <span class="en-before${c.before ? "" : " is-empty"}">${esc(c.before || t("entryEmptyVal"))}</span><span aria-hidden="true">→</span><span class="en-after">${esc(c.after)}</span></div>`).join("");
       const errs = r.plan.errors.filter((e) => !GATE.has(e.reason)).map((e) => `<div class="en-err" role="alert">${esc(headers()[e.col] || "")}: ${esc(t(ERR[e.reason] || "entryErrNotReal"))}</div>`).join("");
       const ow = r.plan.changes.some((c) => c.overwrite);
-      return `<li class="en-change en-q-row${ow ? " is-overwrite" : ""}"><div class="en-target-name">${esc(t("entryTargetExisting", { n: excelRow(r.rowIndex0), key: keyText(row) }))}</div>
+      const mt = qi.meta && qi.meta[r.rowIndex0];
+      const cyc = !mt ? "" : `<div class="en-smart-state">${esc(mt.note ? t("entrySmartNoteLine") : t("entrySmartCycleLine", { action: smartName(q.action), n: mt.cycle }) + (mt.closeCycle ? t("entrySmartCloseLine", { n: mt.closeCycle }) : ""))}</div>`;
+      return `<li class="en-change en-q-row${ow ? " is-overwrite" : ""}"><div class="en-target-name">${esc(t("entryTargetExisting", { n: excelRow(r.rowIndex0), key: keyText(row) }))}</div>${cyc}
         ${changes || `<div class="en-hint">${esc(t("entryQNoChange"))}</div>`}${errs}</li>`;
     }).join("");
-    const skipped = q.items.filter((it) => !Number.isInteger(it.choice)).map((it) => it.text);
+    const inSet = new Set(targets);
+    const skipped = q.items.filter((it) => it.state !== "done" && !(Number.isInteger(it.choice) && inSet.has(it.choice))).map((it) => it.text);
     const owCount = p.overwriteCount;
     stage.innerHTML = `<div class="tr-card en-card">
       <h2 class="en-review-title">${esc(tn("entryQReviewTitle", targets.length))}</h2>
@@ -1250,7 +1660,7 @@ const swbEntry = (() => {
     bar.querySelector("#enCommitBtn").addEventListener("click", doCommitQueue);
     stage.querySelector("#enQOverwrite")?.addEventListener("change", (e) => {
       q.ow = e.target.checked;
-      const pp = swbEntry.planMany({ targets, fields: q.common, overwriteAll: q.ow });
+      const pp = swbEntry.planMany({ ...queueInput().input, overwriteAll: q.ow });
       bar.querySelector("#enCommitBtn").disabled = !pp.ok;
     });
     (bar.querySelector("#enCommitBtn:not([disabled])") || stage.querySelector("#enQOverwrite") || bar.querySelector("#enBackBtn")).focus();
@@ -1261,7 +1671,10 @@ const swbEntry = (() => {
     committing = true;
     try {
       const q = ui.queue;
-      const res = await swbEntry.commitMany({ targets: queueTargets(), fields: q.common, overwriteAll: q.ow, expect: ui.queuePlan ? ui.queuePlan.expect : null });
+      const qi = queueInput();
+      // decyzje smart liczone jeszcze raz na świeżych danych — inne niż w podglądzie = „stale”, nic nie piszemy
+      if (qi.meta && JSON.stringify(qi.meta) !== JSON.stringify(ui.queueMeta)) { toast(t("entryStale"), "warning"); render(); return; }
+      const res = await swbEntry.commitMany({ ...qi.input, overwriteAll: q.ow, expect: ui.queuePlan ? ui.queuePlan.expect : null });
       if (!res.ok && res.reason !== "write-failed") {
         if (res.reason === "stale") toast(t("entryStale"), "warning");
         else if (res.reason === "guard") toast(t("entryNeedEdit"), "warning");
@@ -1271,7 +1684,7 @@ const swbEntry = (() => {
       if (res.reason === "write-failed") toast(t("entryWriteFailed", { n: res.failed.map((f) => excelRow(f.rowIndex0)).join(", ") }), "error");
       res.rows.forEach((r) => ui.sessionLog.unshift({ key: keyText(swbEntry.rowAt(r.rowIndex0)), rowIndex0: r.rowIndex0, at: Date.now() }));
       ui.profiles.clear();
-      const same = queueTargets().length - res.rows.length; // wiersze, które już miały te wartości
+      const same = (qi.input.items ? qi.input.items.length : queueTargets().length) - res.rows.length; // wiersze, które już miały te wartości
       toast(same > 0 ? tn("entryQDoneAllSame", res.rows.length, { same }) : tn("entryQDoneAll", res.rows.length), "success", {
         action: t("entryDoneUndo"),
         onAction: () => { if (swbEntry.undoCard()) toast(t("entryUndone"), "info"); else toast(t("entryUndoGone"), "info"); },
@@ -1313,7 +1726,10 @@ const swbEntry = (() => {
     if (ui.scope !== scopeKey()) { ui.target = null; ui.fields = {}; ui.step = 1; ui.queue = null; ui.sessionLog = ui.scope ? [] : ui.sessionLog; ui.scope = scopeKey(); }
     restore();
     const rows = swbEntry.candidates();
-    ui.keyCol = Number.isInteger(ui.keyColSaved) ? ui.keyColSaved : C.pickKeyColumn(headers(), headers().map((_, i) => rows.map((r) => r.values[i])));
+    // arkusz z cyklami: klucz to kolumna PRZED cyklami (Nr.), nie osoba z któregoś cyklu
+    const cyc = smartSrc();
+    const keyCols = headers().slice(0, cyc && cyc.first > 0 ? cyc.first : headers().length);
+    ui.keyCol = Number.isInteger(ui.keyColSaved) ? ui.keyColSaved : C.pickKeyColumn(keyCols, keyCols.map((_, i) => rows.map((r) => r.values[i])));
     ui.open = true;
     ui.step = ui.queue ? (ui.queue.mode === "walk" && ui.target ? ui.step : "queue") : (ui.target ? ui.step : 1);
     overlay.dataset.font = String(ui.font);

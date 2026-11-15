@@ -234,7 +234,124 @@ const SwbEntryCore = (() => {
 
   const isDuplicateRisk = (targets) => (targets || []).some((t) => t.score >= 1);
 
-  return { fold, pickKeyColumn, findTargets, distinguishingCols, profileColumn, typoSuggest, isDuplicateRisk, looksLikeQuery, trimQuery, parseTargetList, resolveList, within1 };
+  // ── Tryb smart: cykle od/do (projekt: docs/superpowers/specs/2026-11-16-wpisywanie-smart-cykle-design.md) ──
+  // „Źródło cykli” zamienia wiersz na listę cykli { n, start, end, data, skip }; stan i akcje znają tylko
+  // ten kształt — źródło „w pionie” (kolejne wiersze) da się dodać bez ruszania akcji i kolejki.
+  const ROLE_START = /^(od|from|start|begin|wyd|pobr|wzi|out)/;
+  const ROLE_END = /^(do|to|end|until|zwr|odd|zda|back|ret)/;
+  const ROLES = ["data", "start", "end", "skip"];
+  function splitHeader(h) {
+    const s = String(h ?? "").trim();
+    const m = /^(.*?)[\s_.-]*(\d+)$/.exec(s);
+    return m && m[1] ? { base: m[1].trim(), n: Number(m[2]) } : { base: s, n: null };
+  }
+  function guessRoles(positions) { // positions[p] = { label, types: [...], formula }
+    const roles = positions.map((p) => (p.formula ? "skip" : null));
+    const dates = positions.map((p, i) => (roles[i] ? false : p.types.includes("date")));
+    const dateIdx = dates.map((d, i) => (d ? i : -1)).filter((i) => i >= 0);
+    if (dateIdx.length >= 2) { roles[dateIdx[0]] = "start"; roles[dateIdx[1]] = "end"; }
+    else positions.forEach((p, i) => {
+      if (roles[i]) return;
+      const f = fold(p.label);
+      if (!roles.includes("start") && ROLE_START.test(f)) roles[i] = "start";
+      else if (!roles.includes("end") && ROLE_END.test(f)) roles[i] = "end";
+    });
+    return roles.map((r) => r || "data");
+  }
+  const validRoles = (r, span) => Array.isArray(r) && r.length === span && r.every((x) => ROLES.includes(x))
+    && r.filter((x) => x === "start").length === 1 && r.filter((x) => x === "end").length === 1;
+
+  // headers + colInfo[i] = { type (profileColumn), formula } → { kind:"columns", first, span, count, roles, labels } | null
+  function detectCycleColumns(headers, colInfo, opts = {}) {
+    const hs = (headers || []).map(splitHeader);
+    let best = null;
+    for (let first = 0; first < hs.length; first++) {
+      for (let span = 2; first + span * 2 <= hs.length; span++) {
+        const tpl = hs.slice(first, first + span);
+        if (!tpl.every((x) => x.base) || !tpl.every((x) => x.n === null || x.n === 1)) continue;
+        if (new Set(tpl.map((x) => fold(x.base))).size !== span) continue;
+        let count = 1;
+        while (first + (count + 1) * span <= hs.length
+          && hs.slice(first + count * span, first + (count + 1) * span).every((x, p) => x.n === count + 1 && fold(x.base) === fold(tpl[p].base))) count++;
+        if (count < 2) continue;
+        if (!best || count * span > best.count * best.span) best = { first, span, count };
+      }
+    }
+    if (!best) return null;
+    const positions = Array.from({ length: best.span }, (_, p) => {
+      const cols = Array.from({ length: best.count }, (_, k) => best.first + k * best.span + p);
+      const info = cols.map((c) => (colInfo && colInfo[c]) || {});
+      return { label: hs[best.first + p].base, types: info.map((x) => x.type), formula: info.some((x) => x.formula) };
+    });
+    const roles = validRoles(opts.roles, best.span) ? opts.roles.slice() : guessRoles(positions);
+    if (!validRoles(roles, best.span)) return null;
+    return { kind: "columns", ...best, roles, labels: positions.map((p) => p.label) };
+  }
+
+  function cyclesOfRow(values, src) {
+    const out = [];
+    if (!src) return out;
+    for (let k = 0; k < src.count; k++) {
+      const c = { n: k + 1, start: null, end: null, data: [], skip: [] };
+      src.roles.forEach((role, p) => {
+        const col = src.first + k * src.span + p;
+        const cell = { col, v: values ? values[col] ?? null : null };
+        if (role === "start") c.start = cell; else if (role === "end") c.end = cell;
+        else if (role === "skip") c.skip.push(col); else c.data.push(cell);
+      });
+      out.push(c);
+    }
+    return out;
+  }
+
+  function cycleState(cycles) {
+    const list = (cycles || []).map((c) => {
+      const s = !isEmpty(c.start && c.start.v), e = !isEmpty(c.end && c.end.v), d = c.data.some((x) => !isEmpty(x.v));
+      const status = s ? (e ? "closed" : "open") : (e || d ? "odd" : "empty");
+      return { n: c.n, status };
+    });
+    const open = list.map((c, i) => (c.status === "open" ? i : -1)).filter((i) => i >= 0);
+    let last = -1;
+    list.forEach((c, i) => { if (c.status !== "empty") last = i; });
+    const free = last + 1 < list.length ? last + 1 : -1;
+    const issues = [];
+    if (list.some((c) => c.status === "odd")) issues.push("odd");
+    if (open.length > 1) issues.push("many-open");
+    return { cycles: list, open, free, issues };
+  }
+
+  // action: "close" (Zdaj) | "issue" (Wydaj); opts: { date, data: {indeks pola danych: tekst}, resolve }
+  // writes = { kolumna: tekst } — wyłącznie puste komórki wybranego cyklu.
+  function planCycleAction(cycles, action, opts = {}) {
+    const st = cycleState(cycles);
+    const date = String(opts.date ?? "").trim();
+    if (st.issues.length) return { status: "check", issues: st.issues };
+    if (action === "close") {
+      if (!st.open.length) return { status: "not-out" };
+      const c = cycles[st.open[0]];
+      if (!date) return { status: "need-date", cycle: c.n };
+      return { status: "ok", cycle: c.n, writes: { [c.end.col]: date } };
+    }
+    const openC = st.open.length ? cycles[st.open[0]] : null;
+    const target = st.free >= 0 ? cycles[st.free] : null;
+    if (openC && !opts.resolve) return { status: "open-prev", openCycle: openC.n, cycle: target ? target.n : null };
+    if (openC && opts.resolve === "note") return { status: "note", cycle: openC.n };
+    if (!target) return { status: "full" };
+    if (!date) return { status: "need-date", cycle: target.n };
+    const writes = {};
+    if (openC && opts.resolve === "close-issue") writes[openC.end.col] = date;
+    target.data.forEach((cell, i) => { const v = opts.data && opts.data[i]; if (!isEmpty(v)) writes[cell.col] = String(v).trim(); });
+    writes[target.start.col] = date;
+    const out = { status: "ok", cycle: target.n };
+    if (openC && opts.resolve === "close-issue") out.closeCycle = openC.n;
+    out.writes = writes;
+    return out;
+  }
+
+  const todayText = (d = new Date()) => `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+
+  return { fold, pickKeyColumn, findTargets, distinguishingCols, profileColumn, typoSuggest, isDuplicateRisk, looksLikeQuery, trimQuery, parseTargetList, resolveList, within1,
+    detectCycleColumns, cyclesOfRow, cycleState, planCycleAction, todayText };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = SwbEntryCore;
