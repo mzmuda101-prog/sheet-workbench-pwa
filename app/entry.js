@@ -891,24 +891,27 @@ const swbEntry = (() => {
           ${formula ? `<span class="en-tag">${esc(t("entryFormulaField"))}</span>` : `<button class="en-pin" type="button" aria-pressed="${pinned}" aria-label="${esc(pinned ? t("entryUnpin") : t("entryPin"))}" title="${esc(pinned ? t("entryUnpin") : t("entryPin"))}">${ICON_PIN}</button>`}</span>
         </div>
         <input class="en-input" id="enF${col}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next"
-          ${formula ? "readonly tabindex=\"-1\"" : ""} value="${esc(val)}" placeholder="${esc(!formula && now ? now : "")}"
+          ${formula ? "readonly tabindex=\"-1\"" : ""} value="${esc(val)}" placeholder="${esc(!formula && now ? now : "")}"${!formula && now ? ' data-en-now=""' : ""}
           aria-describedby="enP${col}">
         <div class="en-preview" id="enP${col}" aria-live="polite"></div>
         ${noteArea}
       </div>`;
     }).join("");
     const walking = !!(ui.queue && ui.queue.mode === "walk");
-    const targetTools = walking
+    const fixing = !!(ui.queue && ui.queue.mode === "fix");
+    const targetTools = fixing ? `<button class="btn btn-xs ghost" id="enQFixBack" type="button">${esc(t("entryQBack"))}</button>`
+      : walking
       ? `<span class="en-field-tools"><button class="btn btn-xs ghost" id="enQBack" type="button">${esc(t("entryQBack"))}</button>
          <button class="btn btn-xs ghost" id="enQSkip" type="button">${esc(t("entryQSkip"))}</button></span>`
       : `<button class="btn btn-xs ghost" id="enChangeTarget" type="button">${esc(t("entryChangeTarget"))}</button>`;
-    const smartBack = !ui.target.newRow && ui.smart && ui.smart.off && smartSrc()
+    const smartBack = fixing ? "" : !ui.target.newRow && ui.smart && ui.smart.off && smartSrc()
       ? `<button class="btn btn-xs ghost en-smart-toggle" id="enSmartOn" type="button">${esc(t("entrySmartBack"))}</button>` : "";
     stage.innerHTML = `<div class="tr-card en-card">
       ${walking ? queueProgressHtml() : ""}
       <div class="en-target-line"><span class="en-target-name">${esc(head)}</span>${targetTools}</div>
       ${smartBack}${fieldsHtml}</div>`;
     stage.querySelector("#enSmartOn")?.addEventListener("click", () => { ui.smart.off = false; render(); });
+    stage.querySelector("#enQFixBack")?.addEventListener("click", endQueueFix);
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>
       <button class="btn" id="enReviewBtn" type="button">${esc(ui.options.confirmStep ? t("entryReview") : (walking ? t("entryQCommitNext") : t("entryCommit")))}</button>`;
     stage.querySelector("#enChangeTarget")?.addEventListener("click", () => {
@@ -1290,6 +1293,7 @@ const swbEntry = (() => {
       action2: t("entryDoneShow"),
       onAction2: () => { close(); setFocusedCell(`wide:${res.rowIndex0}`, ui.keyCol, { scroll: true }); },
     });
+    if (ui.queue && ui.queue.mode === "fix") { endQueueFix(); drawPanel(); return; }
     if (ui.queue && ui.queue.mode === "walk") {
       const it = ui.queue.items[ui.queue.pos];
       if (it) { it.state = "done"; it.rowIndex0 = res.rowIndex0; }
@@ -1368,7 +1372,11 @@ const swbEntry = (() => {
     if (!Number.isInteger(it.choice) || it.state === "done") return null;
     const base = swbEntry.smartPlan(it.choice, q.action, { date: sm.date, data: sm.data, roles: cfg().roles });
     const needs = base.status === "open-prev" || base.status === "check";
+    // brak otwartego / wolnego cyklu: domyślnie pomijamy, ale można dopisać notatkę albo poprawić wiersz ręcznie
+    const optional = base.status === "not-out" || base.status === "full";
     if (needs && it.resolve === undefined) it.resolve = base.status === "check" && cfg().anomalies === "skip" ? "skip" : null;
+    if (optional && (it.resolve === undefined || it.resolve === null)) it.resolve = "skip";
+    if (optional) return { p: base, base, needs: false, optional };
     if (!needs) return { p: base, base, needs };
     const r = it.resolve;
     const p = r && r !== "skip" && r !== "note" ? swbEntry.smartPlan(it.choice, q.action, { date: sm.date, data: sm.data, resolve: r, roles: cfg().roles }) : base;
@@ -1383,8 +1391,8 @@ const swbEntry = (() => {
       const d = queueDecision(it);
       if (!d) return;
       if (d.needs && it.resolve === null) { unresolved = true; return; }
-      if (d.needs && it.resolve === "skip") return;
-      if (d.needs && it.resolve === "note") {
+      if ((d.needs || d.optional) && (it.resolve === "skip" || it.resolve === "fix")) return;
+      if ((d.needs || d.optional) && it.resolve === "note") {
         if (!String(sm.note || "").trim()) { needNote = true; return; }
         const n = smartNote(it.choice, String(sm.note).trim());
         items.push({ rowIndex0: it.choice, fields: {}, notes: n.notes, overwriteNotes: n.overwriteNotes });
@@ -1403,13 +1411,15 @@ const swbEntry = (() => {
     if (!d) return null;
     const row = swbEntry.rowAt(it.choice);
     const rowN = esc(t("entryRowN", { n: excelRow(it.choice) }));
-    if (d.needs) {
-      const opts = d.base.status === "open-prev" ? ["close-issue", "issue-anyway", "note", "skip"] : ["note", "skip"];
+    if (d.needs || d.optional) {
+      const opts = d.base.status === "open-prev" ? ["close-issue", "issue-anyway", "note", "fix", "skip"] : ["note", "fix", "skip"];
       const label = (v) => (v === "close-issue" ? t("entrySmartCloseIssue", { date: qSmart().date || "—", issue: smartName("issue").toLocaleLowerCase(currentLang === "en" ? "en" : "pl") })
-        : v === "issue-anyway" ? t("entrySmartIssueAnyway", { issue: smartName("issue") }) : v === "note" ? t("entrySmartNoteOnly") : t("entryQSkipOpt"));
+        : v === "issue-anyway" ? t("entrySmartIssueAnyway", { issue: smartName("issue") }) : v === "note" ? t("entrySmartNoteOnly")
+          : v === "fix" ? t("entrySmartFix") : t("entryQSkipOpt"));
+      const why = d.optional ? ` · ${t(d.base.status === "not-out" ? "entrySmartQNotOutShort" : "entrySmartQFullShort")}` : "";
       const after = it.resolve && it.resolve !== "skip" && it.resolve !== "note" && d.p.status === "ok" ? ` ${esc(t("entrySmartQOk", { col: headers()[smartCol(d.p, ui.queue.action)], n: d.p.cycle }))}` : "";
-      return `<label class="en-q-st is-warn"><span data-en-q-smart="${i}">${rowN} · ${esc(cycleStateText(row, d.base))}${after}</span>
-        <select class="en-select" data-en-q-resolve="${i}"><option value="" ${it.resolve === null ? "selected" : ""}>${esc(t("entrySmartQChoose"))}</option>
+      return `<label class="en-q-st ${d.optional ? "is-miss" : "is-warn"}"><span data-en-q-smart="${i}">${rowN} · ${esc(cycleStateText(row, d.base))}${esc(why)}${after}</span>
+        <select class="en-select" data-en-q-resolve="${i}">${d.optional ? "" : `<option value="" ${it.resolve === null ? "selected" : ""}>${esc(t("entrySmartQChoose"))}</option>`}
         ${opts.map((v) => `<option value="${v}" ${it.resolve === v ? "selected" : ""}>${esc(label(v))}</option>`).join("")}</select></label>`;
     }
     const p = d.p;
@@ -1451,6 +1461,7 @@ const swbEntry = (() => {
     }));
     ul.querySelectorAll("[data-en-q-resolve]").forEach((sel) => sel.addEventListener("change", () => {
       const i = Number(sel.dataset.enQResolve);
+      if (sel.value === "fix") { startQueueFix(i); return; }
       q.items[i].resolve = sel.value === "" ? null : sel.value;
       drawQueueList();
       ul.querySelector(`[data-en-q-resolve="${i}"]`)?.focus();
@@ -1458,6 +1469,27 @@ const swbEntry = (() => {
       if (note) note.hidden = !q.items.some((it) => it.resolve === "note");
       updateQueueButtons(); persistSoon();
     }));
+  }
+
+  // „Popraw ręcznie”: zwykła karta wiersza (wszystkie pola), po zapisie albo „Wróć” — z powrotem do kolejki,
+  // a pozycja liczy się od nowa (np. dopisana data „od” = cykl otwarty = gotowa do Zdaj)
+  function startQueueFix(i) {
+    const q = ui.queue, it = q.items[i];
+    if (!it || !Number.isInteger(it.choice)) return;
+    q.pos = i; q.mode = "fix";
+    ui.target = { rowIndex0: it.choice };
+    ui.fields = {}; ui.notes = {}; ui.overwrite = new Set(); ui.overwriteNotes = new Set();
+    ui.smart = newSmart({ off: true }); ui.smartLast = null;
+    ui.step = 2;
+    render(); persistNow();
+  }
+  function endQueueFix() {
+    const q = ui.queue;
+    const it = q && q.items[q.pos];
+    if (it) it.resolve = undefined;
+    q.mode = null; ui.target = null; ui.fields = {}; ui.notes = {}; ui.overwrite = new Set(); ui.overwriteNotes = new Set();
+    ui.step = "queue";
+    render(); persistNow();
   }
 
   function renderQueue(stage, bar) {

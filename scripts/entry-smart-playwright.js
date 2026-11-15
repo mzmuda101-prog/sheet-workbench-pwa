@@ -195,14 +195,32 @@ async function run() {
   ok("F. bez decyzji przy 293 — „naraz” zablokowane; data dziś", f1.all === true && f1.date === today, f1);
   ok("F. podpowiedź mówi o „do sprawdzenia”, nie o „pasuje kilka wierszy”", /sprawdzenia/.test(f1.hint) && !/kilka wierszy/.test(f1.hint), f1.hint);
   if (MOBILE) await noHScroll("kolejka smart");
+  // F2. pominięta pozycja (004, brak otwartego cyklu): wybór zamiast samego „pomijam”; „Popraw ręcznie” → wiersz → z powrotem
+  const f004 = await page.evaluate(() => { const s = document.querySelector('[data-en-q-resolve="2"]'); return s ? { v: s.value, opts: [...s.options].map((o) => o.value) } : null; });
+  ok("F2. 004: wybór z domyślnym „Pomiń”, notatka i poprawa ręczna", f004 && f004.v === "skip" && ["note", "fix", "skip"].every((x) => f004.opts.includes(x)) && !f004.opts.includes(""), f004);
+  await page.selectOption('[data-en-q-resolve="2"]', "fix"); await sleep(300);
+  const fx = await page.evaluate(() => {
+    const inp = document.querySelector('#entryOverlay [data-en-col="2"] input');
+    return { step: window.__entry.state().step, fields: document.querySelectorAll("#entryOverlay .en-field[data-en-col]").length, back: !!document.querySelector("#enQFixBack"),
+      ph: inp ? inp.placeholder : null, phColor: inp ? getComputedStyle(inp, "::placeholder").color : null, ink: inp ? getComputedStyle(inp).color : null };
+  });
+  ok("F2. Popraw ręcznie: zwykła karta wiersza 6 z powrotem do kolejki", fx.step === 2 && fx.fields > 10 && fx.back, fx);
+  ok("G2. obecna wartość w polu (placeholder) czarna, nie szara", fx.ph && fx.phColor === fx.ink, fx);
+  await page.fill('#entryOverlay [data-en-col="6"] input', "10.11.2026"); await sleep(100);
+  await page.click("#enReviewBtn"); await sleep(300); await page.click("#enCommitBtn"); await sleep(500);
+  const f3 = await page.evaluate(() => ({ step: window.__entry.state().step, s2: document.querySelector('[data-en-q-smart="2"]')?.textContent || "" }));
+  ok("F2. po poprawie wraca do kolejki, 004 gotowa: → do2", f3.step === "queue" && /do2/.test(f3.s2), f3);
+  ok("F2. poprawka zapisana (G6)", (await cell("G6")) === "2026-11-10", await cell("G6"));
   await page.selectOption('[data-en-q-resolve="3"]', "skip"); await sleep(150);
   ok("F. po decyzji „naraz” dostępne", await page.evaluate(() => !document.querySelector("#enQAll").disabled), null);
   await page.click("#enQAll"); await sleep(400);
   const f2 = await page.evaluate(() => ({ step: window.__entry.state().step, rows: document.querySelectorAll(".en-q-row").length, txt: document.querySelector("#enStage").textContent }));
-  ok("F. podgląd: 2 wiersze, do i do2", f2.step === "queueReview" && f2.rows === 2 && /do2/.test(f2.txt), f2);
+  ok("F. podgląd: 3 wiersze, do i do2", f2.step === "queueReview" && f2.rows === 3 && /do2/.test(f2.txt), f2);
   await page.click("#enCommitBtn"); await sleep(500);
-  ok("F. D3 i H38 = dziś, I6 puste", (await cell("D3")) === todayYmd && (await cell("H38")) === todayYmd && (await cell("H6")) === null, [await cell("D3"), await cell("H38")]);
-  ok("F. jedno Cofnij", (await undoCard()) && (await cell("D3")) === null && (await cell("H38")) === null, null);
+  ok("F. D3, H38 i H6 (po poprawie) = dziś", (await cell("D3")) === todayYmd && (await cell("H38")) === todayYmd && (await cell("H6")) === todayYmd, [await cell("D3"), await cell("H38"), await cell("H6")]);
+  ok("F. jedno Cofnij", (await undoCard()) && (await cell("D3")) === null && (await cell("H38")) === null && (await cell("H6")) === null, null);
+  await page.evaluate(() => undoLast()); await sleep(200); // poprawka G6 to osobny krok
+  ok("F2. Cofnij poprawki", (await cell("G6")) === null, await cell("G6"));
 
   // ── G. Ustawienia ──
   await page.click("#enSettingsBtn"); await sleep(200);
