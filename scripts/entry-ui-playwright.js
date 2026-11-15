@@ -332,6 +332,57 @@ async function run() {
   const t15b = await page.evaluate(() => [...document.querySelectorAll(".toast .toast-msg")].map((e) => e.textContent));
   ok("15. przypomnienie tylko raz", !t15b.some((m) => /nie w pliku/.test(m)), t15b);
 
+  // 16. operatory szukania w polu celu (jak szybkie szukanie)
+  await openEntry(); await sleep(250);
+  await typeTarget("Ewa Lis && Status:=wzięta");
+  const rows16 = await page.$$eval("#enCandidates [data-en-row]", (els) => els.map((e) => ({ r: e.dataset.enRow, sel: e.getAttribute("aria-selected") })));
+  ok("16. zapytanie — jeden wiersz (Ewa Lis z wziętą pracą), od razu wybrany", rows16.length === 1 && rows16[0].r === "4" && rows16[0].sel === "true", rows16);
+  const hint16 = await page.textContent("#enQueryHint").catch(() => "");
+  ok("16. widać, że to zapytanie z operatorami", /operator/i.test(hint16) && /1/.test(hint16), hint16);
+  ok("16. bez mylącego „Szukam w kolumnie: …”", !(await page.isVisible("#enKeyHint")), null);
+  const new16 = await page.textContent("#enCandidates [data-en-new]");
+  ok("16. „Nowy wiersz” bez wklejania zapytania jako nazwy", new16.trim() === "Nowy wiersz", new16);
+  await page.press("#enTargetInput", "Enter"); await sleep(200);
+  const s16 = await st();
+  ok("16. Enter → krok 2, wiersz arkusza 5", s16.step === 2 && s16.target.rowIndex0 === 4 && s16.fields[0] === undefined, s16);
+  await page.click("#enChangeTarget"); await sleep(150);
+  await typeTarget("Osoba:Nowak && Status:=nic");
+  await page.press("#enTargetInput", "Enter"); await sleep(200);
+  ok("16. zapytanie bez wyników — Enter nie tworzy nowego wiersza", (await st()).step === 1, await st());
+  await toggleSettings();
+  await page.uncheck('#enSettings [data-en-opt="queryOperators"]');
+  await toggleSettings();
+  await typeTarget("Ewa Lis && Status:=wzięta");
+  ok("16. operatory wyłączone — zwykłe szukanie (brak trafień)", (await page.$$eval("#enCandidates [data-en-row]", (e) => e.length)) === 0, null);
+  await toggleSettings();
+  await page.check('#enSettings [data-en-opt="queryOperators"]');
+  await toggleSettings();
+
+  // 17. notatki przy polach
+  await typeTarget("jan kowalski"); await page.press("#enTargetInput", "Enter"); await sleep(200);
+  if (await page.getAttribute('#entryOverlay [data-en-col="1"] .en-pin', "aria-pressed") === "true") await page.click('#entryOverlay [data-en-col="1"] .en-pin');
+  await page.fill(field(1), "");
+  await page.click('#entryOverlay [data-en-col="2"] .en-note-btn'); await sleep(100);
+  ok("17. przycisk Notatka rozwija pole", await page.isVisible("#enN2"), null);
+  await page.fill("#enN2", "Zwrot do piątku");
+  await page.keyboard.press("ControlOrMeta+Enter"); await sleep(200);
+  const ch17 = await page.$$eval("#entryOverlay .en-change", (els) => els.map((e) => e.textContent.replace(/\s+/g, " ")));
+  ok("17. podgląd pokazuje notatkę", ch17.some((x) => /Notatka/.test(x) && /Zwrot do piątku/.test(x)), ch17);
+  await page.click("#enCommitBtn"); await sleep(400);
+  const n17 = await page.evaluate(() => swbNoteOf(currentSheetName, "C2")?.text || null);
+  ok("17. notatka zapisana w komórce C2", n17 === "Zwrot do piątku", n17);
+  await typeTarget("jan kowalski"); await page.press("#enTargetInput", "Enter"); await sleep(200);
+  ok("17. przycisk pokazuje, że notatka już jest", await page.$eval('#entryOverlay [data-en-col="2"] .en-note-btn', (b) => b.classList.contains("has-note")), null);
+  await page.click('#entryOverlay [data-en-col="2"] .en-note-btn'); await sleep(100);
+  ok("17. pole notatki z obecną treścią", (await page.inputValue("#enN2")) === "Zwrot do piątku", await page.inputValue("#enN2"));
+  await page.fill("#enN2", "Zwrot w poniedziałek");
+  await page.keyboard.press("ControlOrMeta+Enter"); await sleep(200);
+  ok("17. zmiana notatki wymaga zgody", await page.$eval("#enCommitBtn", (b) => b.disabled), null);
+  await page.check('#entryOverlay [data-en-overwrite-note="2"]'); await sleep(100);
+  await page.click("#enCommitBtn"); await sleep(400);
+  ok("17. notatka zmieniona", (await page.evaluate(() => swbNoteOf(currentSheetName, "C2")?.text)) === "Zwrot w poniedziałek", null);
+  await page.keyboard.press("Escape"); await sleep(150);
+
   ok("10. brak pageerror", errors.length === 0, errors);
   await browser.close();
   const tag = `${ENGINE}${TOUCH ? " touch" : ""}`;

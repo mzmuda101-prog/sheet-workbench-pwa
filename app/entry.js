@@ -214,7 +214,7 @@ const swbEntry = (() => {
     return filled.target ? plan({ target: filled.target, fields: filled.fields }) : null;
   }
 
-  const api = { candidates, plan, commit, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, _filled: () => filled };
+  const api = { candidates, plan, commit, undoCard, fill, sheetCell, rowAt, lastDataRow, ready, previewText, foldCache, expectOf, _filled: () => filled };
   return api;
 })();
 
@@ -227,12 +227,13 @@ const swbEntry = (() => {
   const btn = document.getElementById("entryBtn");
   if (!overlay || !C) return;
 
-  const DEFAULT_OPTIONS = { fuzzyTarget: true, typoHints: true, typeHints: true, suggestions: true, duplicateGuard: true, confirmStep: true };
+  const DEFAULT_OPTIONS = { fuzzyTarget: true, typoHints: true, typeHints: true, suggestions: true, duplicateGuard: true, confirmStep: true, queryOperators: true };
   const ui = {
     open: false, step: 1, keyCol: 0, query: "", targets: [], active: -1,
     target: null, fields: {}, overwrite: new Set(), pinned: new Set(), font: 2,
     options: { ...DEFAULT_OPTIONS }, profiles: new Map(), lastPlan: null, sessionLog: [], returnFocus: null,
     fieldOrder: [], selected: new Set(), panel: null, draft: null, reminded: false,
+    notes: {}, overwriteNotes: new Set(), queryMode: false, queryTotal: 0,
   };
 
   // ── Pamięć (localStorage, tylko na tym urządzeniu) ──
@@ -263,8 +264,8 @@ const swbEntry = (() => {
     const pinned = {};
     ui.pinned.forEach((c) => { if (ui.fields[c] != null && ui.fields[c] !== "") pinned[c] = String(ui.fields[c]); else pinned[c] = ""; });
     const rec = { keyCol: ui.keyCol, fieldOrder: ui.fieldOrder.slice(), selected: [...ui.selected], pinned, at: Date.now() };
-    const own = Object.keys(cleanFields(ui.fields)).filter((c) => !ui.pinned.has(Number(c)));
-    rec.draft = draft && ui.target && own.length ? { target: { ...ui.target }, fields: cleanFields(ui.fields), query: ui.query, savedAt: Date.now() } : null;
+    const own = Object.keys(cleanFields(ui.fields)).filter((c) => !ui.pinned.has(Number(c))).length + Object.keys(cleanFields(ui.notes)).length;
+    rec.draft = draft && ui.target && own ? { target: { ...ui.target }, fields: cleanFields(ui.fields), notes: cleanFields(ui.notes), query: ui.query, savedAt: Date.now() } : null;
     store.scopes[scopeKey()] = rec;
     saveStore(store);
   }
@@ -311,6 +312,7 @@ const swbEntry = (() => {
   const keyText = (row) => (row ? String(getDisplayValue(row, ui.keyCol) ?? "") : "");
 
   const ICON_PIN = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/></svg>';
+  const ICON_NOTE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>';
   const ICON_X = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
 
   function destroySuggests() { while (suggests.length) { try { suggests.pop().destroy(); } catch { /* już zamknięte */ } } }
@@ -355,7 +357,7 @@ const swbEntry = (() => {
     const logBtn = overlay.querySelector("#enLogBtn");
     if (logBtn) logBtn.textContent = t("entryLog", { n: ui.sessionLog.length });
     if (ui.panel === "settings") {
-      const opts = [["fuzzyTarget", "entryOptFuzzy"], ["typoHints", "entryOptTypo"], ["typeHints", "entryOptType"], ["suggestions", "entryOptSuggest"], ["duplicateGuard", "entryOptDup"], ["confirmStep", "entryOptConfirm"]];
+      const opts = [["fuzzyTarget", "entryOptFuzzy"], ["typoHints", "entryOptTypo"], ["typeHints", "entryOptType"], ["suggestions", "entryOptSuggest"], ["duplicateGuard", "entryOptDup"], ["confirmStep", "entryOptConfirm"], ["queryOperators", "entryOptQuery"]];
       const textCols = realCols();
       slot.innerHTML = `<section class="tr-card en-card en-panel" id="enSettings" aria-label="${esc(t("entrySettings"))}">
         <label class="en-label" for="enKeyCol">${esc(t("entryKeyColLabel"))}</label>
@@ -425,14 +427,14 @@ const swbEntry = (() => {
         <input class="en-input en-target-input" id="enTargetInput" type="text" autocomplete="off" spellcheck="false"
           enterkeyhint="go" role="combobox" aria-expanded="false" aria-controls="enCandidates" aria-autocomplete="list"
           placeholder="${esc(t("entryTargetPlaceholder"))}" value="${esc(ui.query)}">
-        <div class="en-hint">${esc(t("entryTargetHint", { col: headers()[ui.keyCol] || "" }))}</div>
+        <div class="en-hint" id="enKeyHint">${esc(t("entryTargetHint", { col: headers()[ui.keyCol] || "" }))}</div>
         <div class="en-candidates" id="enCandidates" role="listbox" aria-label="${esc(t("entryTargetLabel"))}"></div>
       </div>`;
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>`;
     if (ui.draft) {
       const d = ui.draft;
       const row = d.target.newRow ? null : swbEntry.rowAt(d.target.rowIndex0);
-      const own = Object.keys(d.fields || {}).filter((c) => !ui.pinned.has(Number(c))).length;
+      const own = Object.keys(d.fields || {}).filter((c) => !ui.pinned.has(Number(c))).length + Object.keys(d.notes || {}).length;
       const note = document.createElement("div");
       note.className = "tr-notice en-draft";
       note.id = "enDraft";
@@ -447,7 +449,9 @@ const swbEntry = (() => {
         ui.query = dd.query || "";
         ui.target = { ...dd.target };
         ui.fields = { ...pinnedFields(), ...dd.fields };
+        ui.notes = { ...(dd.notes || {}) };
         ui.overwrite = new Set();
+        ui.overwriteNotes = new Set();
         ui.step = 2;
         render();
       });
@@ -467,10 +471,22 @@ const swbEntry = (() => {
 
   function search() {
     const rows = swbEntry.candidates();
-    ui.targets = C.findTargets(rows, ui.keyCol, ui.query, { fuzzy: ui.options.fuzzyTarget, foldCache: swbEntry.foldCache() });
-    // jeden dokładny kandydat = podświetlony (Enter go wybiera); kilka albo literówki — wybiera człowiek
-    const exact = ui.targets.filter((x) => x.exact);
-    ui.active = exact.length === 1 && ui.targets[0] && ui.targets[0].exact ? 0 : -1;
+    ui.queryMode = !!ui.options.queryOperators && C.looksLikeQuery(ui.query, headers());
+    if (ui.queryMode) {
+      // ta sama składnia i ten sam silnik co szybkie szukanie (workbook.js) — po wszystkich kolumnach pliku
+      const criterion = { query: ui.query.trim(), mode: "contains", indexes: realCols(), headers: headers(), operatorsEnabled: true, negated: false, emptyMode: "all" };
+      let hits = [];
+      try { hits = rows.filter((r) => rowMatchesTextFilter(r, [criterion], false)); } catch { hits = []; }
+      ui.queryTotal = hits.length;
+      ui.targets = hits.slice(0, 6).map((r) => ({ rowIndex0: r.rowIndex0, score: 3, exact: false }));
+      ui.active = hits.length === 1 ? 0 : -1; // zapytanie jest precyzyjne — jedno trafienie = wybrane
+    } else {
+      ui.queryTotal = 0;
+      ui.targets = C.findTargets(rows, ui.keyCol, ui.query, { fuzzy: ui.options.fuzzyTarget, foldCache: swbEntry.foldCache() });
+      // jeden dokładny kandydat = podświetlony (Enter go wybiera); kilka albo literówki — wybiera człowiek
+      const exact = ui.targets.filter((x) => x.exact);
+      ui.active = exact.length === 1 && ui.targets[0] && ui.targets[0].exact ? 0 : -1;
+    }
     drawCandidates();
   }
 
@@ -490,15 +506,19 @@ const swbEntry = (() => {
         <span class="en-cand-row">${esc(t("entryRowN", { n: excelRow(tg.rowIndex0) }))}</span></div>`;
     });
     const newIdx = ui.targets.length;
-    if (q) items.push(`<div class="en-cand en-cand-new" role="option" id="enCand${newIdx}" data-en-new aria-selected="${ui.active === newIdx}">${esc(t("entryNewRowFor", { text: q }))}</div>`);
-    box.innerHTML = items.join("");
+    const newLabel = ui.queryMode ? t("entryNewRow") : t("entryNewRowFor", { text: q });
+    if (q) items.push(`<div class="en-cand en-cand-new" role="option" id="enCand${newIdx}" data-en-new aria-selected="${ui.active === newIdx}">${esc(newLabel)}</div>`);
+    const keyHint = overlay.querySelector("#enKeyHint");
+    if (keyHint) keyHint.hidden = ui.queryMode; // zapytanie szuka we wszystkich kolumnach, nie tylko w kluczu
+    box.innerHTML = (ui.queryMode ? `<div class="en-hint en-query-hint" id="enQueryHint">${esc(t("entryQueryHint", { n: ui.queryTotal }))}</div>` : "") + items.join("");
     input.setAttribute("aria-expanded", items.length ? "true" : "false");
     if (ui.active >= 0) input.setAttribute("aria-activedescendant", `enCand${ui.active}`); else input.removeAttribute("aria-activedescendant");
     box.querySelectorAll(".en-cand").forEach((el, i) => {
+      // indeks = pozycja wśród opcji (podpowiedź o zapytaniu nie jest opcją)
       el.addEventListener("pointerdown", (e) => e.preventDefault()); // fokus zostaje w polu
       el.addEventListener("click", () => { ui.active = i; choose(); });
     });
-    if (q && !ui.targets.length) live(t("entryNoMatch"));
+    if (q && !ui.targets.length) live(t(ui.queryMode ? "entryQueryNone" : "entryNoMatch"));
     else if (ui.targets.length > 1 && ui.active < 0) live(t("entryPickHint"));
   }
 
@@ -513,7 +533,8 @@ const swbEntry = (() => {
     } else if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) {
       e.preventDefault();
       if (ui.active >= 0) choose();
-      else if (ui.query.trim() && !ui.targets.length) { ui.active = 0; choose(); }
+      else if (ui.query.trim() && !ui.targets.length && !ui.queryMode) { ui.active = 0; choose(); }
+      else if (ui.queryMode && !ui.targets.length) live(t("entryQueryNone"));
       else if (ui.targets.length) live(t("entryPickHint"));
     }
   }
@@ -526,7 +547,7 @@ const swbEntry = (() => {
       startCard({ rowIndex0: tg.rowIndex0 });
       return;
     }
-    if (ui.options.duplicateGuard && C.isDuplicateRisk(ui.targets)) {
+    if (!ui.queryMode && ui.options.duplicateGuard && C.isDuplicateRisk(ui.targets)) {
       const best = ui.targets[0];
       const row = swbEntry.rowAt(best.rowIndex0);
       const n = excelRow(best.rowIndex0);
@@ -551,8 +572,10 @@ const swbEntry = (() => {
     const keep = pinnedFields();
     ui.target = target;
     ui.fields = { ...keep };
-    if (target.newRow && ui.query.trim()) ui.fields[ui.keyCol] = ui.query.trim();
+    if (target.newRow && ui.query.trim() && !ui.queryMode) ui.fields[ui.keyCol] = ui.query.trim();
     ui.overwrite = new Set();
+    ui.notes = {};
+    ui.overwriteNotes = new Set();
     ui.step = 2;
     ui.draft = null;
     render();
@@ -569,15 +592,24 @@ const swbEntry = (() => {
       const now = row ? String(getDisplayValue(row, col) ?? "") : "";
       const val = formula ? now : (ui.fields[col] ?? "");
       const pinned = ui.pinned.has(col);
+      const curNote = row && typeof swbNoteOf === "function" ? swbNoteOf(currentSheetName, XLSX.utils.encode_cell({ r: row.rowIndex0, c: currentStartCol + col })) : null;
+      const noteVal = ui.notes[col] ?? (curNote ? curNote.text : "");
+      const noteOpen = ui.notes[col] != null && ui.notes[col] !== "";
+      const noteBtnLabel = curNote ? t("entryNoteEdit", { name: headers()[col] }) : t("entryNoteAdd", { name: headers()[col] });
+      const noteHtml = `<button class="btn btn-xs ghost en-note-btn${curNote ? " has-note" : ""}" type="button" aria-expanded="${noteOpen}" aria-controls="enN${col}" aria-label="${esc(noteBtnLabel)}">${ICON_NOTE}<span>${esc(t("entryNote"))}</span></button>`;
+      const noteArea = `<textarea class="en-input en-note" id="enN${col}" rows="2" ${noteOpen ? "" : "hidden"} ${curNote && curNote.threaded ? "readonly" : ""}
+          aria-label="${esc(noteBtnLabel)}" placeholder="${esc(t("entryNotePlaceholder"))}">${esc(noteVal)}</textarea>`;
       return `<div class="tr-field en-field${formula ? " is-formula" : ""}" data-en-col="${col}">
         <div class="en-field-head">
           <label class="tr-field-label" for="enF${col}">${esc(headers()[col])}</label>
-          ${formula ? `<span class="en-tag">${esc(t("entryFormulaField"))}</span>` : `<button class="en-pin" type="button" aria-pressed="${pinned}" aria-label="${esc(pinned ? t("entryUnpin") : t("entryPin"))}" title="${esc(pinned ? t("entryUnpin") : t("entryPin"))}">${ICON_PIN}</button>`}
+          <span class="en-field-tools">${noteHtml}
+          ${formula ? `<span class="en-tag">${esc(t("entryFormulaField"))}</span>` : `<button class="en-pin" type="button" aria-pressed="${pinned}" aria-label="${esc(pinned ? t("entryUnpin") : t("entryPin"))}" title="${esc(pinned ? t("entryUnpin") : t("entryPin"))}">${ICON_PIN}</button>`}</span>
         </div>
         <input class="en-input" id="enF${col}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next"
           ${formula ? "readonly tabindex=\"-1\"" : ""} value="${esc(val)}" placeholder="${esc(!formula && now ? now : "")}"
           aria-describedby="enP${col}">
         <div class="en-preview" id="enP${col}" aria-live="polite"></div>
+        ${noteArea}
       </div>`;
     }).join("");
     stage.innerHTML = `<div class="tr-card en-card">
@@ -587,13 +619,40 @@ const swbEntry = (() => {
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>
       <button class="btn" id="enReviewBtn" type="button">${esc(ui.options.confirmStep ? t("entryReview") : t("entryCommit"))}</button>`;
     stage.querySelector("#enChangeTarget").addEventListener("click", () => {
-      ui.target = null; ui.fields = pinnedFields(); ui.step = 1; render(); persistNow();
+      ui.target = null; ui.fields = pinnedFields(); ui.notes = {}; ui.overwriteNotes = new Set(); ui.step = 1; render(); persistNow();
     });
     bar.querySelector("#enReviewBtn").addEventListener("click", toReview);
+    stage.querySelectorAll(".en-field").forEach((f) => {
+      const col = Number(f.dataset.enCol);
+      const btn = f.querySelector(".en-note-btn");
+      const area = f.querySelector(".en-note");
+      if (!btn || !area) return;
+      btn.addEventListener("click", () => {
+        const open = area.hidden;
+        area.hidden = !open;
+        btn.setAttribute("aria-expanded", String(open));
+        if (open) area.focus();
+      });
+      area.addEventListener("input", () => { ui.notes[col] = area.value; persistSoon(); });
+      // Enter w notatce = nowa linia; Ctrl/⌘+Enter idzie do podglądu (obsługa globalna)
+    });
     const inputs = [...stage.querySelectorAll(".en-field:not(.is-formula) input")];
     inputs.forEach((input, i) => {
       const col = Number(input.closest("[data-en-col]").dataset.enCol);
-      if (ui.options.suggestions || (fieldDv(col))) attachSuggest(input, col, () => focusField(inputs, i + 1));
+      // Lista podpowiedzi tylko dla pola z fokusem: inaczej otwarta lista z pliku zasłaniała
+      // sąsiednie pola (tap w pinezkę wybierał pozycję listy), a każda lista kręciła własną pętlę rAF.
+      let sug = null;
+      input.addEventListener("focus", () => {
+        if (sug || !(ui.options.suggestions || fieldDv(col))) return;
+        sug = attachSuggest(input, col, () => focusField(inputs, i + 1));
+      });
+      input.addEventListener("blur", () => setTimeout(() => {
+        if (!sug || document.activeElement === input || (sug.isInteracting && sug.isInteracting())) return;
+        const k = suggests.indexOf(sug);
+        if (k >= 0) suggests.splice(k, 1);
+        try { sug.destroy(); } catch { /* już zamknięta */ }
+        sug = null;
+      }, 0));
       input.addEventListener("input", () => { ui.fields[col] = input.value; hint(col); persistSoon(); });
       input.addEventListener("keydown", (e) => {
         if (e.key !== "Enter" || e.ctrlKey || e.metaKey) return;
@@ -626,12 +685,14 @@ const swbEntry = (() => {
   }
 
   function attachSuggest(input, col, next) {
-    if (typeof createCellSuggestions !== "function") return;
+    if (typeof createCellSuggestions !== "function") return null;
     const dv = fieldDv(col);
     const values = dv && dv.values.length ? dv.values : (ui.options.suggestions && typeof buildColumnSuggestions === "function" ? buildColumnSuggestions(col) : []);
-    if (!values.length) return;
-    suggests.push(createCellSuggestions(input, values, (v) => { input.value = v; ui.fields[col] = v; hint(col); next(); },
-      dv && dv.values.length ? {} : { variant: "soft", minChars: 1 }));
+    if (!values.length) return null;
+    const api = createCellSuggestions(input, values, (v) => { input.value = v; ui.fields[col] = v; hint(col); persistSoon(); next(); },
+      dv && dv.values.length ? {} : { variant: "soft", minChars: 1 });
+    suggests.push(api);
+    return api;
   }
 
   // Wpis innego typu niż reszta kolumny (daty / liczby): ostrzeżenie, nie blokada — pod polem i w podglądzie.
@@ -685,7 +746,7 @@ const swbEntry = (() => {
   }
 
   function planInput() {
-    return { target: ui.target, fields: { ...ui.fields }, overwrite: [...ui.overwrite] };
+    return { target: ui.target, fields: { ...ui.fields }, overwrite: [...ui.overwrite], notes: { ...ui.notes }, overwriteNotes: [...ui.overwriteNotes] };
   }
 
   function toReview() {
@@ -697,23 +758,29 @@ const swbEntry = (() => {
   }
 
   // ── Krok 3: podgląd ──
-  const ERR = { formula: "entryErrFormula", "dv-stop": "entryErrDvStop", "overwrite-not-allowed": "entryErrOverwrite", "not-real-col": "entryErrNotReal" };
+  const ERR = { formula: "entryErrFormula", "dv-stop": "entryErrDvStop", "overwrite-not-allowed": "entryErrOverwrite", "not-real-col": "entryErrNotReal",
+    "note-threaded": "entryErrNoteThreaded", "new-row-needs-value": "entryErrNewRowNeedsValue" };
+  const GATE = new Set(["overwrite-not-allowed", "note-overwrite-not-allowed"]); // te pokazuje checkbox, nie komunikat
   function renderReview(stage, bar) {
     const p = ui.lastPlan = swbEntry.plan(planInput());
     const row = ui.target.newRow ? null : swbEntry.rowAt(ui.target.rowIndex0);
     const head = ui.target.newRow ? t("entryNewRow") : t("entryTargetExisting", { n: excelRow(ui.target.rowIndex0), key: keyText(row) });
-    const errsOf = (col) => p.errors.filter((e) => e.col === col && e.reason !== "overwrite-not-allowed");
+    const kindOf = (e) => e.kind || "value";
+    const errsOf = (c) => p.errors.filter((e) => e.col === c.col && kindOf(e) === c.kind && !GATE.has(e.reason));
     const items = p.changes.map((c) => {
-      const errs = errsOf(c.col).map((e) => `<div class="en-err" role="alert">${esc(t(ERR[e.reason] || "entryErrNotReal"))}</div>`).join("");
-      const warns = p.warnings.filter((w) => w.col === c.col).map(() => `<div class="en-warn">${esc(t("entryWarnDv"))}</div>`).join("")
+      const isNote = c.kind === "note";
+      const errs = errsOf(c).map((e) => `<div class="en-err" role="alert">${esc(t(ERR[e.reason] || "entryErrNotReal"))}</div>`).join("");
+      const warns = isNote ? "" : p.warnings.filter((w) => w.col === c.col).map(() => `<div class="en-warn">${esc(t("entryWarnDv"))}</div>`).join("")
         + typeWarn(c.col, c.parsedType).map((k) => `<div class="en-warn">${esc(t(k))}</div>`).join("");
-      const ow = c.overwrite ? `<label class="en-ow"><input type="checkbox" data-en-overwrite="${c.col}" ${ui.overwrite.has(c.col) ? "checked" : ""}> ${esc(t("entryOverwriteOk"))}</label>` : "";
-      return `<li class="en-change${c.overwrite ? " is-overwrite" : ""}">
-        <div class="tr-field-label">${esc(headers()[c.col])}</div>
+      const gateAttr = isNote ? "data-en-overwrite-note" : "data-en-overwrite";
+      const gateOn = isNote ? ui.overwriteNotes.has(c.col) : ui.overwrite.has(c.col);
+      const ow = c.overwrite ? `<label class="en-ow"><input type="checkbox" ${gateAttr}="${c.col}" ${gateOn ? "checked" : ""}> ${esc(t("entryOverwriteOk"))}</label>` : "";
+      return `<li class="en-change${c.overwrite ? " is-overwrite" : ""}${isNote ? " is-note" : ""}">
+        <div class="tr-field-label">${esc(headers()[c.col])}${isNote ? ` · ${esc(t("entryNote"))}` : ""}</div>
         <div class="en-diff"><span class="en-before${c.before ? "" : " is-empty"}">${esc(c.before || t("entryEmptyVal"))}</span><span aria-hidden="true">→</span><span class="en-after">${esc(c.after)}</span></div>
         ${ow}${errs}${warns}</li>`;
     }).join("");
-    const blocked = p.errors.filter((e) => e.reason !== "overwrite-not-allowed" && !p.changes.some((c) => c.col === e.col));
+    const blocked = p.errors.filter((e) => !GATE.has(e.reason) && !p.changes.some((c) => c.col === e.col && c.kind === kindOf(e)));
     const extra = blocked.map((e) => `<li class="en-change"><div class="tr-field-label">${esc(headers()[e.col] || "")}</div><div class="en-err" role="alert">${esc(t(ERR[e.reason] || "entryErrNotReal"))}</div></li>`).join("");
     stage.innerHTML = `<div class="tr-card en-card">
       <div class="en-target-line"><span class="en-target-name">${esc(head)}</span></div>
@@ -724,9 +791,11 @@ const swbEntry = (() => {
       <button class="btn" id="enCommitBtn" type="button" ${p.ok && p.changes.length ? "" : "disabled"}>${esc(t("entryCommit"))}</button>`;
     bar.querySelector("#enBackBtn").addEventListener("click", () => { ui.step = 2; render(); });
     bar.querySelector("#enCommitBtn").addEventListener("click", doCommit);
-    stage.querySelectorAll("[data-en-overwrite]").forEach((cb) => cb.addEventListener("change", () => {
-      const col = Number(cb.dataset.enOverwrite);
-      if (cb.checked) ui.overwrite.add(col); else ui.overwrite.delete(col);
+    stage.querySelectorAll("[data-en-overwrite], [data-en-overwrite-note]").forEach((cb) => cb.addEventListener("change", () => {
+      const isNote = cb.hasAttribute("data-en-overwrite-note");
+      const col = Number(isNote ? cb.dataset.enOverwriteNote : cb.dataset.enOverwrite);
+      const set = isNote ? ui.overwriteNotes : ui.overwrite;
+      if (cb.checked) set.add(col); else set.delete(col);
       const q = swbEntry.plan(planInput());
       ui.lastPlan = q;
       bar.querySelector("#enCommitBtn").disabled = !(q.ok && q.changes.length);
@@ -740,7 +809,7 @@ const swbEntry = (() => {
     committing = true;
     try {
       const input = planInput();
-      if (ui.lastPlan) input.expect = Object.fromEntries(ui.lastPlan.changes.map((c) => [c.col, c.before]));
+      if (ui.lastPlan) input.expect = swbEntry.expectOf(ui.lastPlan);
       const res = await swbEntry.commit(input);
       if (!res.ok) {
         if (res.reason === "stale") toast(t("entryStale"), "warning");
@@ -767,6 +836,8 @@ const swbEntry = (() => {
       onAction2: () => { close(); setFocusedCell(`wide:${res.rowIndex0}`, ui.keyCol, { scroll: true }); },
     });
     ui.fields = pinnedFields();
+    ui.notes = {};
+    ui.overwriteNotes = new Set();
     ui.target = null;
     ui.query = "";
     ui.overwrite = new Set();
@@ -876,7 +947,7 @@ const swbEntry = (() => {
   swbEntry.state = () => ({
     open: ui.open, step: ui.step, target: ui.target ? { ...ui.target } : null, fields: { ...ui.fields },
     pinned: [...ui.pinned], keyCol: ui.keyCol, options: { ...ui.options }, sessionLog: ui.sessionLog.map((x) => ({ ...x })),
-    fieldOrder: ui.fieldOrder.slice(), selected: [...ui.selected],
+    fieldOrder: ui.fieldOrder.slice(), selected: [...ui.selected], notes: { ...ui.notes },
   });
   // fill() z silnika + przejście do kroku 2 (wejście programowe, np. przyszły skan karty)
   const engineFill = swbEntry.fill;

@@ -9886,3 +9886,10 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-log-key { min-width: 0; overflow-wrap: anywhere; font-size: 14px; }
 .en-draft { margin-bottom: 8px; }
 .en-before.is-empty { text-decoration: none; font-style: italic; }
+.en-field-tools { display: inline-flex; align-items: center; gap: 8px; }
+.en-note-btn { min-height: 32px; gap: 4px; }
+.en-note-btn.has-note { color: var(--accent-h); font-weight: 700; }
+.en-note-btn.has-note svg { fill: currentColor; fill-opacity: .18; }
+.en-note { font-size: 16px; font-weight: 500; min-height: 64px; resize: vertical; line-height: 1.4; }
+.en-change.is-note .en-diff { font-size: 16px; font-weight: 500; }
+.en-query-hint { padding-inline: 4px; }
