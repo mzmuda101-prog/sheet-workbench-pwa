@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v1.03.02";
+const CACHE_VERSION = "v1.03.03";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -71,6 +71,7 @@ const SHELL_ASSETS = [
   `./app/sheet-ops-ui.js?v=${ASSET_V}`,
   `./app/move-cells.js?v=${ASSET_V}`,
   `./app/ui-controls.js?v=${ASSET_V}`,
+  `./app/offline-status.js?v=${ASSET_V}`,
   `./app/transcribe.js?v=${ASSET_V}`,
   `./app/entry-core.js?v=${ASSET_V}`,
   `./app/entry.js?v=${ASSET_V}`,
