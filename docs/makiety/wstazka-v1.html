@@ -737,7 +737,7 @@ function placeMini(){
   const g=gw.getBoundingClientRect(),r=c.getBoundingClientRect();
   let top=r.top-g.top+gw.scrollTop-m.offsetHeight-8, below=false;
   if(top<gw.scrollTop+58){const lastC=[...gw.querySelectorAll('td.s')].pop().getBoundingClientRect();top=lastC.bottom-g.top+gw.scrollTop+8;below=true}
-  const left=Math.max(8,Math.min(r.left-g.left+gw.scrollLeft-60,gw.scrollWidth-m.offsetWidth-8));
+  const left=Math.max(gw.scrollLeft+8,Math.min(r.left-g.left+gw.scrollLeft-60,gw.scrollLeft+gw.clientWidth-m.offsetWidth-8));
   m.style.top=top+'px';m.style.left=left+'px';m.style.setProperty('--o',below?'50% 0':'50% 100%');
 }
 function measure(){
