@@ -36,7 +36,7 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 `app/ribbon.js` + znaczniki `#ribbon` w `index.html` + `styles/ribbon.css` (osobny plik).
 Od 769 px: rząd 1 (logo, Plik, 7 kart, Szukaj, Tryb, Narzędzia, Zapisz, ⋯), rząd 2 (Cofnij/Ponów +
 polecenia karty), przewijane rzędy ze strzałką „+N”. Nagłówek „hero” i pasek nad tabelą schowane;
-pasek formuły i chipy filtrów w jednym rzędzie; karty arkuszy pod tabelą; „Ostatnie” zapytania w
+przycisk arkusza (lista + Nowy / Zmień nazwę / Usuń), pasek formuły i chipy filtrów w jednym rzędzie; „Ostatnie” zapytania w
 rozwiniętym polu Szukaj. Podgląd: bez kart i poleceń, nazwa pliku na środku, „Edytuj” zamiast „Zapisz”.
 Telefon bez zmian (wszystko wraca na swoje miejsca). Test: `scripts/ribbon-playwright.js`.
 
@@ -44,7 +44,7 @@ Rozmieszczenie (jedna funkcja = jedno miejsce; przyciski z menu „Więcej ▾�
 PRZENIESIONE, nie skopiowane):
 - **Narzędzia główne:** Wklej / Wytnij / Kopiuj + cały dotychczasowy pasek formatowania (w nim Σ i
   „Formatuj jako tabelę”).
-- **Wstaw:** Kolumna wyliczana, Notatka (Shift+F2), Arkusz.
+- **Wstaw:** Kolumna wyliczana, Notatka (Shift+F2).
 - **Dane:** Filtry tekstowe, Tryby auto, Filtr dat · Sortowanie, Domyślne sortowanie · Wide-to-Long,
   Sprawdzanie wartości · Anonimizuj.
 - **Formuły:** Formuły w arkuszu, Wyjaśnij formułę.
@@ -60,10 +60,17 @@ PRZENIESIONE, nie skopiowane):
 - Wstaw funkcję — przycisk fx w pasku formuły; Autosuma — Σ na Narzędziach głównych;
 - Zapytaj słowami — ✦ w polu Szukaj (karta Asystent ma tylko ustawienia modelu);
 - Podobne nazwy — tryb grupowania w Agregacjach;
-- Wyczyść filtry — „Wyczyść” przy chipach filtrów.
+- Wyczyść filtry — „Wyczyść” przy chipach filtrów;
+- Arkusz — „Nowy arkusz” jest na liście przycisku arkusza.
 
 Tymczasowe odstępstwa (znikają w kolejnych etapach):
 - 🔧 Narzędzia (cały panel boczny) stoi w rzędzie 1 — do etapu 3 (szyna);
 - przyciski kart otwierają sekcję w panelu bocznym — do etapu 3 (wysuwany panel);
 - „Plik” to małe menu — do etapu 2 (ekran Plik);
-- powiększenie stoi na karcie Widok — do etapu 4 (dolny pasek).
+- powiększenie stoi na karcie Widok — do etapu 4 (dolny pasek);
+- arkusze: przycisk z nazwą w rzędzie paska formuły, bez zakładek (jak przed wstążką, test
+  app-frame S1) — zakładki u dołu wchodzą w etapie 4.
+
+Poza tym: F6 traktuje wstążkę jako region „pasek”; po zamknięciu Spisywania / Wpisywania fokus
+wraca na „Tryb ▾”. Stare testy, które klikały kontrolki w dawnych miejscach, mają gałąź „wstążka”
+(to samo zachowanie, nowe miejsce; komentarz „etap 1 wstążki”).
