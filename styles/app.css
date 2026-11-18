@@ -6941,11 +6941,13 @@ body.tr-active { overflow: hidden; }
   .tr-progress-bar { transition: none; }
 }
 
-/* Toasty w trybie spisywania lądują u góry — na dole zasłaniałyby przycisk
-   „Spisane i dalej”, czyli jedyny element, w który się w tym trybie celuje. */
-body.tr-active .toast-container {
-  bottom: auto;
-  top: max(64px, calc(env(safe-area-inset-top) + 64px));
+/* Spisywanie i Wpisywanie: dymek tuż NAD dolnym paskiem (.tr-bar: 10 + 54 + 1 + dolny
+   margines) — tam jest pusto. W rogu leżał na „Spisane i dalej” / „Sprawdź zmiany”,
+   a u góry na banerze „Przywróć tamten widok” i na „Zmień” przy celu. */
+body.tr-active .toast-container,
+body.en-active .toast-container {
+  top: auto;
+  bottom: calc(77px + max(10px, env(safe-area-inset-bottom)));
   z-index: 210;
 }
 
