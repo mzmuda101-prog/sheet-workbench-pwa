@@ -282,6 +282,16 @@ const swbRibbon = (() => {
     strips.forEach((s) => s.sync());
   }
 
+  // Szukaj zwinięte do lupy (wąskie okno): klik gdziekolwiek w nim = fokus w polu → karta się rozwija
+  const searchSlot = root.querySelector(".rb-search");
+  // click, nie pointerdown: mousedown na ikonie i tak zabiera fokus — dajemy go po nim
+  searchSlot?.addEventListener("click", () => {
+    const qs = document.getElementById("quickSearch");
+    if (!qs || searchSlot.contains(document.activeElement)) return;
+    if ((qs.closest(".qs-field") || qs).getBoundingClientRect().width > 4) return; // pole widać — zwykły klik
+    qs.focus();
+  });
+
   // ── panel boczny: otwórz sekcję (do etapu 3 — potem szyna z wysuwanym panelem) ──
   function openPanel(detailsId) {
     const d = document.getElementById(detailsId);

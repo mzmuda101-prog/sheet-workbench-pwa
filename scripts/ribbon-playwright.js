@@ -159,6 +159,19 @@ async function run() {
       return n ? { vis: n.getBoundingClientRect().width > 0, txt: n.textContent.trim() } : null;
     });
     check("7. 820 px: rząd kart ma strzałkę „+N”", nudge && nudge.vis && /^\+\d+/.test(nudge.txt), JSON.stringify(nudge));
+    const lap = await page.evaluate(() => {
+      const w = document.getElementById("quickSearchWrap"), q = w.getBoundingClientRect(), m = document.getElementById("rbModeBtn").getBoundingClientRect();
+      // najdalej wysunięta WIDOCZNA zawartość pola (tekst, ✦, ⚙), nie sama ramka
+      const kids = Array.from(w.querySelectorAll("*")).map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+      const clipped = getComputedStyle(w).overflow === "hidden"; // ramka przycina — wystająca zawartość jest niewidoczna
+      return { qR: Math.round(clipped ? q.right : Math.max(q.right, ...kids.map((r) => r.right))), mL: Math.round(m.left), qW: Math.round(q.width) };
+    });
+    check("7. 820 px: zwinięte Szukaj nie nachodzi na przycisk trybu", lap.qR <= lap.mL && lap.qW <= 40, JSON.stringify(lap));
+    await page.click("#quickSearchWrap");
+    await sleep(300);
+    const open820 = await page.evaluate(() => ({ focus: document.activeElement?.id, w: Math.round(document.getElementById("quickSearchWrap").getBoundingClientRect().width) }));
+    check("7. 820 px: klik w ikonę Szukaj rozwija pole z fokusem", open820.focus === "quickSearch" && open820.w >= 400, JSON.stringify(open820));
+    await page.keyboard.press("Escape");
 
     check("brak błędów strony (komputer)", errors.length === 0, errors.join(" | "));
     await context.close();

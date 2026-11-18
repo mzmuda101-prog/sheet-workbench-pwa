@@ -107,7 +107,12 @@ body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) > select {
 body.rb-on .rb-search > .quick-search.qs-expanded > :is(.qs-operators-toggle, .qs-scope-toggle, #quickSearchColumnsBtn) { display: inline-flex; }
 body.rb-on .rb-search > .quick-search .qs-field { flex: 1 1 120px; min-inline-size: 0; }
 @media (max-width: 900px) {
+  /* wąsko: sama lupa; klik (ribbon.js) daje fokus polu i karta Szukaj rozwija się w lewo */
   .rb-slot.rb-search { inline-size: 36px; }
+  body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) { justify-content: center; padding: 0; overflow: hidden; cursor: pointer; }
+  body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) > :not(svg, .qs-field) { display: none; }
+  /* pole zostaje w drzewie (da się dać mu fokus), tylko zwinięte do zera */
+  body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) > .qs-field { flex: 0 0 0; inline-size: 0; min-inline-size: 0; opacity: 0; overflow: hidden; }
 }
 
 /* ── rząd 2 ── */
