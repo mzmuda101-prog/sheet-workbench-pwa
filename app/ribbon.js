@@ -313,6 +313,8 @@ const swbRibbon = (() => {
   function openPanel(detailsId) {
     const d = document.getElementById(detailsId);
     if (!d) return;
+    // etap 3: jeden panel naraz, z tytułem (rail.js); bez rail.js — jak dotąd
+    if (typeof swbRail !== "undefined" && swbRail && on) { swbRail.show([detailsId]); return; }
     if (typeof setSidebarOpen === "function") setSidebarOpen(true);
     d.open = true;
     requestAnimationFrame(() => d.scrollIntoView({ block: "nearest" }));

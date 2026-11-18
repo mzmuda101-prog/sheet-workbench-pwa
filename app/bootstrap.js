@@ -470,6 +470,8 @@ document.addEventListener("click", (e) => {
   if (sidebarEl && sidebarEl.contains(e.target)) return;
   if (panelToggle && panelToggle.contains(e.target)) return;
   if (panelHandle && panelHandle.contains(e.target)) return;
+  // szyna i wstążka (rail.js, ribbon.js) same otwierają panel — ich klik go nie zamyka
+  if (e.target.closest && e.target.closest("#sidebarRail, #ribbon")) return;
   if (columnPickerEl && !columnPickerEl.classList.contains("hidden") && columnPickerEl.contains(e.target)) return;
   if (quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden") && quickSearchPopupEl.contains(e.target)) return;
   setSidebarOpen(false);

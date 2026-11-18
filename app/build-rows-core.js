@@ -1,3 +1,4 @@
+// @ts-check
 // [EN] Pure buildRows logic for Web Worker — mirrors table.js buildRows; main thread keeps sync fallback.
 (function (global) {
   "use strict";

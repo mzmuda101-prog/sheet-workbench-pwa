@@ -1,3 +1,4 @@
+// @ts-check
 // Daty z nazwami miesięcy wg WŁASNEGO formatu z pliku — tak jak pokazuje je Excel.
 // Ładowany w wątku głównym (index.html) i w wątku roboczym (build-rows-worker.js).
 //

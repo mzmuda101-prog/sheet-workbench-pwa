@@ -349,6 +349,97 @@ async function run() {
     await context.close();
   }
 
+  // ── etap 3: szyna i jeden panel naraz ───────────────────────────────────────
+  {
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
+    const panelsShown = () => page.evaluate(() => Array.from(document.querySelectorAll(".sidebar details.panel")).filter((d) => d.getBoundingClientRect().height > 30).map((d) => d.id));
+    const sideOpen = () => page.evaluate(() => document.documentElement.classList.contains("sidebar-open"));
+    const rail = await page.evaluate(() => ({
+      vis: document.getElementById("sidebarRail").getClientRects().length > 0,
+      btns: Array.from(document.querySelectorAll("#sidebarRail button")).filter((b) => b.getClientRects().length > 0).map((b) => b.dataset.rbRail || b.dataset.group || b.id),
+      tool: document.getElementById("panelToggle").getClientRects().length > 0,
+      finder: document.getElementById("sidebarFinder").getClientRects().length > 0,
+    }));
+    check("E3. szyna: Filtry, Sortowanie, Formuły, Sprawdzanie (bez starych grup i 🔧)", rail.vis && rail.btns.join() === "filters,sort,formulas,check" && !rail.tool, JSON.stringify(rail));
+    await page.click('#sidebarRail [data-rb-rail="filters"]');
+    await sleep(400);
+    const f = { open: await sideOpen(), shown: await panelsShown(), title: await page.evaluate(() => document.getElementById("rbPaneTitle")?.textContent.trim()), finder: await page.evaluate(() => document.getElementById("sidebarFinder").getClientRects().length > 0), pressed: await page.getAttribute('#sidebarRail [data-rb-rail="filters"]', "aria-pressed") };
+    check("E3. Filtry: jeden panel z tytułem i 3 sekcjami, bez szukajki", f.open && f.title === "Filtry" && f.shown.join() === "panel-text-filters,panel-date-filter,panel-smart-filters" && !f.finder && f.pressed === "true", JSON.stringify(f));
+    await page.keyboard.press("Escape");
+    await sleep(400);
+    check("E3. Esc zamyka panel i oddaje fokus przyciskowi szyny", !(await sideOpen()) && (await page.evaluate(() => document.activeElement?.dataset?.rbRail)) === "filters");
+    await page.click('#sidebarRail [data-rb-rail="filters"]');
+    await sleep(350);
+    await page.click('#sidebarRail [data-rb-rail="filters"]');
+    await sleep(400);
+    check("E3. drugi klik w Filtry zamyka panel", !(await sideOpen()));
+    await page.click("#rbTab-an");
+    await page.click('#ribbon [data-rb-panel="panel-aggregation-workbench"]');
+    await sleep(400);
+    const ag = { shown: await panelsShown(), title: await page.evaluate(() => document.getElementById("rbPaneTitle")?.textContent.trim()) };
+    check("E3. Analiza → Agregacje: tylko ten panel, tytuł Agregacje", ag.shown.join() === "panel-aggregation-workbench" && ag.title === "Agregacje", JSON.stringify(ag));
+    // szerokie Agregacje nie poszerzają potem wąskiego panelu (schowane otwarte sekcje zwinięte)
+    await page.click('#sidebarRail [data-rb-rail="check"]');
+    await sleep(450);
+    const wCheck = await page.evaluate(() => Math.round(document.querySelector(".sidebar").getBoundingClientRect().width));
+    check("E3. po Agregacjach panel Sprawdzanie ma zwykłą szerokość", wCheck <= 380, String(wCheck));
+    await page.click("#rbTab-an");
+    await page.click('#ribbon [data-rb-panel="panel-aggregation-workbench"]');
+    await sleep(400);
+    await page.click("#sidebarPinBtn");
+    await sleep(500);
+    const pin = await page.evaluate(() => ({ pinned: document.documentElement.classList.contains("panel-pinned"), shown: Array.from(document.querySelectorAll(".sidebar details.panel")).filter((d) => d.getClientRects().length > 0).map((d) => d.id), mainLeft: Math.round(document.querySelector(".main").getBoundingClientRect().left), sideRight: Math.round(document.querySelector(".sidebar").getBoundingClientRect().right) }));
+    check("E3. pinezka: panel obok tabeli, dalej jeden panel", pin.pinned && pin.shown.join() === "panel-aggregation-workbench" && pin.mainLeft >= pin.sideRight, JSON.stringify(pin));
+    await page.click("#sidebarPinBtn");
+    await sleep(500);
+    // każdy panel ma dokładnie jeden dom; żaden przycisk karty nie dubluje szyny
+    const homes = await page.evaluate(() => {
+      const railPanels = { filters: ["panel-text-filters", "panel-date-filter", "panel-smart-filters"], sort: ["panel-sort-workbench"], formulas: ["panel-formula-workbench"], check: ["panel-validation"] };
+      const onRail = new Set(Object.values(railPanels).flat());
+      const btns = Array.from(document.querySelectorAll("#ribbon [data-rb-panel]")).map((b) => b.dataset.rbPanel);
+      const all = Array.from(document.querySelectorAll(".sidebar details.panel")).map((d) => d.id);
+      const count = (id) => (onRail.has(id) ? 1 : 0) + btns.filter((x) => x === id).length;
+      return { none: all.filter((id) => count(id) === 0), many: all.filter((id) => count(id) > 1) };
+    });
+    check("E3. każdy panel ma dokładnie jeden dom (szyna albo przycisk)", !homes.none.length && !homes.many.length, JSON.stringify(homes));
+    // kod aplikacji otwierający konkretną sekcję (np. z menu komórki) — panel pokazuje właśnie ją
+    await page.evaluate(() => { setSidebarOpen(true); document.getElementById("panel-edit-tools").open = true; });
+    await sleep(400);
+    const codeOpen = await page.evaluate(() => ({ title: document.getElementById("rbPaneTitle").textContent.trim(), editVis: document.getElementById("panel-edit-tools").getBoundingClientRect().height > 30 }));
+    check("E3. otwarcie sekcji z kodu pokazuje tę sekcję (nie Filtry)", codeOpen.editVis && codeOpen.title !== "Filtry", JSON.stringify(codeOpen));
+    await page.evaluate(() => setSidebarOpen(false));
+    await sleep(400);
+    check("E3. Narzędzia główne: Narzędzia edycji", await page.evaluate(() => !!document.querySelector('#rbPanel-home [data-rb-panel="panel-edit-tools"]')));
+    // 900 px: szyna dalej jest, tabela jej nie zasłania
+    await page.setViewportSize({ width: 900, height: 900 });
+    await sleep(400);
+    const narrow = await page.evaluate(() => { const r = document.getElementById("sidebarRail").getBoundingClientRect(), m = document.querySelector(".table-panel").getBoundingClientRect(); return { vis: r.width > 0, railR: Math.round(r.right), mainL: Math.round(m.left), ov: document.documentElement.scrollWidth - innerWidth }; });
+    check("E3. 900 px: szyna widoczna, tabela obok niej, nic nie wystaje", narrow.vis && narrow.mainL >= narrow.railR && narrow.ov <= 0, JSON.stringify(narrow));
+    await page.click('#sidebarRail [data-rb-rail="sort"]');
+    await sleep(400);
+    check("E3. 900 px: Sortowanie otwiera jeden panel", (await sideOpen()) && (await panelsShown()).join() === "panel-sort-workbench");
+    await page.keyboard.press("Escape");
+    await sleep(300);
+    await page.setViewportSize({ width: 768, height: 900 });
+    await page.waitForFunction(() => !document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
+    await sleep(200);
+    const phone = await page.evaluate(() => ({ rbBtns: Array.from(document.querySelectorAll("#sidebarRail .rb-rail-btn")).filter((b) => b.getClientRects().length > 0).length, pane: document.documentElement.classList.contains("rb-pane") }));
+    check("E3. 768 px: bez szyny wstążki i bez trybu jednego panelu", phone.rbBtns === 0 && !phone.pane, JSON.stringify(phone));
+    check("brak błędów strony (E3)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+
+  {
+    // świeża strona przy 900×900 (tablet w pionie = panel jako szuflada): panel z szyny ma treść
+    const { context, page, errors } = await open(browser, { width: 900, height: 900 });
+    await page.click('#sidebarRail [data-rb-rail="sort"]');
+    await sleep(450);
+    const h = await page.evaluate(() => ({ open: document.documentElement.classList.contains("sidebar-open"), h: Math.round(document.getElementById("panel-sort-workbench").getBoundingClientRect().height) }));
+    check("E3. 900×900 (szuflada): Sortowanie otwiera panel z treścią", h.open && h.h > 80, JSON.stringify(h));
+    check("brak błędów strony (E3 szuflada)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+
   // ── telefon ─────────────────────────────────────────────────────────────
   {
     const { context, page, errors } = await open(browser, { width: 390, height: 844 }, { hasTouch: true, isMobile: ENGINE === "chromium" });

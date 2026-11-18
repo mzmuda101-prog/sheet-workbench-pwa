@@ -1708,6 +1708,12 @@ const I18N = {
     rbBsInfoSheets: "arkuszy w pliku",
     rbBsInfoRows: "wierszy w widoku",
     rbBsInfoCols: "kolumn",
+    rbRail_filters: "Filtry",
+    rbRail_sort: "Sortowanie",
+    rbRail_formulas: "Formuły w arkuszu",
+    rbRail_check: "Sprawdzanie wartości",
+    rbEditTools: "Narzędzia edycji",
+    rbBsSearchHelp: "Skróty wyszukiwania",
   },
   en: {
     offlineReady: "<b>Ready to work offline.</b>",
@@ -3410,6 +3416,12 @@ const I18N = {
     rbBsInfoSheets: "sheets in the file",
     rbBsInfoRows: "rows in view",
     rbBsInfoCols: "columns",
+    rbRail_filters: "Filters",
+    rbRail_sort: "Sorting",
+    rbRail_formulas: "Formulas in the sheet",
+    rbRail_check: "Value checks",
+    rbEditTools: "Edit tools",
+    rbBsSearchHelp: "Search shortcuts",
   },
 };
 
@@ -5047,6 +5059,7 @@ function applyLanguage(lang) {
   if (typeof swbRecent !== "undefined") swbRecent.render();
   if (typeof swbDrawerTabs !== "undefined") swbDrawerTabs.labels();
   if (typeof swbRibbon !== "undefined" && swbRibbon) swbRibbon.labels();
+  if (typeof swbRail !== "undefined" && swbRail) swbRail.labels();
   if (typeof swbRowGrow !== "undefined") swbRowGrow.syncButton();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));

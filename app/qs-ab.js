@@ -1,3 +1,4 @@
+// @ts-check
 /* ============================================================================
    qs-ab.js — A/B na telefonie: co w „Trybie szybkie szukanie" zacina przewijanie
    (DEBUG ONLY, ładowany przez debug-loaders.js przy ?qsab).

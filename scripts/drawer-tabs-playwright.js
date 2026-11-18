@@ -112,7 +112,9 @@ async function run() {
   await d.page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
   await sleep(600);
   await d.page.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
-  await d.page.click('#sidebarRail [data-group="group-view"]');
+  // etap 3 wstążki (≥ 769 px): przycisk szyny pokazuje jeden panel — Sortowanie mieszka w grupie Widok
+  const dRb = await d.page.evaluate(() => document.body.classList.contains("rb-on"));
+  await d.page.click(dRb ? '#sidebarRail [data-rb-rail="sort"]' : '#sidebarRail [data-group="group-view"]');
   await sleep(450);
   const ds = await state(d.page);
   check("7. komputer: bez zakładek, pasek ikon pokazuje swoją grupę", !ds.tabsShown && !ds.focus && ds.visible.join() === "group-view", ds);

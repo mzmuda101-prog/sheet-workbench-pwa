@@ -369,3 +369,33 @@ body.rb-reading .rb-r1 { border-radius: 0 0 var(--r-lg) var(--r-lg); }
   .rb-bs, .rb-bs.is-open { transform: none; transition: opacity 150ms ease; }
   .rb-bs-nav button:active, .rb-tile:active { transform: none; }
 }
+
+/* ── szyna i jeden panel naraz (etap 3; app/rail.js) ── */
+.rb-rail-btn { display: none; }
+body.rb-on .rb-rail-btn { display: grid; }
+body.rb-on .sidebar-rail .rail-btn[data-group] { display: none; }
+/* 🔧 (cały panel), uchwyt panelu, „Znajdź ustawienie…” i zakładki grup — przy wstążce zastępuje je szyna */
+body.rb-on :is(#panelToggle, #panelHandle, .sidebar-finder, .drawer-tabs) { display: none !important; }
+.rb-pane-title { flex: 1; min-inline-size: 0; padding-inline: 6px; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-pane-title[hidden] { display: none; }
+:root.rb-pane .sidebar-scroll > .sidebar-group:not(.rb-pane-group) { display: none; }
+:root.rb-pane .sidebar-group-head { display: none; }
+:root.rb-pane .sidebar details.panel:not(.rb-pane-on) { display: none; }
+
+/* 769–1023 px: szyna jak przy panelu obok tabeli (≥ 1024 robi to :root.sidebar-docked w app.css) */
+@media (min-width: 769px) and (max-width: 1023px) {
+  body.rb-on .sidebar-rail {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    position: fixed; z-index: 31;
+    top: var(--rb-rail-top, 82px); left: 12px;
+    inline-size: 52px; block-size: calc(100dvh - var(--rb-rail-top, 82px) - 12px);
+    box-sizing: border-box; padding: 8px 0;
+    border: 1px solid var(--border); border-radius: var(--r-lg, 16px); background: var(--panel);
+  }
+  body.rb-on .main { margin-left: 62px; }
+  body.rb-on .sidebar { left: 74px; }
+}
+/* tryb szuflady (drawer-tabs.js, drawer-focus) chowa grupy spoza „bieżącej zakładki” — przy jednym panelu decyduje szyna */
+:root.rb-pane .sidebar-scroll > .sidebar-group.rb-pane-group { display: flex !important; }
+/* jeden panel: jego własny nagłówek dubluje tytuł panelu — chowamy (przy Filtrach, 3 sekcje, zostaje) */
+:root.rb-pane-single .sidebar details.panel.rb-pane-on > summary { display: none; }

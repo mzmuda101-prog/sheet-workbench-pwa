@@ -1,3 +1,4 @@
+// @ts-check
 // recent-files.js — „Ostatnio otwierane” na ekranie startowym (audyt QoL 2026-11-06, ekran startowy).
 //
 // Safari (także aplikacja w Docku i iPhone) nie daje stronie trwałego dostępu do pliku na
