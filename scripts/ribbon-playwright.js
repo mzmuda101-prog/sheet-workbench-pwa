@@ -58,6 +58,7 @@ async function run() {
     check("1. body.rb-on na komputerze", await page.evaluate(() => document.body.classList.contains("rb-on")));
     check("1. wstążka widoczna", await shown(page, "#ribbon"));
     check("1. nagłówek hero schowany", !(await shown(page, ".hero")));
+    check("1. wstążka zamknięta w sobie (tabela i nagłówek nie są w #ribbon)", await page.evaluate(() => !document.querySelector("#ribbon .workspace, #ribbon .hero")));
 
     const tabs = await page.evaluate(() => Array.from(document.querySelectorAll('#ribbon [role="tab"][data-rtab]')).filter((t) => !t.hidden).map((t) => t.textContent.trim()));
     check("2. 7 kart w kolejności z makiety", JSON.stringify(tabs) === JSON.stringify(["Narzędzia główne", "Wstaw", "Dane", "Formuły", "Analiza", "Widok", "Asystent"]), tabs.join(" | "));
@@ -82,12 +83,68 @@ async function run() {
     });
     check("5. widać tylko panel karty Wstaw", panelOk);
 
+    // ── zadanie 2: polecenia kart i menu trybu ──
+    const named = await page.evaluate(() => Array.from(document.querySelectorAll("#ribbon .rb-panel[data-rtab]")).map((p) => {
+      const btns = Array.from(p.querySelectorAll("button, select"));
+      const noName = btns.filter((b) => !(b.getAttribute("aria-label") || b.textContent.trim()));
+      return { tab: p.dataset.rtab, n: btns.length, noName: noName.map((b) => b.id || b.className) };
+    }));
+    check("T2. każda karta ma polecenia z nazwą", named.every((x) => x.n > 0 && !x.noName.length), JSON.stringify(named.filter((x) => !x.n || x.noName.length)));
+    // bez dubli (decyzja Mateusza): żadne dwa przyciski wstążki nie otwierają tego samego panelu
+    const dupPanels = await page.evaluate(() => {
+      const seen = {}; const dup = [];
+      document.querySelectorAll("#ribbon [data-rb-panel]").forEach((b) => { const k = b.dataset.rbPanel; if (seen[k]) dup.push(k); seen[k] = 1; });
+      return dup;
+    });
+    check("T2. bez dubli: jeden przycisk na panel", dupPanels.length === 0, dupPanels.join());
+    for (const [id, tab] of [["#transcribeBtn", "mode"], ["#entryBtn", "mode"], ["#reportBtn", "an"], ["#resetSortBtn", "data"], ["#wideLongToggle", "data"], ["#aiMenuItem", "ai"]]) {
+      check(`T2. ${id} przeniesiony do wstążki (${tab})`, await inRibbon(page, id));
+    }
+    check("T2. „Więcej ▾” schowane przy wstążce", !(await shown(page, "#moreMenuBtn")));
+
+    await page.click("#rbTab-an");
+    await page.click('#ribbon [data-rb-panel="panel-aggregation-workbench"]');
+    await sleep(300);
+    check("T2. Analiza → Agregacje otwiera panel", await page.evaluate(() => document.getElementById("panel-aggregation-workbench").open && document.documentElement.classList.contains("sidebar-open")));
+    await page.evaluate(() => { if (typeof setSidebarOpen === "function") setSidebarOpen(false); });
+
+    await page.click("#rbModeBtn");
+    check("T2. menu trybu otwarte", await shown(page, "#rbModeMenu"));
+    await page.keyboard.press("Escape");
+    check("T2. Esc zamyka menu trybu i oddaje fokus", await page.evaluate(() => document.getElementById("rbModeMenu").hidden && document.activeElement?.id === "rbModeBtn"));
+    await page.click("#rbModeBtn");
+    await page.click('#rbModeMenu [data-rb-mode="view"]');
+    await sleep(250);
+    const view = await page.evaluate(() => ({
+      r2: (() => { const r = document.querySelector(".rb-r2").getBoundingClientRect(); return r.height > 0; })(),
+      name: document.getElementById("rbName")?.textContent || "",
+      title: document.getElementById("heroTitle")?.textContent || "",
+      edit: (() => { const b = document.getElementById("rbEditBtn"); return !!b && b.getBoundingClientRect().width > 0; })(),
+      save: (() => { const b = document.getElementById("heroSaveBtn"); return b.getBoundingClientRect().width > 0; })(),
+    }));
+    check("T2. Podgląd: bez rzędu poleceń", !view.r2, JSON.stringify(view));
+    check("T2. Podgląd: nazwa pliku w rzędzie 1", view.title && view.name.includes(view.title), JSON.stringify(view));
+    check("T2. Podgląd: „Edytuj” zamiast „Zapisz”", view.edit && !view.save, JSON.stringify(view));
+    await page.click("#rbEditBtn");
+    await sleep(250);
+    const back = await page.evaluate(() => ({ r2: document.querySelector(".rb-r2").getBoundingClientRect().height > 0, tab: document.querySelector('#ribbon [role="tab"][aria-selected="true"]')?.dataset.rtab, edit: typeof swbIsEditMode === "function" && swbIsEditMode() }));
+    check("T2. Edytuj: wraca Edycja i karta Analiza", back.r2 && back.tab === "an" && back.edit, JSON.stringify(back));
+
+    await page.click("#rbModeBtn");
+    await page.click("#rbModeMenu #transcribeBtn");
+    await sleep(500);
+    check("T2. Spisywanie z menu trybu otwiera spisywanie", await page.evaluate(() => document.body.classList.contains("tr-active")));
+    await page.keyboard.press("Escape");
+    await sleep(300);
+    await page.evaluate(() => { document.querySelectorAll(".tr-overlay, .tr-root").forEach(() => {}); });
+
     await page.setViewportSize({ width: 768, height: 900 });
     await sleep(300);
     check("6. 768 px: bez rb-on", !(await page.evaluate(() => document.body.classList.contains("rb-on"))));
     check("6. 768 px: Szukaj wróciło na miejsce", !(await inRibbon(page, "#quickSearch")) && (await page.evaluate(() => !!document.getElementById("quickSearch").closest("#quickSearchWrap")?.closest(".table-panel"))));
     check("6. 768 px: Zapisz wróciło do nagłówka", await page.evaluate(() => !!document.getElementById("heroSaveBtn").closest(".hero")));
     check("6. 768 px: nagłówek widoczny", await shown(page, ".hero"));
+    check("T2. 768 px: Spisywanie wróciło do menu Więcej", await page.evaluate(() => !!document.getElementById("transcribeBtn").closest("#moreMenu")));
     await page.setViewportSize({ width: 1440, height: 900 });
     await sleep(300);
     check("6. z powrotem 1440 px: Szukaj we wstążce", await inRibbon(page, "#quickSearch"));

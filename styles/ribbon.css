@@ -184,3 +184,90 @@ body.rb-on .rb-panel .tb-menu-btn { block-size: 28px; }
   .rb-tab, .rb-file, .rb-nudge { transition: background-color 120ms ease, color 120ms ease; }
   .rb-file:active, .rb-nudge:active { transform: none; }
 }
+
+/* ── polecenia kart (zadanie 2) ── */
+body.rb-on #sheetModeSwitch,
+body.rb-on #moreMenuBtn { display: none; }
+.rb-btn {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  block-size: 28px; min-inline-size: 28px; padding: 0 7px;
+  border: 0; border-radius: 6px; background: none;
+  font: inherit; font-size: 12.5px; color: var(--ink); white-space: nowrap; cursor: pointer;
+}
+.rb-btn svg { color: var(--ink-2); }
+.rb-btn.rb-ic { padding: 0; justify-content: center; inline-size: 28px; }
+.rb-sep { flex: none; inline-size: 1px; align-self: stretch; margin: 8px 4px; background: var(--rb-line); }
+/* przyciski przeniesione z menu „Widok ▾”/„Więcej ▾” i z ⋯ — wyglądają jak reszta rzędu */
+body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle) {
+  block-size: 28px; min-block-size: 0; padding: 0 8px; border: 0; border-radius: 6px;
+  background: none; box-shadow: none; font-size: 12.5px; font-weight: 500; color: var(--ink);
+}
+body.rb-on .rb-panel :is(#resetSortBtn, #wideLongToggle).hidden { display: none; }
+body.rb-on .rb-panel #wideLongToggle[aria-pressed="true"] { background: var(--accent-light); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
+body.rb-on .rb-panel #aiMenuItem { display: inline-flex; gap: 6px; block-size: 28px; padding: 0 8px; border-radius: 6px; inline-size: auto; }
+
+/* przycisk trybu i „Edytuj” (Podgląd) */
+.rb-mode, .rb-edit {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  block-size: 28px; padding: 0 10px; border-radius: 8px;
+  font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.rb-mode { border: 1px solid var(--accent-border); background: var(--accent-light); color: var(--accent); }
+.rb-mode[data-mode="view"] { border-color: var(--border); background: var(--surface); color: var(--ink-2); }
+.rb-mode-ico { display: inline-grid; }
+.rb-edit { border: 0; background: var(--accent); color: var(--on-accent); }
+.rb-edit[hidden] { display: none; }
+.rb-name { flex: 1; min-inline-size: 0; text-align: center; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-name[hidden] { display: none; }
+/* Podgląd: bez kart i bez rzędu poleceń; na środku nazwa pliku, „Edytuj” zamiast „Zapisz” */
+body.rb-reading .rb-r1 > .rb-strip,
+body.rb-reading .rb-r2,
+body.rb-reading .rb-act .hero-save { display: none; }
+
+/* menu (tryb, Plik) — skala od przycisku, nie od środka (Emil) */
+.rb-menu {
+  position: absolute; z-index: 70; min-inline-size: 280px; padding: 6px;
+  display: grid; gap: 2px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  box-shadow: 0 18px 40px rgba(18, 30, 23, 0.22);
+  transition: transform 150ms var(--ease-out), opacity 150ms var(--ease-out);
+}
+.rb-menu[hidden] { display: none; }
+@starting-style { .rb-menu { opacity: 0; transform: scale(0.97); } }
+.rb-mi {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 2px 10px;
+  padding: 8px 10px; border: 0; border-radius: 8px; background: none;
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+}
+.rb-mi svg { color: var(--ink-2); }
+.rb-mi b { font-weight: 600; }
+.rb-mi kbd { font: 10px ui-monospace, monospace; color: var(--muted); }
+.rb-mi small { grid-column: 2 / 4; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.rb-mi[aria-checked="true"] { background: var(--accent-light); }
+.rb-mi[aria-checked="true"] :is(svg, b) { color: var(--accent); }
+.rb-menu-sep { block-size: 1px; margin: 4px 2px; background: var(--rb-line); }
+.rb-menu .rb-slot > .btn { justify-content: flex-start; inline-size: 100%; block-size: 34px; border: 0; background: none; box-shadow: none; font-weight: 600; padding: 0 10px; border-radius: 8px; }
+
+.rb-btn, .rb-mode, .rb-edit, .rb-mi { transition: transform 160ms var(--ease-out), background-color 120ms ease, color 120ms ease; }
+:is(.rb-btn, .rb-mode, .rb-edit):active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .rb-btn:hover, .rb-mi:hover, .rb-menu .rb-slot > .btn:hover,
+  body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle, #aiMenuItem):hover { background: var(--rb-hover); }
+  .rb-edit:hover { background: var(--accent-h); }
+}
+:is(.rb-btn, .rb-mode, .rb-edit, .rb-mi):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .rb-menu { transition: opacity 150ms ease; }
+  @starting-style { .rb-menu { transform: none; } }
+  :is(.rb-btn, .rb-mode, .rb-edit):active { transform: none; }
+}
+
+/* Spisywanie / Wpisywanie w menu trybu: te same przyciski co w „Więcej ▾” — ikona jak przy Edycji i Podglądzie */
+.rb-menu .rb-slot > :is(#transcribeBtn, #entryBtn) { gap: 10px; color: var(--ink); }
+.rb-menu .rb-slot > :is(#transcribeBtn, #entryBtn)::before {
+  content: ""; flex: none; inline-size: 18px; block-size: 18px; background: var(--ink-2);
+  -webkit-mask: var(--rb-ico) center / contain no-repeat; mask: var(--rb-ico) center / contain no-repeat;
+}
+#transcribeBtn { --rb-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12h6M9 16h6'/%3E%3C/svg%3E"); }
+#entryBtn { --rb-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v4M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5'/%3E%3Cpath d='M19.5 13.5a1.4 1.4 0 0 1 2 2L16 21l-3 .5.5-3z'/%3E%3C/svg%3E"); }
+body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle) { font-weight: 400; }

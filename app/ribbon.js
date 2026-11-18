@@ -138,8 +138,125 @@ const swbRibbon = (() => {
   const strips = Array.from(root.querySelectorAll(".rb-strip")).map(makeStrip);
   const tabStrip = strips.find((s) => s.key === "tabs");
 
+  // ── polecenia kart ───────────────────────────────────────────────────────
+  // Każdy przycisk woła TO SAMO, co dotąd robił skrót, menu komórki albo panel (jedna logika).
+  const ACTS = {
+    paste: () => typeof pasteClipboardToSelection === "function" && pasteClipboardToSelection(),
+    cut: () => typeof cutSelectionToClipboard === "function" && cutSelectionToClipboard(),
+    copy: () => typeof copySelectionToClipboard === "function" && copySelectionToClipboard(),
+    // Shift+F2 (cell-notes.js) — ta sama droga co skrót, na bieżącej komórce
+    note: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", shiftKey: true, bubbles: true, cancelable: true })),
+    sheet: () => typeof swbSheetOpsUi !== "undefined" && swbSheetOpsUi.addSheet(),
+    // jak „Wyjaśnij formułę” w menu komórki (filter-bar.js), dla komórki z kursorem
+    explain: () => {
+      const row = typeof focusedCellState !== "undefined" && focusedCellState && typeof getRowByKey === "function" ? getRowByKey(focusedCellState.rowKey) : null;
+      const item = row && typeof cellMenuExplainItem === "function" ? cellMenuExplainItem({ row, col: focusedCellState.colIndex0 }) : null;
+      if (item) item.run();
+      else if (typeof toast === "function") toast(tr("rbNoFormula"), "info");
+    },
+  };
+  root.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-rb-act], [data-rb-panel], [data-rb-panel-menu]");
+    if (!b || !root.contains(b)) return;
+    if (b.dataset.rbAct) ACTS[b.dataset.rbAct]?.();
+    else { closeMenus(); openPanel(b.dataset.rbPanel || b.dataset.rbPanelMenu); }
+  });
+
+  // ── menu: tryb i Plik ────────────────────────────────────────────────────
+  const modeBtn = document.getElementById("rbModeBtn");
+  const modeMenu = document.getElementById("rbModeMenu");
+  const fileBtn = document.getElementById("rbFileBtn");
+  const fileMenu = document.getElementById("rbFileMenu");
+  const editBtn = document.getElementById("rbEditBtn");
+  const nameEl = document.getElementById("rbName");
+  const modeSwitch = document.getElementById("sheetModeSwitch");
+  const MENUS = [[modeBtn, modeMenu, "right"], [fileBtn, fileMenu, "left"]].filter(([x, y]) => x && y);
+  const menuItems = (m) => Array.from(m.querySelectorAll(".rb-mi, .rb-slot > button")).filter((x) => !x.hidden);
+  function closeMenus(refocus) {
+    for (const [btn, menu] of MENUS) {
+      if (menu.hidden) continue;
+      menu.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+      if (refocus) btn.focus();
+    }
+  }
+  function openMenu(btn, menu, side) {
+    closeMenus();
+    menu.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    const r = btn.getBoundingClientRect(), R = root.getBoundingClientRect();
+    menu.style.top = `${Math.round(r.bottom - R.top + 6)}px`;
+    if (side === "right") { menu.style.right = `${Math.max(8, Math.round(R.right - r.right))}px`; menu.style.left = ""; menu.style.transformOrigin = "top right"; }
+    else { menu.style.left = `${Math.max(8, Math.round(r.left - R.left))}px`; menu.style.right = ""; menu.style.transformOrigin = "top left"; }
+    (menu.querySelector('[aria-checked="true"]') || menuItems(menu)[0])?.focus();
+  }
+  for (const [btn, menu, side] of MENUS) {
+    btn.addEventListener("click", () => (menu.hidden ? openMenu(btn, menu, side) : closeMenus()));
+    menu.addEventListener("click", (e) => { if (e.target.closest("button")) setTimeout(() => closeMenus(false), 0); });
+    menu.addEventListener("keydown", (e) => {
+      const items = menuItems(menu);
+      const i = items.indexOf(document.activeElement);
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closeMenus(true); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1) % items.length]?.focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length]?.focus(); }
+      else if (e.key === "Tab") closeMenus();
+    });
+  }
+  document.addEventListener("pointerdown", (e) => {
+    if (MENUS.some(([btn, menu]) => !menu.hidden && (menu.contains(e.target) || btn.contains(e.target)))) return;
+    closeMenus();
+  }, true);
+
+  // Edycja / Podgląd: klikamy TE SAME przyciski #sheetModeSwitch (sheet-edit-ui.js trzyma stan)
+  const MODE_ICONS = {
+    edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
+    view: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  };
+  const isView = () => typeof swbIsEditMode === "function" && !swbIsEditMode();
+  function setMode(m) { modeSwitch?.querySelector(`.mode-btn[data-mode="${m}"]`)?.click(); }
+  modeMenu?.querySelectorAll("[data-rb-mode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.rbMode)));
+  editBtn?.addEventListener("click", () => setMode("edit"));
+  function syncMode() {
+    const m = isView() ? "view" : "edit";
+    document.body.classList.toggle("rb-reading", on && m === "view");
+    modeMenu?.querySelectorAll("[data-rb-mode]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.rbMode === m)));
+    if (modeBtn) {
+      modeBtn.dataset.mode = m;
+      modeBtn.querySelector(".rb-mode-ico").innerHTML = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MODE_ICONS[m]}</svg>`;
+      const label = tr(m === "view" ? "rbModeView" : "rbModeEdit");
+      modeBtn.querySelector(".rb-mode-txt").textContent = label;
+      modeBtn.setAttribute("aria-label", `${tr("rbModeAria")}: ${label}`);
+    }
+    if (editBtn) editBtn.hidden = m !== "view";
+    if (nameEl) {
+      nameEl.hidden = m !== "view";
+      const file = document.getElementById("heroTitle")?.textContent.trim() || "";
+      const sheet = typeof currentSheetName === "string" ? currentSheetName : "";
+      nameEl.textContent = [file, sheet, tr("rbReadOnly")].filter(Boolean).join(" · ");
+    }
+    strips.forEach((x) => x.sync());
+  }
+  if (modeSwitch) new MutationObserver(syncMode).observe(modeSwitch, { subtree: true, attributes: true, attributeFilter: ["class", "aria-pressed"] });
+  const titleEl = document.getElementById("heroTitle");
+  if (titleEl) new MutationObserver(syncMode).observe(titleEl, { childList: true, characterData: true, subtree: true });
+
   // ── teksty (PL/EN) ────────────────────────────────────────────────────────
   function labels() {
+    root.querySelectorAll("[data-rb-label]").forEach((el) => {
+      const txt = tr(el.dataset.rbLabel);
+      if (el.matches("button")) {
+        el.setAttribute("aria-label", txt);
+        const sp = el.querySelector(":scope > span:not([class])");
+        if (sp) sp.textContent = txt;
+        el.dataset.hint = "";
+        el.dataset.hintPl = el.dataset.hintEn = el.dataset.rbHint ? `${txt} (${el.dataset.rbHint})` : txt;
+      } else el.textContent = txt;
+    });
+    modeMenu?.setAttribute("aria-label", tr("rbModeMenuAria"));
+    fileMenu?.setAttribute("aria-label", tr("rbFile"));
+    const ed = editBtn?.querySelector("span");
+    if (ed) ed.textContent = tr("rbEdit");
+    syncMode();
     const file = document.getElementById("rbFileBtn");
     if (file) file.textContent = tr("rbFile");
     tabs.forEach((x) => { x.textContent = tr(`rbTab_${x.dataset.rtab}`); });
@@ -158,10 +275,11 @@ const swbRibbon = (() => {
     requestAnimationFrame(() => d.scrollIntoView({ block: "nearest" }));
   }
 
-  const onMq = () => place(deskMq.matches);
+  const onMq = () => { closeMenus(); place(deskMq.matches); syncMode(); };
   if (deskMq.addEventListener) deskMq.addEventListener("change", onMq); else deskMq.addListener(onMq);
   place(deskMq.matches);
   labels();
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && MENUS.some(([, m]) => !m.hidden)) { e.preventDefault(); closeMenus(true); } });
 
   return { isOn: () => on, select, current: () => current, openPanel, labels };
 })();
