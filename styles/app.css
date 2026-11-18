@@ -9950,3 +9950,12 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-queue-all { align-self: flex-start; min-height: 44px; }
 /* podpowiedź w polu celu jest przykładem, nie treścią — mniejsza, żeby zmieściła się na telefonie */
 .en-target-input::placeholder { font-size: 15px; font-weight: 500; }
+
+/* menu ⋯: czy aplikacja wstanie bez internetu (app/offline-status.js — jak w Documents Workbench) */
+.app-menu-offline { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 8px 10px 4px; font-size: 12.5px; line-height: 1.4; color: var(--ink-2); }
+.app-menu-offline[hidden] { display: none; }
+.app-menu-offline svg { flex: none; margin-top: 1px; }
+.app-menu-offline[data-state="ready"] svg { color: var(--success); }
+.app-menu-offline[data-state="preparing"] svg { color: var(--muted); }
+.app-menu-offline[data-state="volatile"] svg, .app-menu-offline[data-state="blocked"] svg { color: var(--warning); }
+.app-menu-offline b { font-weight: 600; color: var(--ink); }

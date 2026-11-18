@@ -177,6 +177,8 @@
               <img src="assets/images/logo-mateusz-orange.webp" alt="" width="18" height="18" /><span class="app-menu-item-text" id="link2Text">Portal ogłoszeniowy</span><span aria-hidden="true">↗</span>
             </a>
             <div class="app-menu-sep" role="separator"></div>
+            <!-- Czy aplikacja wstanie bez internetu (app/offline-status.js — kopia z Documents Workbench) -->
+            <p class="app-menu-offline" id="offlineState" role="status" hidden></p>
             <div class="app-menu-state hero-badges">
               <span class="hero-badge pwa-badge" data-hint-pl=" Progressive Web App (PWA) to nowoczesna strona internetowa, która działa i wygląda jak klasyczna aplikacja mobilna lub desktopowa. " data-hint-en="Progressive Web App(PWA) is a modern website that works and looks like a classic mobile or desktop application." data-hint-delay="1" data-hint-touch>PWA</span>
               <span class="hero-badge network-badge" id="networkBadge" aria-live="polite" data-hint data-hint-delay="1.1" data-hint-touch>Online</span>
@@ -2045,6 +2047,7 @@
     <script defer src="app/edit-tools.js?v=v1.04.00"></script>
     <script defer src="app/cell-format.js?v=v1.04.00"></script>
     <script defer src="app/ui-controls.js?v=v1.04.00"></script>
+    <script defer src="app/offline-status.js?v=v1.04.00"></script>
     <script defer src="app/filter-bar.js?v=v1.04.00"></script>
     <script defer src="app/qs-history.js?v=v1.04.00"></script>
     <script defer src="app/undo.js?v=v1.04.00"></script>

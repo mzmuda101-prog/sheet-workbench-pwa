@@ -6,6 +6,10 @@ let BASE_TITLE = document.title || "Sheet Workbench";
 
 const I18N = {
   pl: {
+    offlineReady: "<b>Gotowa do pracy bez internetu.</b>",
+    offlinePreparing: "<b>Przygotowuję pracę bez internetu…</b> Zostaw aplikację chwilę otwartą z internetem.",
+    offlineVolatile: "<b>Bez internetu może nie wstać.</b> Ta przeglądarka może kasować dane strony przy zamknięciu (np. komputer szkolny lub firmowy, tryb prywatny, dodatki do prywatności).",
+    offlineBlocked: "<b>Bez internetu nie zadziała.</b> Ta przeglądarka nie zapisuje danych tej strony — sprawdź ustawienia witryny (dane i pliki cookie) albo wyjdź z trybu prywatnego.",
     locale: "pl-PL",
     title: "Sheet Workbench",
     description: "Lokalne przeglądanie, filtrowanie i analiza arkuszy Excel",
@@ -1683,6 +1687,10 @@ const I18N = {
     rbNoFormula: "W tej komórce nie ma formuły do wyjaśnienia. Kliknij komórkę z formułą.",
   },
   en: {
+    offlineReady: "<b>Ready to work offline.</b>",
+    offlinePreparing: "<b>Getting ready to work offline…</b> Keep the app open with internet for a moment.",
+    offlineVolatile: "<b>It may not start offline.</b> This browser may delete the site's data when it closes (e.g. a school or work computer, private mode, privacy add-ons).",
+    offlineBlocked: "<b>It won't work offline.</b> This browser doesn't save this site's data — check the site settings (cookies and site data) or leave private mode.",
     locale: "en-US",
     title: "Sheet Workbench",
     description: "Local browsing, filtering, and analysis of Excel sheets",

@@ -73,6 +73,7 @@ const SHELL_ASSETS = [
   `./app/sheet-ops-ui.js?v=${ASSET_V}`,
   `./app/move-cells.js?v=${ASSET_V}`,
   `./app/ui-controls.js?v=${ASSET_V}`,
+  `./app/offline-status.js?v=${ASSET_V}`,
   `./app/transcribe.js?v=${ASSET_V}`,
   `./app/entry-core.js?v=${ASSET_V}`,
   `./app/entry.js?v=${ASSET_V}`,
