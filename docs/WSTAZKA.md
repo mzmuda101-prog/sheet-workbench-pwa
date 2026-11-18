@@ -94,3 +94,21 @@ Wróć / Plik zamyka i oddaje fokus „Plik”. Tymczasowe menu Plik z etapu 1 z
 
 Bez dubli: Anonimizuj kopię pominięte (Anonimizuj jest na karcie Dane); Raport zostaje na Analizie.
 Pominięte, bo takich funkcji w Sheet nie ma: Zamknij, Zgłoś błąd (makieta v2 ich nie wymagała).
+
+## Etap 3 — co weszło (szyna i jeden panel naraz)
+
+`app/rail.js` (`swbRail`) + przyciski `.rb-rail-btn` w `#sidebarRail` + sekcja w `styles/ribbon.css`;
+plan: `docs/superpowers/plans/2026-11-18-wstazka-etap3.md`. Decyzje Mateusza z 2026-11-18.
+
+- Szyna przy wstążce (od 769 px): **Filtry** (z licznikiem; szukanie + filtr dat + tryby auto),
+  **Sortowanie**, **Formuły w arkuszu**, **Sprawdzanie wartości**. Bez Notatek i Asystenta — nie ma
+  takich paneli.
+- Każdy przycisk (szyny, karty, ekranu Plik) pokazuje JEDEN panel z tytułem; pinezka (≥ 1024 px) stawia
+  go obok tabeli. Wysuwanie, Esc i klik obok — jak dotąd (`frame-compact.js`). Znikają 🔧, uchwyt
+  panelu, „Znajdź ustawienie…” i zakładki grup (na telefonie zostają).
+- Bez dubli: z kart zniknęły przyciski paneli z szyny (Dane: filtry, Sortowanie, Sprawdzanie; Formuły:
+  Formuły w arkuszu). Nowe: Narzędzia główne → **Narzędzia edycji** (dotąd tylko przez 🔧), Plik › Pomoc →
+  **Skróty wyszukiwania**. Test pilnuje, że każdy panel ma dokładnie jeden dom.
+- Liczniki błędów przy Formułach / Sprawdzaniu: pominięte (brak gotowego źródła, liczenie przy każdej
+  zmianie to koszt) — do decyzji później.
+- Karta kontekstowa „Tabela”: osobny etap na koniec, prawie od zera (decyzja Mateusza).
