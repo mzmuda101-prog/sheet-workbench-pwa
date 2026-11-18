@@ -61,6 +61,7 @@ const SHELL_ASSETS = [
   `./app/formula-ui.js?v=${ASSET_V}`,
   `./app/frame-compact.js?v=${ASSET_V}`,
   `./app/ribbon.js?v=${ASSET_V}`,
+  `./app/backstage.js?v=${ASSET_V}`,
   `./app/drawer-tabs.js?v=${ASSET_V}`,
   `./app/key-bar.js?v=${ASSET_V}`,
   `./app/cell-notes.js?v=${ASSET_V}`,

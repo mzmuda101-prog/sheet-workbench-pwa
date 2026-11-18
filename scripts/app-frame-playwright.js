@@ -195,7 +195,11 @@ async function run() {
     };
   });
   check("5. menu ⋯ otwiera się w całości na ekranie", menu.open && menu.left >= 0 && menu.right <= menu.vw && menu.bottom <= menu.vh, JSON.stringify(menu));
-  check("5. menu ⋯ ma język, motyw, odświeżenie i 2 linki", menu.hasLang && menu.hasTheme && menu.hasRefresh && menu.links.length === 2, JSON.stringify(menu));
+  // etap 2 wstążki (≥ 769 px): język i motyw są w Plik → Opcje (te same kontrolki), ⋯ ma resztę
+  const bsOpts = await page.evaluate(() => document.body.classList.contains("rb-on")
+    ? { rb: true, lang: !!document.querySelector("#rbBackstage #langSwitch"), theme: document.querySelectorAll("#rbBackstage #themeSeg [data-theme-pref]").length === 3 } : { rb: false });
+  if (bsOpts.rb) check("5. wstążka: ⋯ ma odświeżenie i 2 linki; język i motyw w Plik → Opcje", menu.hasRefresh && menu.links.length === 2 && !menu.hasLang && bsOpts.lang && bsOpts.theme, JSON.stringify({ menu, bsOpts }));
+  else check("5. menu ⋯ ma język, motyw, odświeżenie i 2 linki", menu.hasLang && menu.hasTheme && menu.hasRefresh && menu.links.length === 2, JSON.stringify(menu));
   await page.keyboard.press("Escape");
   await sleep(150);
   const esc = await page.evaluate(() => ({ hidden: document.getElementById("appMenu").hidden, focus: document.activeElement?.id }));
@@ -370,10 +374,13 @@ async function run() {
   // (Spisywanie, Wpisywanie), na karcie Analiza (Raport) i w menu Plik (Eksport…).
   const rbOn = await page.evaluate(() => document.body.classList.contains("rb-on"));
   if (rbOn) {
-    const where = await page.evaluate(() => ({ tr: !!document.querySelector("#rbModeMenu #transcribeBtn"), en: !!document.querySelector("#rbModeMenu #entryBtn"), rp: !!document.querySelector("#rbPanel-an #reportBtn"), ex: !!document.querySelector("#rbFileMenu #exportCsvBtn") }));
+    const where = await page.evaluate(() => ({ tr: !!document.querySelector("#rbModeMenu #transcribeBtn"), en: !!document.querySelector("#rbModeMenu #entryBtn"), rp: !!document.querySelector("#rbPanel-an #reportBtn"), ex: !!document.querySelector("#rbBackstage #exportCsvBtn") }));
     check("R7. wstążka: Spisywanie, Wpisywanie (tryb), Raport (Analiza), Eksport (Plik)", where.tr && where.en && where.rp && where.ex, JSON.stringify(where));
+    // etap 2 wstążki: Eksport… mieszka w ekranie Plik → Eksportuj
     await page.click("#rbFileBtn");
-    await sleep(200);
+    await sleep(300);
+    await page.click('#rbBackstage [data-bs-sec="export"]');
+    await sleep(150);
   } else {
     await page.click("#moreMenuBtn");
     await sleep(200);
@@ -382,7 +389,7 @@ async function run() {
   }
   await page.click("#exportCsvBtn");
   await sleep(300);
-  check("R7. Eksport z menu otwiera okno eksportu i zamyka menu", await page.evaluate(() => !document.getElementById("exportModal").classList.contains("hidden") && document.getElementById("moreMenu").hidden && document.getElementById("rbFileMenu").hidden), "");
+  check("R7. Eksport z menu otwiera okno eksportu i zamyka menu", await page.evaluate(() => !document.getElementById("exportModal").classList.contains("hidden") && document.getElementById("moreMenu").hidden && (document.getElementById("rbBackstage")?.hidden ?? true)), "");
   await page.keyboard.press("Escape");
   await sleep(200);
   // R8. powiększenie + gęstość (etap 1 wstążki: na karcie Widok)
