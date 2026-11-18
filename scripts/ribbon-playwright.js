@@ -58,6 +58,12 @@ async function run() {
     check("1. body.rb-on na komputerze", await page.evaluate(() => document.body.classList.contains("rb-on")));
     check("1. wstążka widoczna", await shown(page, "#ribbon"));
     check("1. nagłówek hero schowany", !(await shown(page, ".hero")));
+    // dolne rogi wstążki zaokrąglone jak karty aplikacji (.panel, --r-lg) — prośba Mateusza
+    const corners = await page.evaluate(() => {
+      const r = getComputedStyle(document.querySelector(".rb-r2")), p = getComputedStyle(document.querySelector(".table-panel"));
+      return { bl: r.borderBottomLeftRadius, br: r.borderBottomRightRadius, panel: p.borderTopLeftRadius };
+    });
+    check("1. dolne rogi wstążki jak karty", corners.bl === corners.panel && corners.br === corners.panel && corners.panel !== "0px", JSON.stringify(corners));
     check("1. wstążka zamknięta w sobie (tabela i nagłówek nie są w #ribbon)", await page.evaluate(() => !document.querySelector("#ribbon .workspace, #ribbon .hero")));
 
     const tabs = await page.evaluate(() => Array.from(document.querySelectorAll('#ribbon [role="tab"][data-rtab]')).filter((t) => !t.hidden).map((t) => t.textContent.trim()));

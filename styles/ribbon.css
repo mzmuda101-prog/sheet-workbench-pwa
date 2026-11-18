@@ -297,3 +297,7 @@ body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) > #re
 .rb-btn:disabled { opacity: 0.45; cursor: default; }
 .rb-btn:disabled:active { transform: none; }
 @media (hover: hover) and (pointer: fine) { .rb-btn:disabled:hover { background: none; } }
+
+/* dolne rogi wstążki jak karty aplikacji (.panel → --r-lg); w Podglądzie rząd 2 znika, więc rogi ma rząd 1 */
+.rb-r2 { border-radius: 0 0 var(--r-lg) var(--r-lg); }
+body.rb-reading .rb-r1 { border-radius: 0 0 var(--r-lg) var(--r-lg); }
