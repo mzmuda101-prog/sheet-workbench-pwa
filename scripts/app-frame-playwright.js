@@ -91,8 +91,30 @@ async function run() {
   check("1. szukanie widoczne bez przełącznika", s1.qsVisible && !s1.readingToggle, JSON.stringify(s1));
   check("1. Zapisz widoczny, szary", s1.save && !s1.saveDirty, JSON.stringify(s1));
 
-  // Q. pisanie w szukaniu: pole bierze cały rząd, przyciski z rzędu się zsuwają; klik w tabelę oddaje
-  {
+  // Q. pisanie w szukaniu: pole bierze cały rząd, przyciski z rzędu się zsuwają; klik w tabelę oddaje.
+  // Etap 1 wstążki (≥ 769 px): Szukaj stoi w rzędzie kart — to samo zachowanie to rozwinięcie
+  // karty Szukaj (230 → 440 px) z trybami dopasowania; klik w tabelę / Tab poza pole ją zwija.
+  if (await page.evaluate(() => document.body.classList.contains("rb-on"))) {
+    const w = () => page.evaluate(() => Math.round(document.getElementById("quickSearchWrap").getBoundingClientRect().width));
+    const before = await w();
+    await page.click("#quickSearch");
+    await sleep(400);
+    const on = await w();
+    const flags = await page.isVisible(".qs-flag[data-qs-flag='equals']");
+    check("Q1. wstążka: fokus w szukaniu → karta Szukaj się rozwija, widać tryby", before <= 240 && on >= 400 && flags, JSON.stringify({ before, on, flags }));
+    await page.click(".qs-flag[data-qs-flag='equals']");
+    await page.click(".qs-flag[data-qs-flag='equals']");
+    await sleep(150);
+    check("Q2. wstążka: klik w ikonkę W polu nie zwija", (await w()) >= 400, "");
+    await page.click("#dataTable tbody tr[data-row-key] td[data-col-index='1']");
+    await sleep(450);
+    check("Q3. wstążka: klik w tabelę → karta Szukaj wraca do wąskiej", (await w()) <= 240, "");
+    await page.click("#quickSearch");
+    await sleep(300);
+    for (let i = 0; i < 16 && (await page.evaluate(() => document.getElementById("quickSearchWrap").contains(document.activeElement))); i++) { await page.keyboard.press("Tab"); await sleep(60); }
+    await sleep(400);
+    check("Q4. wstążka: Tab poza pole → karta Szukaj wraca", (await w()) <= 240, "");
+  } else {
     const before = await qsWideState(page);
     await page.click("#quickSearch");
     await sleep(400);
@@ -343,17 +365,28 @@ async function run() {
   const d2 = await dock();
   check("R6. ‹ chowa i odpina panel, tabela wraca obok paska", !d2.open && d2.mainLeft < 150 && !(await railState()).pinned, JSON.stringify(d2));
   check("R6. odpięcie zapamiętane", (await page.evaluate(() => localStorage.getItem("swb-panel-pinned-v1"))) === "0", "");
-  // R7. menu „Więcej ▾” ma Spisywanie/Wpisywanie/Raport/Eksport; Eksport otwiera okno
-  await page.click("#moreMenuBtn");
-  await sleep(200);
-  const more = await page.evaluate(() => ({ open: !document.getElementById("moreMenu").hidden, ids: [...document.querySelectorAll("#moreMenu > button")].map((b) => b.id) }));
-  check("R7. „Więcej ▾”: Spisywanie, Wpisywanie, Raport, Eksport", more.open && more.ids.join() === "transcribeBtn,entryBtn,reportBtn,exportCsvBtn", JSON.stringify(more));
+  // R7. menu „Więcej ▾” ma Spisywanie/Wpisywanie/Raport/Eksport; Eksport otwiera okno.
+  // Etap 1 wstążki (≥ 769 px): „Więcej ▾” rozebrane — te same przyciski stoją w menu trybu
+  // (Spisywanie, Wpisywanie), na karcie Analiza (Raport) i w menu Plik (Eksport…).
+  const rbOn = await page.evaluate(() => document.body.classList.contains("rb-on"));
+  if (rbOn) {
+    const where = await page.evaluate(() => ({ tr: !!document.querySelector("#rbModeMenu #transcribeBtn"), en: !!document.querySelector("#rbModeMenu #entryBtn"), rp: !!document.querySelector("#rbPanel-an #reportBtn"), ex: !!document.querySelector("#rbFileMenu #exportCsvBtn") }));
+    check("R7. wstążka: Spisywanie, Wpisywanie (tryb), Raport (Analiza), Eksport (Plik)", where.tr && where.en && where.rp && where.ex, JSON.stringify(where));
+    await page.click("#rbFileBtn");
+    await sleep(200);
+  } else {
+    await page.click("#moreMenuBtn");
+    await sleep(200);
+    const more = await page.evaluate(() => ({ open: !document.getElementById("moreMenu").hidden, ids: [...document.querySelectorAll("#moreMenu > button")].map((b) => b.id) }));
+    check("R7. „Więcej ▾”: Spisywanie, Wpisywanie, Raport, Eksport", more.open && more.ids.join() === "transcribeBtn,entryBtn,reportBtn,exportCsvBtn", JSON.stringify(more));
+  }
   await page.click("#exportCsvBtn");
   await sleep(300);
-  check("R7. Eksport z menu otwiera okno eksportu i zamyka menu", await page.evaluate(() => !document.getElementById("exportModal").classList.contains("hidden") && document.getElementById("moreMenu").hidden), "");
+  check("R7. Eksport z menu otwiera okno eksportu i zamyka menu", await page.evaluate(() => !document.getElementById("exportModal").classList.contains("hidden") && document.getElementById("moreMenu").hidden && document.getElementById("rbFileMenu").hidden), "");
   await page.keyboard.press("Escape");
   await sleep(200);
-  // R8. powiększenie + gęstość
+  // R8. powiększenie + gęstość (etap 1 wstążki: na karcie Widok)
+  await page.evaluate(() => { if (typeof swbRibbon !== "undefined" && swbRibbon?.isOn()) swbRibbon.select("view"); });
   const rowH = () => page.evaluate(() => Math.round(document.querySelector("#dataTable tbody tr[data-row-key]").getBoundingClientRect().height));
   const h0 = await rowH();
   await page.click("#zoomInBtn");

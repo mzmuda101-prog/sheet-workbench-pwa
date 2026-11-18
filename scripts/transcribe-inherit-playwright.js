@@ -218,7 +218,9 @@ async function run() {
     document.getElementById("quickSearchAction").value = "filter";
     document.getElementById("quickSearch").value = "A2";
   });
-  await page.click("#quickSearchBtn");
+  // etap 1 wstążki: w rzędzie Szukaj nie ma lupy — Enter w polu robi to samo
+  if (await page.isVisible("#quickSearchBtn")) await page.click("#quickSearchBtn");
+  else await page.press("#quickSearch", "Enter");
   await sleep(600);
   const filteredRows = await page.evaluate(() => viewRows.length);
   await page.evaluate(() => document.getElementById("transcribeBtn").click());

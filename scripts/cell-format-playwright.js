@@ -222,7 +222,9 @@ async function run() {
   ok("10b. obramowanie widać w tabeli", !!(await cellView(16, 1)).borderBottom, await cellView(16, 1));
 
   // ── 11. Podgląd ────────────────────────────────────────────────────────────
-  await page.click('#sheetModeSwitch [data-mode="view"]');
+  // etap 1 wstążki: przełącznik trybu stoi w menu „Tryb ▾” (ten sam stan, sheet-edit-ui.js)
+  if (await page.evaluate(() => document.body.classList.contains("rb-on"))) { await page.click("#rbModeBtn"); await page.click('#rbModeMenu [data-rb-mode="view"]'); }
+  else await page.click('#sheetModeSwitch [data-mode="view"]');
   await sleep(250);
   const view = await page.evaluate(() => ({ bars: !document.getElementById("editBars").hidden, cls: document.documentElement.classList.contains("swb-view-mode") }));
   ok("11. Podgląd chowa paski", !view.bars && view.cls, view);

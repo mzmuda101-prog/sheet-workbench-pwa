@@ -1811,6 +1811,7 @@ const swbEntry = (() => {
     ui.returnFocus = null;
     persistNow();
     if (back && document.contains(back) && back.getClientRects().length) back.focus();
+    else if (document.body.classList.contains("rb-on")) document.getElementById("rbModeBtn")?.focus(); // wstążka: Wpisywanie w menu trybu
     else document.getElementById("moreMenuBtn")?.focus();
     // raz na sesję: kartki są w aplikacji, plik trzeba jeszcze zapisać
     if (!ui.reminded && ui.sessionLog.length && typeof hasUnsavedChanges !== "undefined" && hasUnsavedChanges) {

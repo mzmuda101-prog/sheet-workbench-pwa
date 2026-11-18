@@ -2,6 +2,8 @@
 //   node scripts/row-grow-playwright.js            (Chromium)
 //   ENGINE=webkit node scripts/row-grow-playwright.js
 //
+// test-impact: bez śledzenia CSS (śledzenie reguł wydłużało krok z ~30 do ~50 s)
+//
 // Pilnuje (przykład „Obieg zadań”: 4 kolumny „Długość” to formuły, kolumny dat mają format daty):
 //   1. „＋ Nowy wiersz” tylko w Edycji; klik = wiersz za ostatnim wierszem danych, pisanie od 1. kolumny;
 //   2. wpis: wartości w arkuszu, wygląd z wiersza wyżej (indeks stylu w pustych kolumnach też),

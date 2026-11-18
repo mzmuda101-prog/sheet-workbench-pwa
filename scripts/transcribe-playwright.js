@@ -253,7 +253,8 @@ async function run() {
   if (closed.bodyLock) failures.push("po zamknięciu body.tr-active powinno zniknąć");
   if (closed.appInert) failures.push("po zamknięciu inert powinien zejść z .app");
   // przycisk mieszka w menu „Więcej ▾” — po zamknięciu fokus wraca na „Więcej”
-  if (closed.focus !== "transcribeBtn" && closed.focus !== "moreMenuBtn") failures.push(`fokus powinien wrócić na przycisk (Spisywanie albo „Więcej”), jest "${closed.focus}"`);
+  // etap 1 wstążki: Spisywanie mieszka w menu „Tryb ▾” — fokus wraca na przycisk trybu
+  if (!["transcribeBtn", "moreMenuBtn", "rbModeBtn"].includes(closed.focus)) failures.push(`fokus powinien wrócić na przycisk (Spisywanie, „Więcej” albo „Tryb”), jest "${closed.focus}"`);
 
   await loadSheet(page);
   await page.evaluate(() => document.getElementById("transcribeBtn").click());

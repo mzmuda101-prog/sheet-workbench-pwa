@@ -1,0 +1,299 @@
+/* ── Wstążka (app/ribbon.js; docs/WSTAZKA.md, makieta docs/makiety/wstazka-v2.html) ──────────
+   Osobny plik: kolory i krój z tokenów app.css. Paski płaskie (bez --glass) — decyzja 1 z
+   WSTAZKA.md: tańsze przewijanie dużej tabeli, szkło zostaje w oknach i powiadomieniach. */
+
+.ribbon {
+  --rb-r1-bg: color-mix(in srgb, var(--surface) 92%, var(--ink) 3%);
+  --rb-r2-bg: color-mix(in srgb, var(--surface) 60%, #fff);
+  --rb-hover: color-mix(in srgb, var(--accent) 9%, transparent);
+  --rb-press: color-mix(in srgb, var(--accent) 17%, transparent);
+  --rb-line: var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin: 0 -12px 3px;
+  font: 13px/1.35 var(--font);
+  color: var(--ink);
+}
+[data-theme="dark"] .ribbon { --rb-r2-bg: color-mix(in srgb, var(--surface) 88%, #fff 4%); }
+.ribbon[hidden] { display: none; }
+
+/* rama na komputerze: nagłówek i stary pasek nad tabelą znikają (ich kontrolki są we wstążce) */
+body.rb-on .app { max-width: none; padding: 0 12px 12px; }
+body.rb-on .hero,
+body.rb-on .hero-grip,
+body.rb-on .table-toolbar { display: none; }
+/* tabela zaczyna się tuż pod wstążką — miejsce idzie w wiersze (makieta v2: 108 px do liter kolumn) */
+body.rb-on .table-panel { padding-top: 4px; }
+
+.rb-slot { display: contents; }
+
+/* ── rząd 1 ── */
+.rb-r1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  block-size: 38px;
+  padding: 0 8px;
+  background: var(--rb-r1-bg);
+  border-bottom: 1px solid var(--rb-line);
+}
+.rb-logo {
+  inline-size: 22px; block-size: 22px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 6px;
+  background: var(--accent); color: var(--on-accent);
+}
+.rb-file {
+  flex: none;
+  block-size: 26px; padding: 0 12px;
+  border: 0; border-radius: 7px;
+  background: var(--accent); color: var(--on-accent);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.rb-r1 > .rb-strip { flex: 1; block-size: 38px; }
+.rb-r1 .rb-sc { align-items: stretch; }
+.rb-tabs { display: flex; align-items: stretch; }
+.rb-tab {
+  position: relative;
+  border: 0; background: none;
+  padding: 0 10px;
+  font: inherit; color: var(--ink-2); white-space: nowrap;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+}
+.rb-tab[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+.rb-tab[aria-selected="true"]::after {
+  content: ""; position: absolute; inset-inline: 10px; bottom: 0;
+  block-size: 3px; border-radius: 3px 3px 0 0; background: currentColor;
+}
+.rb-act { display: flex; align-items: center; gap: 4px; flex: none; }
+
+/* kontrolki przeniesione do rzędu 1 — wysokość 28 px jak w makiecie */
+body.rb-on .rb-act .hero-save { block-size: 28px; padding: 0 12px; border-radius: 8px; box-shadow: none; }
+body.rb-on .rb-act .app-menu-btn { inline-size: 28px; block-size: 28px; border: 0; background: none; box-shadow: none; border-radius: 7px; }
+body.rb-on .rb-act .mode-switch { padding: 2px; border-radius: 9px; }
+body.rb-on .rb-act .mode-btn { padding: 2px 9px; }
+body.rb-on .rb-act .panel-toggle { block-size: 28px; }
+body.rb-on .rb-act .app-update-btn { block-size: 28px; }
+
+/* Szukaj: wąskie pole w rzędzie; po kliknięciu (albo ⚙) szersza karta nad wstążką z resztą opcji */
+.rb-slot.rb-search { display: block; position: relative; inline-size: 230px; block-size: 28px; flex: none; }
+body.rb-on .rb-search > .quick-search {
+  position: absolute; inset-block-start: 0; inset-inline-end: 0;
+  inline-size: 100%; min-block-size: 28px; block-size: auto;
+  margin: 0; padding: 0 4px 0 9px; gap: 4px;
+  flex-wrap: nowrap;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); box-shadow: none;
+  transition: inline-size 180ms var(--ease-out);
+}
+body.rb-on .rb-search > .quick-search > select,
+body.rb-on .rb-search > .quick-search > .qs-operators-toggle,
+body.rb-on .rb-search > .quick-search > .qs-scope-toggle,
+body.rb-on .rb-search > .quick-search > #quickSearchColumnsBtn,
+body.rb-on .rb-search > .quick-search > #quickSearchBtn,
+body.rb-on .rb-search > .quick-search .qs-flags { display: none; }
+body.rb-on .rb-search > .quick-search input { block-size: 26px; }
+body.rb-on .rb-search > .quick-search :is(.btn, .nlq-open-btn) { block-size: 24px; min-block-size: 0; }
+body.rb-on .rb-search > .quick-search:focus-within,
+body.rb-on .rb-search > .quick-search.qs-expanded {
+  inline-size: 440px; z-index: 60; flex-wrap: wrap; padding-block: 2px;
+  border-color: var(--accent);
+  box-shadow: 0 14px 32px -16px rgba(18, 30, 23, 0.35);
+}
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) .qs-flags,
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) > select { display: flex; }
+body.rb-on .rb-search > .quick-search.qs-expanded > :is(.qs-operators-toggle, .qs-scope-toggle, #quickSearchColumnsBtn) { display: inline-flex; }
+body.rb-on .rb-search > .quick-search .qs-field { flex: 1 1 120px; min-inline-size: 0; }
+@media (max-width: 900px) {
+  /* wąsko: sama lupa; klik (ribbon.js) daje fokus polu i karta Szukaj rozwija się w lewo */
+  .rb-slot.rb-search { inline-size: 36px; }
+  body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) { justify-content: center; padding: 0; overflow: hidden; cursor: pointer; }
+  body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) > :not(svg, .qs-field) { display: none; }
+  /* pole zostaje w drzewie (da się dać mu fokus), tylko zwinięte do zera */
+  body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) > .qs-field { flex: 0 0 0; inline-size: 0; min-inline-size: 0; opacity: 0; overflow: hidden; }
+}
+
+/* ── rząd 2 ── */
+.rb-r2 {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  block-size: 36px;
+  padding: 0 6px;
+  background: var(--rb-r2-bg);
+  border-bottom: 1px solid var(--border);
+}
+.rb-r2 > .rb-strip { flex: 1; block-size: 100%; }
+.rb-fixed {
+  display: flex; align-items: center; gap: 2px; flex: none;
+  padding-inline-end: 6px; margin-inline-end: 4px;
+  border-inline-end: 1px solid var(--rb-line);
+}
+body.rb-on .rb-fixed .undo-btn { inline-size: 28px; block-size: 28px; padding: 0; }
+.rb-panel { display: flex; align-items: center; gap: 2px; flex: none; }
+.rb-panel[hidden] { display: none; }
+/* pasek formatowania w karcie Narzędzia główne — bez własnej ramki, przyciski 28 px */
+body.rb-on .rb-panel .format-ribbon {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 2px;
+  padding: 0; margin: 0; border: 0; background: none; box-shadow: none;
+}
+body.rb-on .rb-panel :is(.fmt-btn, .tb-btn) { block-size: 28px; min-inline-size: 28px; }
+body.rb-on .rb-panel .tb-menu-btn { block-size: 28px; }
+
+/* ── przewijany rząd z podpowiedzią ── */
+.rb-strip { display: flex; align-items: stretch; min-inline-size: 0; position: relative; }
+.rb-sc {
+  display: flex; align-items: center; gap: 2px;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; scroll-behavior: smooth;
+  min-inline-size: 0; flex: 1;
+}
+.rb-sc::-webkit-scrollbar { display: none; }
+.rb-sc > * { flex: none; }
+.rb-strip.has-r .rb-sc { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
+.rb-strip.has-l .rb-sc { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px); mask-image: linear-gradient(90deg, transparent, #000 40px); }
+.rb-strip.has-l.has-r .rb-sc { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+.rb-nudge {
+  display: none; align-items: center; gap: 2px; flex: none; align-self: center;
+  block-size: 24px; min-inline-size: 24px; padding: 0 5px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--accent);
+  font: 600 11px/1 var(--font); cursor: pointer;
+  box-shadow: 0 1px 3px rgba(18, 30, 23, 0.12);
+}
+.rb-strip.has-l .rb-nudge-l,
+.rb-strip.has-r .rb-nudge-r { display: inline-flex; }
+.rb-nudge-l { margin-inline-end: 4px; }
+.rb-nudge-r { margin-inline-start: 4px; }
+.rb-nudge.is-hint { animation: rb-nudge 0.5s var(--ease-out) 2; }
+@keyframes rb-nudge { 50% { transform: translateX(3px); background: var(--accent-light); } }
+
+/* wciśnięcie i najechanie — tylko mysz dostaje hover (Emil: bez „lepkiego” hover na dotyku) */
+.rb-tab, .rb-file, .rb-nudge { transition: transform 160ms var(--ease-out), background-color 120ms ease, color 120ms ease; }
+.rb-file:active, .rb-nudge:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .rb-tab:hover { background: var(--rb-hover); }
+  .rb-file:hover { background: var(--accent-h); }
+  .rb-nudge:hover { background: var(--accent-light); }
+}
+.rb-tab:focus-visible, .rb-file:focus-visible, .rb-nudge:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rb-sc { scroll-behavior: auto; }
+  .rb-nudge.is-hint { animation: none; }
+  body.rb-on .rb-search > .quick-search { transition: none; }
+  .rb-tab, .rb-file, .rb-nudge { transition: background-color 120ms ease, color 120ms ease; }
+  .rb-file:active, .rb-nudge:active { transform: none; }
+}
+
+/* ── polecenia kart (zadanie 2) ── */
+body.rb-on #sheetModeSwitch,
+body.rb-on #moreMenuBtn { display: none; }
+.rb-btn {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  block-size: 28px; min-inline-size: 28px; padding: 0 7px;
+  border: 0; border-radius: 6px; background: none;
+  font: inherit; font-size: 12.5px; color: var(--ink); white-space: nowrap; cursor: pointer;
+}
+.rb-btn svg { color: var(--ink-2); }
+.rb-btn.rb-ic { padding: 0; justify-content: center; inline-size: 28px; }
+.rb-sep { flex: none; inline-size: 1px; align-self: stretch; margin: 8px 4px; background: var(--rb-line); }
+/* przyciski przeniesione z menu „Widok ▾”/„Więcej ▾” i z ⋯ — wyglądają jak reszta rzędu */
+body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle) {
+  block-size: 28px; min-block-size: 0; padding: 0 8px; border: 0; border-radius: 6px;
+  background: none; box-shadow: none; font-size: 12.5px; font-weight: 500; color: var(--ink);
+}
+body.rb-on .rb-panel :is(#resetSortBtn, #wideLongToggle).hidden { display: none; }
+body.rb-on .rb-panel #wideLongToggle[aria-pressed="true"] { background: var(--accent-light); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
+body.rb-on .rb-panel #aiMenuItem { display: inline-flex; gap: 6px; block-size: 28px; padding: 0 8px; border-radius: 6px; inline-size: auto; }
+
+/* przycisk trybu i „Edytuj” (Podgląd) */
+.rb-mode, .rb-edit {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  block-size: 28px; padding: 0 10px; border-radius: 8px;
+  font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer;
+}
+.rb-mode { border: 1px solid var(--accent-border); background: var(--accent-light); color: var(--accent); }
+.rb-mode[data-mode="view"] { border-color: var(--border); background: var(--surface); color: var(--ink-2); }
+.rb-mode-ico { display: inline-grid; }
+.rb-edit { border: 0; background: var(--accent); color: var(--on-accent); }
+.rb-edit[hidden] { display: none; }
+.rb-name { flex: 1; min-inline-size: 0; text-align: center; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-name[hidden] { display: none; }
+/* Podgląd: bez kart i bez rzędu poleceń; na środku nazwa pliku, „Edytuj” zamiast „Zapisz” */
+body.rb-reading .rb-r1 > .rb-strip,
+body.rb-reading .rb-r2,
+body.rb-reading .rb-act .hero-save { display: none; }
+
+/* menu (tryb, Plik) — skala od przycisku, nie od środka (Emil) */
+.rb-menu {
+  position: absolute; z-index: 70; min-inline-size: 280px; padding: 6px;
+  display: grid; gap: 2px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  box-shadow: 0 18px 40px rgba(18, 30, 23, 0.22);
+  transition: transform 150ms var(--ease-out), opacity 150ms var(--ease-out);
+}
+.rb-menu[hidden] { display: none; }
+@starting-style { .rb-menu { opacity: 0; transform: scale(0.97); } }
+.rb-mi {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 2px 10px;
+  padding: 8px 10px; border: 0; border-radius: 8px; background: none;
+  font: inherit; color: var(--ink); text-align: left; cursor: pointer;
+}
+.rb-mi svg { color: var(--ink-2); }
+.rb-mi b { font-weight: 600; }
+.rb-mi kbd { font: 10px ui-monospace, monospace; color: var(--muted); }
+.rb-mi small { grid-column: 2 / 4; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.rb-mi[aria-checked="true"] { background: var(--accent-light); }
+.rb-mi[aria-checked="true"] :is(svg, b) { color: var(--accent); }
+.rb-menu-sep { block-size: 1px; margin: 4px 2px; background: var(--rb-line); }
+.rb-menu .rb-slot > .btn { justify-content: flex-start; inline-size: 100%; block-size: 34px; border: 0; background: none; box-shadow: none; font-weight: 600; padding: 0 10px; border-radius: 8px; }
+
+.rb-btn, .rb-mode, .rb-edit, .rb-mi { transition: transform 160ms var(--ease-out), background-color 120ms ease, color 120ms ease; }
+:is(.rb-btn, .rb-mode, .rb-edit):active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .rb-btn:hover, .rb-mi:hover, .rb-menu .rb-slot > .btn:hover,
+  body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle, #aiMenuItem):hover { background: var(--rb-hover); }
+  .rb-edit:hover { background: var(--accent-h); }
+}
+:is(.rb-btn, .rb-mode, .rb-edit, .rb-mi):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .rb-menu { transition: opacity 150ms ease; }
+  @starting-style { .rb-menu { transform: none; } }
+  :is(.rb-btn, .rb-mode, .rb-edit):active { transform: none; }
+}
+
+/* Spisywanie / Wpisywanie w menu trybu: te same przyciski co w „Więcej ▾” — ikona jak przy Edycji i Podglądzie */
+.rb-menu .rb-slot > :is(#transcribeBtn, #entryBtn) { gap: 10px; color: var(--ink); }
+.rb-menu .rb-slot > :is(#transcribeBtn, #entryBtn)::before {
+  content: ""; flex: none; inline-size: 18px; block-size: 18px; background: var(--ink-2);
+  -webkit-mask: var(--rb-ico) center / contain no-repeat; mask: var(--rb-ico) center / contain no-repeat;
+}
+#transcribeBtn { --rb-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12h6M9 16h6'/%3E%3C/svg%3E"); }
+#entryBtn { --rb-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v4M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5'/%3E%3Cpath d='M19.5 13.5a1.4 1.4 0 0 1 2 2L16 21l-3 .5.5-3z'/%3E%3C/svg%3E"); }
+body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle) { font-weight: 400; }
+
+/* ── pasek formuły + chipy filtrów w jednym rzędzie (zadanie 3, makieta v2 .fbar) ── */
+.rb-fbar-row { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 8px; row-gap: 4px; margin-bottom: 8px; }
+.rb-fbar-row > .edit-bars { flex: 1 1 360px; min-inline-size: 0; margin: 0; }
+.rb-fbar-row > .edit-bars[hidden] { display: none; }
+.rb-fbar-row > .active-filters { flex: 0 1 auto; margin: 0 0 0 auto; min-inline-size: 0; align-self: center; }
+.rb-fbar-row > .active-filters.hidden { display: none; }
+body.rb-on .rb-fbar-row .formula-input { min-inline-size: 160px; }
+
+/* „Ostatnie” zapytania: ostatni rząd w rozwiniętej karcie Szukaj, tylko z fokusem */
+body.rb-on .rb-search > .quick-search > #recentStrip { flex: 1 0 100%; order: 99; min-inline-size: 0; padding-block: 2px 4px; }
+body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) > #recentStrip { display: none; }
+
+/* przycisk arkusza (nazwa bieżącego arkusza ▾) na początku rzędu paska formuły */
+.rb-fbar-row > .hero-sheet { flex: none; align-self: center; block-size: 28px; margin: 0; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.rb-fbar-row > .hero-sheet[hidden] { display: none; }
+
+/* polecenia bez pliku (ribbon.js syncFile) */
+.rb-btn:disabled { opacity: 0.45; cursor: default; }
+.rb-btn:disabled:active { transform: none; }
+@media (hover: hover) and (pointer: fine) { .rb-btn:disabled:hover { background: none; } }

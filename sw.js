@@ -1,4 +1,4 @@
-const CACHE_VERSION = "v1.03.03";
+const CACHE_VERSION = "v1.04.00";
 const APP_CACHE = `excel-wb-shell-${CACHE_VERSION}`;
 const HEAVY_CACHE = `excel-wb-heavy-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `excel-wb-runtime-${CACHE_VERSION}`;
@@ -17,6 +17,7 @@ const SHELL_ASSETS = [
   "./index.html",
   "./manifest.json",
   `./styles/app.css?v=${ASSET_V}`,
+  `./styles/ribbon.css?v=${ASSET_V}`,
   "./assets/fonts/space-grotesk-latin.woff2",
   "./assets/fonts/space-grotesk-latin-ext.woff2",
   `./app/core.js?v=${ASSET_V}`,
@@ -59,6 +60,7 @@ const SHELL_ASSETS = [
   `./app/sheet-edit-ui.js?v=${ASSET_V}`,
   `./app/formula-ui.js?v=${ASSET_V}`,
   `./app/frame-compact.js?v=${ASSET_V}`,
+  `./app/ribbon.js?v=${ASSET_V}`,
   `./app/drawer-tabs.js?v=${ASSET_V}`,
   `./app/key-bar.js?v=${ASSET_V}`,
   `./app/cell-notes.js?v=${ASSET_V}`,

@@ -28,6 +28,7 @@
 // — ten sam test po nowym silniku tabeli (app/virt-rows.js).
 //
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/).
+// test-impact: bez śledzenia CSS (setki klatek przewijania — śledzenie reguł wydłużało krok z ~25 do ~80 s)
 
 const playwright = require("playwright");
 
