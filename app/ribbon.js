@@ -37,6 +37,8 @@ const swbRibbon = (() => {
     [editBars, fbarRow],
     [document.getElementById("activeFilters"), fbarRow],
     [document.getElementById("recentStrip"), document.getElementById("quickSearchWrap")],
+    // powiększenie na dolnym pasku, po prawej (jak w Excelu; WSTAZKA.md, etap 4)
+    [document.getElementById("zoomGroup"), document.getElementById("tableFoot")],
   ].filter(([el, into]) => el && into).map(([el, slot]) => ({ el, slot, mark: document.createComment("swb-rb") }));
   moves.push(...extra);
   let on = false;
@@ -308,6 +310,16 @@ const swbRibbon = (() => {
     if ((qs.closest(".qs-field") || qs).getBoundingClientRect().width > 4) return; // pole widać — zwykły klik
     qs.focus();
   });
+  // karta Szukaj rozwinięta przez ⚙ zwija się po kliknięciu poza nią (szeroka tylko, gdy w niej pracujesz);
+  // okna i menu otwarte z karty (np. Kolumny) jej nie zwijają
+  document.addEventListener("pointerdown", (e) => {
+    const wrap = document.getElementById("quickSearchWrap");
+    const more = document.getElementById("qsMoreBtn");
+    if (!on || !wrap?.classList.contains("qs-expanded") || wrap.contains(e.target)) return;
+    if (e.target.closest?.('[role="dialog"], [role="menu"], [role="listbox"], .app-menu')) return;
+    wrap.classList.remove("qs-expanded");
+    more?.setAttribute("aria-expanded", "false");
+  }, true);
 
   // ── panel boczny: otwórz sekcję (do etapu 3 — potem szyna z wysuwanym panelem) ──
   function openPanel(detailsId) {

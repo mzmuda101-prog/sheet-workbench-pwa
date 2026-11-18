@@ -96,12 +96,31 @@ body.rb-on .rb-search > .quick-search > #quickSearchBtn,
 body.rb-on .rb-search > .quick-search .qs-flags { display: none; }
 body.rb-on .rb-search > .quick-search input { block-size: 26px; }
 body.rb-on .rb-search > .quick-search :is(.btn, .nlq-open-btn) { block-size: 24px; min-block-size: 0; }
+/* kursor w polu (albo ⚙): karta rośnie w lewo, NAD kartami wstążki — pole ma być szerokie, póki się pisze */
 body.rb-on .rb-search > .quick-search:focus-within,
 body.rb-on .rb-search > .quick-search.qs-expanded {
-  inline-size: 440px; z-index: 60; flex-wrap: wrap; padding-block: 2px;
+  inline-size: min(720px, calc(100vw - 360px)); min-inline-size: 100%;
+  z-index: 60; flex-wrap: wrap; align-items: center; row-gap: 4px; padding: 3px 4px 3px 9px;
   border-color: var(--accent);
   box-shadow: 0 14px 32px -16px rgba(18, 30, 23, 0.35);
 }
+/* rząd 1: pole + przełączniki dopasowania w jednej ramce, potem akcja i przyciski — wszystko 24 px */
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) .qs-field { flex: 1 1 200px; }
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) input { block-size: 24px; }
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) .qs-flags {
+  gap: 0; padding: 1px; border-radius: var(--r-sm); background: var(--field);
+}
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) .qs-flag { block-size: 22px; min-inline-size: 26px; }
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) > select {
+  flex: none; inline-size: auto; block-size: 24px; min-block-size: 0; padding-block: 0; font-size: 12px;
+}
+/* rząd 2 (⚙): zawsze od nowej linii, od lewej krawędzi pola tekstowego, ta sama wysokość co reszta */
+body.rb-on .rb-search > .quick-search.qs-expanded > .qs-more-toggle { order: 0; }
+body.rb-on .rb-search > .quick-search.qs-expanded::after { content: ""; order: 5; flex-basis: 100%; block-size: 0; }
+body.rb-on .rb-search > .quick-search.qs-expanded > :is(.qs-operators-toggle, .qs-scope-toggle, #quickSearchColumnsBtn) {
+  order: 6; block-size: 24px; min-block-size: 0; box-sizing: border-box; padding-block: 0;
+}
+body.rb-on .rb-search > .quick-search.qs-expanded > .qs-operators-toggle { margin-inline-start: 18px; }
 body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) .qs-flags,
 body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) > select { display: flex; }
 body.rb-on .rb-search > .quick-search.qs-expanded > :is(.qs-operators-toggle, .qs-scope-toggle, #quickSearchColumnsBtn) { display: inline-flex; }
@@ -399,3 +418,10 @@ body.rb-on :is(#panelToggle, #panelHandle, .sidebar-finder, .drawer-tabs) { disp
 :root.rb-pane .sidebar-scroll > .sidebar-group.rb-pane-group { display: flex !important; }
 /* jeden panel: jego własny nagłówek dubluje tytuł panelu — chowamy (przy Filtrach, 3 sekcje, zostaje) */
 :root.rb-pane-single .sidebar details.panel.rb-pane-on > summary { display: none; }
+
+/* powiększenie na dolnym pasku (ribbon.js przenosi #zoomGroup do #tableFoot): zawsze po prawej */
+body.rb-on .table-foot > .zoom-group { margin-inline-start: auto; block-size: 28px; }
+body.rb-on .table-foot > .zoom-group :is(.tb-btn, .zoom-now) { block-size: 24px; }
+/* wąsko: sumy nie ściskają się do jednej kolumny — powiększenie schodzi wtedy do własnej linii */
+body.rb-on .table-foot { flex-wrap: wrap; }
+body.rb-on .table-foot > .cell-stats-bar { flex: 1 1 360px; }

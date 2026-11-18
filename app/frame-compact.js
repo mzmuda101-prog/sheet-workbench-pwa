@@ -39,8 +39,13 @@ var frameCompact = (() => {
     let left = m.align === "center" ? r.left + r.width / 2 - w / 2 : r.left;
     left = Math.max(8, Math.min(vw - w - 8, left));
     m.el.style.left = `${Math.round(left)}px`;
-    m.el.style.top = `${Math.round(r.bottom + 6)}px`;
-    m.el.style.maxHeight = `${Math.max(160, window.innerHeight - r.bottom - 20)}px`;
+    // przycisk przy dolnej krawędzi (powiększenie na dolnym pasku): menu w górę, gdy tam więcej miejsca
+    const below = window.innerHeight - r.bottom - 20;
+    const above = r.top - 20;
+    const up = below < (m.el.scrollHeight || 240) && above > below;
+    m.el.style.top = up ? "" : `${Math.round(r.bottom + 6)}px`;
+    m.el.style.bottom = up ? `${Math.round(window.innerHeight - r.top + 6)}px` : "";
+    m.el.style.maxHeight = `${Math.max(160, up ? above : below)}px`;
   }
   function closeMenu(returnFocus) {
     const m = openMenu;
