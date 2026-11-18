@@ -239,6 +239,58 @@ async function run() {
     await context.close();
   }
 
+  // ── poprawki po przeglądzie: fokus, menu przy przejściu progu, pusty stan, skróty ──
+  {
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
+    // F1: fokus przeżywa przejście 769 → 768 (obrót iPada w trakcie szukania)
+    await page.focus("#quickSearch");
+    await page.keyboard.type("Ann");
+    await page.setViewportSize({ width: 768, height: 900 });
+    await page.waitForFunction(() => !document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
+    await sleep(150);
+    check("F1. 1440→768: fokus zostaje w Szukaj", await page.evaluate(() => document.activeElement?.id === "quickSearch"));
+    await page.fill("#quickSearch", "");
+    // F2: otwarte „Widok ▾” nie zostaje przyklejone w rogu po przejściu na wstążkę
+    await page.click("#viewMenuBtn");
+    await sleep(150);
+    await page.setViewportSize({ width: 1024, height: 900 });
+    await page.waitForFunction(() => document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
+    await sleep(200);
+    check("F2. 768→1024: menu Widok zamknięte", await page.evaluate(() => document.getElementById("viewMenu").hidden && document.getElementById("viewMenuBtn").getAttribute("aria-expanded") !== "true"));
+    // F3: wybór trybu z klawiatury i „Edytuj” oddają fokus przyciskowi trybu
+    await page.focus("#rbModeBtn");
+    await page.keyboard.press("Enter");
+    await sleep(100);
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await sleep(250);
+    check("F3. Podgląd z klawiatury: fokus na przycisku trybu", await page.evaluate(() => document.activeElement?.id === "rbModeBtn" && document.body.classList.contains("rb-reading")));
+    await page.focus("#rbEditBtn");
+    await page.keyboard.press("Enter");
+    await sleep(250);
+    check("F3. Edytuj: fokus na przycisku trybu", await page.evaluate(() => document.activeElement?.id === "rbModeBtn" && !document.body.classList.contains("rb-reading")));
+    // F4: menu nie obiecuje skrótu, którego nie ma (Ctrl+Alt+E = AltGr+E = „ę” na polskim Windowsie)
+    check("F4. menu trybu bez nieistniejącego Ctrl+Alt+E", await page.evaluate(() => !document.getElementById("rbModeMenu").textContent.includes("Ctrl+Alt+E")));
+    check("brak błędów strony (poprawki)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+  {
+    // F5: bez pliku polecenia wymagające pliku są wyszarzone, po wczytaniu działają
+    const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1440, height: 900 } });
+    await context.addInitScript(() => { localStorage.clear(); localStorage.setItem("introPlayed", "true"); });
+    const page = await context.newPage();
+    await page.goto(APP_URL, { waitUntil: "load" });
+    await page.evaluate(() => document.getElementById("heroSplash")?.remove());
+    await sleep(400);
+    const empty = await page.evaluate(() => Array.from(document.querySelectorAll("#ribbon [data-rb-act]")).map((b) => ({ a: b.dataset.rbAct, d: b.disabled })));
+    check("F5. bez pliku: Wklej/Wytnij/Kopiuj/Notatka/Wyjaśnij wyszarzone", empty.length >= 5 && empty.every((x) => x.d), JSON.stringify(empty));
+    await page.evaluate(() => document.getElementById("loadSampleBtn")?.click());
+    await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 30000 });
+    await sleep(300);
+    check("F5. po wczytaniu: polecenia aktywne", await page.evaluate(() => Array.from(document.querySelectorAll("#ribbon [data-rb-act]")).every((b) => !b.disabled)));
+    await context.close();
+  }
+
   // ── telefon ─────────────────────────────────────────────────────────────
   {
     const { context, page, errors } = await open(browser, { width: 390, height: 844 }, { hasTouch: true, isMobile: ENGINE === "chromium" });

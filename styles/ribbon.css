@@ -292,3 +292,8 @@ body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) > #re
 /* przycisk arkusza (nazwa bieżącego arkusza ▾) na początku rzędu paska formuły */
 .rb-fbar-row > .hero-sheet { flex: none; align-self: center; block-size: 28px; margin: 0; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .rb-fbar-row > .hero-sheet[hidden] { display: none; }
+
+/* polecenia bez pliku (ribbon.js syncFile) */
+.rb-btn:disabled { opacity: 0.45; cursor: default; }
+.rb-btn:disabled:active { transform: none; }
+@media (hover: hover) and (pointer: fine) { .rb-btn:disabled:hover { background: none; } }

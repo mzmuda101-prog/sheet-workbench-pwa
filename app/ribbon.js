@@ -43,6 +43,8 @@ const swbRibbon = (() => {
   function place(desk) {
     if (desk === on) return;
     on = desk;
+    // przeniesienie elementu z fokusem go rozmywa (obrót iPada w trakcie pisania) — oddajemy fokus
+    const had = document.activeElement;
     if (desk && editBars) editBars.before(fbarRow);
     for (const m of moves) {
       if (desk) { m.el.before(m.mark); m.slot.append(m.el); }
@@ -51,6 +53,8 @@ const swbRibbon = (() => {
     if (!desk) fbarRow.remove();
     root.hidden = !desk;
     document.body.classList.toggle("rb-on", desk);
+    // dopiero po zmianie klasy: wcześniej pole w chowanym pasku nie ma jeszcze rozmiaru
+    if (had && had !== document.body && had.isConnected && document.activeElement !== had && had.getClientRects().length) had.focus({ preventScroll: true });
     if (desk) requestAnimationFrame(() => strips.forEach((s) => s.sync(true)));
     // wysokość tabeli liczy się od jej górnej krawędzi — po zmianie ramy przelicz
     requestAnimationFrame(() => {
@@ -208,7 +212,16 @@ const swbRibbon = (() => {
   }
   for (const [btn, menu, side] of MENUS) {
     btn.addEventListener("click", () => (menu.hidden ? openMenu(btn, menu, side) : closeMenus()));
-    menu.addEventListener("click", (e) => { if (e.target.closest("button")) setTimeout(() => closeMenus(false), 0); });
+    // po wyborze fokus wraca na przycisk menu — chyba że akcja sama go gdzieś postawiła (Spisywanie, okno)
+    menu.addEventListener("click", (e) => {
+      if (!e.target.closest("button")) return;
+      setTimeout(() => {
+        const a = document.activeElement;
+        const lost = !a || a === document.body || menu.contains(a);
+        closeMenus(false);
+        if (lost && btn.getClientRects().length) btn.focus();
+      }, 0);
+    });
     menu.addEventListener("keydown", (e) => {
       const items = menuItems(menu);
       const i = items.indexOf(document.activeElement);
@@ -231,8 +244,15 @@ const swbRibbon = (() => {
   const isView = () => typeof swbIsEditMode === "function" && !swbIsEditMode();
   function setMode(m) { modeSwitch?.querySelector(`.mode-btn[data-mode="${m}"]`)?.click(); }
   modeMenu?.querySelectorAll("[data-rb-mode]").forEach((b) => b.addEventListener("click", () => setMode(b.dataset.rbMode)));
-  editBtn?.addEventListener("click", () => setMode("edit"));
+  // „Edytuj” chowa się po kliknięciu — fokus na przycisk trybu, nie w próżnię
+  editBtn?.addEventListener("click", () => { setMode("edit"); setTimeout(() => modeBtn?.focus(), 0); });
+  // polecenia działające na komórkach — bez pliku wyszarzone (komunikat „tylko w trybie szerokim” mylił)
+  function syncFile() {
+    const has = typeof workbook !== "undefined" && !!workbook;
+    root.querySelectorAll("[data-rb-act]").forEach((b) => { b.disabled = !has; });
+  }
   function syncMode() {
+    syncFile();
     const m = isView() ? "view" : "edit";
     document.body.classList.toggle("rb-reading", on && m === "view");
     modeMenu?.querySelectorAll("[data-rb-mode]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.rbMode === m)));
@@ -301,7 +321,13 @@ const swbRibbon = (() => {
     requestAnimationFrame(() => d.scrollIntoView({ block: "nearest" }));
   }
 
-  const onMq = () => { closeMenus(); place(deskMq.matches); syncMode(); };
+  const onMq = () => {
+    closeMenus();
+    // menu paska (frame-compact.js) przypięte do przycisku, który właśnie zmienia miejsce
+    if (typeof frameCompact !== "undefined" && frameCompact?.closeMenu) frameCompact.closeMenu(false);
+    place(deskMq.matches);
+    syncMode();
+  };
   if (deskMq.addEventListener) deskMq.addEventListener("change", onMq); else deskMq.addListener(onMq);
   place(deskMq.matches);
   labels();
