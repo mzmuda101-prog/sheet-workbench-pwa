@@ -1,3 +1,4 @@
+// @ts-check
 // [EN] Lazy loader for scroll-diagnostics / ipad-scroll-debug — external file
 // (not inline) so CSP can stay script-src 'self'. Same activation rules as before:
 // query param, hash or localStorage flag. No flag = zero extra JS loaded.

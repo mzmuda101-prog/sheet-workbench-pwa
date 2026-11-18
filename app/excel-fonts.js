@@ -1,3 +1,4 @@
+// @ts-check
 // Czcionki z pliku → stos CSS, jak rysuje je Excel. Ładowany w wątku głównym (index.html)
 // i w wątku roboczym (build-rows-worker.js) — jedna wersja zamiast dwóch kopii.
 //

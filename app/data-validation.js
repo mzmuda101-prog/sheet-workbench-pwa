@@ -1,3 +1,4 @@
+// @ts-check
 /* ───────────────────────────────────────────────────────────────────────────
    Data Validation — listy/słowniki jak w Excelu (Sprawdzanie poprawności → Lista)
    FAZA 1: ODCZYT z pliku + pokazywanie. Parsujemy <dataValidation type="list">

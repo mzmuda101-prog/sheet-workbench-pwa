@@ -101,7 +101,9 @@
     "py:setup": "python3 -m venv .venv && .venv/bin/pip install -q -r scripts/py/requirements.txt",
     "build": "node scripts/build-release.mjs",
     "release": "node scripts/bump-version.js",
-    "test:all": "node scripts/run-tests.mjs --all"
+    "test:all": "node scripts/run-tests.mjs --all",
+    "check": "tsc -p jsconfig.json",
+    "lint": "biome lint"
   },
   "repository": {
     "type": "git",
@@ -116,7 +118,9 @@
   },
   "homepage": "https://github.com/mzmuda101-prog/sheet-workbench-pwa#readme",
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
     "esbuild": "^0.28.1",
-    "playwright": "^1.60.0"
+    "playwright": "^1.60.0",
+    "typescript": "7.0.2"
   }
 }

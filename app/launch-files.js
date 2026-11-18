@@ -1,3 +1,4 @@
+// @ts-check
 // launch-files.js — otwieranie pliku „z zewnątrz”: Otwórz za pomocą / Udostępnij
 // (ten sam mechanizm co w Documents Workbench, 2026-10-31).
 //

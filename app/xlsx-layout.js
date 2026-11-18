@@ -1,3 +1,4 @@
+// @ts-check
 // xlsx-layout.js — szerokości kolumn i wysokości wierszy ustawione w aplikacji → plik (docs/OD-ZERA.md, poz. 1).
 //
 // layout = { cols: { indeksKolumny0: szerokośćWZnakach }, rows: { indeksWiersza0: wysokośćWPunktach } }

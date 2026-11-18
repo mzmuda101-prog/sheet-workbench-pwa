@@ -1,3 +1,4 @@
+// @ts-check
 // entry-core.js — silnik Wpisywania (kartka papieru → arkusz), bez DOM.
 //
 // Tu tylko decyzje, które da się sprawdzić bez przeglądarki: który wiersz jest celem kartki
