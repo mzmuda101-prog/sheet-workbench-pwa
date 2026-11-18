@@ -24,14 +24,28 @@ const swbRibbon = (() => {
     const el = document.querySelector(slot.dataset.rb);
     return el ? { el, slot, mark: document.createComment("swb-rb") } : null;
   }).filter(Boolean);
+  // Poza wstążką (makieta v2): pasek formuły i chipy filtrów w JEDNYM rzędzie (chipy po prawej,
+  // przy braku miejsca schodzą pod formułę), a „Ostatnie” zapytania — pod polem Szukaj.
+  const editBars = document.getElementById("editBars");
+  const fbarRow = document.createElement("div");
+  fbarRow.id = "rbFbarRow";
+  fbarRow.className = "rb-fbar-row";
+  const extra = [
+    [editBars, fbarRow],
+    [document.getElementById("activeFilters"), fbarRow],
+    [document.getElementById("recentStrip"), document.getElementById("quickSearchWrap")],
+  ].filter(([el, into]) => el && into).map(([el, slot]) => ({ el, slot, mark: document.createComment("swb-rb") }));
+  moves.push(...extra);
   let on = false;
   function place(desk) {
     if (desk === on) return;
     on = desk;
+    if (desk && editBars) editBars.before(fbarRow);
     for (const m of moves) {
       if (desk) { m.el.before(m.mark); m.slot.append(m.el); }
       else if (m.mark.parentNode) { m.mark.replaceWith(m.el); }
     }
+    if (!desk) fbarRow.remove();
     root.hidden = !desk;
     document.body.classList.toggle("rb-on", desk);
     if (desk) requestAnimationFrame(() => strips.forEach((s) => s.sync(true)));

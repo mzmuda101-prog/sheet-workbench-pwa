@@ -152,11 +152,22 @@ const appFrame = (() => {
   // Zakładki arkuszy z dołu tabeli → do nagłówka (desktop; na telefonie slot jest
   // ukryty CSS-em, a arkusz zmienia przycisk z nazwą). Element zostaje ten sam, więc
   // cała obsługa (klik, klawiatura, aria-selected) działa bez zmian.
+  // Przy wstążce (ribbon.js, komputer) nagłówka nie ma — zakładki zostają na swoim miejscu pod
+  // tabelą, jak w Excelu (etap 4 zrobi z tego dolny pasek); bez wstążki wracają do nagłówka.
+  let sheetTabsHome = null;
   function mountSheetTabs() {
     if (typeof sheetTabsEl === "undefined" || !sheetTabsEl || !heroTabsSlot) return;
-    if (sheetTabsEl.parentElement !== heroTabsSlot) heroTabsSlot.appendChild(sheetTabsEl);
+    if (!sheetTabsHome && sheetTabsEl.parentElement !== heroTabsSlot) {
+      sheetTabsHome = document.createComment("swb-sheet-tabs");
+      sheetTabsEl.before(sheetTabsHome);
+    }
+    // klasa, nie swbRibbon.isOn(): zdarzenie „swb:ribbon” przychodzi, zanim stała swbRibbon istnieje
+    const ribbonOn = document.body.classList.contains("rb-on");
+    if (ribbonOn) { if (sheetTabsHome && sheetTabsEl.previousSibling !== sheetTabsHome) sheetTabsHome.after(sheetTabsEl); }
+    else if (sheetTabsEl.parentElement !== heroTabsSlot) heroTabsSlot.appendChild(sheetTabsEl);
     attachOverflowFade(sheetTabsEl);
   }
+  document.addEventListener("swb:ribbon", mountSheetTabs);
 
   // Przełączanie arkusza: przycisk z nazwą pod tytułem pliku — na KAŻDEJ szerokości
   // (Mateusz: „na telefonie idealnie, zrób to też na innych”). Telefon: dotychczasowy

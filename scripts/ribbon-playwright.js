@@ -163,6 +163,61 @@ async function run() {
     await context.close();
   }
 
+  // ── zadanie 3: filtry w rzędzie paska formuły, „Ostatnie” pod Szukaj, arkusze pod tabelą ──
+  {
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
+    await page.fill("#quickSearch", "Anna");
+    await page.press("#quickSearch", "Enter");
+    await page.waitForFunction(() => { const a = document.getElementById("activeFilters"); return a && !a.classList.contains("hidden") && a.children.length > 0; }, null, { timeout: 10000 }).catch(() => {});
+    const row = await page.evaluate(() => {
+      const af = document.getElementById("activeFilters"), nb = document.getElementById("nameBox"), fx = document.getElementById("formulaInput");
+      const a = af.getBoundingClientRect(), n = nb.getBoundingClientRect();
+      return { inRow: !!af.closest("#rbFbarRow") && !!nb.closest("#rbFbarRow"), dTop: Math.abs(Math.round(a.top - n.top)), fxW: Math.round(fx.getBoundingClientRect().width), visible: a.width > 0 };
+    });
+    check("T3. chipy filtrów w jednym rzędzie z paskiem formuły", row.inRow && row.visible && row.dTop <= 2, JSON.stringify(row));
+    check("T3. pole formuły ≥ 160 px", row.fxW >= 160, JSON.stringify(row));
+    await page.setViewportSize({ width: 820, height: 900 });
+    await page.waitForTimeout(300);
+    const narrow = await page.evaluate(() => ({ fxW: Math.round(document.getElementById("formulaInput").getBoundingClientRect().width), ov: document.documentElement.scrollWidth - innerWidth }));
+    check("T3. 820 px: pole formuły ≥ 160 px, nic nie wystaje", narrow.fxW >= 160 && narrow.ov <= 0, JSON.stringify(narrow));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(300);
+    // Podgląd: pasek formuły znika, chipy zostają
+    await page.click("#rbModeBtn");
+    await page.click('#rbModeMenu [data-rb-mode="view"]');
+    await page.waitForTimeout(250);
+    check("T3. Podgląd: chipy filtrów dalej widoczne", await shown(page, "#activeFilters"));
+    await page.click("#rbEditBtn");
+    // Ostatnie: historia szukania pod polem, tylko gdy jest fokus
+    await page.click("#ribbon .rb-tab[data-rtab=home]");
+    const closed = await shown(page, "#recentStrip");
+    await page.focus("#quickSearch");
+    await page.waitForTimeout(250);
+    const rec = await page.evaluate(() => { const r = document.getElementById("recentStrip"); const b = r.getBoundingClientRect(); return { inSearch: !!r.closest("#quickSearchWrap"), vis: b.width > 0 && b.height > 0, txt: r.textContent }; });
+    check("T3. Ostatnie: bez fokusu schowane, z fokusem pod Szukaj z „Anna”", !closed && rec.inSearch && rec.vis && rec.txt.includes("Anna"), JSON.stringify({ closed, ...rec }));
+    check("brak błędów strony (T3)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+  {
+    const context = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1440, height: 900 } });
+    await context.addInitScript(() => localStorage.setItem("introPlayed", "true"));
+    const page = await context.newPage();
+    await page.goto(APP_URL, { waitUntil: "load" });
+    await page.evaluate(() => document.getElementById("heroSplash")?.remove());
+    await page.setInputFiles("#fileInput", require("path").join(__dirname, "stress-test-workbench.xlsx"));
+    await page.waitForFunction(() => document.querySelectorAll("#sheetTabs [role=tab]").length > 1, null, { timeout: 30000 });
+    await page.waitForTimeout(300);
+    const tabsPos = await page.evaluate(() => {
+      const st = document.getElementById("sheetTabs"), g = document.querySelector(".table-wrap, #dataTable");
+      return { underTable: st.getBoundingClientRect().top > g.getBoundingClientRect().top, inHero: !!st.closest(".hero"), vis: st.getBoundingClientRect().width > 0 };
+    });
+    check("T3. karty arkuszy pod tabelą (nie w nagłówku)", tabsPos.underTable && !tabsPos.inHero && tabsPos.vis, JSON.stringify(tabsPos));
+    await page.setViewportSize({ width: 768, height: 900 });
+    await page.waitForTimeout(300);
+    check("T3. 768 px: karty arkuszy wracają do nagłówka", await page.evaluate(() => !!document.getElementById("sheetTabs").closest(".hero")));
+    await context.close();
+  }
+
   // ── telefon ─────────────────────────────────────────────────────────────
   {
     const { context, page, errors } = await open(browser, { width: 390, height: 844 }, { hasTouch: true, isMobile: ENGINE === "chromium" });
