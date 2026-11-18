@@ -85,8 +85,6 @@ async function main() {
 
   const appDir = path.join(ROOT, "app");
   const jsFiles = fs.readdirSync(appDir).filter((f) => f.endsWith(".js"));
-  const cssIn = path.join(ROOT, "styles", "app.css");
-  const cssOut = path.join(DIST, "styles", "app.css");
 
   let totalIn = 0;
   let totalOut = 0;
@@ -103,17 +101,24 @@ async function main() {
     console.log(`  ✅  app/${file}  ${(before / 1024).toFixed(1)}KB → ${(after / 1024).toFixed(1)}KB (−${pct}%)`);
   }
 
-  const cssBefore = fs.statSync(cssIn).size;
-  await minifyFile(cssIn, cssOut);
-  const cssAfter = fs.statSync(cssOut).size;
-  totalIn += cssBefore;
-  totalOut += cssAfter;
-  console.log(
-    `  ✅  styles/app.css  ${(cssBefore / 1024).toFixed(1)}KB → ${(cssAfter / 1024).toFixed(1)}KB (−${Math.round((1 - cssAfter / cssBefore) * 100)}%)`
-  );
+  // WSZYSTKIE arkusze z styles/ (nie tylko app.css) — inaczej nowy plik (ribbon.css, etap 1 wstążki)
+  // nie trafia na produkcję; pilnuje tego scripts/build-release-test.mjs
+  const cssFiles = fs.readdirSync(path.join(ROOT, "styles")).filter((f) => f.endsWith(".css"));
+  for (const file of cssFiles) {
+    const cssIn = path.join(ROOT, "styles", file);
+    const cssOut = path.join(DIST, "styles", file);
+    const cssBefore = fs.statSync(cssIn).size;
+    await minifyFile(cssIn, cssOut);
+    const cssAfter = fs.statSync(cssOut).size;
+    totalIn += cssBefore;
+    totalOut += cssAfter;
+    console.log(
+      `  ✅  styles/${file}  ${(cssBefore / 1024).toFixed(1)}KB → ${(cssAfter / 1024).toFixed(1)}KB (−${Math.round((1 - cssAfter / cssBefore) * 100)}%)`
+    );
+  }
 
   const saved = totalIn ? Math.round((1 - totalOut / totalIn) * 100) : 0;
-  console.log(`\n🎉  Gotowe: dist/ (−${saved}% łącznie dla app/*.js + app.css)`);
+  console.log(`\n🎉  Gotowe: dist/ (−${saved}% łącznie dla app/*.js + styles/*.css)`);
   console.log(`    Podgląd: cd dist && python3 -m http.server 7822\n`);
 }
 
