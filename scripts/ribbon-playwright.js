@@ -233,6 +233,16 @@ async function run() {
     await page.waitForTimeout(250);
     const rec = await page.evaluate(() => { const r = document.getElementById("recentStrip"); const b = r.getBoundingClientRect(); return { inSearch: !!r.closest("#quickSearchWrap"), vis: b.width > 0 && b.height > 0, txt: r.textContent }; });
     check("T3. Ostatnie: bez fokusu schowane, z fokusem pod Szukaj z „Anna”", !closed && rec.inSearch && rec.vis && rec.txt.includes("Anna"), JSON.stringify({ closed, ...rec }));
+    // Esc w polu Szukaj: wychodzi z pola i karta Szukaj się zwija (także z rozwiniętymi opcjami ⚙)
+    await page.click("#qsMoreBtn");
+    await page.focus("#quickSearch");
+    await page.keyboard.type("Jan");
+    await sleep(250);
+    await page.keyboard.press("Escape");
+    await sleep(300);
+    const esc = await page.evaluate(() => { const w = document.getElementById("quickSearchWrap"); return { inField: w.contains(document.activeElement), w: Math.round(w.getBoundingClientRect().width), expanded: w.classList.contains("qs-expanded"), live: !document.getElementById("qsLiveResults").classList.contains("hidden") }; });
+    check("T3. Esc w Szukaj: wyjście z pola, karta zwinięta, bez podglądu", !esc.inField && esc.w <= 240 && !esc.expanded && !esc.live, JSON.stringify(esc));
+    await page.fill("#quickSearch", "");
     check("brak błędów strony (T3)", errors.length === 0, errors.join(" | "));
     await context.close();
   }

@@ -323,6 +323,15 @@ const swbRibbon = (() => {
     more?.setAttribute("aria-expanded", "false");
   }, true);
 
+  // Esc w polu Szukaj (wstążka): wyjście z pola — karta Szukaj się zwija, także z opcjami ⚙.
+  // Podpowiedzi tokenów i inne nakładki, które same łapią Esc (stopPropagation), zamykają się pierwsze.
+  const qsWrap = document.getElementById("quickSearchWrap");
+  qsWrap?.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !on || e.defaultPrevented && e.target.id !== "quickSearch") return;
+    if (qsWrap.classList.contains("qs-expanded")) document.getElementById("qsMoreBtn")?.click();
+    if (qsWrap.contains(document.activeElement)) document.activeElement.blur();
+  });
+
   // ── panel boczny: otwórz sekcję (do etapu 3 — potem szyna z wysuwanym panelem) ──
   function openPanel(detailsId) {
     const d = document.getElementById(detailsId);
