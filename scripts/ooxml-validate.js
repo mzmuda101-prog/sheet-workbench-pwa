@@ -9,6 +9,7 @@
 // brew install dotnet).
 
 const { execFileSync, spawnSync } = require("child_process");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
@@ -28,20 +29,45 @@ function available() {
   return (ready = true);
 }
 
+// Wynik dla wzorców z scripts/ (oryginały porównywane w każdym teście, np. RODO ~1 s) pamiętamy
+// po hashu pliku i walidatora — wyniki zapisów z testów (pliki tymczasowe) zawsze liczymy od nowa.
+const CACHE_DIR = path.resolve(__dirname, "../.test-cache/ooxml");
+const SCRIPTS_DIR = __dirname + path.sep;
+const cacheKey = (file) => {
+  if (!path.resolve(file).startsWith(SCRIPTS_DIR)) return null;
+  try {
+    const h = crypto.createHash("sha1").update(fs.readFileSync(file)).update(String(fs.statSync(DLL).mtimeMs));
+    return path.join(CACHE_DIR, h.digest("hex") + ".json");
+  } catch { return null; }
+};
+const readCache = (p) => { try { return p ? JSON.parse(fs.readFileSync(p, "utf8")) : null; } catch { return null; } };
+
 // [{ file, ok, error?, errors: [{ id, type, part, path, description }] }]
 function validate(files) {
   if (!files.length) return [];
+  const keys = files.map(cacheKey);
+  const res = keys.map((k, i) => { const r = readCache(k); return r && { ...r, file: files[i] }; });
+  const todo = files.filter((_, i) => !res[i]);
+  if (!todo.length) return res;
   let out;
   try {
-    out = execFileSync("dotnet", [DLL, ...files], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    out = execFileSync("dotnet", [DLL, ...todo], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   } catch (e) {
     out = e.stdout; // kod 1/2 = są błędy; wynik i tak na stdout
   }
+  let fresh;
   try {
-    return JSON.parse(out);
+    fresh = JSON.parse(out);
   } catch (_) {
     throw new Error(`walidator nie zwrócił wyniku (dotnet: ${String(out || "").slice(0, 200) || "pusto"})`);
   }
+  let j = 0;
+  return res.map((r, i) => {
+    if (r) return r;
+    const f = fresh[j++];
+    if (keys[i] && f && !f.error) try { fs.mkdirSync(CACHE_DIR, { recursive: true }); fs.writeFileSync(keys[i], JSON.stringify(f)); } catch { /* bez pamięci — następnym razem policzy */ }
+    return f;
+  });
 }
 
 // Błędy, których nie było w oryginale (porównanie po części pliku i opisie, z krotnością —

@@ -148,7 +148,7 @@ async function run() {
   await page.evaluate(() => swbAnon.close());
 
   // ── 5. przywracanie z klucza ──
-  await page.click("#anonRestoreBtn").catch(async () => { await page.evaluate(() => swbAnon.openRestore()); });
+  await page.click("#anonRestoreBtn", { timeout: 1500 }).catch(async () => { await page.evaluate(() => swbAnon.openRestore()); });
   await page.waitForSelector("#anonRestoreModal:not(.hidden)");
   await page.setInputFiles("#anonRestoreFile", { name: keyName, mimeType: "application/json", buffer: Buffer.from(keyText) });
   await page.fill("#anonRestorePass", "zle-haslo-123");
