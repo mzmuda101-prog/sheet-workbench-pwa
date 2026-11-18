@@ -108,6 +108,23 @@ async function run() {
     }
     check("T2. „Więcej ▾” schowane przy wstążce", !(await shown(page, "#moreMenuBtn")));
 
+    // powiększenie na dolnym pasku (nie na karcie Widok); Szukaj rozwija się szeroko, póki w nim pracujesz
+    check("Z. powiększenie na dolnym pasku, nie we wstążce", await page.evaluate(() => !!document.getElementById("zoomGroup").closest("#tableFoot")) && !(await inRibbon(page, "#zoomGroup")));
+    await page.click("#quickSearch");
+    await sleep(300);
+    const qsWide = await page.evaluate(() => Math.round(document.getElementById("quickSearchWrap").getBoundingClientRect().width));
+    check("Z. Szukaj z kursorem: karta ≥ 600 px", qsWide >= 600, qsWide + " px");
+    await page.click("#qsMoreBtn");
+    await sleep(200);
+    const rowsOk = await page.evaluate(() => {
+      const top = (id) => Math.round(document.getElementById(id).getBoundingClientRect().top);
+      return top("qsMoreBtn") === top("nlqOpenBtn") && top("qsAllSheets") > top("qsMoreBtn");
+    });
+    check("Z. ⚙ zostaje w rzędzie pola, opcje w drugim rzędzie", rowsOk);
+    await page.mouse.click(5, 500);
+    await sleep(300);
+    check("Z. klik poza Szukaj zwija kartę", await page.evaluate(() => !document.getElementById("quickSearchWrap").classList.contains("qs-expanded")));
+
     await page.click("#rbTab-an");
     await page.click('#ribbon [data-rb-panel="panel-aggregation-workbench"]');
     await sleep(300);
@@ -151,6 +168,7 @@ async function run() {
     check("6. 768 px: Szukaj wróciło na miejsce", !(await inRibbon(page, "#quickSearch")) && (await page.evaluate(() => !!document.getElementById("quickSearch").closest("#quickSearchWrap")?.closest(".table-panel"))));
     check("6. 768 px: Zapisz wróciło do nagłówka", await page.evaluate(() => !!document.getElementById("heroSaveBtn").closest(".hero")));
     check("6. 768 px: nagłówek widoczny", await shown(page, ".hero"));
+    check("Z. 768 px: powiększenie wróciło do paska nad tabelą", await page.evaluate(() => !!document.getElementById("zoomGroup").closest("#toolbarMain")));
     check("T2. 768 px: Spisywanie wróciło do menu Więcej", await page.evaluate(() => !!document.getElementById("transcribeBtn").closest("#moreMenu")));
     await page.setViewportSize({ width: 1440, height: 900 });
     await sleep(300);
