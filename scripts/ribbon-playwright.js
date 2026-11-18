@@ -245,21 +245,36 @@ async function run() {
     await page.setInputFiles("#fileInput", require("path").join(__dirname, "stress-test-workbench.xlsx"));
     await page.waitForFunction(() => document.querySelectorAll("#sheetTabs [role=tab]").length > 1, null, { timeout: 30000 });
     await page.waitForTimeout(300);
-    // Arkusze na komputerze: przycisk z nazwą (lista + Nowy / Zmień nazwę / Usuń), BEZ zakładek —
-    // decyzja Mateusza sprzed wstążki (app-frame S1); zakładki u dołu dopiero w etapie 4 (makieta v2).
+    // Etap 4 (makieta v2, dolny pasek): karty arkuszy na dole od lewej, obok nich przycisk listy arkuszy
+    // (przełączanie + Nowy / Zmień nazwę / Usuń) — przy kilku arkuszach sama ikona, bez dublowania nazwy.
     const sh = await page.evaluate(() => {
-      const b = document.getElementById("heroSheetBtn"), st = document.getElementById("sheetTabs");
-      return { inRow: !!b.closest("#rbFbarRow"), vis: b.getBoundingClientRect().width > 0, tabs: !!st.offsetParent };
+      const b = document.getElementById("heroSheetBtn"), st = document.getElementById("sheetTabs"), foot = document.getElementById("tableFoot");
+      const tabs = Array.from(st.querySelectorAll("[role=tab]"));
+      const name = b.querySelector(".hero-sheet-name");
+      return {
+        btnInFoot: !!b.closest("#tableFoot"), tabsInFoot: !!st.closest("#tableFoot"), notInRow: !b.closest("#rbFbarRow"),
+        tabsVis: st.getBoundingClientRect().width > 0, n: tabs.length, sheets: workbook.SheetNames.length,
+        // kolejność na ekranie (CSS order), nie w DOM — row-grow dopisuje swoje przyciski później
+        first: (() => { const bl = b.getBoundingClientRect(), tl = st.getBoundingClientRect(); const others = Array.from(foot.children).filter((c) => c !== b && c !== st && c.getBoundingClientRect().width > 0); return bl.right <= tl.left + 1 && others.every((c) => c.getBoundingClientRect().left >= tl.right - 1 || c.getBoundingClientRect().top >= tl.bottom - 1); })(), nameHidden: !name || name.getBoundingClientRect().width === 0,
+        label: b.getAttribute("aria-label") || "",
+      };
     });
-    check("T3. przycisk arkusza w rzędzie paska formuły, bez zakładek", sh.inRow && sh.vis && !sh.tabs, JSON.stringify(sh));
+    check("E4. karty arkuszy i przycisk listy na dolnym pasku (od lewej)", sh.btnInFoot && sh.tabsInFoot && sh.notInRow && sh.tabsVis && sh.n === sh.sheets && sh.first, JSON.stringify(sh));
+    check("E4. przy kilku arkuszach przycisk listy bez nazwy (nazwa na karcie), z nazwą dostępną", sh.nameHidden && sh.label.length > 3, JSON.stringify(sh));
+    const target = await page.evaluate(() => workbook.SheetNames[1]);
+    await page.click(`#sheetTabs [data-sheet="${target}"]`);
+    await page.waitForFunction((n) => currentSheetName === n, target, { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    check("E4. klik w kartę przełącza arkusz", await page.evaluate((n) => currentSheetName === n && document.querySelector(`#sheetTabs [data-sheet="${n}"]`)?.getAttribute("aria-selected") === "true", target));
     await page.click("#heroSheetBtn");
     await page.waitForTimeout(200);
-    check("T3. przycisk arkusza otwiera listę arkuszy", await page.evaluate(() => !document.getElementById("sheetMenu").hidden && document.querySelectorAll("#sheetMenu .sheet-menu-item").length > 1));
+    const menu = await page.evaluate(() => { const m = document.getElementById("sheetMenu"), r = m.getBoundingClientRect(); return { open: !m.hidden, items: m.querySelectorAll(".sheet-menu-item").length, ops: m.querySelectorAll(".sheet-op-item").length, top: Math.round(r.top), bottom: Math.round(r.bottom), vh: innerHeight }; });
+    check("E4. lista arkuszy otwiera się w górę, cała na ekranie, z Nowy / Zmień nazwę / Usuń", menu.open && menu.items > 1 && menu.ops >= 3 && menu.top >= 0 && menu.bottom <= menu.vh, JSON.stringify(menu));
     await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 768, height: 900 });
     await page.waitForFunction(() => !document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(100);
-    check("T3. 768 px: przycisk arkusza wraca do nagłówka", await page.evaluate(() => !!document.getElementById("heroSheetBtn").closest(".hero")));
+    check("E4. 768 px: przycisk arkusza i karty wracają do nagłówka", await page.evaluate(() => !!document.getElementById("heroSheetBtn").closest(".hero") && !!document.getElementById("sheetTabs").closest(".hero")));
     await context.close();
   }
 

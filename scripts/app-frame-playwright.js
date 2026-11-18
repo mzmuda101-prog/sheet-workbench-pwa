@@ -516,7 +516,9 @@ async function run() {
     await pg.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
     await sleep(600);
     const before = await pg.evaluate(() => ({ sheet: currentSheetName, names: workbook.SheetNames, multi: document.getElementById("heroSheetBtn").classList.contains("is-multi"), tabsVisible: !!document.getElementById("sheetTabs")?.offsetParent }));
-    check("S1. kilka arkuszy: przycisk arkusza klikalny, bez zakładek", before.multi && !before.tabsVisible, JSON.stringify(before));
+    // etap 4 wstążki (≥ 769 px, makieta v2): karty arkuszy na dolnym pasku obok przycisku listy
+    if (await pg.evaluate(() => document.body.classList.contains("rb-on"))) check("S1. wstążka: kilka arkuszy — przycisk listy klikalny, karty na dolnym pasku", before.multi && before.tabsVisible && (await pg.evaluate(() => !!document.getElementById("sheetTabs").closest("#tableFoot"))), JSON.stringify(before));
+    else check("S1. kilka arkuszy: przycisk arkusza klikalny, bez zakładek", before.multi && !before.tabsVisible, JSON.stringify(before));
     await pg.click("#heroSheetBtn");
     await sleep(200);
     const menu = await pg.evaluate(() => {

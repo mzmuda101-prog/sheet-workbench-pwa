@@ -425,3 +425,24 @@ body.rb-on .table-foot > .zoom-group :is(.tb-btn, .zoom-now) { block-size: 24px;
 /* wąsko: sumy nie ściskają się do jednej kolumny — powiększenie schodzi wtedy do własnej linii */
 body.rb-on .table-foot { flex-wrap: wrap; }
 body.rb-on .table-foot > .cell-stats-bar { flex: 1 1 360px; }
+
+/* ── dolny pasek: karty arkuszy (etap 4; ribbon.js przenosi #sheetTabs i #heroSheetBtn do #tableFoot) ── */
+body.rb-on .table-foot > :is(#heroSheetBtn, #sheetTabs) { order: -2; }
+body.rb-on .table-foot > #heroSheetBtn {
+  flex: none; margin: 0; block-size: 28px; padding: 0 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface);
+}
+body.rb-on .table-foot > #heroSheetBtn[hidden] { display: none; }
+body.rb-on .table-foot > #sheetTabs {
+  flex: 0 1 auto; min-inline-size: 0; max-inline-size: 50%;
+  padding: 0; background: none; border: 0; box-shadow: none;
+}
+body.rb-on .table-foot > #sheetTabs.hidden { display: none; }
+/* kilka arkuszy: nazwa jest na karcie — przycisk listy to sama ikona (nazwa zostaje w aria-label) */
+body.rb-on .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn { inline-size: 28px; padding: 0; justify-content: center; }
+body.rb-on .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn > :is(.hero-sheet-name, .hero-sheet-caret) { display: none; }
+body.rb-on .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn::before {
+  content: ""; inline-size: 16px; block-size: 16px; background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'/%3E%3C/svg%3E") center / contain no-repeat;
+}

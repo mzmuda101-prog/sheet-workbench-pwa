@@ -206,9 +206,13 @@ const appFrame = (() => {
     const width = Math.min(300, vw - 16);
     sheetMenu.style.width = `${width}px`;
     sheetMenu.style.left = `${Math.round(Math.max(8, Math.min(vw - width - 8, r.left - 6)))}px`;
+    // Przycisk na dolnym pasku (wstążka, etap 4): pod nim brak miejsca — lista otwiera się w górę
+    const below = window.innerHeight - r.bottom - 24, above = r.top - 24;
+    const up = below < 240 && above > below;
+    sheetMenu.style.maxHeight = `${Math.max(160, up ? above : below)}px`;
     sheetMenu.style.top = `${Math.round(r.bottom + 6)}px`;
-    sheetMenu.style.maxHeight = `${Math.max(160, window.innerHeight - r.bottom - 24)}px`;
     sheetMenu.hidden = false;
+    if (up) sheetMenu.style.top = `${Math.round(Math.max(8, r.top - 6 - sheetMenu.offsetHeight))}px`;
     heroSheetBtn.setAttribute("aria-expanded", "true");
     if (focusCurrent) {
       const cur = sheetMenu.querySelector('[aria-selected="true"]') || sheetMenuItems()[0];
