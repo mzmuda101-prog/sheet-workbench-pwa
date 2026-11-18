@@ -112,3 +112,14 @@ plan: `docs/superpowers/plans/2026-11-18-wstazka-etap3.md`. Decyzje Mateusza z 2
 - Liczniki błędów przy Formułach / Sprawdzaniu: pominięte (brak gotowego źródła, liczenie przy każdej
   zmianie to koszt) — do decyzji później.
 - Karta kontekstowa „Tabela”: osobny etap na koniec, prawie od zera (decyzja Mateusza).
+
+## Etap 4 — co weszło (dolny pasek)
+
+Dolny pasek (`#tableFoot`) przy wstążce: od lewej przycisk listy arkuszy (przełączanie + Nowy /
+Zmień nazwę / Usuń; przy kilku arkuszach sama ikona, nazwa w aria-label) i karty arkuszy
+(przewijane z wygaszeniem krawędzi), dalej „+ Nowy wiersz / Nowa kolumna”, statystyki (sumy widoku,
+a przy zaznaczeniu zakres / liczba / suma / średnia — jak dotąd), powiększenie po prawej (PR #18).
+Lista arkuszy otwiera się w górę, gdy pod przyciskiem brak miejsca.
+
+Bez dubli: bez osobnego „+” przy kartach („Nowy arkusz” jest na liście) i bez „Widoczne X z Y”
+(liczba wierszy jest w chipach filtrów). Pominięte: kolory kart z pliku (Sheet ich dziś nie czyta).

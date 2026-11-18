@@ -31,15 +31,17 @@ const swbRibbon = (() => {
   fbarRow.id = "rbFbarRow";
   fbarRow.className = "rb-fbar-row";
   const extra = [
-    // przycisk arkusza z nagłówka: lista arkuszy + Nowy / Zmień nazwę / Usuń (app-frame.js) —
-    // bez nagłówka byłby nieosiągalny, a zakładki pod tabelą są tylko przy kilku arkuszach
-    [document.getElementById("heroSheetBtn"), fbarRow],
+    // Etap 4 (dolny pasek, makieta v2): karty arkuszy na dole od lewej, przed nimi przycisk listy arkuszy
+    // (przełączanie + Nowy / Zmień nazwę / Usuń, app-frame.js). „start” = na początek paska; kolejność
+    // wstawiania odwrotna, więc najpierw karty, potem przycisk (ląduje przed nimi).
+    [document.getElementById("sheetTabs"), document.getElementById("tableFoot"), "start"],
+    [document.getElementById("heroSheetBtn"), document.getElementById("tableFoot"), "start"],
     [editBars, fbarRow],
     [document.getElementById("activeFilters"), fbarRow],
     [document.getElementById("recentStrip"), document.getElementById("quickSearchWrap")],
     // powiększenie na dolnym pasku, po prawej (jak w Excelu; WSTAZKA.md, etap 4)
     [document.getElementById("zoomGroup"), document.getElementById("tableFoot")],
-  ].filter(([el, into]) => el && into).map(([el, slot]) => ({ el, slot, mark: document.createComment("swb-rb") }));
+  ].filter(([el, into]) => el && into).map(([el, slot, at]) => ({ el, slot, at, mark: document.createComment("swb-rb") }));
   moves.push(...extra);
   let on = false;
   function place(desk) {
@@ -49,7 +51,7 @@ const swbRibbon = (() => {
     const had = document.activeElement;
     if (desk && editBars) editBars.before(fbarRow);
     for (const m of moves) {
-      if (desk) { m.el.before(m.mark); m.slot.append(m.el); }
+      if (desk) { m.el.before(m.mark); if (m.at === "start") m.slot.prepend(m.el); else m.slot.append(m.el); }
       else if (m.mark.parentNode) { m.mark.replaceWith(m.el); }
     }
     if (!desk) fbarRow.remove();
@@ -320,6 +322,15 @@ const swbRibbon = (() => {
     wrap.classList.remove("qs-expanded");
     more?.setAttribute("aria-expanded", "false");
   }, true);
+
+  // Esc w polu Szukaj (wstążka): wyjście z pola — karta Szukaj się zwija, także z opcjami ⚙.
+  // Podpowiedzi tokenów i inne nakładki, które same łapią Esc (stopPropagation), zamykają się pierwsze.
+  const qsWrap = document.getElementById("quickSearchWrap");
+  qsWrap?.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !on || e.defaultPrevented && e.target.id !== "quickSearch") return;
+    if (qsWrap.classList.contains("qs-expanded")) document.getElementById("qsMoreBtn")?.click();
+    if (qsWrap.contains(document.activeElement)) document.activeElement.blur();
+  });
 
   // ── panel boczny: otwórz sekcję (do etapu 3 — potem szyna z wysuwanym panelem) ──
   function openPanel(detailsId) {
