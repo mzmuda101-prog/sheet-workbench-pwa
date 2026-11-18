@@ -30,3 +30,40 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 4. Anonimizuj: **na karcie Dane** (i w Plik → Anonimizuj kopię od etapu 2).
 5. Wiersze tabeli 24 px z makiety v2: **nie w etapie 1** — dziś wysokość ustawia „Gęstość wierszy”;
    zmiana domyślnej gęstości to osobna decyzja (etap 6).
+
+## Etap 1 — co weszło
+
+`app/ribbon.js` + znaczniki `#ribbon` w `index.html` + `styles/ribbon.css` (osobny plik).
+Od 769 px: rząd 1 (logo, Plik, 7 kart, Szukaj, Tryb, Narzędzia, Zapisz, ⋯), rząd 2 (Cofnij/Ponów +
+polecenia karty), przewijane rzędy ze strzałką „+N”. Nagłówek „hero” i pasek nad tabelą schowane;
+pasek formuły i chipy filtrów w jednym rzędzie; karty arkuszy pod tabelą; „Ostatnie” zapytania w
+rozwiniętym polu Szukaj. Podgląd: bez kart i poleceń, nazwa pliku na środku, „Edytuj” zamiast „Zapisz”.
+Telefon bez zmian (wszystko wraca na swoje miejsca). Test: `scripts/ribbon-playwright.js`.
+
+Rozmieszczenie (jedna funkcja = jedno miejsce; przyciski z menu „Więcej ▾” i „Widok ▾” są
+PRZENIESIONE, nie skopiowane):
+- **Narzędzia główne:** Wklej / Wytnij / Kopiuj + cały dotychczasowy pasek formatowania (w nim Σ i
+  „Formatuj jako tabelę”).
+- **Wstaw:** Kolumna wyliczana, Notatka (Shift+F2), Arkusz.
+- **Dane:** Filtry tekstowe, Tryby auto, Filtr dat · Sortowanie, Domyślne sortowanie · Wide-to-Long,
+  Sprawdzanie wartości · Anonimizuj.
+- **Formuły:** Formuły w arkuszu, Wyjaśnij formułę.
+- **Analiza:** Przegląd arkusza, Układ arkusza, Kluczowe liczby · Agregacje, Podsumowanie miesięczne · Raport.
+- **Widok:** powiększenie i gęstość, menu Widok (układ jak w Excelu, wiersze nad nagłówkiem, pasek
+  cyfr), Ustawienia widoku.
+- **Asystent:** Asystent AI… (przeniesiony z ⋯).
+- **Tryb ▾:** Edycja, Podgląd, Spisywanie, Wpisywanie.
+- **Plik ▾ (tymczasowo, do etapu 2):** Plik i arkusz…, Eksport….
+
+Świadomie bez dubli (do decyzji Mateusza, czy któryś przywrócić):
+- Wiersz / Kolumna — są pod tabelą („+ Nowy wiersz”, „+ Nowa kolumna”), więc nie na karcie Wstaw;
+- Wstaw funkcję — przycisk fx w pasku formuły; Autosuma — Σ na Narzędziach głównych;
+- Zapytaj słowami — ✦ w polu Szukaj (karta Asystent ma tylko ustawienia modelu);
+- Podobne nazwy — tryb grupowania w Agregacjach;
+- Wyczyść filtry — „Wyczyść” przy chipach filtrów.
+
+Tymczasowe odstępstwa (znikają w kolejnych etapach):
+- 🔧 Narzędzia (cały panel boczny) stoi w rzędzie 1 — do etapu 3 (szyna);
+- przyciski kart otwierają sekcję w panelu bocznym — do etapu 3 (wysuwany panel);
+- „Plik” to małe menu — do etapu 2 (ekran Plik);
+- powiększenie stoi na karcie Widok — do etapu 4 (dolny pasek).

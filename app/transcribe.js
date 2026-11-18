@@ -2449,6 +2449,7 @@ function closeTranscribe() {
   if (visible(back) && back !== document.body) back.focus();
   else if (visible(trBtn)) trBtn.focus();
   else if (visible(moreBtn)) moreBtn.focus();
+  else document.getElementById("rbModeBtn")?.focus(); // wstążka: Spisywanie mieszka w menu trybu
 }
 
 // ── Klawiatura ──────────────────────────────────────────────────────────────

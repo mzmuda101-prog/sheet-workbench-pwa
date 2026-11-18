@@ -605,7 +605,8 @@ async function run() {
   await page.evaluate(() => { closeQuickSearchPopup(); setSidebarOpen(false); });
   await sleep(300);
   // przycisk z paska nad tabelą (aktywny tryb „Edycja” — klik nic nie zmienia, zostawia fokus)
-  const przycisk = '#sheetModeSwitch .mode-btn[data-mode="edit"]';
+  // etap 1 wstążki: przełącznika trybu nie ma na wierzchu — wybrana karta wstążki też „nic nie zmienia”
+  const przycisk = (await page.evaluate(() => document.body.classList.contains("rb-on"))) ? "#rbTab-home" : '#sheetModeSwitch .mode-btn[data-mode="edit"]';
   if (TOUCH) await page.tap(przycisk); else await page.click(przycisk);
   await sleep(250);
   const naPrzycisku = await page.evaluate((sel) => document.activeElement === document.querySelector(sel), przycisk);

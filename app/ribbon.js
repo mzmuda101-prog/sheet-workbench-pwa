@@ -31,6 +31,9 @@ const swbRibbon = (() => {
   fbarRow.id = "rbFbarRow";
   fbarRow.className = "rb-fbar-row";
   const extra = [
+    // przycisk arkusza z nagłówka: lista arkuszy + Nowy / Zmień nazwę / Usuń (app-frame.js) —
+    // bez nagłówka byłby nieosiągalny, a zakładki pod tabelą są tylko przy kilku arkuszach
+    [document.getElementById("heroSheetBtn"), fbarRow],
     [editBars, fbarRow],
     [document.getElementById("activeFilters"), fbarRow],
     [document.getElementById("recentStrip"), document.getElementById("quickSearchWrap")],
@@ -160,7 +163,6 @@ const swbRibbon = (() => {
     copy: () => typeof copySelectionToClipboard === "function" && copySelectionToClipboard(),
     // Shift+F2 (cell-notes.js) — ta sama droga co skrót, na bieżącej komórce
     note: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", shiftKey: true, bubbles: true, cancelable: true })),
-    sheet: () => typeof swbSheetOpsUi !== "undefined" && swbSheetOpsUi.addSheet(),
     // jak „Wyjaśnij formułę” w menu komórki (filter-bar.js), dla komórki z kursorem
     explain: () => {
       const row = typeof focusedCellState !== "undefined" && focusedCellState && typeof getRowByKey === "function" ? getRowByKey(focusedCellState.rowKey) : null;

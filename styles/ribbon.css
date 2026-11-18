@@ -283,3 +283,7 @@ body.rb-on .rb-fbar-row .formula-input { min-inline-size: 160px; }
 /* „Ostatnie” zapytania: ostatni rząd w rozwiniętej karcie Szukaj, tylko z fokusem */
 body.rb-on .rb-search > .quick-search > #recentStrip { flex: 1 0 100%; order: 99; min-inline-size: 0; padding-block: 2px 4px; }
 body.rb-on .rb-search > .quick-search:not(:focus-within):not(.qs-expanded) > #recentStrip { display: none; }
+
+/* przycisk arkusza (nazwa bieżącego arkusza ▾) na początku rzędu paska formuły */
+.rb-fbar-row > .hero-sheet { flex: none; align-self: center; block-size: 28px; margin: 0; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.rb-fbar-row > .hero-sheet[hidden] { display: none; }

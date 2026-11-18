@@ -115,10 +115,10 @@ async function run() {
 
   // 5. wyjście z pola bez dotknięcia (jak „✓” nad klawiaturą iPhone'a)
   await typeQuery("Nowak");
-  const before5 = await page.evaluate(() => ({ live: !document.getElementById("qsLiveResults").classList.contains("hidden"), wide: document.querySelector(".table-toolbar").classList.contains("qs-wide") }));
+  const before5 = await page.evaluate(() => ({ live: !document.getElementById("qsLiveResults").classList.contains("hidden"), wide: document.body.classList.contains("rb-on") ? document.getElementById("quickSearchWrap").getBoundingClientRect().width > 300 : document.querySelector(".table-toolbar").classList.contains("qs-wide") })); // etap 1 wstążki: szerokie = rozwinięta karta Szukaj
   await page.evaluate(() => document.getElementById("quickSearch").blur());
   await sleep(150);
-  const after5 = await page.evaluate(() => ({ live: !document.getElementById("qsLiveResults").classList.contains("hidden"), wide: document.querySelector(".table-toolbar").classList.contains("qs-wide") }));
+  const after5 = await page.evaluate(() => ({ live: !document.getElementById("qsLiveResults").classList.contains("hidden"), wide: document.body.classList.contains("rb-on") ? document.getElementById("quickSearchWrap").getBoundingClientRect().width > 300 : document.querySelector(".table-toolbar").classList.contains("qs-wide") })); // etap 1 wstążki: szerokie = rozwinięta karta Szukaj
   check("5. „✓” (blur bez dotknięcia): panel znika, pole wraca do zwykłej szerokości", before5.live && before5.wide && !after5.live && !after5.wide, { before5, after5 });
   await context.close();
 

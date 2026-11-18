@@ -139,7 +139,8 @@ async function run() {
     await page.evaluate(() => { document.querySelectorAll(".tr-overlay, .tr-root").forEach(() => {}); });
 
     await page.setViewportSize({ width: 768, height: 900 });
-    await sleep(300);
+    await page.waitForFunction(() => !document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
+    await sleep(100);
     check("6. 768 px: bez rb-on", !(await page.evaluate(() => document.body.classList.contains("rb-on"))));
     check("6. 768 px: Szukaj wróciło na miejsce", !(await inRibbon(page, "#quickSearch")) && (await page.evaluate(() => !!document.getElementById("quickSearch").closest("#quickSearchWrap")?.closest(".table-panel"))));
     check("6. 768 px: Zapisz wróciło do nagłówka", await page.evaluate(() => !!document.getElementById("heroSaveBtn").closest(".hero")));
@@ -207,14 +208,21 @@ async function run() {
     await page.setInputFiles("#fileInput", require("path").join(__dirname, "stress-test-workbench.xlsx"));
     await page.waitForFunction(() => document.querySelectorAll("#sheetTabs [role=tab]").length > 1, null, { timeout: 30000 });
     await page.waitForTimeout(300);
-    const tabsPos = await page.evaluate(() => {
-      const st = document.getElementById("sheetTabs"), g = document.querySelector(".table-wrap, #dataTable");
-      return { underTable: st.getBoundingClientRect().top > g.getBoundingClientRect().top, inHero: !!st.closest(".hero"), vis: st.getBoundingClientRect().width > 0 };
+    // Arkusze na komputerze: przycisk z nazwą (lista + Nowy / Zmień nazwę / Usuń), BEZ zakładek —
+    // decyzja Mateusza sprzed wstążki (app-frame S1); zakładki u dołu dopiero w etapie 4 (makieta v2).
+    const sh = await page.evaluate(() => {
+      const b = document.getElementById("heroSheetBtn"), st = document.getElementById("sheetTabs");
+      return { inRow: !!b.closest("#rbFbarRow"), vis: b.getBoundingClientRect().width > 0, tabs: !!st.offsetParent };
     });
-    check("T3. karty arkuszy pod tabelą (nie w nagłówku)", tabsPos.underTable && !tabsPos.inHero && tabsPos.vis, JSON.stringify(tabsPos));
+    check("T3. przycisk arkusza w rzędzie paska formuły, bez zakładek", sh.inRow && sh.vis && !sh.tabs, JSON.stringify(sh));
+    await page.click("#heroSheetBtn");
+    await page.waitForTimeout(200);
+    check("T3. przycisk arkusza otwiera listę arkuszy", await page.evaluate(() => !document.getElementById("sheetMenu").hidden && document.querySelectorAll("#sheetMenu .sheet-menu-item").length > 1));
+    await page.keyboard.press("Escape");
     await page.setViewportSize({ width: 768, height: 900 });
-    await page.waitForTimeout(300);
-    check("T3. 768 px: karty arkuszy wracają do nagłówka", await page.evaluate(() => !!document.getElementById("sheetTabs").closest(".hero")));
+    await page.waitForFunction(() => !document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(100);
+    check("T3. 768 px: przycisk arkusza wraca do nagłówka", await page.evaluate(() => !!document.getElementById("heroSheetBtn").closest(".hero")));
     await context.close();
   }
 

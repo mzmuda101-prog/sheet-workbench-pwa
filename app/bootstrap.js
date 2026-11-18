@@ -571,6 +571,9 @@ function currentAppRegion() {
   if (tbodyEl && tbodyEl.contains(active)) return "grid";
   const toolbar = document.querySelector(".table-toolbar");
   if (toolbar && toolbar.contains(active)) return "toolbar";
+  // wstążka (ribbon.js, komputer) to region „pasek” — jest w niej Szukaj i polecenia
+  const ribbon = document.getElementById("ribbon");
+  if (ribbon && !ribbon.hidden && ribbon.contains(active)) return "toolbar";
   return null;
 }
 
