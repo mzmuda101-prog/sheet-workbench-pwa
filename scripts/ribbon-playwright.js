@@ -378,6 +378,14 @@ async function run() {
     await sleep(400);
     const ag = { shown: await panelsShown(), title: await page.evaluate(() => document.getElementById("rbPaneTitle")?.textContent.trim()) };
     check("E3. Analiza → Agregacje: tylko ten panel, tytuł Agregacje", ag.shown.join() === "panel-aggregation-workbench" && ag.title === "Agregacje", JSON.stringify(ag));
+    // szerokie Agregacje nie poszerzają potem wąskiego panelu (schowane otwarte sekcje zwinięte)
+    await page.click('#sidebarRail [data-rb-rail="check"]');
+    await sleep(450);
+    const wCheck = await page.evaluate(() => Math.round(document.querySelector(".sidebar").getBoundingClientRect().width));
+    check("E3. po Agregacjach panel Sprawdzanie ma zwykłą szerokość", wCheck <= 380, String(wCheck));
+    await page.click("#rbTab-an");
+    await page.click('#ribbon [data-rb-panel="panel-aggregation-workbench"]');
+    await sleep(400);
     await page.click("#sidebarPinBtn");
     await sleep(500);
     const pin = await page.evaluate(() => ({ pinned: document.documentElement.classList.contains("panel-pinned"), shown: Array.from(document.querySelectorAll(".sidebar details.panel")).filter((d) => d.getClientRects().length > 0).map((d) => d.id), mainLeft: Math.round(document.querySelector(".main").getBoundingClientRect().left), sideRight: Math.round(document.querySelector(".sidebar").getBoundingClientRect().right) }));

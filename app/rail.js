@@ -69,6 +69,7 @@ const swbRail = (() => {
   let wasOpen = isOpen();
   new MutationObserver(() => {
     const open = isOpen();
+    if (open && !current && ribbonOn()) current = { key: "filters", ...RAIL.filters }; // np. przypięty po przeładowaniu
     if (open === wasOpen) { apply(); return; }
     wasOpen = open;
     if (open) { apply(); return; }
@@ -111,6 +112,7 @@ const swbRail = (() => {
   requestAnimationFrame(placeTop);
   // wstążka znika (telefon) → panel wraca do zwykłego układu
   document.addEventListener("swb:ribbon", () => { if (!ribbonOn()) current = null; apply(); requestAnimationFrame(placeTop); });
+  if (isOpen() && ribbonOn()) current = { key: "filters", ...RAIL.filters };
   labels();
 
   return { show, close, labels, current: () => current };

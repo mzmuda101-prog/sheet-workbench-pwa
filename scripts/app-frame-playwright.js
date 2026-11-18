@@ -250,7 +250,9 @@ async function run() {
     opt.checked = true; opt.dispatchEvent(new Event("change", { bubbles: true }));
     return { a, b, c: vis() };
   });
-  check("8. „Pokaż uchwyt panelu” chowa i przywraca uchwyt", handle.a && !handle.b && handle.c, JSON.stringify(handle));
+  // etap 3 wstążki: przy wstążce (≥ 769 px) uchwytu nie ma wcale — panel otwiera szyna; opcja działa na telefonie
+  if (await page.evaluate(() => document.body.classList.contains("rb-on"))) check("8. wstążka: bez uchwytu panelu (otwiera go szyna)", !handle.a && !handle.b && !handle.c, JSON.stringify(handle));
+  else check("8. „Pokaż uchwyt panelu” chowa i przywraca uchwyt", handle.a && !handle.b && handle.c, JSON.stringify(handle));
   await page.setViewportSize({ width: 1280, height: 900 });
   await sleep(400);
 
@@ -269,8 +271,14 @@ async function run() {
       docH: document.scrollingElement.scrollHeight, vh: innerHeight, vw: innerWidth,
     };
   });
+  // Etap 3 wstążki (≥ 769 px): pasek ikon ma przyciski paneli (Filtry, Sortowanie, Formuły,
+  // Sprawdzanie) zamiast grup — te same zachowania (wysuwanie nad tabelę, drugi klik, Esc, klik w
+  // tabelę, pinezka) sprawdzamy na nich; grupę pokazuje jeden panel (.rb-pane-group).
+  const rbOn = await page.evaluate(() => document.body.classList.contains("rb-on"));
+  const RB = { "group-filters": "filters", "group-view": "sort", "group-data": "check" }; // „Plik” = wąski panel → Sprawdzanie
+  const railSel = (g) => (rbOn ? `#sidebarRail [data-rb-rail="${RB[g]}"]` : `.rail-btn[data-group="${g}"]`);
   const railState = () => page.evaluate(() => ({
-    pressed: [...document.querySelectorAll(".rail-btn[aria-pressed='true']")].map((x) => x.dataset.group),
+    pressed: [...document.querySelectorAll(".rail-btn[aria-pressed='true']")].filter((x) => x.getClientRects().length > 0).map((x) => x.dataset.group || x.dataset.rbRail),
     groups: [...document.querySelectorAll(".sidebar .sidebar-group")].filter((g) => getComputedStyle(g).display !== "none").map((g) => g.id),
     pinned: document.documentElement.classList.contains("panel-pinned"),
     railVisible: getComputedStyle(document.getElementById("sidebarRail")).display !== "none",
@@ -281,33 +289,34 @@ async function run() {
   check("R1. ≥1024: pasek ikon widoczny, panel schowany, tabela obok paska", r0.railVisible && !d0.open && d0.mainLeft < 150, JSON.stringify({ d0, r0 }));
   check("R1. strona nie wystaje", d0.docH <= d0.vh + 1 && d0.mainRight <= d0.vw, JSON.stringify(d0));
   // R2. klik „Filtry” → tylko ta grupa, NAD tabelą (tabela się nie przesuwa)
-  await page.click('.rail-btn[data-group="group-filters"]');
+  await page.click(railSel("group-filters"));
   await sleep(500);
   const d1 = await dock();
   const r1 = await railState();
-  check("R2. klik w ikonę wysuwa tylko tę grupę", d1.open && r1.groups.join() === "group-filters" && r1.pressed.join() === "group-filters", JSON.stringify(r1));
+  check("R2. klik w ikonę wysuwa tylko tę grupę", d1.open && r1.groups.join() === "group-filters" && r1.pressed.join() === (rbOn ? "filters" : "group-filters"), JSON.stringify(r1));
   check("R2. tabela się nie przesuwa, bez zasłony", d1.mainLeft === d0.mainLeft && d1.scrim === "none", JSON.stringify({ d0, d1 }));
   // R3. ten sam klik chowa; inna ikona przełącza; Esc i klik w tabelę chowają
-  await page.click('.rail-btn[data-group="group-filters"]');
+  await page.click(railSel("group-filters"));
   await sleep(400);
   check("R3. drugi klik w tę samą ikonę chowa panel", !(await dock()).open, "");
-  await page.click('.rail-btn[data-group="group-view"]');
+  await page.click(railSel("group-view"));
   await sleep(400);
   await page.keyboard.press("Escape");
   await sleep(400);
   check("R3. Esc chowa wysunięty panel", !(await dock()).open, "");
-  await page.click('.rail-btn[data-group="group-view"]');
+  await page.click(railSel("group-view"));
   await sleep(400);
   await page.mouse.click(d0.mainLeft + 600, 500);
   await sleep(400);
   check("R3. klik w tabelę chowa wysunięty panel", !(await dock()).open, "");
   // R3b. szeroka sekcja (Agregacje) w innej grupie nie poszerza „Plik i arkusz”
-  await page.click('.rail-btn[data-group="group-analyze"]');
+  if (rbOn) await page.evaluate(() => swbRibbon.openPanel("panel-aggregation-workbench")); // Analiza → Agregacje
+  else await page.click('.rail-btn[data-group="group-analyze"]');
   await sleep(300);
   await page.evaluate(() => { document.getElementById("panel-aggregation-workbench").open = true; });
   await sleep(500);
   const wWide = await page.evaluate(() => Math.round(document.querySelector(".sidebar").getBoundingClientRect().width));
-  await page.click('.rail-btn[data-group="group-data"]');
+  await page.click(railSel("group-data"));
   await sleep(600);
   const wFile = await page.evaluate(() => Math.round(document.querySelector(".sidebar").getBoundingClientRect().width));
   check("R3b. po szerokiej sekcji „Plik i arkusz” wraca do zwykłej szerokości", wWide > wFile + 60 && wFile <= 380, JSON.stringify({ wWide, wFile }));
@@ -342,18 +351,21 @@ async function run() {
   check("R3c. bez animacji szerokości panelu / marginesu tabeli, dymek bez backdrop-filter, --sidebar-w tylko przy zmianie",
     !lagGuard.sbWidth && !lagGuard.mainMargin && (lagGuard.bf === "none" || lagGuard.bf === "") && lagGuard.writes === 0, JSON.stringify(lagGuard));
   // R4. 📌 przypina: wszystkie grupy, panel OBOK tabeli, pamiętane po przeładowaniu
-  await page.click('.rail-btn[data-group="group-data"]');
+  await page.click(railSel("group-data"));
   await sleep(300);
   await page.click("#sidebarPinBtn");
   await sleep(600);
   const d4 = await dock();
   const r4 = await railState();
-  check("R4. przypięty: panel obok tabeli bez nachodzenia, wszystkie grupy", d4.open && r4.pinned && d4.sideRight <= d4.mainLeft && r4.groups.length === 6, JSON.stringify({ d4, r4 }));
+  // wstążka: przypięty panel dalej pokazuje JEDEN panel (decyzja etapu 3), bez wstążki — wszystkie grupy
+  check("R4. przypięty: panel obok tabeli bez nachodzenia" + (rbOn ? ", jeden panel" : ", wszystkie grupy"), d4.open && r4.pinned && d4.sideRight <= d4.mainLeft && r4.groups.length === (rbOn ? 1 : 6), JSON.stringify({ d4, r4 }));
   check("R4. strona nie wystaje z przypiętym panelem", d4.docH <= d4.vh + 1 && d4.mainRight <= d4.vw, JSON.stringify(d4));
   await page.reload({ waitUntil: "load" });
   await page.evaluate(() => document.getElementById("heroSplash")?.remove());
   await sleep(700);
   check("R4. przypięcie pamiętane po przeładowaniu", (await page.evaluate(() => isSidebarOpen() && document.documentElement.classList.contains("panel-pinned"))), "");
+  if (rbOn) check("R4. wstążka: po przeładowaniu przypięty panel pokazuje jeden panel (Filtry), nie wszystkie grupy",
+    await page.evaluate(() => document.documentElement.classList.contains("rb-pane") && document.getElementById("rbPaneTitle").textContent.trim() === "Filtry"), "");
   await page.evaluate(() => document.getElementById("loadSampleBtn")?.click());
   await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 30000 });
   await sleep(500);
@@ -372,7 +384,6 @@ async function run() {
   // R7. menu „Więcej ▾” ma Spisywanie/Wpisywanie/Raport/Eksport; Eksport otwiera okno.
   // Etap 1 wstążki (≥ 769 px): „Więcej ▾” rozebrane — te same przyciski stoją w menu trybu
   // (Spisywanie, Wpisywanie), na karcie Analiza (Raport) i w menu Plik (Eksport…).
-  const rbOn = await page.evaluate(() => document.body.classList.contains("rb-on"));
   if (rbOn) {
     const where = await page.evaluate(() => ({ tr: !!document.querySelector("#rbModeMenu #transcribeBtn"), en: !!document.querySelector("#rbModeMenu #entryBtn"), rp: !!document.querySelector("#rbPanel-an #reportBtn"), ex: !!document.querySelector("#rbBackstage #exportCsvBtn") }));
     check("R7. wstążka: Spisywanie, Wpisywanie (tryb), Raport (Analiza), Eksport (Plik)", where.tr && where.en && where.rp && where.ex, JSON.stringify(where));
@@ -413,17 +424,23 @@ async function run() {
   // szukajka ustawień (przypięty panel — wszystkie grupy)
   await page.evaluate(() => frameCompact.setPinned(true));
   await sleep(500);
-  await page.fill("#sidebarFinder", "zawijaj");
-  await sleep(200);
-  const f1 = await page.evaluate(() => ({
-    visible: [...document.querySelectorAll(".sidebar details.panel")].filter((d) => !d.hidden).map((d) => d.id),
-    hit: !!document.querySelector("#wrapCells")?.closest("label")?.classList.contains("finder-hit"),
-  }));
-  check("C4. „Znajdź ustawienie”: zostaje sekcja Widok z podświetloną opcją", f1.visible.length === 1 && f1.visible[0] === "panel-view" && f1.hit, JSON.stringify(f1));
-  await page.fill("#sidebarFinder", "");
-  await sleep(200);
-  const f2 = await page.evaluate(() => [...document.querySelectorAll(".sidebar details.panel")].filter((d) => d.hidden).length);
-  check("C4. wyczyszczenie przywraca wszystkie sekcje", f2 === 0, String(f2));
+  // etap 3 wstążki (≥ 769 px): „Znajdź ustawienie…” znika (decyzja Mateusza) — panel pokazuje jeden
+  // panel z szyny/karty; na telefonie szukajka zostaje (sprawdza ją ten test przy < 769, drawer-tabs)
+  if (rbOn) {
+    check("C4. wstążka: bez „Znajdź ustawienie…”", await page.evaluate(() => document.getElementById("sidebarFinder").getClientRects().length === 0), "");
+  } else {
+    await page.fill("#sidebarFinder", "zawijaj");
+    await sleep(200);
+    const f1 = await page.evaluate(() => ({
+      visible: [...document.querySelectorAll(".sidebar details.panel")].filter((d) => !d.hidden).map((d) => d.id),
+      hit: !!document.querySelector("#wrapCells")?.closest("label")?.classList.contains("finder-hit"),
+    }));
+    check("C4. „Znajdź ustawienie”: zostaje sekcja Widok z podświetloną opcją", f1.visible.length === 1 && f1.visible[0] === "panel-view" && f1.hit, JSON.stringify(f1));
+    await page.fill("#sidebarFinder", "");
+    await sleep(200);
+    const f2 = await page.evaluate(() => [...document.querySelectorAll(".sidebar details.panel")].filter((d) => d.hidden).length);
+    check("C4. wyczyszczenie przywraca wszystkie sekcje", f2 === 0, String(f2));
+  }
   // przegrupowanie: brak „Akcji”, przyciski w nowych miejscach
   const g = await page.evaluate(() => ({
     actions: !!document.getElementById("panel-actions"),
