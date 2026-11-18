@@ -402,6 +402,13 @@ async function run() {
       return { none: all.filter((id) => count(id) === 0), many: all.filter((id) => count(id) > 1) };
     });
     check("E3. każdy panel ma dokładnie jeden dom (szyna albo przycisk)", !homes.none.length && !homes.many.length, JSON.stringify(homes));
+    // kod aplikacji otwierający konkretną sekcję (np. z menu komórki) — panel pokazuje właśnie ją
+    await page.evaluate(() => { setSidebarOpen(true); document.getElementById("panel-edit-tools").open = true; });
+    await sleep(400);
+    const codeOpen = await page.evaluate(() => ({ title: document.getElementById("rbPaneTitle").textContent.trim(), editVis: document.getElementById("panel-edit-tools").getBoundingClientRect().height > 30 }));
+    check("E3. otwarcie sekcji z kodu pokazuje tę sekcję (nie Filtry)", codeOpen.editVis && codeOpen.title !== "Filtry", JSON.stringify(codeOpen));
+    await page.evaluate(() => setSidebarOpen(false));
+    await sleep(400);
     check("E3. Narzędzia główne: Narzędzia edycji", await page.evaluate(() => !!document.querySelector('#rbPanel-home [data-rb-panel="panel-edit-tools"]')));
     // 900 px: szyna dalej jest, tabela jej nie zasłania
     await page.setViewportSize({ width: 900, height: 900 });

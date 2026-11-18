@@ -26,7 +26,8 @@ const swbDrawerTabs = (() => {
   const groups = () => Array.from(document.querySelectorAll(".sidebar-scroll > .sidebar-group"));
   const tabs = () => (tabsEl ? Array.from(tabsEl.querySelectorAll("[data-group]")) : []);
   // tryb szuflady = bez paska ikon (ten ma własne zawężenie: rail-focus)
-  const drawerMode = () => !root.classList.contains("rail-on");
+  // przy wstążce (ribbon.js, ≥ 769 px) zakładek grup nie ma — panel pokazuje szyna (rail.js)
+  const drawerMode = () => !root.classList.contains("rail-on") && !document.body.classList.contains("rb-on");
   const finding = () => !!(finder && finder.value);
   const filterCount = () => (countSrc && !countSrc.hidden ? Number(countSrc.textContent) || 0 : 0);
   const readLS = (k) => { try { return localStorage.getItem(k); } catch { return null; } };

@@ -364,8 +364,8 @@ async function run() {
   await page.evaluate(() => document.getElementById("heroSplash")?.remove());
   await sleep(700);
   check("R4. przypięcie pamiętane po przeładowaniu", (await page.evaluate(() => isSidebarOpen() && document.documentElement.classList.contains("panel-pinned"))), "");
-  if (rbOn) check("R4. wstążka: po przeładowaniu przypięty panel pokazuje jeden panel (Filtry), nie wszystkie grupy",
-    await page.evaluate(() => document.documentElement.classList.contains("rb-pane") && document.getElementById("rbPaneTitle").textContent.trim() === "Filtry"), "");
+  if (rbOn) check("R4. wstążka: po przeładowaniu przypięty panel wraca do ostatnio oglądanego panelu",
+    await page.evaluate(() => document.documentElement.classList.contains("rb-pane") && document.getElementById("rbPaneTitle").textContent.trim() === "Sprawdzanie wartości"), ""); // ostatnio oglądany przed przeładowaniem
   await page.evaluate(() => document.getElementById("loadSampleBtn")?.click());
   await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 30000 });
   await sleep(500);

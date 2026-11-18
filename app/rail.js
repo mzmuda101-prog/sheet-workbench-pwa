@@ -41,9 +41,12 @@ const swbRail = (() => {
   }
 
   // Jeden panel (albo komplet z szyny) — otwiera panel boczny tą samą drogą co pasek ikon.
+  const LAST_KEY = "swb-rb-pane-v1";
+  function readLast() { try { return JSON.parse(localStorage.getItem(LAST_KEY) || "null"); } catch (_) { return null; } }
   function show(panels, { key = "", title = "" } = {}) {
     clearTimeout(releaseTimer);
     current = { key, panels, title };
+    try { localStorage.setItem(LAST_KEY, JSON.stringify(current)); } catch (_) { /* prywatne okno */ }
     panels.forEach((id) => { const d = document.getElementById(id); if (d) d.open = true; });
     const group = document.getElementById(panels[0])?.closest(".sidebar-group")?.id;
     if (docked() && typeof frameCompact !== "undefined" && group) frameCompact.openGroup(group);
@@ -69,7 +72,7 @@ const swbRail = (() => {
   let wasOpen = isOpen();
   new MutationObserver(() => {
     const open = isOpen();
-    if (open && !current && ribbonOn()) current = { key: "filters", ...RAIL.filters }; // np. przypięty po przeładowaniu
+    if (open) restoreLast();
     if (open === wasOpen) { apply(); return; }
     wasOpen = open;
     if (open) { apply(); return; }
@@ -81,6 +84,23 @@ const swbRail = (() => {
     clearTimeout(releaseTimer);
     releaseTimer = setTimeout(() => { if (!isOpen()) { current = null; apply(); } }, 320);
   }).observe(root, { attributes: true, attributeFilter: ["class"] });
+
+  // Kod aplikacji otwiera sekcję sam (details.open = true, np. menu komórki → Narzędzia edycji) —
+  // przy wstążce panel pokazuje wtedy właśnie ją. Sekcje z bieżącego zestawu (Filtry = 3) pomijamy.
+  // Uzbrojony dopiero po pierwszym kliknięciu / klawiszu: Safari po załadowaniu wysyła „toggle” dla sekcji
+  // otwartych w HTML (Widok, Plik i arkusz) — to nie jest intencja kodu, a przełączyłoby przypięty panel.
+  let armed = false;
+  const arm = () => { armed = true; };
+  document.addEventListener("pointerdown", arm, { capture: true, once: true });
+  document.addEventListener("keydown", arm, { capture: true, once: true });
+  sidebar.addEventListener("toggle", (e) => {
+    const d = e.target;
+    if (!armed || !ribbonOn() || !d.matches?.("details.panel") || !d.open) return;
+    if (current && current.panels.includes(d.id)) return;
+    if (!current && !isOpen()) return;
+    const railKey = Object.keys(RAIL).find((k) => RAIL[k].panels.includes(d.id));
+    show(railKey ? RAIL[railKey].panels : [d.id], railKey ? { key: railKey, title: RAIL[railKey].title } : {});
+  }, true);
 
   // licznik filtrów — ten sam co przy 🔧 / starym pasku ikon
   const countSrc = document.getElementById("panelToggleCount");
@@ -112,7 +132,15 @@ const swbRail = (() => {
   requestAnimationFrame(placeTop);
   // wstążka znika (telefon) → panel wraca do zwykłego układu
   document.addEventListener("swb:ribbon", () => { if (!ribbonOn()) current = null; apply(); requestAnimationFrame(placeTop); });
-  if (isOpen() && ribbonOn()) current = { key: "filters", ...RAIL.filters };
+  // PRZYPIĘTY panel otwarty bez wybranego panelu (po przeładowaniu; start bywa otwórz–zamknij–otwórz)
+  // wraca do ostatnio oglądanego panelu; bez zapisu — cały panel, jak dawniej. Wysuwany panel otwierany
+  // z kodu niczego nie zawęża (sekcję, którą kod otworzy, pokaże nasłuch „toggle” niżej).
+  function restoreLast() {
+    if (current || !ribbonOn() || !root.classList.contains("panel-pinned")) return;
+    const last = readLast();
+    if (last && last.panels?.every((id) => document.getElementById(id))) current = last;
+  }
+  if (isOpen()) restoreLast();
   labels();
 
   return { show, close, labels, current: () => current };
