@@ -1,0 +1,186 @@
+/* ── Wstążka (app/ribbon.js; docs/WSTAZKA.md, makieta docs/makiety/wstazka-v2.html) ──────────
+   Osobny plik: kolory i krój z tokenów app.css. Paski płaskie (bez --glass) — decyzja 1 z
+   WSTAZKA.md: tańsze przewijanie dużej tabeli, szkło zostaje w oknach i powiadomieniach. */
+
+.ribbon {
+  --rb-r1-bg: color-mix(in srgb, var(--surface) 92%, var(--ink) 3%);
+  --rb-r2-bg: color-mix(in srgb, var(--surface) 60%, #fff);
+  --rb-hover: color-mix(in srgb, var(--accent) 9%, transparent);
+  --rb-press: color-mix(in srgb, var(--accent) 17%, transparent);
+  --rb-line: var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin: 0 -12px 4px;
+  font: 13px/1.35 var(--font);
+  color: var(--ink);
+}
+[data-theme="dark"] .ribbon { --rb-r2-bg: color-mix(in srgb, var(--surface) 88%, #fff 4%); }
+.ribbon[hidden] { display: none; }
+
+/* rama na komputerze: nagłówek i stary pasek nad tabelą znikają (ich kontrolki są we wstążce) */
+body.rb-on .app { max-width: none; padding: 0 12px 12px; }
+body.rb-on .hero,
+body.rb-on .hero-grip,
+body.rb-on .table-toolbar { display: none; }
+/* tabela zaczyna się tuż pod wstążką — miejsce idzie w wiersze (makieta v2: 108 px do liter kolumn) */
+body.rb-on .table-panel { padding-top: 4px; }
+
+.rb-slot { display: contents; }
+
+/* ── rząd 1 ── */
+.rb-r1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  block-size: 38px;
+  padding: 0 8px;
+  background: var(--rb-r1-bg);
+  border-bottom: 1px solid var(--rb-line);
+}
+.rb-logo {
+  inline-size: 22px; block-size: 22px; flex: none;
+  display: grid; place-items: center;
+  border-radius: 6px;
+  background: var(--accent); color: var(--on-accent);
+}
+.rb-file {
+  flex: none;
+  block-size: 26px; padding: 0 12px;
+  border: 0; border-radius: 7px;
+  background: var(--accent); color: var(--on-accent);
+  font: inherit; font-weight: 600; cursor: pointer;
+}
+.rb-r1 > .rb-strip { flex: 1; block-size: 38px; }
+.rb-r1 .rb-sc { align-items: stretch; }
+.rb-tabs { display: flex; align-items: stretch; }
+.rb-tab {
+  position: relative;
+  border: 0; background: none;
+  padding: 0 10px;
+  font: inherit; color: var(--ink-2); white-space: nowrap;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+}
+.rb-tab[aria-selected="true"] { color: var(--accent); font-weight: 600; }
+.rb-tab[aria-selected="true"]::after {
+  content: ""; position: absolute; inset-inline: 10px; bottom: 0;
+  block-size: 3px; border-radius: 3px 3px 0 0; background: currentColor;
+}
+.rb-act { display: flex; align-items: center; gap: 4px; flex: none; }
+
+/* kontrolki przeniesione do rzędu 1 — wysokość 28 px jak w makiecie */
+body.rb-on .rb-act .hero-save { block-size: 28px; padding: 0 12px; border-radius: 8px; box-shadow: none; }
+body.rb-on .rb-act .app-menu-btn { inline-size: 28px; block-size: 28px; border: 0; background: none; box-shadow: none; border-radius: 7px; }
+body.rb-on .rb-act .mode-switch { padding: 2px; border-radius: 9px; }
+body.rb-on .rb-act .mode-btn { padding: 2px 9px; }
+body.rb-on .rb-act .panel-toggle { block-size: 28px; }
+body.rb-on .rb-act .app-update-btn { block-size: 28px; }
+
+/* Szukaj: wąskie pole w rzędzie; po kliknięciu (albo ⚙) szersza karta nad wstążką z resztą opcji */
+.rb-slot.rb-search { display: block; position: relative; inline-size: 230px; block-size: 28px; flex: none; }
+body.rb-on .rb-search > .quick-search {
+  position: absolute; inset-block-start: 0; inset-inline-end: 0;
+  inline-size: 100%; min-block-size: 28px; block-size: auto;
+  margin: 0; padding: 0 4px 0 9px; gap: 4px;
+  flex-wrap: nowrap;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); box-shadow: none;
+  transition: inline-size 180ms var(--ease-out);
+}
+body.rb-on .rb-search > .quick-search > select,
+body.rb-on .rb-search > .quick-search > .qs-operators-toggle,
+body.rb-on .rb-search > .quick-search > .qs-scope-toggle,
+body.rb-on .rb-search > .quick-search > #quickSearchColumnsBtn,
+body.rb-on .rb-search > .quick-search > #quickSearchBtn,
+body.rb-on .rb-search > .quick-search .qs-flags { display: none; }
+body.rb-on .rb-search > .quick-search input { block-size: 26px; }
+body.rb-on .rb-search > .quick-search :is(.btn, .nlq-open-btn) { block-size: 24px; min-block-size: 0; }
+body.rb-on .rb-search > .quick-search:focus-within,
+body.rb-on .rb-search > .quick-search.qs-expanded {
+  inline-size: 440px; z-index: 60; flex-wrap: wrap; padding-block: 2px;
+  border-color: var(--accent);
+  box-shadow: 0 14px 32px -16px rgba(18, 30, 23, 0.35);
+}
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) .qs-flags,
+body.rb-on .rb-search > .quick-search:is(:focus-within, .qs-expanded) > select { display: flex; }
+body.rb-on .rb-search > .quick-search.qs-expanded > :is(.qs-operators-toggle, .qs-scope-toggle, #quickSearchColumnsBtn) { display: inline-flex; }
+body.rb-on .rb-search > .quick-search .qs-field { flex: 1 1 120px; min-inline-size: 0; }
+@media (max-width: 900px) {
+  .rb-slot.rb-search { inline-size: 36px; }
+}
+
+/* ── rząd 2 ── */
+.rb-r2 {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  block-size: 36px;
+  padding: 0 6px;
+  background: var(--rb-r2-bg);
+  border-bottom: 1px solid var(--border);
+}
+.rb-r2 > .rb-strip { flex: 1; block-size: 100%; }
+.rb-fixed {
+  display: flex; align-items: center; gap: 2px; flex: none;
+  padding-inline-end: 6px; margin-inline-end: 4px;
+  border-inline-end: 1px solid var(--rb-line);
+}
+body.rb-on .rb-fixed .undo-btn { inline-size: 28px; block-size: 28px; padding: 0; }
+.rb-panel { display: flex; align-items: center; gap: 2px; flex: none; }
+.rb-panel[hidden] { display: none; }
+/* pasek formatowania w karcie Narzędzia główne — bez własnej ramki, przyciski 28 px */
+body.rb-on .rb-panel .format-ribbon {
+  display: flex; flex-wrap: nowrap; align-items: center; gap: 2px;
+  padding: 0; margin: 0; border: 0; background: none; box-shadow: none;
+}
+body.rb-on .rb-panel :is(.fmt-btn, .tb-btn) { block-size: 28px; min-inline-size: 28px; }
+body.rb-on .rb-panel .tb-menu-btn { block-size: 28px; }
+
+/* ── przewijany rząd z podpowiedzią ── */
+.rb-strip { display: flex; align-items: stretch; min-inline-size: 0; position: relative; }
+.rb-sc {
+  display: flex; align-items: center; gap: 2px;
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; scroll-behavior: smooth;
+  min-inline-size: 0; flex: 1;
+}
+.rb-sc::-webkit-scrollbar { display: none; }
+.rb-sc > * { flex: none; }
+.rb-strip.has-r .rb-sc { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 40px), transparent); }
+.rb-strip.has-l .rb-sc { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px); mask-image: linear-gradient(90deg, transparent, #000 40px); }
+.rb-strip.has-l.has-r .rb-sc { -webkit-mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, transparent, #000 40px, #000 calc(100% - 40px), transparent); }
+.rb-nudge {
+  display: none; align-items: center; gap: 2px; flex: none; align-self: center;
+  block-size: 24px; min-inline-size: 24px; padding: 0 5px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--accent);
+  font: 600 11px/1 var(--font); cursor: pointer;
+  box-shadow: 0 1px 3px rgba(18, 30, 23, 0.12);
+}
+.rb-strip.has-l .rb-nudge-l,
+.rb-strip.has-r .rb-nudge-r { display: inline-flex; }
+.rb-nudge-l { margin-inline-end: 4px; }
+.rb-nudge-r { margin-inline-start: 4px; }
+.rb-nudge.is-hint { animation: rb-nudge 0.5s var(--ease-out) 2; }
+@keyframes rb-nudge { 50% { transform: translateX(3px); background: var(--accent-light); } }
+
+/* wciśnięcie i najechanie — tylko mysz dostaje hover (Emil: bez „lepkiego” hover na dotyku) */
+.rb-tab, .rb-file, .rb-nudge { transition: transform 160ms var(--ease-out), background-color 120ms ease, color 120ms ease; }
+.rb-file:active, .rb-nudge:active { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .rb-tab:hover { background: var(--rb-hover); }
+  .rb-file:hover { background: var(--accent-h); }
+  .rb-nudge:hover { background: var(--accent-light); }
+}
+.rb-tab:focus-visible, .rb-file:focus-visible, .rb-nudge:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rb-sc { scroll-behavior: auto; }
+  .rb-nudge.is-hint { animation: none; }
+  body.rb-on .rb-search > .quick-search { transition: none; }
+  .rb-tab, .rb-file, .rb-nudge { transition: background-color 120ms ease, color 120ms ease; }
+  .rb-file:active, .rb-nudge:active { transform: none; }
+}

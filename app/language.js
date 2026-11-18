@@ -1638,6 +1638,18 @@ const I18N = {
     fnCat_text: "Tekst",
     fnCat_info: "Informacyjne",
     fnInsertHint: "Kliknij funkcję — trafi do paska formuły. Odwołania dodasz, klikając komórki w tabeli.",
+    // Wstążka (app/ribbon.js, docs/WSTAZKA.md)
+    rbFile: "Plik",
+    rbTabsAria: "Karty wstążki",
+    rbTab_home: "Narzędzia główne",
+    rbTab_ins: "Wstaw",
+    rbTab_data: "Dane",
+    rbTab_fx: "Formuły",
+    rbTab_an: "Analiza",
+    rbTab_view: "Widok",
+    rbTab_ai: "Asystent",
+    rbScrollLeft: "Przewiń w lewo",
+    rbScrollRight: "Przewiń w prawo",
   },
   en: {
     locale: "en-US",
@@ -3271,6 +3283,17 @@ const I18N = {
     fnCat_text: "Text",
     fnCat_info: "Information",
     fnInsertHint: "Click a function — it goes to the formula bar. Add references by clicking cells in the table.",
+    rbFile: "File",
+    rbTabsAria: "Ribbon tabs",
+    rbTab_home: "Home",
+    rbTab_ins: "Insert",
+    rbTab_data: "Data",
+    rbTab_fx: "Formulas",
+    rbTab_an: "Analysis",
+    rbTab_view: "View",
+    rbTab_ai: "Assistant",
+    rbScrollLeft: "Scroll left",
+    rbScrollRight: "Scroll right",
   },
 };
 
@@ -4907,6 +4930,7 @@ function applyLanguage(lang) {
   if (typeof swbAnonSyncLanguage === "function") swbAnonSyncLanguage();
   if (typeof swbRecent !== "undefined") swbRecent.render();
   if (typeof swbDrawerTabs !== "undefined") swbDrawerTabs.labels();
+  if (typeof swbRibbon !== "undefined" && swbRibbon) swbRibbon.labels();
   if (typeof swbRowGrow !== "undefined") swbRowGrow.syncButton();
   syncSidebarHandle();
   setReadingMode(rootEl.classList.contains("reading"));

@@ -19,6 +19,7 @@
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
     <link rel="stylesheet" href="styles/app.css?v=v1.03.02" />
+    <link rel="stylesheet" href="styles/ribbon.css?v=v1.03.02" />
     <!-- Motyw PRZED pierwszym malowaniem (bez mignięcia jasnego tła w trybie ciemnym). Plik, nie
          skrypt w treści — CSP pozwala tylko na script-src 'self'. Brak klucza = motyw systemu. -->
     <script src="app/theme-early.js?v=v1.03.02"></script>
@@ -33,6 +34,50 @@
            z klawiatury to ~59 Tabów (otwarty sidebar wrzuca przed nią ~50 kontrolek).
            Widoczny dopiero po ofokusowaniu — dla myszy i dotyku niewidoczny. -->
       <button class="skip-link" id="skipToTable" type="button">Przejdź do tabeli</button>
+      <!-- ============ WSTĄŻKA (komputer ≥ 769 px; app/ribbon.js, docs/WSTAZKA.md, makieta docs/makiety/wstazka-v2.html) ============
+           Gniazda [data-rb] dostają ISTNIEJĄCE kontrolki (te same id i obsługa); na telefonie wracają na swoje miejsca. -->
+      <div class="ribbon" id="ribbon" hidden>
+        <div class="rb-r1">
+          <span class="rb-logo" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg></span>
+          <button class="rb-file" id="rbFileBtn" type="button">Plik</button>
+          <div class="rb-strip" data-strip="tabs">
+            <button class="rb-nudge rb-nudge-l" type="button" tabindex="-1" aria-label="Przewiń w lewo"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span class="rb-cnt"></span></button>
+            <div class="rb-sc"><div class="rb-tabs" role="tablist" aria-label="Karty wstążki">
+              <button class="rb-tab" type="button" role="tab" id="rbTab-home" data-rtab="home" aria-controls="rbPanel-home" aria-selected="true" tabindex="0">Narzędzia główne</button>
+              <button class="rb-tab" type="button" role="tab" id="rbTab-ins" data-rtab="ins" aria-controls="rbPanel-ins" aria-selected="false" tabindex="-1">Wstaw</button>
+              <button class="rb-tab" type="button" role="tab" id="rbTab-data" data-rtab="data" aria-controls="rbPanel-data" aria-selected="false" tabindex="-1">Dane</button>
+              <button class="rb-tab" type="button" role="tab" id="rbTab-fx" data-rtab="fx" aria-controls="rbPanel-fx" aria-selected="false" tabindex="-1">Formuły</button>
+              <button class="rb-tab" type="button" role="tab" id="rbTab-an" data-rtab="an" aria-controls="rbPanel-an" aria-selected="false" tabindex="-1">Analiza</button>
+              <button class="rb-tab" type="button" role="tab" id="rbTab-view" data-rtab="view" aria-controls="rbPanel-view" aria-selected="false" tabindex="-1">Widok</button>
+              <button class="rb-tab" type="button" role="tab" id="rbTab-ai" data-rtab="ai" aria-controls="rbPanel-ai" aria-selected="false" tabindex="-1">Asystent</button>
+            </div></div>
+            <button class="rb-nudge rb-nudge-r" type="button" tabindex="-1" aria-label="Przewiń w prawo"><span class="rb-cnt"></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+          <div class="rb-act">
+            <div class="rb-slot rb-search" data-rb="#quickSearchWrap"></div>
+            <div class="rb-slot" data-rb="#sheetModeSwitch"></div>
+            <div class="rb-slot" data-rb="#panelToggle"></div>
+            <div class="rb-slot" data-rb="#appUpdateBtn"></div>
+            <div class="rb-slot" data-rb="#heroSaveBtn"></div>
+            <div class="rb-slot rb-menu-slot" data-rb="#appMenuBtn"></div>
+          </div>
+        </div>
+        <div class="rb-r2" id="rbCmds">
+          <div class="rb-fixed"><div class="rb-slot" data-rb="#undoBtn"></div><div class="rb-slot" data-rb="#redoBtn"></div></div>
+          <div class="rb-strip" data-strip="cmds">
+            <button class="rb-nudge rb-nudge-l" type="button" tabindex="-1" aria-label="Przewiń w lewo"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span class="rb-cnt"></span></button>
+            <div class="rb-sc">
+              <div class="rb-panel" id="rbPanel-home" data-rtab="home" role="tabpanel" aria-labelledby="rbTab-home"><div class="rb-slot" data-rb="#formatRibbon"></div></div>
+              <div class="rb-panel" id="rbPanel-ins" data-rtab="ins" role="tabpanel" aria-labelledby="rbTab-ins" hidden></div>
+              <div class="rb-panel" id="rbPanel-data" data-rtab="data" role="tabpanel" aria-labelledby="rbTab-data" hidden></div>
+              <div class="rb-panel" id="rbPanel-fx" data-rtab="fx" role="tabpanel" aria-labelledby="rbTab-fx" hidden></div>
+              <div class="rb-panel" id="rbPanel-an" data-rtab="an" role="tabpanel" aria-labelledby="rbTab-an" hidden></div>
+              <div class="rb-panel" id="rbPanel-view" data-rtab="view" role="tabpanel" aria-labelledby="rbTab-view" hidden><div class="rb-slot" data-rb="#zoomGroup"></div><div class="rb-slot" data-rb="#viewMenuBtn"></div><div class="rb-slot" data-rb="#moreMenuBtn"></div></div>
+              <div class="rb-panel" id="rbPanel-ai" data-rtab="ai" role="tabpanel" aria-labelledby="rbTab-ai" hidden></div></div>
+            <button class="rb-nudge rb-nudge-r" type="button" tabindex="-1" aria-label="Przewiń w prawo"><span class="rb-cnt"></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+          </div>
+        </div>
+      </div>
       <!-- ============ HERO ============ -->
       <header class="hero">
         <div class="hero-left">
@@ -2010,6 +2055,7 @@
     <script defer src="app/app-frame.js?v=v1.03.02"></script>
     <script defer src="app/sheet-edit-ui.js?v=v1.03.02"></script>
     <script defer src="app/frame-compact.js?v=v1.03.02"></script>
+    <script defer src="app/ribbon.js?v=v1.03.02"></script>
     <script defer src="app/drawer-tabs.js?v=v1.03.02"></script>
     <script defer src="app/key-bar.js?v=v1.03.02"></script>
     <script defer src="app/cell-spill.js?v=v1.03.02"></script>
