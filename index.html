@@ -18,11 +18,11 @@
     <link rel="apple-touch-icon" href="assets/images/apple-touch-icon.png?v=20261114-logo" />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="assets/fonts/space-grotesk-latin-ext.woff2" crossorigin />
-    <link rel="stylesheet" href="styles/app.css?v=v1.04.01" />
-    <link rel="stylesheet" href="styles/ribbon.css?v=v1.04.01" />
+    <link rel="stylesheet" href="styles/app.css?v=v1.05.00" />
+    <link rel="stylesheet" href="styles/ribbon.css?v=v1.05.00" />
     <!-- Motyw PRZED pierwszym malowaniem (bez mignięcia jasnego tła w trybie ciemnym). Plik, nie
          skrypt w treści — CSP pozwala tylko na script-src 'self'. Brak klucza = motyw systemu. -->
-    <script src="app/theme-early.js?v=v1.04.01"></script>
+    <script src="app/theme-early.js?v=v1.05.00"></script>
   </head>
   <body>
     <!-- Intro splash -->
@@ -39,7 +39,7 @@
       <div class="ribbon" id="ribbon" hidden>
         <div class="rb-r1">
           <span class="rb-logo" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg></span>
-          <button class="rb-file" id="rbFileBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="rbFileMenu">Plik</button>
+          <button class="rb-file" id="rbFileBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="rbBackstage">Plik</button>
           <div class="rb-strip" data-strip="tabs">
             <button class="rb-nudge rb-nudge-l" type="button" tabindex="-1" aria-label="Przewiń w lewo"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span class="rb-cnt"></span></button>
             <div class="rb-sc"><div class="rb-tabs" role="tablist" aria-label="Karty wstążki">
@@ -72,9 +72,56 @@
           <div class="rb-slot" data-rb="#transcribeBtn"></div>
           <div class="rb-slot" data-rb="#entryBtn"></div>
         </div>
-        <div class="rb-menu" id="rbFileMenu" role="menu" aria-label="Plik" hidden>
-          <button class="rb-mi" type="button" role="menuitem" data-rb-panel-menu="panel-file-sheet"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><b data-rb-label="rbFileSheet">Plik i arkusz…</b><span></span><small data-rb-label="rbFileSheetDesc">Otwórz, zapisz jako, wybór arkusza i nagłówka.</small></button>
-          <div class="rb-slot" data-rb="#exportCsvBtn"></div>
+        <div class="rb-bs" id="rbBackstage" role="dialog" aria-modal="true" aria-labelledby="rbFileBtn" hidden>
+          <nav class="rb-bs-nav" aria-label="Plik">
+            <button type="button" data-bs-act="back" data-rb-label="rbBsBack"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Wróć</span></button>
+            <button type="button" data-bs-sec="new" data-rb-label="rbBsNew" aria-current="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Nowy</span></button>
+            <button type="button" data-bs-act="open" data-rb-label="rbBsOpen"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Otwórz</span></button>
+            <button type="button" data-bs-sec="info" data-rb-label="rbBsInfo"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg><span>Informacje</span></button>
+            <button type="button" data-bs-act="saveas" data-rb-label="rbBsSaveAs"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg><span>Zapisz jako</span></button>
+            <button type="button" data-bs-sec="export" data-rb-label="rbBsExport"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg><span>Eksportuj</span></button>
+            <span class="rb-bs-grow" aria-hidden="true"></span>
+            <span class="rb-bs-hr" role="separator"></span>
+            <button type="button" data-bs-sec="opts" data-rb-label="rbBsOpts"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"/></svg><span>Opcje</span></button>
+            <button type="button" data-bs-sec="help" data-rb-label="rbBsHelp"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></svg><span>Pomoc i skróty</span></button>
+          </nav>
+          <div class="rb-bs-main">
+            <section class="rb-bs-sec" data-bs-sec-body="new">
+              <h2 data-rb-label="rbBsNew">Nowy</h2>
+              <div class="rb-tiles">
+                <button class="rb-tile lead" type="button" data-bs-act="open"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><b data-rb-label="rbBsOpenFile">Otwórz plik z urządzenia</b><small data-rb-label="rbBsOpenFileDesc">.xlsx, .xlsm, .csv — albo upuść plik w dowolnym miejscu okna</small></button>
+                <button class="rb-tile" type="button" data-bs-act="new"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg><b data-rb-label="rbBsBlank">Pusty skoroszyt</b><small data-rb-label="rbBsBlankDesc">Jeden arkusz do wpisywania od zera</small></button>
+                <button class="rb-tile" type="button" data-bs-act="sample"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg><b data-rb-label="rbBsSample">Przykładowy plik</b><small data-rb-label="rbBsSampleDesc">Poznaj filtry i cykle na gotowych danych</small></button>
+              </div>
+              <div class="rb-bs-recent" id="rbRecent"></div>
+            </section>
+            <section class="rb-bs-sec" data-bs-sec-body="info" hidden>
+              <h2 data-rb-label="rbBsInfo">Informacje</h2>
+              <div class="rb-kv" id="rbInfo"></div>
+              <button class="rb-bs-link" type="button" data-rb-panel="panel-file-sheet"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 12h8v6H8zM12 12v6M8 15h8"/></svg><span data-rb-label="rbBsLoadOpts">Wczytywanie: arkusz i nagłówek…</span></button>
+            </section>
+            <section class="rb-bs-sec" data-bs-sec-body="export" hidden>
+              <h2 data-rb-label="rbBsExport">Eksportuj</h2>
+              <p class="rb-bs-lead" data-rb-label="rbBsExportDesc">Bieżący widok (filtry i kolejność) albo cały arkusz — do CSV lub Excela.</p>
+              <div class="rb-slot" data-rb="#exportCsvBtn"></div>
+            </section>
+            <section class="rb-bs-sec" data-bs-sec-body="opts" hidden>
+              <h2 data-rb-label="rbBsOpts">Opcje</h2>
+              <div class="rb-opts">
+                <div class="rb-slot" data-rb=".app-menu-row:has(#langSwitch)"></div>
+                <div class="rb-slot" data-rb=".app-menu-row:has(#appMenuThemeLabel)"></div>
+                <div class="rb-slot" data-rb="#themeSeg"></div>
+                <div class="rb-slot" data-rb="#settingsBackupItem"></div>
+              </div>
+            </section>
+            <section class="rb-bs-sec" data-bs-sec-body="help" hidden>
+              <h2 data-rb-label="rbBsHelp">Pomoc i skróty</h2>
+              <div class="rb-opts">
+                <div class="rb-slot" data-rb="#shortcutsMenuItem"></div>
+                <button class="rb-bs-link" type="button" data-rb-panel="panel-log"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg><span data-rb-label="rbBsLog">Dziennik zdarzeń</span></button>
+              </div>
+            </section>
+          </div>
         </div>
         <div class="rb-r2" id="rbCmds">
           <div class="rb-fixed"><div class="rb-slot" data-rb="#undoBtn"></div><div class="rb-slot" data-rb="#redoBtn"></div></div>
@@ -2021,72 +2068,73 @@
          Dogrywa je leniwie ensureXlsxLibs() (app/workbook.js) przy pierwszym wczytaniu/zapisie
          pliku — apka bootuje bez ~512K JS. SW i tak je precache'uje (offline OK). -->
     <!-- defer: skrypty pobierają się równolegle i wykonują po sparsowaniu HTML, z zachowaniem kolejności -->
-    <script defer src="app/core.js?v=v1.04.01"></script>
-    <script defer src="app/render-budget.js?v=v1.04.01"></script>
-    <script defer src="app/language.js?v=v1.04.01"></script>
-    <script defer src="app/app-dialog.js?v=v1.04.01"></script>
-    <script defer src="app/similar-names.js?v=v1.04.01"></script>
-    <script defer src="app/analysis.js?v=v1.04.01"></script>
-    <script defer src="app/smart-filters.js?v=v1.04.01"></script>
-    <script defer src="app/excel-date-format.js?v=v1.04.01"></script>
-    <script defer src="app/excel-fonts.js?v=v1.04.01"></script>
-    <script defer src="app/workbook.js?v=v1.04.01"></script>
-    <script defer src="app/xlsx-patch.js?v=v1.04.01"></script>
-    <script defer src="app/xlsx-grow.js?v=v1.04.01"></script>
-    <script defer src="app/xlsx-layout.js?v=v1.04.01"></script>
-    <script defer src="app/table.js?v=v1.04.01"></script>
-    <script defer src="app/virt-rows.js?v=v1.04.01"></script>
-    <script defer src="app/conditional-formatting.js?v=v1.04.01"></script>
-    <script defer src="app/formula-engine.js?v=v1.04.01"></script>
-    <script defer src="app/sheet-ops.js?v=v1.04.01"></script>
-    <script defer src="app/formula-calc.js?v=v1.04.01"></script>
-    <script defer src="app/formula-explain.js?v=v1.04.01"></script>
-    <script defer src="app/data-validation.js?v=v1.04.01"></script>
-    <script defer src="app/derived-columns.js?v=v1.04.01"></script>
-    <script defer src="app/formulas.js?v=v1.04.01"></script>
-    <script defer src="app/edit-tools.js?v=v1.04.01"></script>
-    <script defer src="app/cell-format.js?v=v1.04.01"></script>
-    <script defer src="app/ui-controls.js?v=v1.04.01"></script>
-    <script defer src="app/offline-status.js?v=v1.04.01"></script>
-    <script defer src="app/filter-bar.js?v=v1.04.01"></script>
-    <script defer src="app/qs-history.js?v=v1.04.01"></script>
-    <script defer src="app/undo.js?v=v1.04.01"></script>
-    <script defer src="app/layout-edit.js?v=v1.04.01"></script>
-    <script defer src="app/cell-notes.js?v=v1.04.01"></script>
-    <script defer src="app/anonymize-core.js?v=v1.04.01"></script>
-    <script defer src="app/anonymize-tools.js?v=v1.04.01"></script>
-    <script defer src="app/anonymize-zip.js?v=v1.04.01"></script>
-    <script defer src="app/anonymize-ui.js?v=v1.04.01"></script>
-    <script defer src="app/drafts.js?v=v1.04.01"></script>
-    <script defer src="app/session-resume.js?v=v1.04.01"></script>
-    <script defer src="app/recent-files.js?v=v1.04.01"></script>
-    <script defer src="app/row-grow.js?v=v1.04.01"></script>
-    <script defer src="app/shortcuts.js?v=v1.04.01"></script>
-    <script defer src="app/app-settings.js?v=v1.04.01"></script>
-    <script defer src="app/transcribe.js?v=v1.04.01"></script>
-    <script defer src="app/entry-core.js?v=v1.04.01"></script>
-    <script defer src="app/entry.js?v=v1.04.01"></script>
-    <script defer src="app/local-ai.js?v=v1.04.01"></script>
-    <script defer src="app/nl-query.js?v=v1.04.01"></script>
-    <script defer src="app/report.js?v=v1.04.01"></script>
-    <script defer src="app/freeze-pane.js?v=v1.04.01"></script>
-    <script defer src="app/app-frame.js?v=v1.04.01"></script>
-    <script defer src="app/sheet-edit-ui.js?v=v1.04.01"></script>
-    <script defer src="app/frame-compact.js?v=v1.04.01"></script>
-    <script defer src="app/ribbon.js?v=v1.04.01"></script>
-    <script defer src="app/drawer-tabs.js?v=v1.04.01"></script>
-    <script defer src="app/key-bar.js?v=v1.04.01"></script>
-    <script defer src="app/cell-spill.js?v=v1.04.01"></script>
-    <script defer src="app/autofill.js?v=v1.04.01"></script>
-    <script defer src="app/move-cells.js?v=v1.04.01"></script>
-    <script defer src="app/header-edit.js?v=v1.04.01"></script>
-    <script defer src="app/sheet-ops-ui.js?v=v1.04.01"></script>
-    <script defer src="app/formula-ui.js?v=v1.04.01"></script>
+    <script defer src="app/core.js?v=v1.05.00"></script>
+    <script defer src="app/render-budget.js?v=v1.05.00"></script>
+    <script defer src="app/language.js?v=v1.05.00"></script>
+    <script defer src="app/app-dialog.js?v=v1.05.00"></script>
+    <script defer src="app/similar-names.js?v=v1.05.00"></script>
+    <script defer src="app/analysis.js?v=v1.05.00"></script>
+    <script defer src="app/smart-filters.js?v=v1.05.00"></script>
+    <script defer src="app/excel-date-format.js?v=v1.05.00"></script>
+    <script defer src="app/excel-fonts.js?v=v1.05.00"></script>
+    <script defer src="app/workbook.js?v=v1.05.00"></script>
+    <script defer src="app/xlsx-patch.js?v=v1.05.00"></script>
+    <script defer src="app/xlsx-grow.js?v=v1.05.00"></script>
+    <script defer src="app/xlsx-layout.js?v=v1.05.00"></script>
+    <script defer src="app/table.js?v=v1.05.00"></script>
+    <script defer src="app/virt-rows.js?v=v1.05.00"></script>
+    <script defer src="app/conditional-formatting.js?v=v1.05.00"></script>
+    <script defer src="app/formula-engine.js?v=v1.05.00"></script>
+    <script defer src="app/sheet-ops.js?v=v1.05.00"></script>
+    <script defer src="app/formula-calc.js?v=v1.05.00"></script>
+    <script defer src="app/formula-explain.js?v=v1.05.00"></script>
+    <script defer src="app/data-validation.js?v=v1.05.00"></script>
+    <script defer src="app/derived-columns.js?v=v1.05.00"></script>
+    <script defer src="app/formulas.js?v=v1.05.00"></script>
+    <script defer src="app/edit-tools.js?v=v1.05.00"></script>
+    <script defer src="app/cell-format.js?v=v1.05.00"></script>
+    <script defer src="app/ui-controls.js?v=v1.05.00"></script>
+    <script defer src="app/offline-status.js?v=v1.05.00"></script>
+    <script defer src="app/filter-bar.js?v=v1.05.00"></script>
+    <script defer src="app/qs-history.js?v=v1.05.00"></script>
+    <script defer src="app/undo.js?v=v1.05.00"></script>
+    <script defer src="app/layout-edit.js?v=v1.05.00"></script>
+    <script defer src="app/cell-notes.js?v=v1.05.00"></script>
+    <script defer src="app/anonymize-core.js?v=v1.05.00"></script>
+    <script defer src="app/anonymize-tools.js?v=v1.05.00"></script>
+    <script defer src="app/anonymize-zip.js?v=v1.05.00"></script>
+    <script defer src="app/anonymize-ui.js?v=v1.05.00"></script>
+    <script defer src="app/drafts.js?v=v1.05.00"></script>
+    <script defer src="app/session-resume.js?v=v1.05.00"></script>
+    <script defer src="app/recent-files.js?v=v1.05.00"></script>
+    <script defer src="app/row-grow.js?v=v1.05.00"></script>
+    <script defer src="app/shortcuts.js?v=v1.05.00"></script>
+    <script defer src="app/app-settings.js?v=v1.05.00"></script>
+    <script defer src="app/transcribe.js?v=v1.05.00"></script>
+    <script defer src="app/entry-core.js?v=v1.05.00"></script>
+    <script defer src="app/entry.js?v=v1.05.00"></script>
+    <script defer src="app/local-ai.js?v=v1.05.00"></script>
+    <script defer src="app/nl-query.js?v=v1.05.00"></script>
+    <script defer src="app/report.js?v=v1.05.00"></script>
+    <script defer src="app/freeze-pane.js?v=v1.05.00"></script>
+    <script defer src="app/app-frame.js?v=v1.05.00"></script>
+    <script defer src="app/sheet-edit-ui.js?v=v1.05.00"></script>
+    <script defer src="app/frame-compact.js?v=v1.05.00"></script>
+    <script defer src="app/ribbon.js?v=v1.05.00"></script>
+    <script defer src="app/backstage.js?v=v1.05.00"></script>
+    <script defer src="app/drawer-tabs.js?v=v1.05.00"></script>
+    <script defer src="app/key-bar.js?v=v1.05.00"></script>
+    <script defer src="app/cell-spill.js?v=v1.05.00"></script>
+    <script defer src="app/autofill.js?v=v1.05.00"></script>
+    <script defer src="app/move-cells.js?v=v1.05.00"></script>
+    <script defer src="app/header-edit.js?v=v1.05.00"></script>
+    <script defer src="app/sheet-ops-ui.js?v=v1.05.00"></script>
+    <script defer src="app/formula-ui.js?v=v1.05.00"></script>
     <!-- Diagnostyka przewijania: NIE ładowana na starcie (czysty narzut ~29KB dla kodu,
          który i tak nic nie robi bez `?scrolltest`). Dogrywamy ją leniwie TYLKO gdy
          flaga jest włączona — loader w osobnym pliku, żeby CSP mogło zostać script-src 'self'. -->
-    <script defer src="app/debug-loaders.js?v=v1.04.01"></script>
-    <script defer src="app/launch-files.js?v=v1.04.01"></script>
-    <script defer src="app/bootstrap.js?v=v1.04.01"></script>
+    <script defer src="app/debug-loaders.js?v=v1.05.00"></script>
+    <script defer src="app/launch-files.js?v=v1.05.00"></script>
+    <script defer src="app/bootstrap.js?v=v1.05.00"></script>
   </body>
 </html>

@@ -176,21 +176,19 @@ const swbRibbon = (() => {
     },
   };
   root.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-rb-act], [data-rb-panel], [data-rb-panel-menu]");
+    const b = e.target.closest("[data-rb-act], [data-rb-panel]");
     if (!b || !root.contains(b)) return;
     if (b.dataset.rbAct) ACTS[b.dataset.rbAct]?.();
-    else { closeMenus(); openPanel(b.dataset.rbPanel || b.dataset.rbPanelMenu); }
+    else { closeMenus(); openPanel(b.dataset.rbPanel); }
   });
 
   // ── menu: tryb i Plik ────────────────────────────────────────────────────
   const modeBtn = document.getElementById("rbModeBtn");
   const modeMenu = document.getElementById("rbModeMenu");
-  const fileBtn = document.getElementById("rbFileBtn");
-  const fileMenu = document.getElementById("rbFileMenu");
   const editBtn = document.getElementById("rbEditBtn");
   const nameEl = document.getElementById("rbName");
   const modeSwitch = document.getElementById("sheetModeSwitch");
-  const MENUS = [[modeBtn, modeMenu, "right"], [fileBtn, fileMenu, "left"]].filter(([x, y]) => x && y);
+  const MENUS = [[modeBtn, modeMenu, "right"]].filter(([x, y]) => x && y);
   const menuItems = (m) => Array.from(m.querySelectorAll(".rb-mi, .rb-slot > button")).filter((x) => !x.hidden);
   function closeMenus(refocus) {
     for (const [btn, menu] of MENUS) {
@@ -289,7 +287,6 @@ const swbRibbon = (() => {
       } else el.textContent = txt;
     });
     modeMenu?.setAttribute("aria-label", tr("rbModeMenuAria"));
-    fileMenu?.setAttribute("aria-label", tr("rbFile"));
     const ed = editBtn?.querySelector("span");
     if (ed) ed.textContent = tr("rbEdit");
     syncMode();
@@ -333,5 +330,5 @@ const swbRibbon = (() => {
   labels();
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && MENUS.some(([, m]) => !m.hidden)) { e.preventDefault(); closeMenus(true); } });
 
-  return { isOn: () => on, select, current: () => current, openPanel, labels };
+  return { isOn: () => on, select, current: () => current, openPanel, labels, closeMenus };
 })();

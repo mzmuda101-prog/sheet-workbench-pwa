@@ -58,6 +58,12 @@ async function run() {
     check("1. body.rb-on na komputerze", await page.evaluate(() => document.body.classList.contains("rb-on")));
     check("1. wstążka widoczna", await shown(page, "#ribbon"));
     check("1. nagłówek hero schowany", !(await shown(page, ".hero")));
+    // dolne rogi wstążki zaokrąglone jak karty aplikacji (.panel, --r-lg) — prośba Mateusza
+    const corners = await page.evaluate(() => {
+      const r = getComputedStyle(document.querySelector(".rb-r2")), p = getComputedStyle(document.querySelector(".table-panel"));
+      return { bl: r.borderBottomLeftRadius, br: r.borderBottomRightRadius, panel: p.borderTopLeftRadius };
+    });
+    check("1. dolne rogi wstążki jak karty", corners.bl === corners.panel && corners.br === corners.panel && corners.panel !== "0px", JSON.stringify(corners));
     check("1. wstążka zamknięta w sobie (tabela i nagłówek nie są w #ribbon)", await page.evaluate(() => !document.querySelector("#ribbon .workspace, #ribbon .hero")));
 
     const tabs = await page.evaluate(() => Array.from(document.querySelectorAll('#ribbon [role="tab"][data-rtab]')).filter((t) => !t.hidden).map((t) => t.textContent.trim()));
@@ -288,6 +294,58 @@ async function run() {
     await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 30000 });
     await sleep(300);
     check("F5. po wczytaniu: polecenia aktywne", await page.evaluate(() => Array.from(document.querySelectorAll("#ribbon [data-rb-act]")).every((b) => !b.disabled)));
+    await context.close();
+  }
+
+  // ── etap 2: ekran Plik ─────────────────────────────────────────────────────
+  {
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
+    await page.click("#rbFileBtn");
+    await sleep(350);
+    const st = await page.evaluate(() => {
+      const bs = document.getElementById("rbBackstage"), r = bs?.getBoundingClientRect();
+      return {
+        vis: !!bs && !bs.hidden && r.width > 0, exp: document.getElementById("rbFileBtn").getAttribute("aria-expanded"),
+        focusIn: !!bs && bs.contains(document.activeElement), inert: !!document.querySelector(".workspace")?.inert,
+        sec: bs?.querySelector('.rb-bs-nav [aria-current="true"]')?.dataset.bsSec,
+        tiles: Array.from(bs?.querySelectorAll('[data-bs-sec-body="new"] .rb-tile') || []).map((x) => x.dataset.bsAct),
+      };
+    });
+    check("E2. Plik otwiera ekran Plik (fokus w środku, reszta inert)", st.vis && st.exp === "true" && st.focusIn && st.inert, JSON.stringify(st));
+    check("E2. domyślnie sekcja Nowy z kafelkami Otwórz / Pusty / Przykładowy", st.sec === "new" && st.tiles.join() === "open,new,sample", JSON.stringify(st));
+    await page.click('#rbBackstage [data-bs-sec="info"]');
+    await sleep(150);
+    const info = await page.evaluate(() => { const b = document.querySelector('[data-bs-sec-body="info"]'); return { txt: b?.textContent || "", file: currentFileName, sheetOk: !!b && b.textContent.includes(currentSheetName), vis: !!b && !b.hidden }; });
+    check("E2. Informacje: nazwa pliku i arkusz", info.vis && info.file && info.txt.includes(info.file) && info.sheetOk, JSON.stringify(info).slice(0, 300));
+    await page.click('#rbBackstage [data-bs-sec="opts"]');
+    await sleep(150);
+    const opts = await page.evaluate(() => ({ theme: !!document.querySelector('#rbBackstage [data-bs-sec-body="opts"] #themeSeg'), lang: !!document.querySelector('#rbBackstage [data-bs-sec-body="opts"] #langSwitch'), backup: !!document.querySelector("#rbBackstage #settingsBackupItem"), inMenu: !!document.querySelector("#appMenu #themeSeg, #appMenu #langSwitch, #appMenu #settingsBackupItem") }));
+    check("E2. Opcje: motyw, język, kopia ustawień (już nie w ⋯)", opts.theme && opts.lang && opts.backup && !opts.inMenu, JSON.stringify(opts));
+    const pill = await page.evaluate(() => { const i = document.querySelector("#langSwitch .lang-switch-indicator").getBoundingClientRect(), b = document.querySelector("#langSwitch .lang-button.is-active").getBoundingClientRect(); return { w: Math.round(i.width), bw: Math.round(b.width), dx: Math.round(i.left - b.left) }; });
+    check("E2. Opcje: znacznik wybranego języka stoi pod aktywnym przyciskiem", pill.w > 10 && Math.abs(pill.w - pill.bw) <= 2 && Math.abs(pill.dx) <= 2, JSON.stringify(pill));
+    await page.click('#rbBackstage [data-bs-sec="help"]');
+    await sleep(150);
+    check("E2. Pomoc: skróty klawiszowe przeniesione z ⋯", await page.evaluate(() => !!document.querySelector('#rbBackstage [data-bs-sec-body="help"] #shortcutsMenuItem') && !document.querySelector("#appMenu #shortcutsMenuItem")));
+    check("E2. bez tymczasowego menu Plik z etapu 1", await page.evaluate(() => !document.getElementById("rbFileMenu")));
+    await page.keyboard.press("Escape");
+    await sleep(350);
+    const closed = await page.evaluate(() => ({ hidden: document.getElementById("rbBackstage").hidden, focus: document.activeElement?.id, inert: !!document.querySelector(".workspace")?.inert, exp: document.getElementById("rbFileBtn").getAttribute("aria-expanded") }));
+    check("E2. Esc zamyka, fokus na Plik, aplikacja znów aktywna", closed.hidden && closed.focus === "rbFileBtn" && !closed.inert && closed.exp === "false", JSON.stringify(closed));
+    // Eksportuj: ten sam przycisk co dawniej, okno eksportu, ekran Plik się zamyka
+    await page.click("#rbFileBtn");
+    await sleep(300);
+    await page.click('#rbBackstage [data-bs-sec="export"]');
+    await page.click("#rbBackstage #exportCsvBtn");
+    await sleep(400);
+    check("E2. Eksport… z ekranu Plik otwiera okno eksportu i zamyka ekran", await page.evaluate(() => !document.getElementById("exportModal").classList.contains("hidden") && document.getElementById("rbBackstage").hidden));
+    await page.keyboard.press("Escape");
+    await sleep(200);
+    // telefon: przeniesione kontrolki wracają do ⋯
+    await page.setViewportSize({ width: 768, height: 900 });
+    await page.waitForFunction(() => !document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
+    await sleep(150);
+    check("E2. 768 px: motyw, język, skróty, eksport wracają na swoje miejsca", await page.evaluate(() => !!document.querySelector("#appMenu #themeSeg") && !!document.querySelector("#appMenu #langSwitch") && !!document.querySelector("#appMenu #shortcutsMenuItem") && !!document.querySelector("#moreMenu #exportCsvBtn")));
+    check("brak błędów strony (E2)", errors.length === 0, errors.join(" | "));
     await context.close();
   }
 

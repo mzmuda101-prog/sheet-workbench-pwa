@@ -74,3 +74,23 @@ Tymczasowe odstępstwa (znikają w kolejnych etapach):
 Poza tym: F6 traktuje wstążkę jako region „pasek”; po zamknięciu Spisywania / Wpisywania fokus
 wraca na „Tryb ▾”. Stare testy, które klikały kontrolki w dawnych miejscach, mają gałąź „wstążka”
 (to samo zachowanie, nowe miejsce; komentarz „etap 1 wstążki”).
+
+## Etap 2 — co weszło (ekran Plik)
+
+`app/backstage.js` + `#rbBackstage` w `#ribbon` + sekcja w `styles/ribbon.css`; plan:
+`docs/superpowers/plans/2026-11-18-wstazka-etap2.md`. „Plik” otwiera ekran pod rzędem kart (przenikanie
++ 12 px, 280 ms; wyjście 200 ms; „ogranicz ruch” = samo przenikanie), reszta aplikacji `inert`, Esc /
+Wróć / Plik zamyka i oddaje fokus „Plik”. Tymczasowe menu Plik z etapu 1 zniknęło.
+
+- **Nowy:** Otwórz plik z urządzenia (wiodący), Pusty skoroszyt, Przykładowy plik + „Ostatnio otwierane”
+  (ta sama lista co na pustym ekranie, tu także przy otwartym pliku).
+- **Otwórz**, **Zapisz jako** — te same przyciski co dotąd.
+- **Informacje:** plik, bieżący arkusz, liczba arkuszy, wiersze w widoku, kolumny; „Wczytywanie: arkusz
+  i nagłówek…” (sekcja Plik i arkusz w panelu).
+- **Eksportuj:** Eksport… (przeniesiony z menu Plik).
+- **Opcje:** Język, Motyw, Kopia ustawień — przeniesione z ⋯.
+- **Pomoc i skróty:** Skróty klawiszowe (z ⋯), Dziennik zdarzeń.
+- Menu ⋯ przy wstążce: Asystent AI…, Odśwież, inne aplikacje, stan, wersja.
+
+Bez dubli: Anonimizuj kopię pominięte (Anonimizuj jest na karcie Dane); Raport zostaje na Analizie.
+Pominięte, bo takich funkcji w Sheet nie ma: Zamknij, Zgłoś błąd (makieta v2 ich nie wymagała).

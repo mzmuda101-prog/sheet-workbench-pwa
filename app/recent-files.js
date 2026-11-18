@@ -161,30 +161,34 @@ const swbRecent = (() => {
     return `${d.toLocaleDateString(loc, { day: "numeric", month: "long" })}, ${time}`;
   }
 
-  let renderJob = 0;
-  async function render() {
-    const job = ++renderJob;
-    const host = document.getElementById("recentFiles");
+  // render() = pusty ekran (#recentFiles, tylko bez pliku); render(host) = inne miejsce (ekran Plik,
+  // backstage.js) — tam lista jest też przy otwartym pliku.
+  async function render(target) {
+    const host = target || document.getElementById("recentFiles");
     if (!host) return;
-    if (workbook) { host.replaceChildren(); host.hidden = true; return; }
+    const job = host._recentJob = (host._recentJob || 0) + 1;
+    const always = !!target;
+    if (workbook && !always) { host.replaceChildren(); host.hidden = true; return; }
     const recs = await list();
-    if (job !== renderJob || workbook) return;
+    if (job !== host._recentJob || (workbook && !always)) return;
+    const again = () => { render(); if (target) render(target); };
     host.replaceChildren();
     host.hidden = !recs.length;
     if (!recs.length) return;
     const head = Object.assign(document.createElement("div"), { className: "recent-head" });
-    const cap = Object.assign(document.createElement("div"), { className: "recent-cap", id: "recentCap", textContent: t("recentTitle") });
+    const capId = always ? `${host.id || "recent"}Cap` : "recentCap";
+    const cap = Object.assign(document.createElement("div"), { className: "recent-cap", id: capId, textContent: t("recentTitle") });
     const clear = Object.assign(document.createElement("button"), { type: "button", className: "recent-clear", textContent: t("recentClear") });
     clear.addEventListener("click", async () => {
       const ok = await appConfirm(t("recentClearAsk"), { title: t("recentClearTitle"), okLabel: t("recentClear"), danger: true });
       if (!ok) return;
       await tx("readwrite", (s, b) => { s.clear(); b.clear(); }).catch(() => {});
       currentId = "";
-      render();
+      again();
     });
     head.append(cap, clear);
     const ul = Object.assign(document.createElement("ul"), { className: "recent-list" });
-    ul.setAttribute("aria-labelledby", "recentCap");
+    ul.setAttribute("aria-labelledby", capId);
     recs.forEach((r) => {
       const li = Object.assign(document.createElement("li"), { className: "recent-item" });
       const btn = Object.assign(document.createElement("button"), { type: "button", className: "recent-open" });
@@ -203,7 +207,7 @@ const swbRecent = (() => {
       del.addEventListener("click", async () => {
         await remove(r.id);
         if (r.id === currentId) currentId = "";
-        render();
+        again();
       });
       li.append(btn, del);
       ul.append(li);
