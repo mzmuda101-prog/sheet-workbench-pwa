@@ -508,11 +508,11 @@ body.rb-show-tabs:not(.rb-peek) .rb-tab[aria-selected="true"] { color: var(--ink
 body.rb-show-tabs:not(.rb-peek) .rb-tab[aria-selected="true"]::after { display: none; }
 
 /* Dotyk: większe cele w rzędzie poleceń (28 → 36 px, rząd 36 → 50 px; makieta .mk[data-dens=touch]) */
-body.rb-touch .rb-r2 { block-size: 50px; }
-body.rb-touch .rb-r2 :is(.rb-btn, .fmt-btn, .undo-btn, .rb-slot > .btn) { block-size: 36px; min-block-size: 36px; min-inline-size: 36px; }
-body.rb-touch .rb-r2 .rb-btn.rb-ic,
-body.rb-on.rb-touch .rb-fixed .undo-btn { inline-size: 36px; block-size: 36px; }
-body.rb-touch .rb-r2 .fmt-select { block-size: 36px; }
+body.rb-touch:not(.rb-classic) .rb-r2 { block-size: 50px; }
+body.rb-touch:not(.rb-classic) .rb-r2 :is(.rb-btn, .fmt-btn, .undo-btn, .rb-slot > .btn) { block-size: 36px; min-block-size: 36px; min-inline-size: 36px; }
+body.rb-touch:not(.rb-classic) .rb-r2 .rb-btn.rb-ic,
+body.rb-on.rb-touch:not(.rb-classic) .rb-fixed .undo-btn { inline-size: 36px; block-size: 36px; }
+body.rb-touch:not(.rb-classic) .rb-r2 .fmt-select { block-size: 36px; }
 body.rb-touch.rb-show-auto.rb-tucked .rb-r2 { block-size: 0; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -527,3 +527,77 @@ body.rb-touch.rb-show-auto.rb-tucked .rb-r2 { block-size: 0; }
 /* gęstość wierszy wybiera się w menu powiększenia i w Plik → Opcje — w panelu Widok bez dubla */
 body.rb-on .field:has(> #rowDensity) { display: none; }
 .density-glyph-auto { --gl: 5px; opacity: .45; }
+
+/* ── wstążka Klasyczna (etap 6b; app/ribbon-classic.js, makieta v2 .r2.classic) ──
+   Duże przyciski, kolumny małych z podpisami, nazwy grup pod spodem. Gęstość Dotyk jej nie zmienia
+   (duże przyciski i tak mają 66 px). */
+.rb-menu-cap { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; color: var(--muted); }
+body.rb-classic .rb-r2 { block-size: 92px; align-items: stretch; padding-block-start: 4px; }
+body.rb-classic.rb-show-auto.rb-tucked .rb-r2 { block-size: 0; padding-block: 0; }
+body.rb-classic .rb-r2 .rb-sc { align-items: stretch; }
+body.rb-classic .rb-r2 :is(.rb-nudge, .rb-end) { align-self: center; }
+body.rb-classic .rb-fixed { flex-direction: column; justify-content: flex-start; padding-block-start: 2px; }
+.rb-panel.rb-cl { align-items: stretch; gap: 0; }
+.rb-cg { display: grid; grid-template-rows: 1fr auto; flex: none; padding: 0 6px; border-inline-end: 1px solid var(--rb-line); }
+.rb-gi { display: flex; align-items: flex-start; gap: 2px; }
+.rb-gcap, .fmt-gcap { padding: 2px 0 4px; font-size: 11px; line-height: 1.2; color: var(--muted); text-align: center; white-space: nowrap; }
+.rb-cst { display: grid; gap: 2px; align-content: start; }
+/* grupa bez widocznych poleceń (np. Sortowanie, gdy nie ma czego przywracać) — znika cała */
+.rb-cg:not(:has(.rb-btn)):not(:has(.rb-slot > :not(.hidden):not([hidden]))) { display: none; }
+.rb-btn.rb-big {
+  flex-direction: column; justify-content: flex-start; gap: 3px;
+  block-size: 66px; min-inline-size: 56px; max-inline-size: 88px; padding: 5px 6px 3px;
+  font-size: 12px; line-height: 1.15; white-space: normal; text-align: center;
+}
+.rb-btn.rb-big svg { inline-size: 24px; block-size: 24px; flex: none; color: var(--accent); }
+.rb-btn.rb-big > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.rb-btn.rb-sm { block-size: 26px; justify-content: flex-start; gap: 6px; padding: 0 8px 0 6px; font-size: 12px; }
+body.rb-on .rb-cl .rb-gi > .rb-slot > :is(.btn, .app-menu-item) { block-size: 28px; }
+
+/* blok formatu (ta sama kontrolka co w Uproszczonej) ułożony w grupy siatką — sheet-edit-ui.js nic nie zauważa */
+.fmt-gcap, .fmt-cl-t { display: none; }
+body.rb-on.rb-classic .rb-panel.rb-cl .format-ribbon {
+  display: grid; grid-template-rows: 28px 28px auto; column-gap: 2px; row-gap: 2px; align-items: center;
+  overflow: visible; padding: 0 6px 0 0; border-inline-end: 1px solid var(--rb-line);
+}
+body.rb-classic .rb-cl .format-ribbon :is(.fmt-btn, .fmt-select) { block-size: 28px; }
+body.rb-classic .rb-cl .format-ribbon > .fmt-gcap { display: block; grid-row: 3; align-self: end; }
+body.rb-classic .rb-cl .format-ribbon > .fmt-sep { grid-row: 1 / 4; align-self: stretch; inline-size: 1px; block-size: auto; margin: 0 6px; background: var(--rb-line); }
+body.rb-classic .rb-cl .format-ribbon > .fmt-sep:is([data-g="in-font"], [data-g="in-edit"]) { display: none; }
+/* Czcionka (kolejność Tab = kolejność na ekranie: rząd 1 B I U S, rząd 2 rozmiar, kolory, obramowanie) */
+body.rb-classic .rb-cl .format-ribbon > [data-fmt="b"] { grid-area: 1 / 1; }
+body.rb-classic .rb-cl .format-ribbon > [data-fmt="i"] { grid-area: 1 / 2; }
+body.rb-classic .rb-cl .format-ribbon > [data-fmt="u"] { grid-area: 1 / 3; }
+body.rb-classic .rb-cl .format-ribbon > [data-fmt="strike"] { grid-area: 1 / 4; }
+body.rb-classic .rb-cl #fmtSize { grid-area: 2 / 1 / 3 / 3; }
+body.rb-classic .rb-cl #fmtColorSplit { grid-area: 2 / 3; }
+body.rb-classic .rb-cl #fmtFillSplit { grid-area: 2 / 4; }
+body.rb-classic .rb-cl #fmtBorderBtn { grid-area: 2 / 5; }
+body.rb-classic .rb-cl .fmt-gcap[data-g="font"] { grid-column: 1 / 6; }
+body.rb-classic .rb-cl .fmt-sep[data-g="font"] { grid-column: 6; }
+/* Wyrównanie */
+body.rb-classic .rb-cl .format-ribbon > [data-align="left"] { grid-area: 1 / 7; }
+body.rb-classic .rb-cl .format-ribbon > [data-align="center"] { grid-area: 1 / 8; }
+body.rb-classic .rb-cl .format-ribbon > [data-align="right"] { grid-area: 1 / 9; }
+body.rb-classic .rb-cl .format-ribbon > [data-fmt="wrap"] { grid-area: 2 / 7; }
+body.rb-classic .rb-cl .fmt-gcap[data-g="align"] { grid-column: 7 / 10; }
+body.rb-classic .rb-cl .fmt-sep[data-g="align"] { grid-column: 10; }
+/* Liczba */
+body.rb-classic .rb-cl #fmtNumFormat { grid-area: 1 / 11 / 2 / 13; }
+body.rb-classic .rb-cl #fmtDecLess { grid-area: 2 / 11; }
+body.rb-classic .rb-cl #fmtDecMore { grid-area: 2 / 12; }
+body.rb-classic .rb-cl .fmt-gcap[data-g="num"] { grid-column: 11 / 13; }
+body.rb-classic .rb-cl .fmt-sep[data-g="num"] { grid-column: 13; }
+/* Edycja: kolumna Malarz / Wyczyść z podpisami, potem duże Σ i Formatuj jako tabelę (kolejność jak w DOM) */
+body.rb-classic .rb-cl #fmtSumSplit { grid-area: 1 / 15 / 3 / 16; flex-direction: column; align-self: stretch; }
+body.rb-classic .rb-cl #fmtSumBtn { flex: 1; block-size: auto; flex-direction: column; gap: 2px; border-radius: 8px 8px 0 0; }
+body.rb-classic .rb-cl #fmtSumMore { block-size: 14px; min-block-size: 0; border-radius: 0 0 8px 8px; }
+body.rb-classic .rb-cl #fmtSumBtn .fmt-glyph { font-size: 20px; }
+body.rb-classic .rb-cl #fmtTableBtn { grid-area: 1 / 16 / 3 / 17; align-self: stretch; block-size: auto; flex-direction: column; justify-content: flex-start; gap: 3px; padding-block-start: 6px; }
+body.rb-classic .rb-cl #fmtTableBtn svg { inline-size: 22px; block-size: 22px; }
+body.rb-classic .rb-cl :is(#fmtSumBtn, #fmtTableBtn) .fmt-cl-t { display: block; max-inline-size: 76px; font-size: 12px; line-height: 1.15; white-space: normal; text-align: center; }
+body.rb-classic .rb-cl #fmtPainterBtn { grid-area: 1 / 14; }
+body.rb-classic .rb-cl #fmtClearBtn { grid-area: 2 / 14; }
+body.rb-classic .rb-cl :is(#fmtPainterBtn, #fmtClearBtn) { justify-content: flex-start; gap: 6px; }
+body.rb-classic .rb-cl :is(#fmtPainterBtn, #fmtClearBtn) .fmt-cl-t { display: inline; font-size: 12px; white-space: nowrap; }
+body.rb-classic .rb-cl .fmt-gcap[data-g="edit"] { grid-column: 14 / 17; }
