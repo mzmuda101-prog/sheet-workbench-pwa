@@ -3,6 +3,9 @@
 PWA do pracy z plikami Excela (.xlsx) w przeglądarce, także offline i na telefonie/iPadzie.
 Czysty JavaScript + HTML + CSS, bez frameworka. esbuild tylko skleja pliki w `dist/`.
 
+Wspólne zasady wszystkich projektów (przeczytaj na starcie): `../ZASADY-AGENTOW.md`
+@../ZASADY-AGENTOW.md
+
 ## Zanim zaczniesz
 - W tym folderze może równolegle pracować inna sesja lub agent. Najpierw `git status` i `git log -3`;
   nie nadpisuj cudzych niezacommitowanych zmian.
