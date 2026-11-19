@@ -19,7 +19,7 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 | 3 | Szyna i panele + karta Tabela | Szyna 40 px: Filtry, Sortowanie, Notatki, Formuły, Sprawdzanie, Asystent z licznikami; panel wysuwany nad tabelę albo przypięty. Zastępuje długi panel z sekcjami i „Znajdź ustawienie…”. Kontekstowa karta Tabela (kursor w tabeli Excela), mignie dwa razy, nie przełącza się sama. | v1.06.00 (PR #17); karta Tabela przeniesiona na koniec |
 | 4 | Dolny pasek | Karty arkuszy (z kolorem karty z pliku, przewijane), Widoczne X/Y, Średnia / Liczba / Suma zaznaczenia, powiększenie. | v1.07.00 (PR #19) |
 | 5 | Mini pasek | Nad zaznaczeniem myszą (pod nim, gdy brak miejsca): B, wypełnienie, format liczb, Σ, Filtruj wg wartości, Notatka, Wyjaśnij. Klawiatura i dotyk bez paska. | v1.08.00 |
-| 6 | Opcje wstążki | Klasyczna / Uproszczona, Zawsze / Tylko karty (Ctrl+F1), gęstość Mysz / Dotyk. | — |
+| 6 | Opcje wstążki (6a pokazywanie i gęstość, 6b Klasyczna) | Klasyczna / Uproszczona, Zawsze / Chowaj przy przewijaniu / Tylko karty (Ctrl+F1), gęstość Mysz / Dotyk, gęstość wierszy z Automatyczną. | 6a: v1.09.00 · 6b: — |
 | 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. | — |
 
 ## Do decyzji Mateusza (domyślnie — jak w makiecie)
@@ -30,6 +30,8 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 4. Anonimizuj: **na karcie Dane** (i w Plik → Anonimizuj kopię od etapu 2).
 5. Wiersze tabeli 24 px z makiety v2: **nie w etapie 1** — dziś wysokość ustawia „Gęstość wierszy”;
    zmiana domyślnej gęstości to osobna decyzja (etap 6).
+   Rozstrzygnięte w etapie 6a: nowa domyślna gęstość wierszy „Automatyczna” (mysz = Standardowa 23 px,
+   dotyk = Wygodna 29 px).
 
 ## Etap 1 — co weszło
 
@@ -137,3 +139,27 @@ Powtórki ze wstążki są celowe (decyzja Mateusza 2026-11-19): to skrót przy 
 klikają te same kontrolki co wstążka (`#formatRibbon`, `#fmtFillBtn`, `#fmtNumFormat`, `#fmtSumBtn`,
 Notatka i Wyjaśnij z kart Wstaw / Formuły), a „Filtruj wg wartości” to „Pokaż tylko …” z menu
 komórki (`applyCellFilter`). Do decyzji później: pasek także przy kliknięciu jednej komórki.
+
+## Etap 6a — co weszło (pokazywanie wstążki i gęstość; v1.09.00)
+
+- Przycisk na końcu rzędu poleceń (ikona zależna od wyboru) → menu: **Zawsze** / **Chowaj przy
+  przewijaniu** / **Tylko karty** (Ctrl/⌘+F1 przełącza Tylko karty ↔ Zawsze). To samo w Plik → Opcje.
+- Chowaj przy przewijaniu: tabela w dół — rząd poleceń zwija się (160 ms), tabela zajmuje miejsce;
+  w górę, klik karty albo Tab do poleceń — wraca.
+- Tylko karty: klik karty wysuwa polecenia nad tabelą (tabela się nie przesuwa); ta sama karta drugi
+  raz, klik poza wstążką albo Esc — chowa.
+- Gęstość wstążki **Mysz / Dotyk** (Plik → Opcje): Dotyk = przyciski 36 px, rząd 50 px; mini pasek
+  (etap 5) wtedy się nie pokazuje.
+- Domyślne bez zapisanego wyboru (decyzja Mateusza 2026-11-19): sam dotyk (iPad bez myszki) = Dotyk,
+  a iPad pionowo także Chowaj przy przewijaniu; po obróceniu do poziomu — Zawsze. Mysz = Zawsze + Mysz.
+  Wybór zapamiętany na urządzeniu (`swb-rb-prefs-v1`).
+- **Gęstość wierszy** przebudowana (`app/frame-compact.js`): nowa opcja **Automatyczna** (domyślna) —
+  mysz = Standardowa 23 px, dotyk albo wstążka Dotyk = Wygodna 29 px; nadąża za podłączeniem myszki do
+  iPada. Wygodna / Standardowa / Kompaktowa ręcznie (wygrywają z automatem). Wybór w menu powiększenia
+  na dolnym pasku i w Plik → Opcje; lista w panelu Widok schowana przy wstążce (bez dubla).
+- Dolny pasek przy 1024 px w jednej linii: statystyki zaznaczenia przewijają się w bok, prawa krawędź
+  wygasa, gdy coś jest dalej (wcześniej pasek zawijał się na 86 px).
+- Naprawa silnika przewijania (`app/virt-rows.js`), ujawniona przez nową domyślną gęstość: po skoku
+  w środek tabeli okno wierszy liczyło się ze starą poprawką (drift), zapas nad widokiem znikał i
+  pierwszy krok w górę podskakiwał (virt-guard 11). Dotyczyło też ręcznie wybranej Standardowej.
+- Bez „Klasycznej” w menu — wejdzie z etapem 6b.

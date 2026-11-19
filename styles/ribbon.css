@@ -422,9 +422,16 @@ body.rb-on :is(#panelToggle, #panelHandle, .sidebar-finder, .drawer-tabs) { disp
 /* powiększenie na dolnym pasku (ribbon.js przenosi #zoomGroup do #tableFoot): zawsze po prawej */
 body.rb-on .table-foot > .zoom-group { margin-inline-start: auto; block-size: 28px; }
 body.rb-on .table-foot > .zoom-group :is(.tb-btn, .zoom-now) { block-size: 24px; }
-/* wąsko: sumy nie ściskają się do jednej kolumny — powiększenie schodzi wtedy do własnej linii */
-body.rb-on .table-foot { flex-wrap: wrap; }
-body.rb-on .table-foot > .cell-stats-bar { flex: 1 1 360px; }
+/* jedna linia także przy 1024 px (iPad poziomo): statystyki biorą resztę miejsca (co najmniej 140 px —
+   ściskają się wtedy karty arkuszy, które same się przewijają) i przewijają się w bok; wygaszone
+   krawędzie daje attachOverflowFade (frame-compact.js). Zasada: nic nie ucina się po cichu. */
+body.rb-on .table-foot { flex-wrap: nowrap; }
+body.rb-on .table-foot > .cell-stats-bar {
+  flex: 1 1 0; min-inline-size: 140px;
+  flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; white-space: nowrap;
+}
+body.rb-on .table-foot > .cell-stats-bar::-webkit-scrollbar { display: none; }
+body.rb-on .table-foot > .cell-stats-bar > * { flex: none; }
 
 /* ── dolny pasek: karty arkuszy (etap 4; ribbon.js przenosi #sheetTabs i #heroSheetBtn do #tableFoot) ── */
 body.rb-on .table-foot > :is(#heroSheetBtn, #sheetTabs) { order: -2; }
@@ -476,3 +483,47 @@ body.rb-on .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn::before {
   @starting-style { .mini-bar, .mini-bar.is-below { transform: none; } }
   .mini-bar .rb-btn:active { transform: none; }
 }
+
+/* ── opcje wyświetlania (etap 6a; app/ribbon.js) ── */
+.rb-end {
+  display: flex; align-items: center; flex: none;
+  padding-inline-start: 4px; margin-inline-start: 2px;
+  border-inline-start: 1px solid var(--rb-line);
+}
+/* Chowaj przy przewijaniu: rząd poleceń zwija się (160 ms), tabela płynnie zajmuje miejsce */
+body.rb-show-auto .rb-r2 { overflow: hidden; transition: block-size 160ms var(--ease-out), opacity 120ms ease; }
+body.rb-show-auto.rb-tucked .rb-r2 { block-size: 0; opacity: 0; border-bottom-width: 0; }
+body.rb-show-auto.rb-tucked .rb-r1 { border-radius: 0 0 var(--r-lg) var(--r-lg); }
+/* Tylko karty: bez rzędu poleceń; klik karty wysuwa je NAD tabelą (tabela się nie przesuwa) */
+body.rb-show-tabs .rb-r2 { display: none; }
+body.rb-show-tabs .rb-r1 { border-radius: 0 0 var(--r-lg) var(--r-lg); }
+body.rb-show-tabs.rb-peek:not(.rb-reading) .rb-r2 {
+  display: flex; position: absolute; inset-inline: 0; inset-block-start: 100%; z-index: 2;
+  box-shadow: 0 14px 28px -16px rgba(18, 30, 23, 0.35);
+  transition: opacity 150ms var(--ease-out), transform 150ms var(--ease-out);
+}
+@starting-style { body.rb-show-tabs.rb-peek .rb-r2 { opacity: 0; transform: translateY(-4px); } }
+/* zwinięte polecenia: żadna karta nie wygląda na otwartą (makieta) */
+body.rb-show-tabs:not(.rb-peek) .rb-tab[aria-selected="true"] { color: var(--ink-2); font-weight: 400; }
+body.rb-show-tabs:not(.rb-peek) .rb-tab[aria-selected="true"]::after { display: none; }
+
+/* Dotyk: większe cele w rzędzie poleceń (28 → 36 px, rząd 36 → 50 px; makieta .mk[data-dens=touch]) */
+body.rb-touch .rb-r2 { block-size: 50px; }
+body.rb-touch .rb-r2 :is(.rb-btn, .fmt-btn, .undo-btn, .rb-slot > .btn) { block-size: 36px; min-block-size: 36px; min-inline-size: 36px; }
+body.rb-touch .rb-r2 .rb-btn.rb-ic,
+body.rb-on.rb-touch .rb-fixed .undo-btn { inline-size: 36px; block-size: 36px; }
+body.rb-touch .rb-r2 .fmt-select { block-size: 36px; }
+body.rb-touch.rb-show-auto.rb-tucked .rb-r2 { block-size: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  body.rb-show-auto .rb-r2 { transition: none; }
+  @starting-style { body.rb-show-tabs.rb-peek .rb-r2 { transform: none; } }
+}
+
+/* Plik → Opcje: pokazywanie, gęstość wstążki, gęstość wierszy */
+.rb-opt { display: grid; gap: 4px; justify-items: start; }
+.rb-opt-seg { grid-template-columns: repeat(var(--n), auto); }
+.rb-opt-seg .theme-seg-btn { padding-inline: 14px; }
+/* gęstość wierszy wybiera się w menu powiększenia i w Plik → Opcje — w panelu Widok bez dubla */
+body.rb-on .field:has(> #rowDensity) { display: none; }
+.density-glyph-auto { --gl: 5px; opacity: .45; }

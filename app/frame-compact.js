@@ -99,7 +99,13 @@ var frameCompact = (() => {
   const zoomSel = typeof zoomLevelEl !== "undefined" ? zoomLevelEl : document.getElementById("zoomLevel");
   const zoomText = document.getElementById("zoomNowText");
   const densitySel = document.getElementById("rowDensity");
-  const DENSITIES = ["", "standard", "compact"];
+  // "auto" (domyślna, etap 6a): mysz = Standardowa (23 px, blisko Excela), sam dotyk albo wstążka
+  // w gęstości Dotyk = Wygodna (29 px, łatwiej trafić palcem). Ręczny wybór zawsze wygrywa.
+  // Wygodna to "" (tak była zapisywana od zawsze), brak zapisu = Automatyczna.
+  const DENSITIES = ["auto", "", "standard", "compact"];
+  const fineMq = matchMedia("(any-pointer: fine)");
+  let densityPref = "auto";
+  const autoDensity = () => (document.body.classList.contains("rb-touch") || !fineMq.matches ? "" : "standard");
 
   function zoomOptions() { return zoomSel ? Array.from(zoomSel.options).map((o) => o.value) : []; }
   function setZoom(value) {
@@ -124,16 +130,27 @@ var frameCompact = (() => {
   if (zoomSel) zoomSel.addEventListener("change", syncZoomText);
 
   function setDensity(value, { save = true } = {}) {
-    const v = DENSITIES.includes(value) ? value : "";
+    densityPref = DENSITIES.includes(value) ? value : "auto";
+    const v = densityPref === "auto" ? autoDensity() : densityPref;
+    const changed = (root.dataset.density || "") !== v;
     if (v) root.dataset.density = v; else delete root.dataset.density;
-    if (densitySel && densitySel.value !== v) densitySel.value = v;
-    if (save) writeLS(SWB_DENSITY_KEY, v);
+    if (densitySel && densitySel.value !== densityPref) densitySel.value = densityPref;
+    document.querySelectorAll("#rowDensSeg [data-density]").forEach((b) => b.setAttribute("aria-checked", String((b.dataset.density === "comfortable" ? "" : b.dataset.density) === densityPref)));
+    if (save) writeLS(SWB_DENSITY_KEY, densityPref);
     if (typeof syncFrozenHeaderMetrics === "function") syncFrozenHeaderMetrics();
     if (typeof syncTableViewportHeight === "function") syncTableViewportHeight();
-    if (save && typeof renderActiveTable === "function" && typeof currentHeaders !== "undefined" && currentHeaders.length) renderActiveTable();
+    if (changed && typeof renderActiveTable === "function" && typeof currentHeaders !== "undefined" && currentHeaders.length) renderActiveTable();
     if (openMenu && openMenu.el.id === "zoomMenu") openMenu.build(openMenu.el);
   }
   if (densitySel) densitySel.addEventListener("change", () => setDensity(densitySel.value));
+  document.getElementById("rowDensSeg")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-density]");
+    if (b) setDensity(b.dataset.density === "comfortable" ? "" : b.dataset.density);
+  });
+  // Automatyczna nadąża za urządzeniem (myszka podłączona do iPada) i za gęstością wstążki
+  const reAuto = () => { if (densityPref === "auto") setDensity("auto", { save: false }); };
+  document.addEventListener("swb:rbprefs", reAuto);
+  if (fineMq.addEventListener) fineMq.addEventListener("change", reAuto); else fineMq.addListener(reAuto);
 
   function buildZoomMenu(el) {
     el.setAttribute("aria-label", t("zoomMenuAria"));
@@ -154,7 +171,7 @@ var frameCompact = (() => {
     const cap2 = document.createElement("div");
     cap2.className = "app-menu-cap";
     cap2.textContent = t("densityLabel");
-    const cur = root.dataset.density || "";
+    const cur = densityPref;
     const opts = DENSITIES.map((d) => {
       const b = document.createElement("button");
       b.type = "button";
@@ -414,7 +431,8 @@ var frameCompact = (() => {
   if (statsBar && typeof attachOverflowFade === "function") attachOverflowFade(statsBar);
 
   // start
-  setDensity(readLS(SWB_DENSITY_KEY) || "", { save: false });
+  const savedDensity = readLS(SWB_DENSITY_KEY);
+  setDensity(savedDensity == null ? "auto" : savedDensity, { save: false });
   syncRailClasses();
   sync();
   return { sync, setDensity, setPinned, openGroup, closeFlyout, closeMenu, get pinned() { return pinned; } };

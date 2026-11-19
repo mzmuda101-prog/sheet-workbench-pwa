@@ -486,6 +486,157 @@ async function run() {
     await context.close();
   }
 
+  // ── etap 6a: pokazywanie wstążki, gęstość wstążki i wierszy ──────────────────
+  {
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
+    const body = () => page.evaluate(() => document.body.className);
+    const r2h = () => page.evaluate(() => { const r = document.querySelector(".rb-r2"); return r.getClientRects().length ? Math.round(r.getBoundingClientRect().height) : 0; });
+    const rowH = () => page.evaluate(() => Math.round(document.querySelector("#dataTable tbody tr[data-row-key]:nth-child(6)").getBoundingClientRect().height));
+    const wrapTop = () => page.evaluate(() => Math.round(document.getElementById("tableWrap").getBoundingClientRect().top));
+
+    // domyślnie na komputerze z myszką: Zawsze, Mysz, wiersze Automatyczna = Standardowa (23 px)
+    check("O6. mysz: domyślnie Zawsze + Mysz", /rb-show-pin/.test(await body()) && !/rb-touch/.test(await body()), await body());
+    check("O6. mysz: wiersze automatycznie 23 px (Standardowa)", (await rowH()) === 23, await rowH());
+
+    // menu opcji na końcu rzędu poleceń: 3 sposoby pokazywania, zaznaczone Zawsze
+    await page.click("#rbOptsBtn");
+    await sleep(200);
+    const menu = await page.evaluate(() => Array.from(document.querySelectorAll("#rbOptsMenu [data-rb-show]")).map((b) => `${b.dataset.rbShow}:${b.getAttribute("aria-checked")}`));
+    check("O6. menu opcji: Zawsze / Chowaj przy przewijaniu / Tylko karty", JSON.stringify(menu) === JSON.stringify(["pin:true", "auto:false", "tabs:false"]), menu.join());
+
+    // Tylko karty: rząd poleceń znika, tabela idzie w górę; klik karty wysuwa polecenia, drugi klik chowa
+    const top0 = await wrapTop();
+    await page.click('#rbOptsMenu [data-rb-show="tabs"]');
+    await sleep(400);
+    check("O6. Tylko karty: bez rzędu poleceń", (await r2h()) === 0, await r2h());
+    const top1 = await wrapTop();
+    check("O6. Tylko karty: tabela wyżej o rząd poleceń", top0 - top1 >= 30, `${top0} → ${top1}`);
+    await page.click("#rbTab-data");
+    await sleep(250);
+    const peek = await page.evaluate(() => ({ h: Math.round(document.querySelector(".rb-r2").getBoundingClientRect().height), data: !document.getElementById("rbPanel-data").hidden, top: Math.round(document.getElementById("tableWrap").getBoundingClientRect().top) }));
+    check("O6. Tylko karty: klik karty wysuwa jej polecenia nad tabelą", peek.h > 30 && peek.data && Math.abs(peek.top - top1) <= 1, JSON.stringify(peek));
+    await page.click("#rbTab-data");
+    await sleep(250);
+    check("O6. ta sama karta drugi raz chowa polecenia", (await r2h()) === 0);
+    await page.click("#rbTab-home");
+    await sleep(200);
+    await page.keyboard.press("Escape");
+    await sleep(200);
+    check("O6. Esc chowa wysunięte polecenia", (await r2h()) === 0);
+
+    // Ctrl+F1 przełącza Tylko karty ↔ Zawsze; wybór zostaje po przeładowaniu
+    await page.keyboard.press("Control+F1");
+    await sleep(300);
+    check("O6. Ctrl+F1: z powrotem Zawsze", /rb-show-pin/.test(await body()) && (await r2h()) > 30);
+    await page.keyboard.press("Control+F1");
+    await sleep(300);
+    await page.reload({ waitUntil: "load" });
+    await page.evaluate(() => document.getElementById("heroSplash")?.remove());
+    await page.evaluate(() => document.getElementById("loadSampleBtn")?.click());
+    await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 30000 });
+    await sleep(400);
+    check("O6. Tylko karty zapamiętane po przeładowaniu", /rb-show-tabs/.test(await body()), await body());
+    await page.keyboard.press("Control+F1");
+    await sleep(300);
+
+    // Chowaj przy przewijaniu: w dół rząd poleceń się chowa, w górę wraca
+    await page.click("#rbOptsBtn");
+    await page.click('#rbOptsMenu [data-rb-show="auto"]');
+    await sleep(200);
+    await page.evaluate(() => { const w = document.getElementById("tableWrap"); w.scrollTop = 200; w.dispatchEvent(new Event("scroll")); });
+    await sleep(80);
+    await page.evaluate(() => { const w = document.getElementById("tableWrap"); w.scrollTop = 600; w.dispatchEvent(new Event("scroll")); });
+    await sleep(450);
+    check("O6. Chowaj przy przewijaniu: w dół rząd znika", /rb-tucked/.test(await body()) && (await r2h()) <= 1, `${await body()} r2=${await r2h()}`);
+    const gap = await page.evaluate(() => { const w = document.getElementById("tableWrap").getBoundingClientRect(); const f = document.getElementById("tableFoot").getBoundingClientRect(); return Math.round(f.top - w.bottom); });
+    check("O6. po schowaniu tabela rośnie (bez dziury nad dolnym paskiem)", gap <= 24, gap + " px");
+    await page.evaluate(() => { const w = document.getElementById("tableWrap"); w.scrollTop = 400; w.dispatchEvent(new Event("scroll")); });
+    await sleep(450);
+    check("O6. w górę rząd wraca", !/rb-tucked/.test(await body()) && (await r2h()) > 30);
+
+    // Plik → Opcje: gęstość wstążki Dotyk (36 px) i gęstość wierszy
+    await page.click("#rbFileBtn");
+    await page.click('[data-bs-sec="opts"]');
+    await sleep(300);
+    check("O6. Plik → Opcje: pokazywanie, gęstość wstążki, gęstość wierszy", await page.evaluate(() => !!document.querySelector('#rbShowSeg [data-rb-show="auto"][aria-checked="true"]') && !!document.querySelector("#rbDensSeg [data-rb-dens]") && document.querySelectorAll("#rowDensSeg [data-density]").length === 4));
+    await page.click('#rbDensSeg [data-rb-dens="touch"]');
+    await page.keyboard.press("Escape");
+    await sleep(400);
+    // gęstość wstążki zmienia wysokość rzędu poleceń — tabela ma się przeliczyć sama (przegląd kodu)
+    const gapT = await page.evaluate(() => Math.round(document.getElementById("tableFoot").getBoundingClientRect().top - document.getElementById("tableWrap").getBoundingClientRect().bottom));
+    check("O6. Dotyk: tabela przeliczona (bez nachodzenia na dolny pasek)", gapT >= 0 && gapT <= 24, gapT + " px");
+    await page.click("#rbFileBtn");
+    await page.click('[data-bs-sec="opts"]');
+    await sleep(300);
+    await page.click('#rowDensSeg [data-density="comfortable"]');
+    await page.keyboard.press("Escape");
+    await sleep(400);
+    const touchBtn = await page.evaluate(() => Math.round(document.querySelector("#rbPanel-home .rb-btn").getBoundingClientRect().height));
+    check("O6. Dotyk: przyciski poleceń 36 px", touchBtn === 36, touchBtn);
+    check("O6. Wygodna: wiersze 29 px", (await rowH()) === 29, await rowH());
+    {
+      const cell = (r, c) => page.locator(`#dataTable tbody tr[data-row-key]:nth-child(${r}) td[data-col-index="${c}"]`).boundingBox();
+      const a = await cell(8, 1), z = await cell(10, 2);
+      await page.mouse.move(a.x + 5, a.y + 5); await page.mouse.down(); await page.mouse.move(z.x + 5, z.y + 5, { steps: 6 }); await page.mouse.up();
+      await sleep(300);
+      check("O6. Dotyk: bez mini paska", await page.evaluate(() => { const m = document.getElementById("miniBar"); return !m || m.hidden; }));
+      await page.keyboard.press("Escape");
+    }
+    await page.evaluate(() => document.querySelector('#zoomNowBtn')?.click());
+    await sleep(200);
+    const zoomOpts = await page.evaluate(() => Array.from(document.querySelectorAll("#zoomMenu .density-opt")).length);
+    check("O6. menu powiększenia: 4 gęstości (z Automatyczną)", zoomOpts === 4, zoomOpts);
+    await page.keyboard.press("Escape");
+    check("O6. panel Widok bez drugiego wyboru gęstości", !(await shown(page, "#rowDensity")));
+    check("brak błędów strony (O6)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+  {
+    // ogranicz ruch: chowanie bez przejścia też przelicza tabelę; Tylko karty z klawiatury — fokus na kartę
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 }, { reducedMotion: "reduce" });
+    await page.evaluate(() => swbRibbon.setShow("auto"));
+    await sleep(200);
+    for (const y of [200, 600]) { await page.evaluate((v) => { const w = document.getElementById("tableWrap"); w.scrollTop = v; w.dispatchEvent(new Event("scroll")); }, y); await sleep(120); }
+    await sleep(300);
+    const g = await page.evaluate(() => ({ tucked: document.body.classList.contains("rb-tucked"), gap: Math.round(document.getElementById("tableFoot").getBoundingClientRect().top - document.getElementById("tableWrap").getBoundingClientRect().bottom) }));
+    check("O6. ogranicz ruch: po schowaniu tabela rośnie", g.tucked && g.gap <= 24, JSON.stringify(g));
+    await page.evaluate(() => swbRibbon.setShow("pin"));
+    await sleep(200);
+    await page.focus("#rbOptsBtn");
+    await page.keyboard.press("Enter");
+    await sleep(150);
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await sleep(250);
+    const f = await page.evaluate(() => ({ tabs: document.body.classList.contains("rb-show-tabs"), focus: document.activeElement?.classList.contains("rb-tab") }));
+    check("O6. Tylko karty z klawiatury: fokus na karcie, nie w próżni", f.tabs && f.focus, JSON.stringify(f));
+    check("brak błędów strony (O6 ogranicz ruch)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+  {
+    // iPad pionowo (sam dotyk): Chowaj przy przewijaniu + Dotyk + wiersze Wygodna; poziomo: Zawsze
+    const { context, page, errors } = await open(browser, { width: 820, height: 1180 }, { hasTouch: true });
+    const cls = await page.evaluate(() => document.body.className);
+    check("O6. iPad pionowo: domyślnie Chowaj przy przewijaniu + Dotyk", /rb-show-auto/.test(cls) && /rb-touch/.test(cls), cls);
+    const rh = await page.evaluate(() => Math.round(document.querySelector("#dataTable tbody tr[data-row-key]:nth-child(6)").getBoundingClientRect().height));
+    check("O6. iPad: wiersze automatycznie 29 px (Wygodna)", rh === 29, rh);
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await sleep(400);
+    const cls2 = await page.evaluate(() => document.body.className);
+    check("O6. iPad poziomo: Zawsze", /rb-show-pin/.test(cls2) && /rb-touch/.test(cls2), cls2);
+    check("brak błędów strony (O6 iPad)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+  {
+    // iPad poziomo bez paska z boku: dolny pasek w jednej linii
+    const { context, page, errors } = await open(browser, { width: 1024, height: 768 });
+    const foot = await page.evaluate(() => Math.round(document.getElementById("tableFoot").getBoundingClientRect().height));
+    check("O6. 1024 px: dolny pasek w jednej linii (≤ 44 px)", foot <= 44, foot + " px");
+    check("brak błędów strony (O6 1024)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+
   // ── etap 5: mini pasek nad zaznaczeniem myszą ─────────────────────────────
   {
     const { context, page, errors } = await open(browser, { width: 1440, height: 900 });

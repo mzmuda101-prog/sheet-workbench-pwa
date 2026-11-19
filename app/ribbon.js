@@ -87,7 +87,7 @@ const swbRibbon = (() => {
     tabStrip?.reveal(tab);
     if (focus) tab.focus();
   }
-  tabs.forEach((x) => x.addEventListener("click", () => select(x.dataset.rtab)));
+  tabs.forEach((x) => x.addEventListener("click", () => onTabClick(x.dataset.rtab)));
   // strzałki bez animacji — przełączanie kart to ruch powtarzany setki razy
   root.querySelector('[role="tablist"]')?.addEventListener("keydown", (e) => {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
@@ -192,7 +192,9 @@ const swbRibbon = (() => {
   const editBtn = document.getElementById("rbEditBtn");
   const nameEl = document.getElementById("rbName");
   const modeSwitch = document.getElementById("sheetModeSwitch");
-  const MENUS = [[modeBtn, modeMenu, "right"]].filter(([x, y]) => x && y);
+  const optsBtn = document.getElementById("rbOptsBtn");
+  const optsMenu = document.getElementById("rbOptsMenu");
+  const MENUS = [[modeBtn, modeMenu, "right"], [optsBtn, optsMenu, "right"]].filter(([x, y]) => x && y);
   const menuItems = (m) => Array.from(m.querySelectorAll(".rb-mi, .rb-slot > button")).filter((x) => !x.hidden);
   function closeMenus(refocus) {
     for (const [btn, menu] of MENUS) {
@@ -291,6 +293,7 @@ const swbRibbon = (() => {
       } else el.textContent = txt;
     });
     modeMenu?.setAttribute("aria-label", tr("rbModeMenuAria"));
+    optsMenu?.setAttribute("aria-label", tr("rbOpts"));
     const ed = editBtn?.querySelector("span");
     if (ed) ed.textContent = tr("rbEdit");
     syncMode();
@@ -343,6 +346,123 @@ const swbRibbon = (() => {
     requestAnimationFrame(() => d.scrollIntoView({ block: "nearest" }));
   }
 
+  // ── opcje wyświetlania (etap 6a): Zawsze / Chowaj przy przewijaniu / Tylko karty, gęstość ──
+  // Menu na końcu rzędu poleceń i Plik → Opcje; zapamiętane na urządzeniu. Bez zapisanego wyboru
+  // domyślne zależą od urządzenia (decyzja Mateusza 2026-11-19): sam dotyk (iPad bez myszki) =
+  // Dotyk, a trzymany pionowo także Chowaj przy przewijaniu; mysz = Zawsze + Mysz.
+  const PREFS_KEY = "swb-rb-prefs-v1";
+  const SHOWS = ["pin", "auto", "tabs"];
+  const fineMq = matchMedia("(any-pointer: fine)");
+  const portraitMq = matchMedia("(orientation: portrait)");
+  const saved = (() => {
+    try { const p = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}"); return { show: SHOWS.includes(p.show) ? p.show : null, dens: ["mouse", "touch"].includes(p.dens) ? p.dens : null }; }
+    catch (_) { return { show: null, dens: null }; }
+  })();
+  const touchOnly = () => !fineMq.matches;
+  const prefs = () => ({
+    show: saved.show || (touchOnly() && portraitMq.matches ? "auto" : "pin"),
+    dens: saved.dens || (touchOnly() ? "touch" : "mouse"),
+  });
+  const SHOW_ICONS = {};
+  optsMenu?.querySelectorAll("[data-rb-show]").forEach((b) => { SHOW_ICONS[b.dataset.rbShow] = b.querySelector("svg")?.innerHTML || ""; });
+  const r2 = root.querySelector(".rb-r2");
+  let peek = false;
+  let lastLayout = "";
+  // zwinięcie/rozwinięcie rzędu poleceń: wysokość tabeli przeliczamy po końcu przejścia (transitionend),
+  // a bez przejścia (ogranicz ruch) — od razu, bo transitionend wtedy nie przychodzi
+  function tuck(v) {
+    const b = document.body;
+    if (b.classList.contains("rb-tucked") === v) return;
+    b.classList.toggle("rb-tucked", v);
+    if (reduceMq.matches) relayout();
+  }
+  function syncPrefs() {
+    const p = prefs();
+    const b = document.body;
+    SHOWS.forEach((v) => b.classList.toggle(`rb-show-${v}`, p.show === v));
+    b.classList.toggle("rb-touch", p.dens === "touch");
+    if (p.show !== "tabs") peek = false;
+    b.classList.toggle("rb-peek", peek);
+    if (p.show !== "auto") tuck(false);
+    const svg = optsBtn?.querySelector("svg");
+    if (svg) svg.innerHTML = SHOW_ICONS[p.show] || "";
+    const mark = (sel, key, val) => document.querySelectorAll(sel).forEach((x) => x.setAttribute("aria-checked", String(x.dataset[key] === val)));
+    mark("#rbOptsMenu [data-rb-show], #rbShowSeg [data-rb-show]", "rbShow", p.show);
+    mark("#rbDensSeg [data-rb-dens]", "rbDens", p.dens);
+    // wysokość tabeli liczy się od jej górnej krawędzi — po zmianie rzędu poleceń przelicz
+    // wysokość rzędu poleceń zależy od pokazywania i gęstości — tabela liczy się od jej górnej krawędzi
+    if (`${p.show}|${p.dens}` !== lastLayout) { lastLayout = `${p.show}|${p.dens}`; relayout(); }
+    requestAnimationFrame(() => strips.forEach((st) => st.sync()));
+    document.dispatchEvent(new CustomEvent("swb:rbprefs", { detail: p }));
+  }
+  function relayout() {
+    requestAnimationFrame(() => {
+      if (typeof onViewportChange === "function") onViewportChange();
+      window.dispatchEvent(new Event("resize"));
+    });
+  }
+  function save(k, v) {
+    saved[k] = v;
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(saved)); } catch (_) {}
+    syncPrefs();
+  }
+  const setShow = (v) => { peek = false; save("show", v); };
+  const setDens = (v) => save("dens", v);
+  function setPeek(v) {
+    if (peek === v) return;
+    peek = v;
+    syncPrefs();
+    if (v) requestAnimationFrame(() => strips.find((x) => x.key === "cmds")?.sync());
+  }
+  function onTabClick(id) {
+    // Tylko karty: klik karty wysuwa polecenia, ta sama karta drugi raz je chowa
+    if (prefs().show === "tabs") setPeek(!(peek && current === id));
+    tuck(false);
+    select(id);
+  }
+  optsMenu?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-rb-show]");
+    if (!b) return;
+    setShow(b.dataset.rbShow);
+    // Tylko karty chowa rząd z przyciskiem menu — fokus na wybraną kartę, nie w próżnię (po powrocie menu)
+    if (b.dataset.rbShow === "tabs") setTimeout(() => { const a = document.activeElement; if (!optsBtn?.getClientRects().length && (!a || a === document.body || !a.getClientRects().length)) tabs.find((x) => x.getAttribute("aria-selected") === "true")?.focus(); }, 0);
+  });
+  document.getElementById("rbShowSeg")?.addEventListener("click", (e) => { const b = e.target.closest("[data-rb-show]"); if (b) setShow(b.dataset.rbShow); });
+  document.getElementById("rbDensSeg")?.addEventListener("click", (e) => { const b = e.target.closest("[data-rb-dens]"); if (b) setDens(b.dataset.rbDens); });
+  // Ctrl/⌘+F1: Tylko karty ↔ Zawsze (jak w Excelu); Esc chowa wysunięte polecenia
+  document.addEventListener("keydown", (e) => {
+    if (!on) return;
+    if (e.key === "F1" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+      e.preventDefault();
+      setShow(prefs().show === "tabs" ? "pin" : "tabs");
+    } else if (e.key === "Escape" && peek) setPeek(false);
+  });
+  // wysunięte polecenia chowa klik poza wstążką (nie w menu i podpowiedzi, które z niej wyszły)
+  document.addEventListener("pointerdown", (e) => {
+    if (peek && !e.target.closest?.("#ribbon, .app-menu, .fmt-pop, .cursor-hint, [role='menu'], [role='dialog']")) setPeek(false);
+  }, true);
+  // Chowaj przy przewijaniu: tabela w dół — rząd poleceń się zwija, w górę — wraca. Po zmianie
+  // wysokości tabela rośnie/maleje, co samo przesuwa scrollTop przy dole — przez chwilę to ignorujemy.
+  const wrapEl = document.getElementById("tableWrap");
+  let lastTop = 0, quietUntil = 0;
+  wrapEl?.addEventListener("scroll", () => {
+    const top = wrapEl.scrollTop, d = top - lastTop;
+    lastTop = top;
+    if (!on || prefs().show !== "auto" || Date.now() < quietUntil) return;
+    const b = document.body;
+    const tucked = b.classList.contains("rb-tucked");
+    // nie chowamy rzędu z widocznym fokusem z klawiatury (WCAG 2.4.11); fokus po kliknięciu myszą nie blokuje
+    if ((d > 6 && top > 40 && !tucked && !r2?.querySelector(":focus-visible")) || ((d < -6 || top < 10) && tucked)) {
+      tuck(!tucked);
+      quietUntil = Date.now() + 350;
+    }
+  }, { passive: true });
+  // po zwinięciu/rozwinięciu (koniec przejścia) tabela dostaje nową wysokość
+  r2?.addEventListener("transitionend", (e) => { if (e.target === r2 && e.propertyName === "block-size") relayout(); });
+  r2?.addEventListener("focusin", () => tuck(false)); // Tab do poleceń
+  const onDevice = () => { if (!saved.show || !saved.dens) syncPrefs(); };
+  for (const mq of [fineMq, portraitMq]) { if (mq.addEventListener) mq.addEventListener("change", onDevice); else mq.addListener(onDevice); }
+
   const onMq = () => {
     closeMenus();
     // menu paska (frame-compact.js) przypięte do przycisku, który właśnie zmienia miejsce
@@ -351,9 +471,10 @@ const swbRibbon = (() => {
     syncMode();
   };
   if (deskMq.addEventListener) deskMq.addEventListener("change", onMq); else deskMq.addListener(onMq);
+  syncPrefs();
   place(deskMq.matches);
   labels();
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && MENUS.some(([, m]) => !m.hidden)) { e.preventDefault(); closeMenus(true); } });
 
-  return { isOn: () => on, select, current: () => current, openPanel, labels, closeMenus };
+  return { isOn: () => on, select, current: () => current, openPanel, labels, closeMenus, prefs: () => ({ ...prefs(), peek }), setShow, setDens };
 })();
