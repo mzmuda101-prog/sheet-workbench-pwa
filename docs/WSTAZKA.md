@@ -14,11 +14,11 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 
 | # | Etap | Co wchodzi | Stan |
 |---|------|------------|------|
-| 1 | Rama: dwa rzędy u góry (v1.04.00) | Rząd 1: logo, Plik, karty (Narzędzia główne, Wstaw, Dane, Formuły, Analiza, Widok, Asystent), Szukaj, Tryb (menu: Edycja, Podgląd, Spisywanie, Wpisywanie), Zapisz z licznikiem, ⋯. Rząd 2: Cofnij/Ponów + polecenia karty w jednej linii (Uproszczona). Przewijane rzędy z podpowiedzią „+N”. Chipy filtrów w rzędzie paska formuły. Nagłówek „hero” schowany na komputerze; karty arkuszy wracają pod tabelę. | plan: `docs/superpowers/plans/2026-11-18-wstazka-etap1.md` |
-| 2 | Plik za kulisami | Ekran Plik: Nowy, Otwórz, Informacje, Zapisz jako, Eksportuj, Anonimizuj kopię, Zamknij · Opcje, Pomoc i skróty, Zgłoś błąd. Menu ⋯ odchudzone. | — |
-| 3 | Szyna i panele + karta Tabela | Szyna 40 px: Filtry, Sortowanie, Notatki, Formuły, Sprawdzanie, Asystent z licznikami; panel wysuwany nad tabelę albo przypięty. Zastępuje długi panel z sekcjami i „Znajdź ustawienie…”. Kontekstowa karta Tabela (kursor w tabeli Excela), mignie dwa razy, nie przełącza się sama. | — |
-| 4 | Dolny pasek | Karty arkuszy (z kolorem karty z pliku, przewijane), Widoczne X/Y, Średnia / Liczba / Suma zaznaczenia, powiększenie. | — |
-| 5 | Mini pasek | Nad zaznaczeniem myszą (pod nim, gdy brak miejsca): B, wypełnienie, format liczb, Σ, Filtruj wg wartości, Notatka, Wyjaśnij. Klawiatura i dotyk bez paska. | — |
+| 1 | Rama: dwa rzędy u góry (v1.04.00) | Rząd 1: logo, Plik, karty (Narzędzia główne, Wstaw, Dane, Formuły, Analiza, Widok, Asystent), Szukaj, Tryb (menu: Edycja, Podgląd, Spisywanie, Wpisywanie), Zapisz z licznikiem, ⋯. Rząd 2: Cofnij/Ponów + polecenia karty w jednej linii (Uproszczona). Przewijane rzędy z podpowiedzią „+N”. Chipy filtrów w rzędzie paska formuły. Nagłówek „hero” schowany na komputerze; karty arkuszy wracają pod tabelę. | v1.04.00 (PR #13–15) |
+| 2 | Plik za kulisami | Ekran Plik: Nowy, Otwórz, Informacje, Zapisz jako, Eksportuj, Anonimizuj kopię, Zamknij · Opcje, Pomoc i skróty, Zgłoś błąd. Menu ⋯ odchudzone. | v1.05.00 (PR #16) |
+| 3 | Szyna i panele + karta Tabela | Szyna 40 px: Filtry, Sortowanie, Notatki, Formuły, Sprawdzanie, Asystent z licznikami; panel wysuwany nad tabelę albo przypięty. Zastępuje długi panel z sekcjami i „Znajdź ustawienie…”. Kontekstowa karta Tabela (kursor w tabeli Excela), mignie dwa razy, nie przełącza się sama. | v1.06.00 (PR #17); karta Tabela przeniesiona na koniec |
+| 4 | Dolny pasek | Karty arkuszy (z kolorem karty z pliku, przewijane), Widoczne X/Y, Średnia / Liczba / Suma zaznaczenia, powiększenie. | v1.07.00 (PR #19) |
+| 5 | Mini pasek | Nad zaznaczeniem myszą (pod nim, gdy brak miejsca): B, wypełnienie, format liczb, Σ, Filtruj wg wartości, Notatka, Wyjaśnij. Klawiatura i dotyk bez paska. | v1.08.00 |
 | 6 | Opcje wstążki | Klasyczna / Uproszczona, Zawsze / Tylko karty (Ctrl+F1), gęstość Mysz / Dotyk. | — |
 | 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. | — |
 
@@ -123,3 +123,17 @@ Lista arkuszy otwiera się w górę, gdy pod przyciskiem brak miejsca.
 
 Bez dubli: bez osobnego „+” przy kartach („Nowy arkusz” jest na liście) i bez „Widoczne X z Y”
 (liczba wierszy jest w chipach filtrów). Pominięte: kolory kart z pliku (Sheet ich dziś nie czyta).
+
+## Etap 5 — co weszło (mini pasek)
+
+`app/mini-bar.js` + style na końcu `styles/ribbon.css`. Po zaznaczeniu myszą co najmniej dwóch
+komórek (przeciągnięcie albo Shift+klik) nad zakresem staje mały pasek: pogrubienie, wypełnienie
+(ostatni kolor), format liczb · Σ, Filtruj wg wartości · Notatka, Wyjaśnij. Gdy nad zakresem brak
+miejsca (nagłówek kolumn) — pod nim. Przy przewijaniu gaśnie i wraca po zatrzymaniu; znika po
+kliknięciu obok, po klawiszu (też Esc) i po Σ / Filtruj / Notatce / Wyjaśnij (po B, wypełnieniu i
+formacie zostaje). Jedna komórka, klawiatura, dotyk, Podgląd i telefon — bez paska.
+
+Powtórki ze wstążki są celowe (decyzja Mateusza 2026-11-19): to skrót przy zaznaczeniu. Przyciski
+klikają te same kontrolki co wstążka (`#formatRibbon`, `#fmtFillBtn`, `#fmtNumFormat`, `#fmtSumBtn`,
+Notatka i Wyjaśnij z kart Wstaw / Formuły), a „Filtruj wg wartości” to „Pokaż tylko …” z menu
+komórki (`applyCellFilter`). Do decyzji później: pasek także przy kliknięciu jednej komórki.

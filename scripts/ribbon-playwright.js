@@ -10,6 +10,9 @@
 //   7. 820 px: nic nie wystaje w bok, rząd kart ma strzałkę „+N”,
 //   8. telefon: bez wstążki, układ jak dotąd.
 //
+// Etap 5 — mini pasek (M5.): po przeciągnięciu myszą nad zakresem, pod nim przy braku miejsca;
+// przyciski idą tą samą drogą co wstążka; bez paska przy jednej komórce, klawiaturze i w Podglądzie.
+//
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/). ENGINE=webkit — Safari.
 
 const playwright = require("playwright");
@@ -480,6 +483,132 @@ async function run() {
     const h = await page.evaluate(() => ({ open: document.documentElement.classList.contains("sidebar-open"), h: Math.round(document.getElementById("panel-sort-workbench").getBoundingClientRect().height) }));
     check("E3. 900×900 (szuflada): Sortowanie otwiera panel z treścią", h.open && h.h > 80, JSON.stringify(h));
     check("brak błędów strony (E3 szuflada)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+
+  // ── etap 5: mini pasek nad zaznaczeniem myszą ─────────────────────────────
+  {
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
+    const td = (r, c) => `#dataTable tbody tr[data-row-key]:nth-child(${r}) td[data-col-index="${c}"]`;
+    const center = async (sel) => { const b = await page.locator(sel).first().boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+    async function drag(from, to) {
+      const a = await center(from), b = await center(to);
+      await page.mouse.move(a.x, a.y);
+      await page.mouse.down();
+      await page.mouse.move((a.x + b.x) / 2, (a.y + b.y) / 2, { steps: 4 });
+      await page.mouse.move(b.x, b.y, { steps: 4 });
+      await page.mouse.up();
+      await sleep(350);
+    }
+    const bar = () => page.evaluate(() => {
+      const m = document.getElementById("miniBar");
+      if (!m || m.hidden || m.classList.contains("is-off")) return null;
+      const r = m.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, n: m.querySelectorAll("button, select").length };
+    });
+    const selBox = (a, b) => page.evaluate(([s1, s2]) => {
+      const r1 = document.querySelector(s1).getBoundingClientRect(), r2 = document.querySelector(s2).getBoundingClientRect();
+      return { top: Math.min(r1.top, r2.top), bottom: Math.max(r1.bottom, r2.bottom) };
+    }, [a, b]);
+
+    // zwykłe kliknięcie jednej komórki — bez paska (decyzja Mateusza)
+    await page.click(td(8, 1));
+    await sleep(300);
+    check("M5. klik jednej komórki: bez mini paska", !(await bar()));
+
+    await drag(td(8, 1), td(10, 2));
+    const b1 = await bar();
+    const s1 = await selBox(td(8, 1), td(10, 2));
+    check("M5. zaznaczenie myszą: mini pasek widoczny", !!b1, JSON.stringify(b1));
+    check("M5. pasek nad zaznaczeniem", b1 && b1.bottom <= s1.top + 1, JSON.stringify({ b1, s1 }));
+    check("M5. 7 poleceń (B, wypełnienie, format, Σ, Filtruj, Notatka, Wyjaśnij)", b1 && b1.n === 7, b1 && b1.n);
+    const labels = await page.evaluate(() => Array.from(document.querySelectorAll("#miniBar button, #miniBar select")).map((b) => b.getAttribute("aria-label") || b.textContent.trim()));
+    check("M5. każde polecenie ma nazwę", labels.length === 7 && labels.every(Boolean), labels.join(" | "));
+
+    // przyciski wołają TE SAME polecenia co wstążka (szpieg na oryginałach)
+    await page.evaluate(() => {
+      window.__mini = [];
+      const spy = (sel, name) => document.querySelector(sel)?.addEventListener("click", () => window.__mini.push(name), true);
+      spy('#formatRibbon [data-fmt="b"]', "bold");
+      spy("#fmtFillBtn", "fill");
+      spy("#fmtSumBtn", "sum");
+      spy('#ribbon [data-rb-act="note"]', "note");
+      spy('#ribbon [data-rb-act="explain"]', "explain");
+      document.getElementById("fmtNumFormat").addEventListener("change", (e) => window.__mini.push("num:" + e.target.value));
+      // skutków nie sprawdzamy tutaj (mają własne testy) — tylko że idą tą samą drogą
+      for (const b of document.querySelectorAll('#formatRibbon [data-fmt="b"], #fmtFillBtn, #fmtSumBtn, #ribbon [data-rb-act="note"], #ribbon [data-rb-act="explain"]')) b.addEventListener("click", (e) => e.stopImmediatePropagation(), true);
+    });
+    // Σ, Notatka i Wyjaśnij chowają pasek (zmieniają widok) — przed każdym zaznaczamy od nowa
+    for (const act of ["bold", "fill", "sum", "note", "explain"]) {
+      if (!(await bar())) await drag(td(8, 1), td(10, 2));
+      await page.click(`#miniBar [data-mini="${act}"]`);
+      await sleep(80);
+    }
+    check("M5. po Wyjaśnij pasek znika", !(await bar()));
+    await drag(td(8, 1), td(10, 2));
+    const numVal = await page.evaluate(() => { const s = document.querySelector('#miniBar select[data-mini="num"]'); const o = Array.from(s.options).find((x) => x.value && x.value !== s.value); return o ? o.value : ""; });
+    await page.selectOption('#miniBar select[data-mini="num"]', numVal);
+    await sleep(80);
+    const got = await page.evaluate(() => window.__mini);
+    check("M5. B / wypełnienie / Σ / Notatka / Wyjaśnij / format = te same polecenia co wstążka",
+      JSON.stringify(got) === JSON.stringify(["bold", "fill", "sum", "note", "explain", "num:" + numVal]), JSON.stringify(got));
+    await context.close();
+  }
+  {
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
+    const td = (r, c) => `#dataTable tbody tr[data-row-key]:nth-child(${r}) td[data-col-index="${c}"]`;
+    const center = async (sel) => { const b = await page.locator(sel).first().boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
+    async function drag(from, to) {
+      const a = await center(from), b = await center(to);
+      await page.mouse.move(a.x, a.y);
+      await page.mouse.down();
+      await page.mouse.move(b.x, b.y, { steps: 6 });
+      await page.mouse.up();
+      await sleep(350);
+    }
+    const shownBar = () => page.evaluate(() => { const m = document.getElementById("miniBar"); return !!m && !m.hidden && !m.classList.contains("is-off"); });
+
+    // Filtruj wg wartości: jak „Pokaż tylko …” z menu komórki — mniej wierszy, pasek znika
+    const before = await page.evaluate(() => document.querySelectorAll("#dataTable tbody tr[data-row-key]").length);
+    await drag(td(3, 1), td(4, 1));
+    await page.click('#miniBar [data-mini="filter"]');
+    await sleep(800);
+    const fq = await page.evaluate(() => ({ q: document.getElementById("searchQuery")?.value || "", rows: document.querySelectorAll("#dataTable tbody tr[data-row-key]").length }));
+    check("M5. Filtruj wg wartości: zapytanie i mniej wierszy", fq.q.trim() && fq.rows < before, JSON.stringify({ ...fq, before }));
+    check("M5. po Filtruj pasek znika", !(await shownBar()));
+    await page.evaluate(() => document.getElementById("resetFiltersBtn")?.click());
+    await sleep(600);
+
+    // brak miejsca nad zaznaczeniem (pierwszy wiersz pod nagłówkiem) — pasek pod nim
+    await page.evaluate(() => { const w = document.getElementById("tableWrap"); if (w) w.scrollTop = 0; });
+    await sleep(200);
+    await drag(td(1, 1), td(2, 2));
+    const low = await page.evaluate(() => {
+      const m = document.getElementById("miniBar").getBoundingClientRect();
+      const c = document.querySelector('#dataTable tbody tr[data-row-key]:nth-child(2) td[data-col-index="2"]').getBoundingClientRect();
+      return { barTop: m.top, selBottom: c.bottom, ok: !document.getElementById("miniBar").hidden };
+    });
+    check("M5. brak miejsca nad zaznaczeniem: pasek pod nim", low.ok && low.barTop >= low.selBottom - 1, JSON.stringify(low));
+
+    // Esc chowa pasek
+    await page.keyboard.press("Escape");
+    await sleep(200);
+    check("M5. Esc chowa pasek", !(await shownBar()));
+
+    // klawiatura (Shift+strzałki) — bez paska
+    await page.click(td(6, 1));
+    await page.keyboard.press("Shift+ArrowDown");
+    await page.keyboard.press("Shift+ArrowRight");
+    await sleep(300);
+    check("M5. zaznaczenie klawiaturą: bez paska", !(await shownBar()));
+
+    // Podgląd — bez paska
+    await page.click("#rbModeBtn");
+    await page.click('#rbModeMenu [data-rb-mode="view"]');
+    await sleep(400);
+    await drag(td(8, 1), td(10, 2));
+    check("M5. Podgląd: bez paska", !(await shownBar()));
+    check("brak błędów strony (M5)", errors.length === 0, errors.join(" | "));
     await context.close();
   }
 
