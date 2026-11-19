@@ -414,10 +414,10 @@ async function run() {
   await sleep(300);
   await page.click("#zoomNowBtn");
   await sleep(200);
-  await page.click("#zoomMenu .density-opt:nth-of-type(3)");
+  await page.click("#zoomMenu .density-opt:nth-of-type(4)"); // Automatyczna, Wygodna, Standardowa, Kompaktowa
   await sleep(500);
   const h1 = await rowH();
-  check("R8. gęstość Kompaktowa: niższe wiersze, zapamiętana", h1 < h0 - 8 && (await page.evaluate(() => localStorage.getItem("swb-row-density-v1"))) === "compact", JSON.stringify({ h0, h1 }));
+  check("R8. gęstość Kompaktowa: niższe wiersze, zapamiętana", h1 < h0 - 2 && /* start: Automatyczna = Standardowa 23 px, Kompaktowa 19 px */ (await page.evaluate(() => localStorage.getItem("swb-row-density-v1"))) === "compact", JSON.stringify({ h0, h1 }));
   await page.keyboard.press("Escape");
   await page.evaluate(() => frameCompact.setDensity(""));
   await sleep(300);

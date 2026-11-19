@@ -136,7 +136,8 @@ const swbMiniBar = (() => {
 
   // ── kiedy i gdzie ───────────────────────────────────────────────────────
   let wanted = false;
-  const on = () => document.body.classList.contains("rb-on") && swbIsEditMode() && currentDisplayModel?.mode === "wide";
+  // gęstość wstążki Dotyk (etap 6a) = bez paska, jak w makiecie
+  const on = () => document.body.classList.contains("rb-on") && !document.body.classList.contains("rb-touch") && swbIsEditMode() && currentDisplayModel?.mode === "wide";
   function selRect() {
     const r = getSelectionRectangle();
     return r && r.rowCount * r.colCount >= 2 ? r : null;

@@ -363,15 +363,20 @@ const swbVirt = (() => {
     const needBottom = st.e < st.n - 1 && domTop + clientH + clientH * Math.max(VIRT_MARGIN, o.down * 0.8) > covBottom;
     if (!force && !needTop && !needBottom) return;
 
-    const modelTop = domTop - st.drift;
+    let modelTop = domTop - st.drift;
+    const a = indexAt(Math.max(0, modelTop));
+    const anchor = (a >= st.s && a <= st.e) ? { i: a, domTop: st.topPx + (st.prefix[a] - st.prefix[st.s]) } : null;
+    // Skok poza narysowane okno: place() bez kotwicy stawia wiersze na pozycjach z modelu (drift = 0),
+    // więc okno liczymy od domTop, nie od domTop − stary drift. Inaczej okno lądowało o drift niżej,
+    // zapas nad widokiem znikał i pierwszy krok w górę wyjeżdżał poza wiersze — bez kotwicy wszystko
+    // podskakiwało (virt-guard 11 przy gęstości Standardowej: drift −580 px, skok o 120 px).
+    if (!anchor) modelTop = domTop;
     let [ns, ne] = desiredRange(modelTop, clientH);
     const ei = editorIndex();
     if (ei >= 0 && (ei < ns || ei > ne)) {
       if (Math.abs(ei < ns ? ns - ei : ei - ne) < 300) { ns = Math.min(ns, ei); ne = Math.max(ne, ei); }
       else if (activeCellEditor.input) activeCellEditor.input.blur(); // za daleko — zatwierdź (blur = commit)
     }
-    const a = indexAt(Math.max(0, modelTop));
-    const anchor = (a >= st.s && a <= st.e) ? { i: a, domTop: st.topPx + (st.prefix[a] - st.prefix[st.s]) } : null;
     const shift = place(ns, ne, anchor);
     fillViewport(domTop + shift, clientH);
     afterWindowChange();
