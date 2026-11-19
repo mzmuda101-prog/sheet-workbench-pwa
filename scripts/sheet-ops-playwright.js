@@ -216,9 +216,13 @@ print(json.dumps({"sheets":wb.sheetnames,"a1":wb["Moje dane"]["A1"].value,"a2":w
   // telefon: wstążka formatu jest pod „Aa” (arkusz od dołu)
   if (TOUCH) { await tap("#fmtSheetBtn"); await sleep(500); }
   await shot("table-ribbon");
+  // pasek formuły: przy ponownym wczytaniu pliku nie miga napis o Wide-to-Long (nagranie 2026-11-19)
+  await p.evaluate(() => { const f = document.getElementById("formulaInput"); window.__ph = []; if (f) new MutationObserver(() => window.__ph.push(f.placeholder)).observe(f, { attributes: true, attributeFilter: ["placeholder"] }); });
   await tap("#fmtTableBtn");
   await idle();
   await sleep(800);
+  const ph = await p.evaluate(() => window.__ph.filter((x) => /Wide-to-Long/.test(x)));
+  check("8. przy tworzeniu tabeli bez mignięcia „Wide-to-Long” w pasku formuły", ph.length === 0, ph);
   const tb = await p.evaluate(() => ({ t: [...new Set(Object.values(currentTables))].map((x) => [x.displayName, x.ref, x.styleName]), h: ["A1", "B1", "C1"].map((r) => { const c = workbook.Sheets.Arkusz2[r]; return c && [c.t, c.v]; }), toast: [...document.querySelectorAll(".toast")].map((x) => x.textContent).join("|") }));
   check("8. Tabela1 na obszarze z danymi (A1:C2), styl jak Excel", JSON.stringify(tb.t) === JSON.stringify([["Tabela1", "A1:C2", "TableStyleMedium2"]]) && /Tabela1/.test(tb.toast), tb);
   check("8. nagłówki jak Excel: formuła i liczba → tekst, pusty → Kolumna1", JSON.stringify(tb.h) === JSON.stringify([["s", "#REF!"], ["s", "2026"], ["s", "Kolumna1"]]), tb.h);
