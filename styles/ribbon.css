@@ -446,3 +446,33 @@ body.rb-on .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn::before {
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'/%3E%3C/svg%3E") center / contain no-repeat;
 }
+
+/* ── mini pasek nad zaznaczeniem (etap 5; app/mini-bar.js) ──
+   Często widziany, więc wejście krótkie (150 ms) i od strony zaznaczenia; znika od razu. */
+.mini-bar {
+  --rb-hover: color-mix(in srgb, var(--accent) 9%, transparent);
+  --rb-line: var(--border-subtle);
+  position: fixed; z-index: 60;
+  display: flex; align-items: center; gap: 2px; padding: 3px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface);
+  box-shadow: 0 10px 28px rgba(18, 30, 23, 0.18);
+  transform-origin: 24px 100%;
+  transition: transform 150ms var(--ease-out), opacity 150ms var(--ease-out);
+}
+.mini-bar.is-below { transform-origin: 24px 0; }
+.mini-bar[hidden] { display: none; }
+.mini-bar.is-off { opacity: 0; pointer-events: none; transition: none; }
+@starting-style { .mini-bar { opacity: 0; transform: scale(0.96) translateY(4px); } }
+@starting-style { .mini-bar.is-below { opacity: 0; transform: scale(0.96) translateY(-4px); } }
+.mini-bar .rb-sep { margin: 5px 2px; }
+.mini-bar .mini-fill { flex-direction: column; gap: 1px; }
+.mini-bar .mini-num { block-size: 28px; max-inline-size: 120px; font-size: 12.5px; }
+.mini-bar .rb-btn[aria-pressed="true"] { background: var(--accent-light); color: var(--accent); }
+.mini-bar .rb-btn:active { transform: scale(0.97); }
+.mini-bar .rb-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) { .mini-bar .rb-btn:hover { background: var(--rb-hover); } }
+@media (prefers-reduced-motion: reduce) {
+  .mini-bar { transition: opacity 150ms ease; }
+  @starting-style { .mini-bar, .mini-bar.is-below { transform: none; } }
+  .mini-bar .rb-btn:active { transform: none; }
+}
