@@ -1118,6 +1118,7 @@ function recordPendingEdit(sheetName, cellRef, payload) {
   // komórka, której nie było w pliku (nowy wiersz): zapis dostaje styl wiersza nad nią (row-grow.js)
   if (typeof swbRowGrow !== "undefined") payload = swbRowGrow.withXf(sheetName, cellRef, payload);
   pendingEdits[sheetName][cellRef] = payload;
+  if (typeof swbNoteChangedCell === "function") swbNoteChangedCell(sheetName, cellRef); // filtr „Zmienione wiersze”
 }
 
 function getDateRange() {
@@ -1976,6 +1977,7 @@ function swbBuildRowFilter({ query1 = null, operators1 = null, preview = false }
     if (ex.rules) { c.query = ex.query; noteRules.push(...ex.rules); }
   });
   const notesOnly = typeof swbNotesOnly !== "undefined" && swbNotesOnly;
+  const changedRows = typeof swbChangedRowSet === "function" ? swbChangedRowSet() : null; // changed-rows.js
 
   const dateFilter = {
     indexes: resolveIndexes(currentHeaders, columnSelections.date),
@@ -2010,6 +2012,7 @@ function swbBuildRowFilter({ query1 = null, operators1 = null, preview = false }
     // Walidacja listą: w trybie „pokaż tylko niezgodne" zostają wyłącznie naruszenia.
     if (validationState.showOnly && !rowIsValidationViolation(row)) return false;
     if (notesOnly && !swbRowHasNote(row)) return false;
+    if (changedRows && !changedRows.has(row.rowIndex0)) return false;
     if (noteRules.length && !swbRowPassesNoteRules(row, noteRules)) return false;
     if (!smartActive) return rowMatchesTextFilter(row, criteria, onlyNonEmpty);
 
@@ -2030,14 +2033,14 @@ function swbBuildRowFilter({ query1 = null, operators1 = null, preview = false }
     return true;
   };
 
-  return { rowPasses, criteria, dateFilter, noteRules, notesOnly, smartModel, smartScoped, hitRecords };
+  return { rowPasses, criteria, dateFilter, noteRules, notesOnly, changedOnly: !!changedRows, smartModel, smartScoped, hitRecords };
 }
 
 function applyFilters() {
   // Filtrowanie i reset sortowania (przez applyCurrentSort) przechodzą tędy —
   // następny render ma animować odsłonięcie/przestawienie wierszy (FLIP).
   flipNextRender = true;
-  const { rowPasses, criteria, dateFilter, notesOnly, smartScoped } = swbBuildRowFilter();
+  const { rowPasses, criteria, dateFilter, notesOnly, changedOnly, smartScoped } = swbBuildRowFilter();
   // Podświetlanie komórek: checkbox z filtra tekstowego LUB dat (zsynchronizowane),
   // ALBO tryby szybkiego szukania „Podświetl pasujące" (cells) / „Filtruj + podświetl" (filter-cells).
   // Tryb auto sam z siebie włącza podświetlanie: inaczej w szerokim arkuszu nie widać,
@@ -2051,7 +2054,7 @@ function applyFilters() {
     if (cols.size) matchedCellsByRow.set(row.rowIndex0, cols);
   };
 
-  const shouldFilterRows = (filtersCommitted || validationState.showOnly || notesOnly) && !quickSearchHighlightMode && !quickSearchCellsMode;
+  const shouldFilterRows = (filtersCommitted || validationState.showOnly || notesOnly || changedOnly) && !quickSearchHighlightMode && !quickSearchCellsMode;
   if (shouldFilterRows) {
     // Tryb „filtruj": tylko pasujące wiersze (po kliknięciu Filtruj lub równoważnej akcji)
     matchedRowIndexes = new Set();

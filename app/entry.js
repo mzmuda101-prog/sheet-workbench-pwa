@@ -1816,8 +1816,12 @@ const swbEntry = (() => {
     // raz na sesję: kartki są w aplikacji, plik trzeba jeszcze zapisać
     if (!ui.reminded && ui.sessionLog.length && typeof hasUnsavedChanges !== "undefined" && hasUnsavedChanges) {
       ui.reminded = true;
-      toast(t("entryUnsaved"), "info");
+      toast(t("entryUnsaved"), "info", typeof swbSetChangedOnly === "function" ? { action: t("changedShowAction"), onAction: () => swbSetChangedOnly("all") } : undefined);
+    } else if (ui.sessionLog.length && typeof swbSetChangedOnly === "function" && ui.sessionLog.length !== ui.announcedLog) {
+      // kolejne wyjście z wpisanymi kartkami: sam skrót do zmienionych wierszy (Mateusz 2026-11-20)
+      toast(t("changedAfterEntry"), "info", { action: t("changedShowAction"), onAction: () => swbSetChangedOnly("all") });
     }
+    ui.announcedLog = ui.sessionLog.length;
   }
 
   // Klawisze: Esc i Ctrl/⌘+Enter tu; reszta zostaje w karcie (nie dochodzi do tabeli i Cofnij).

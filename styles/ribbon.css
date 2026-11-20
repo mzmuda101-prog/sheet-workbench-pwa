@@ -804,3 +804,15 @@ body.ph-on #appMenu > .rb-bs-link svg { flex: none; color: var(--ink-2); }
   body.ph-on .sidebar { transition: opacity 160ms ease; transform: none; opacity: 0; }
   :root.sidebar-open body.ph-on .sidebar { opacity: 1; }
 }
+
+/* telefon: sumy na dolnym pasku domyślnie schowane, karty arkuszy na cały rząd; Σ po prawej pokazuje sumy
+   (ribbon.js, Mateusz 2026-11-20). Na komputerze Σ nie ma — pasek jest szeroki. */
+.stats-toggle { display: none; }
+body.ph-on .table-foot > .stats-toggle {
+  display: inline-grid; place-items: center; flex: none; margin-inline-start: auto; inline-size: 40px; block-size: 40px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink-2);
+  font-family: inherit; font-size: 17px; font-weight: 600; line-height: 1; touch-action: manipulation; -webkit-user-select: none; user-select: none;
+}
+body.ph-on .table-foot > .stats-toggle[aria-pressed="true"] { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent); }
+body.ph-on:not(.ph-stats-on) .table-foot > .cell-stats-bar { display: none !important; }
+body.ph-on:not(.ph-stats-on) .table-foot > #sheetTabs { max-inline-size: none; flex: 1 1 auto; }

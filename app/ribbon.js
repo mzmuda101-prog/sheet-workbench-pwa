@@ -183,6 +183,27 @@ const swbRibbon = (() => {
     rideKeyBar(phOn && !!kb && !kb.hidden && !!a?.matches?.(EDIT_SEL) && (!phSheet || phSheet.hidden));
   }
 
+  // telefon: sumy na dolnym pasku domyślnie schowane — karty arkuszy dostają cały rząd; Σ pokazuje / chowa
+  // (Mateusz 2026-11-20), wybór zapamiętany na urządzeniu
+  const STATS_KEY = "swb-ph-stats-v1";
+  const statsBtn = document.getElementById("statsToggle");
+  const statsOn = () => { try { return localStorage.getItem(STATS_KEY) === "1"; } catch (_) { return false; } };
+  function syncStats() {
+    const v = statsOn();
+    document.body.classList.toggle("ph-stats-on", v);
+    if (statsBtn) {
+      statsBtn.setAttribute("aria-pressed", String(v));
+      statsBtn.setAttribute("aria-label", tr(v ? "phStatsHide" : "phStatsShow"));
+      statsBtn.dataset.hint = "";
+      statsBtn.dataset.hintPl = statsBtn.dataset.hintEn = tr(v ? "phStatsHide" : "phStatsShow");
+    }
+  }
+  statsBtn?.addEventListener("click", () => {
+    try { localStorage.setItem(STATS_KEY, statsOn() ? "0" : "1"); } catch (_) { /* tryb prywatny */ }
+    syncStats();
+  });
+  syncStats();
+
   function syncDevice() {
     const desk = deskMq.matches;
     if (desk) placePhone(false); // najpierw oddaj kontrolki z paska telefonu, potem wstążka bierze swoje
