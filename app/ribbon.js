@@ -55,11 +55,19 @@ const swbRibbon = (() => {
     [document.getElementById("rbModeMenu"), phTop],
     [document.getElementById("sheetTabs"), foot, "start"],
     [document.getElementById("heroSheetBtn"), foot, "start"],
+    // etap 7b: polecenia kart na dole — kontrolki z id wchodzą do gniazd kart (jak na komputerze),
+    // a cały rząd poleceń (#rbCmds) do rzędu nad dolnym paskiem. Spisywanie / Wpisywanie do menu Trybu,
+    // powiększenie na kartę Widok, Eksport do ⋯ (ekranu Plik na telefonie nie ma).
+    ...Array.from(root.querySelectorAll(".rb-panel:not(.rb-cl) [data-rb], #rbModeMenu [data-rb]")).map((slot) => [document.querySelector(slot.dataset.rb), slot]),
+    [document.getElementById("zoomGroup"), document.getElementById("rbPanel-view")],
+    [document.getElementById("exportCsvBtn"), document.getElementById("appMenu")],
+    [document.getElementById("rbCmds"), document.getElementById("phCmdsSlot")],
   ].filter(([el, slot]) => el && slot).map(([el, slot, at]) => ({ el, slot, at, mark: document.createComment("swb-ph") }));
   let phOn = false;
   const hasFile = () => !!heroEl?.classList.contains("has-file");
   function placePhone(want) {
     if (!phTop || want === phOn) return;
+    if (!want) { closePhSheet(); rideKeyBar(false); }
     phOn = want;
     closeMenus();
     for (const m of phMoves) {
@@ -67,9 +75,14 @@ const swbRibbon = (() => {
       else if (m.mark.parentNode) m.mark.replaceWith(m.el);
     }
     phTop.hidden = !want;
+    if (phBottom) phBottom.hidden = !want;
     document.body.classList.toggle("ph-on", want);
-    if (!want) document.body.classList.remove("ph-editing");
+    if (!want) document.body.classList.remove("ph-editing", "ph-reading");
+    const pt = document.getElementById("panelToggle");
+    if (pt) { if (want) pt.setAttribute("aria-label", tr("phFilters")); else pt.removeAttribute("aria-label"); }
     syncPhName();
+    syncPhTab();
+    syncKeyRide();
     requestAnimationFrame(() => {
       if (typeof onViewportChange === "function") onViewportChange();
       window.dispatchEvent(new Event("resize"));
@@ -77,7 +90,7 @@ const swbRibbon = (() => {
   }
   function syncPhName() {
     if (!phOn) return;
-    const f = document.getElementById("phFile"), s = document.getElementById("phSheet");
+    const f = document.getElementById("phFile"), s = document.getElementById("phSheetName");
     if (f) f.textContent = document.getElementById("heroTitle")?.textContent.trim() || "";
     if (s) s.textContent = typeof currentSheetName === "string" ? currentSheetName : "";
   }
@@ -93,16 +106,76 @@ const swbRibbon = (() => {
     const a = document.activeElement;
     const was = document.body.classList.contains("ph-editing");
     const now = phOn && !!a?.matches?.(EDIT_SEL);
+    syncKeyRide();
     if (now === was) return;
     document.body.classList.toggle("ph-editing", now);
     if (typeof onViewportChange === "function") requestAnimationFrame(() => onViewportChange());
   };
   document.addEventListener("focusin", syncEditing);
+  // pasek cyfr (key-bar.js) powstaje i pokazuje się chwilę po fokusie — sprawdź jeszcze raz; dalej pilnuje obserwator
+  document.addEventListener("focusin", () => setTimeout(syncKeyRide, 50));
   document.addEventListener("focusout", () => setTimeout(syncEditing, 0));
   // pole w komórce znika z DOM po Enter / Esc — wtedy przeglądarka nie zgłasza utraty fokusu
   const later = () => { if (document.body.classList.contains("ph-editing")) setTimeout(syncEditing, 0); };
   document.addEventListener("keydown", later, true);
   document.addEventListener("pointerdown", later, true);
+  // ── telefon, etap 7b: rząd poleceń, arkusz kart, jazda z paskiem cyfr ──
+  const phBottom = document.getElementById("phBottom");
+  const phTabBtn = document.getElementById("phTabBtn");
+  const phSheet = document.getElementById("phSheet");
+  const phSheetTabs = document.getElementById("phSheetTabs");
+  const phSheetBody = document.getElementById("phSheetBody");
+  const phCmdsSlot = document.getElementById("phCmdsSlot");
+  const tabsList = root.querySelector(".rb-tabs");
+  const tabsMark = document.createComment("swb-ph-tabs");
+  const bottomMark = document.createComment("swb-ph-bottom");
+  function syncPhTab() {
+    const txt = phTabBtn?.querySelector(".ph-tab-txt");
+    if (!txt) return;
+    const tab = root.querySelector(`.rb-tab[data-rtab="${current}"]`) || phSheet?.querySelector(`.rb-tab[data-rtab="${current}"]`);
+    txt.textContent = current === "home" ? tr("phTabHome") : (tab?.textContent.trim() || "");
+    phSheet?.setAttribute("aria-label", tr("phSheetAria"));
+  }
+  // arkusz kart „w miejscu klawiatury”: klawiatura się chowa, karty jako pigułki, polecenia z podpisami
+  function openPhSheet() {
+    if (!phOn || !phSheet || !phSheet.hidden) return;
+    if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
+    rideKeyBar(false);
+    if (tabsList) { tabsList.before(tabsMark); phSheetTabs.append(tabsList); }
+    if (rbCmds) phSheetBody.append(rbCmds);
+    phSheet.hidden = false;
+    document.body.classList.add("ph-sheet-open");
+    phTabBtn?.setAttribute("aria-expanded", "true");
+    phSheet.querySelector('.rb-tab[aria-selected="true"]')?.scrollIntoView({ inline: "center", block: "nearest" });
+    if (typeof onViewportChange === "function") requestAnimationFrame(() => onViewportChange());
+  }
+  function closePhSheet() {
+    if (!phSheet || phSheet.hidden) return;
+    if (tabsMark.parentNode) tabsMark.replaceWith(tabsList);
+    if (rbCmds && phCmdsSlot) phCmdsSlot.append(rbCmds);
+    phSheet.hidden = true;
+    document.body.classList.remove("ph-sheet-open");
+    phTabBtn?.setAttribute("aria-expanded", "false");
+    syncPhTab();
+    if (typeof onViewportChange === "function") requestAnimationFrame(() => onViewportChange());
+  }
+  phTabBtn?.addEventListener("click", () => (phSheet?.hidden ? openPhSheet() : closePhSheet()));
+  document.getElementById("phSheetClose")?.addEventListener("click", () => { closePhSheet(); phTabBtn?.focus(); });
+  // przy otwartej klawiaturze (pasek cyfr widoczny, edycja komórki) rząd poleceń jedzie razem z paskiem cyfr
+  function rideKeyBar(want) {
+    const kb = document.querySelector(".key-bar");
+    if (!phBottom) return;
+    if (want && kb) { if (!bottomMark.parentNode) phBottom.before(bottomMark); kb.prepend(phBottom); }
+    else if (bottomMark.parentNode) bottomMark.replaceWith(phBottom);
+  }
+  let kbObserved = null;
+  function syncKeyRide() {
+    const kb = document.querySelector(".key-bar");
+    if (kb && kbObserved !== kb) { kbObserved = kb; new MutationObserver(syncKeyRide).observe(kb, { attributes: true, attributeFilter: ["hidden"] }); }
+    const a = document.activeElement;
+    rideKeyBar(phOn && !!kb && !kb.hidden && !!a?.matches?.(EDIT_SEL) && (!phSheet || phSheet.hidden));
+  }
+
   function syncDevice() {
     const desk = deskMq.matches;
     if (desk) placePhone(false); // najpierw oddaj kontrolki z paska telefonu, potem wstążka bierze swoje
@@ -182,6 +255,7 @@ const swbRibbon = (() => {
     if (cmds) { cmds.sc.scrollLeft = 0; cmds.sync(); }
     tabStrip?.reveal(tab);
     if (focus) tab.focus();
+    syncPhTab();
   }
   tabs.forEach((x) => x.addEventListener("click", () => onTabClick(x.dataset.rtab)));
   // strzałki bez animacji — przełączanie kart to ruch powtarzany setki razy
@@ -268,6 +342,9 @@ const swbRibbon = (() => {
     // Shift+F2 (cell-notes.js) — ta sama droga co skrót, na bieżącej komórce
     note: () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "F2", shiftKey: true, bubbles: true, cancelable: true })),
     // jak „Wyjaśnij formułę” w menu komórki (filter-bar.js), dla komórki z kursorem
+    // ten sam fill co dawny pasek dotykowy i Ctrl/⌘+D / R (table.js fillSelection)
+    fillDown: () => typeof fillSelection === "function" && fillSelection("down"),
+    fillRight: () => typeof fillSelection === "function" && fillSelection("right"),
     explain: () => {
       const row = typeof focusedCellState !== "undefined" && focusedCellState && typeof getRowByKey === "function" ? getRowByKey(focusedCellState.rowKey) : null;
       const item = row && typeof cellMenuExplainItem === "function" ? cellMenuExplainItem({ row, col: focusedCellState.colIndex0 }) : null;
@@ -275,12 +352,16 @@ const swbRibbon = (() => {
       else if (typeof toast === "function") toast(tr("rbNoFormula"), "info");
     },
   };
-  root.addEventListener("click", (e) => {
+  // polecenia kart (#rbCmds) mają własną obsługę — na telefonie (etap 7b) stoją poza wstążką
+  const rbCmds = document.getElementById("rbCmds");
+  function onCmd(e) {
     const b = e.target.closest("[data-rb-act], [data-rb-panel]");
-    if (!b || !root.contains(b)) return;
+    if (!b) return;
     if (b.dataset.rbAct) ACTS[b.dataset.rbAct]?.();
-    else { closeMenus(); openPanel(b.dataset.rbPanel); }
-  });
+    else { closeMenus(); closePhSheet(); openPanel(b.dataset.rbPanel); }
+  }
+  rbCmds?.addEventListener("click", onCmd);
+  root.addEventListener("click", (e) => { if (!rbCmds?.contains(e.target)) onCmd(e); });
 
   // ── menu: tryb i Plik ────────────────────────────────────────────────────
   const modeBtn = document.getElementById("rbModeBtn");
@@ -350,12 +431,15 @@ const swbRibbon = (() => {
   // polecenia działające na komórkach — bez pliku wyszarzone (komunikat „tylko w trybie szerokim” mylił)
   function syncFile() {
     const has = typeof workbook !== "undefined" && !!workbook;
-    root.querySelectorAll("[data-rb-act]").forEach((b) => { b.disabled = !has; });
+    // #rbCmds na telefonie stoi poza wstążką (etap 7b) — jego polecenia też
+    document.querySelectorAll("#ribbon [data-rb-act], #rbCmds [data-rb-act]").forEach((b) => { b.disabled = !has; });
   }
   function syncMode() {
     syncFile();
     const m = isView() ? "view" : "edit";
     document.body.classList.toggle("rb-reading", on && m === "view");
+    document.body.classList.toggle("ph-reading", phOn && m === "view");
+    if (phOn && m === "view") closePhSheet();
     modeMenu?.querySelectorAll("[data-rb-mode]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.rbMode === m)));
     if (modeBtn) {
       modeBtn.dataset.mode = m;

@@ -3399,16 +3399,24 @@ details.panel[open] > summary {
     color: var(--ink-2);
   }
 }
+/* stan jako suwak włącz/wyłącz zamiast kwadracika 12 px (Mateusz 2026-11-20: „można usprawnić UI/UX”);
+   cała pigułka dalej przełącza, a przytrzymanie pokazuje ściągawkę operatorów (data-hint) */
 .qs-operators-toggle input[type="checkbox"] {
-  accent-color: var(--accent);
+  -webkit-appearance: none;
+  appearance: none;
   cursor: pointer;
-  width: 12px;
-  height: 12px;
+  width: 28px;
+  height: 16px;
   flex-shrink: 0;
   margin: 0;
-  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-full);
+  background: var(--surface) radial-gradient(circle at 7px 50%, var(--muted) 5px, transparent 5.5px) no-repeat;
+  transition: background-color var(--t), border-color var(--t);
+}
+.qs-operators-toggle input[type="checkbox"]:checked {
+  border-color: var(--accent);
+  background: var(--accent) radial-gradient(circle at 19px 50%, #fff 5px, transparent 5.5px) no-repeat;
 }
 .qs-operators-toggle-text em {
   font-style: normal;

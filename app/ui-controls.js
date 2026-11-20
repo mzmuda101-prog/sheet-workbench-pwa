@@ -516,6 +516,12 @@ function toggleQuickSearchFlag(flag) {
   syncQuickSearchModeControls();
 }
 
+// „Operatory wyszukiwania” zapamiętane na urządzeniu (Mateusz 2026-11-20: „zapamiętuj”) — raz włączone
+// zostają włączone także po wyczyszczeniu filtrów i w kolejnym pliku. Klucz w kopii ustawień (prefs).
+const QS_OPS_KEY = "swb-qs-ops-v1";
+function qsOpsRemembered() { try { return localStorage.getItem(QS_OPS_KEY) === "1"; } catch (_) { return false; } }
+function qsOpsRemember(on) { try { localStorage.setItem(QS_OPS_KEY, on ? "1" : "0"); } catch (_) { /* tryb prywatny */ } }
+
 function syncQuickSearchOperatorsControls() {
   const enabled = !!filterOperatorsEl?.checked;
   quickSearchOperatorsEnabled = enabled;
@@ -544,7 +550,7 @@ function resetFilterInputs() {
   filterEmptyMode2El.value = "all";
   filterNegateEl.checked = false;
   filterNegate2El.checked = false;
-  if (filterOperatorsEl) filterOperatorsEl.checked = false;
+  if (filterOperatorsEl) filterOperatorsEl.checked = qsOpsRemembered();
   if (filterOperators2El) filterOperators2El.checked = false;
   onlyNonEmptyEl.checked = false;
   if (typeof swbSetNotesOnly === "function") swbSetNotesOnly(false, { rerun: false });
@@ -566,12 +572,12 @@ function resetFilterInputs() {
   quickSearchFilterCellsMode = false;
   filtersCommitted = false;
   matchedRowIndexes = new Set();
-  quickSearchOperatorsEnabled = false;
+  quickSearchOperatorsEnabled = qsOpsRemembered();
   if (typeof resetSmartFilterState === "function") resetSmartFilterState();
   if (quickSearchActionEl) quickSearchActionEl.value = "filter";
   if (quickSearchPopupActionEl) quickSearchPopupActionEl.value = "filter";
-  if (quickSearchOperatorsEl) quickSearchOperatorsEl.checked = false;
-  if (quickSearchPopupOperatorsEl) quickSearchPopupOperatorsEl.checked = false;
+  if (quickSearchOperatorsEl) quickSearchOperatorsEl.checked = quickSearchOperatorsEnabled;
+  if (quickSearchPopupOperatorsEl) quickSearchPopupOperatorsEl.checked = quickSearchOperatorsEnabled;
   syncQuickSearchInputs();
   syncQuickSearchModeControls();
   syncQuickSearchOperatorsControls();
@@ -4085,6 +4091,27 @@ if (quickSearchColumnsBtn) {
       if (ctx) hideQsLive(ctx);
     }, 0);
   });
+  // Drugie zabezpieczenie (nagranie Mateusza z iPhone'a 2026-11-20, klawiatura SwiftKey): po „✓” klawiatura
+  // znikała, a lista „Przypięte / Ostatnie” dalej wisiała nad tabelą — fokus nie zawsze odchodzi z pola.
+  // Klawiatura schowana (widoczna wysokość wraca) przy pracy w Szukaj = koniec szukania: pole puszcza fokus,
+  // lista i poszerzenie się zwijają. Bez klawiatury ekranowej (iPad z klawiaturą, komputer) to się nie odpala.
+  const vv = window.visualViewport;
+  if (vv) {
+    let kbOpen = false;
+    vv.addEventListener("resize", () => {
+      const open = window.innerHeight - vv.height > 120;
+      const closed = kbOpen && !open;
+      kbOpen = open;
+      if (!closed) return;
+      const ctx = qsContexts.find((c) => c.inputEl === quickSearchEl);
+      const inField = quickSearchWrap.contains(document.activeElement);
+      const listOpen = !!(ctx && ctx.liveEl && !ctx.liveEl.classList.contains("hidden"));
+      if (!inField && !listOpen) return;
+      if (inField) document.activeElement.blur();
+      set(false);
+      if (ctx) hideQsLive(ctx);
+    });
+  }
 })();
 
 // Panel podpowiedzi/wyników zawsze w WIDOCZNYM obszarze: na iPhonie klawiatura zasłaniała
@@ -5551,6 +5578,12 @@ filterModeEl.addEventListener("change", syncQuickSearchModeControls);
 filterNegateEl.addEventListener("change", syncQuickSearchModeControls);
 if (filterOperatorsEl) {
   filterOperatorsEl.addEventListener("change", syncQuickSearchOperatorsControls);
+  // zapamiętaj wybór (pole szybkiego szukania, okienko szukania, panel Filtry) i ustaw go na starcie
+  [quickSearchOperatorsEl, quickSearchPopupOperatorsEl, filterOperatorsEl].forEach((el) => el && el.addEventListener("change", () => qsOpsRemember(el.checked)));
+  if (qsOpsRemembered()) {
+    [quickSearchOperatorsEl, quickSearchPopupOperatorsEl, filterOperatorsEl].forEach((el) => { if (el) el.checked = true; });
+    quickSearchOperatorsEnabled = true;
+  }
 }
 
 maxRowsEl.addEventListener("change", () => {

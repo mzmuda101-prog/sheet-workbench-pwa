@@ -217,8 +217,9 @@ print(json.dumps({"sheets":wb.sheetnames,"a1":wb["Moje dane"]["A1"].value,"a2":w
   await dropToasts();
   await p.evaluate(() => { renderActiveTable(); setFocusedCell("wide:1", 0, { scroll: true }); }); // wstążka działa na aktywnej komórce
   await sleep(300);
-  // telefon: wstążka formatu jest pod „Aa” (arkusz od dołu)
-  if (TOUCH) { await tap("#fmtSheetBtn"); await sleep(500); }
+  // telefon (etap 7b): „Formatuj jako tabelę” w rzędzie karty Główne na dole — przewijamy do niego
+  const toTableBtn = async () => { if (TOUCH) { await p.evaluate(() => { swbRibbon.select("home"); document.getElementById("fmtTableBtn").scrollIntoView({ inline: "center", block: "nearest" }); }); await sleep(300); } };
+  await toTableBtn();
   await shot("table-ribbon");
   // pasek formuły: przy ponownym wczytaniu pliku nie miga napis o Wide-to-Long (nagranie 2026-11-19)
   await p.evaluate(() => { const f = document.getElementById("formulaInput"); window.__ph = []; if (f) new MutationObserver(() => window.__ph.push(f.placeholder)).observe(f, { attributes: true, attributeFilter: ["placeholder"] }); });
@@ -233,7 +234,7 @@ print(json.dumps({"sheets":wb.sheetnames,"a1":wb["Moje dane"]["A1"].value,"a2":w
   await dropToasts();
   await p.evaluate(() => setFocusedCell("wide:1", 0, { scroll: true }));
   await sleep(300);
-  if (TOUCH && !(await p.evaluate(() => document.documentElement.classList.contains("fmt-sheet-open")))) { await tap("#fmtSheetBtn"); await sleep(500); }
+  await toTableBtn();
   await tap("#fmtTableBtn");
   await sleep(400);
   const again = await p.evaluate(() => [...document.querySelectorAll(".toast")].map((x) => x.textContent).join("|"));
