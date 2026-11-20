@@ -9,7 +9,7 @@
 //     bywał martwy.
 //
 // Sprawdzamy:
-//   1. pasek działań pokazuje się na dotyku po zaznaczeniu komórki, a na myszy NIE,
+//   1. telefon: polecenia Kopiuj / Wklej / Wypełnij w rzędzie karty Główne (etap 7b; dawny pasek nie wraca),
 //   2. „Kopiuj" + „Wklej" przenoszą wartość także wtedy, gdy schowek SYSTEMOWY odmawia
 //      (wtedy idzie bufor aplikacji i komunikat mówi o tym wprost),
 //   3. „Wypełnij w dół" rozlewa pierwszą komórkę na zaznaczony zakres,
@@ -142,70 +142,25 @@ async function run() {
   await page.waitForFunction(() => typeof buildRows === "function");
   await loadSheet(page);
 
-  // ── 1. Pasek na dotyku ───────────────────────────────────────────────────
-  const beforeFocus = await barState(page);
+  // ── 1. Telefon (etap 7b wstążki, 2026-11-20): zamiast paska „Kopiuj / Wklej / Wypełnij” polecenia są
+  // w rzędzie karty Główne na dole (te same funkcje: copy/paste ToClipboard, fillSelection). Dawny pasek
+  // nie pokazuje się nawet włączony w ustawieniach (bez dubli).
   await focusCell(page, 0, 0);
-  // Pasek startuje ZWINIĘTY (na telefonie miejsce jest najdroższym zasobem) — rozwijamy go,
-  // żeby sprawdzić przyciski, a osobna sekcja niżej pilnuje samego zwijania.
-  const collapsedByDefault = await page.evaluate(() =>
-    document.getElementById("cellActions").classList.contains("is-collapsed"));
-  await page.click("#cellActionsToggle");
-  await sleep(200);
-  const oneCell = await barState(page);
-  report.collapsedByDefault = collapsedByDefault;
-  ok("pasek startuje zwiniety", collapsedByDefault, collapsedByDefault);
-  report.bar = { beforeFocus, oneCell };
-  ok("bez zaznaczenia paska nie ma", !beforeFocus.bar, beforeFocus);
-  ok("po zaznaczeniu komorki pasek widoczny", oneCell.bar && oneCell.copy && oneCell.paste, oneCell);
-  ok("przy jednej komorce bez przyciskow wypelniania", !oneCell.fillDown && !oneCell.fillRight, oneCell);
-  ok("etykiety sa slowami, nie ikonami", oneCell.labels.join("|").includes("Kopiuj"), oneCell.labels);
-
-  // Pasek NIE MOŻE zabierać wysokosci tabeli — jest nakladka, nie elementem przeplywu.
-  const overlay = await page.evaluate(() => {
-    const el = document.getElementById("cellActions");
-    return { position: getComputedStyle(el).position, inFlow: el.offsetParent !== null };
-  });
-  report.overlay = overlay;
-  ok("pasek jest nakladka (nie zabiera miejsca)", overlay.position === "absolute", overlay);
-
-  // ── 1b. Zwijanie paska ───────────────────────────────────────────────────
-  // Pasek ma dawać się schować (i pamiętać tę decyzję), bo na telefonie każdy
-  // zajęty rząd to jeden wiersz tabeli mniej. Zwinięty pokazuje kropkę, gdy dla
-  // zaznaczonego zakresu są jeszcze inne działania — inaczej nikt by ich nie znalazł.
-  await selectRange(page, 0, 3, 1, 1);
-  const expandedH = await page.evaluate(() => Math.round(document.getElementById("cellActions").getBoundingClientRect().height));
-  await page.click("#cellActionsToggle");
-  await sleep(250);
-  const collapsed = await page.evaluate(() => ({
-    h: Math.round(document.getElementById("cellActions").getBoundingClientRect().height),
-    groupHidden: document.getElementById("cellActionsGroup").classList.contains("hidden"),
-    dot: document.getElementById("cellActionsToggle").classList.contains("has-more"),
-    saved: localStorage.getItem("excel-workbench-cell-actions-collapsed"),
-    aria: document.getElementById("cellActionsToggle").getAttribute("aria-expanded"),
+  const row = await page.evaluate(() => ({
+    oldBar: (() => { const el = document.getElementById("cellActions"); return !!el && el.getBoundingClientRect().height > 0 && getComputedStyle(el).display !== "none"; })(),
+    acts: ["copy", "paste", "fillDown", "fillRight"].map((a) => !!document.querySelector(`#phBottom [data-rb-act="${a}"]`)),
   }));
-  report.collapse = { expandedH, collapsed };
-  // Pasek ma byc JEDNYM rzedem niskich pigulek (na iPhonie dwa rzedy przyciskow po 44 px
-  // zjadaly tyle ekranu, ze przestawaly pomagac). Zwiniety moze byc juz tylko nizszy.
-  ok("rozwiniety pasek miesci sie w jednym rzedzie", expandedH <= 52, report.collapse);
-  ok("zwiniety pasek nie jest wyzszy niz rozwiniety", collapsed.h <= expandedH, report.collapse);
-  ok("zwiniety pasek chowa przyciski", collapsed.groupHidden, collapsed);
-  ok("zwiniecie zapisuje sie na urzadzeniu", collapsed.saved === "1", collapsed);
-  ok("zwiniety pasek sygnalizuje dzialania dla zakresu", collapsed.dot, collapsed);
-  ok("stan zwiniecia jest w aria-expanded", collapsed.aria === "false", collapsed);
-  await page.click("#cellActionsToggle");
-  await sleep(250);
-  const reexpanded = await page.evaluate(() => ({
-    groupHidden: document.getElementById("cellActionsGroup").classList.contains("hidden"),
-    saved: localStorage.getItem("excel-workbench-cell-actions-collapsed"),
-  }));
-  ok("rozwiniecie wraca do przyciskow", !reexpanded.groupHidden && reexpanded.saved === "0", reexpanded);
+  report.row = row;
+  ok("telefon: dawny pasek Kopiuj/Wklej nie pokazuje sie", !row.oldBar, row);
+  ok("telefon: Kopiuj, Wklej, Wypelnij w dol i w prawo w rzedzie polecen", row.acts.every(Boolean), row);
+  const act = (a) => page.evaluate((x) => document.querySelector(`#phBottom [data-rb-act="${x}"]`).click(), a);
 
   // ── 2. Kopiuj → Wklej mimo odmowy schowka systemowego ────────────────────
   await focusCell(page, 0, 0);                       // „2026-09-01"
-  await page.click("#cellActionCopy");
+  await act("copy");
   await sleep(250);
   await focusCell(page, 4, 2);                       // „piąta" → tu wklejamy
-  await page.click("#cellActionPaste");
+  await act("paste");
   await sleep(400);
   const pasted = await cellText(page, 4, 2);
   // „Wklej” z kopii w aplikacji = wartość + format źródła (jak w Excelu, decyzja Mateusza
@@ -220,10 +175,8 @@ async function run() {
 
   // ── 3+4. Wypełnij w dół ──────────────────────────────────────────────────
   await selectRange(page, 0, 3, 1, 1);               // kolumna „Rejon", wiersze 1-4
-  const rangeBar = await barState(page);
-  ok("przy zakresie pokazuje sie Wypelnij w dol", rangeBar.fillDown, rangeBar);
-  ok("zakres w jednej kolumnie bez Wypelnij w prawo", !rangeBar.fillRight, rangeBar);
-  await page.click("#cellActionFillDown");
+  const rangeBar = null;
+  await act("fillDown");
   await sleep(400);
   const filled = [await cellText(page, 0, 1), await cellText(page, 1, 1), await cellText(page, 2, 1), await cellText(page, 3, 1), await cellText(page, 4, 1)];
   report.fill = { bar: rangeBar, filled };

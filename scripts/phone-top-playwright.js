@@ -59,7 +59,7 @@ async function run() {
       return items.map((el) => (el && top.contains(el) ? Math.round(el.getBoundingClientRect().left) : -1));
     });
     check("1. kolejność: ← · Cofnij · nazwa · Tryb · ⋯", order.every((x) => x >= 0) && order.every((x, i) => i === 0 || x > order[i - 1]), order);
-    const name = await page.evaluate(() => ({ file: document.getElementById("phFile")?.textContent, sheet: document.getElementById("phSheet")?.textContent }));
+    const name = await page.evaluate(() => ({ file: document.getElementById("phFile")?.textContent, sheet: document.getElementById("phSheetName")?.textContent }));
     check("1. nazwa pliku i arkusza w pasku", /Przyklad|xlsx/.test(name.file || "") && (name.sheet || "").length > 0, name);
     const tableTop = await page.evaluate(() => Math.round(document.getElementById("tableWrap").getBoundingClientRect().top));
     check("1. tabela wyżej niż dotąd (< 160 px od góry)", tableTop < 160, tableTop);
@@ -94,6 +94,44 @@ async function run() {
 
     check("3. bez zmian: Zapisz schowany", !(await shown(page, "#heroSaveBtn")));
     check("4. przy przeglądaniu: Szukaj widoczne, paska formuły brak", (await shown(page, "#quickSearch")) && !(await shown(page, "#formulaInput")));
+    // Szukaj + schowanie klawiatury „✓” (nagranie Mateusza 2026-11-20, SwiftKey): lista „Ostatnie” i poszerzone
+    // pole nie mogą zostać nad tabelą, nawet gdy przeglądarka nie zgłosi utraty fokusu — udajemy klawiaturę
+    await page.evaluate(() => { try { localStorage.setItem("excel-workbench-qs-history", JSON.stringify({ pinned: [], recent: [{ q: "15.11.26" }, { q: "@notatka" }] })); } catch (_) {} });
+    await page.tap("#quickSearch");
+    await sleep(400);
+    const kb = (h) => page.evaluate((hh) => { Object.defineProperty(visualViewport, "height", { configurable: true, get: () => hh }); visualViewport.dispatchEvent(new Event("resize")); }, h);
+    await kb(844 - 320);
+    await sleep(100);
+    await kb(844);
+    await sleep(500);
+    const qsAfter = await page.evaluate(() => ({ live: !document.getElementById("qsLiveResults").classList.contains("hidden"), wide: document.querySelector(".table-toolbar").classList.contains("qs-wide"), focus: document.activeElement?.id || "" }));
+    check("4b. klawiatura schowana: lista „Ostatnie” i poszerzenie Szukaj zwinięte", !qsAfter.live && !qsAfter.wide && qsAfter.focus !== "quickSearch", qsAfter);
+    await page.evaluate(() => { delete visualViewport.height; });
+    // „suwaki” w polu Szukaj: opcje (w tym „Operatory wyszukiwania”) muszą się pokazać — w 7a stała wysokość
+    // pola je ucinała (Mateusz 2026-11-20: „operator wyszukiwania nie otwiera się”)
+    await page.tap("#qsMoreBtn");
+    await sleep(400);
+    const hit = await page.evaluate(() => ["#quickSearchWrap .qs-operators-toggle", "#qsAllSheets", "#quickSearchColumnsBtn"].map((s) => {
+      const el = document.querySelector(s); if (!el) return s + ": brak";
+      const r = el.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) return s + ": 0";
+      const at = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+      return el.contains(at) ? "ok" : `${s}: zasłania ${at?.id || at?.className}`;
+    }));
+    check("4c. suwaki w Szukaj: „Operatory wyszukiwania”, Wszystkie arkusze i Kolumny widoczne i do stuknięcia", hit.every((x) => x === "ok"), hit);
+    const filt = await page.evaluate(() => { const a = document.getElementById("quickSearchWrap").getBoundingClientRect(), b = document.getElementById("panelToggle").getBoundingClientRect(); return { wrapTop: Math.round(a.top), filtTop: Math.round(b.top), filtRight: Math.round(b.right), vw: innerWidth }; });
+    check("4c. rozwinięte opcje: Filtry zostaje obok pola (nie spada do osobnego rzędu)", Math.abs(filt.wrapTop - filt.filtTop) <= 2 && filt.filtRight <= filt.vw, filt);
+    // operatory: przełącznik (role=switch) i zapamiętanie na urządzeniu (Mateusz 2026-11-20: „zapamiętuj”)
+    check("4d. „Operatory wyszukiwania” to przełącznik (role=switch)", await page.evaluate(() => document.getElementById("quickSearchOperators").getAttribute("role") === "switch"));
+    await page.tap("#quickSearchWrap .qs-operators-toggle");
+    await sleep(200);
+    await page.evaluate(() => typeof resetFilterInputs === "function" && resetFilterInputs()); // jak „Wyczyść filtry” / nowy plik
+    await sleep(200);
+    const opsKept = await page.evaluate(() => ({ el: document.getElementById("quickSearchOperators").checked, flag: quickSearchOperatorsEnabled, saved: localStorage.getItem("swb-qs-ops-v1") }));
+    check("4d. włączone operatory zapamiętane (po wyczyszczeniu filtrów dalej włączone)", opsKept.el && opsKept.flag && opsKept.saved === "1", opsKept);
+    await page.tap("#quickSearchWrap .qs-operators-toggle");
+    await sleep(200);
+    await page.tap("#qsMoreBtn");
+    await sleep(400);
 
     // edycja komórki: podwójne stuknięcie
     const cell = '#dataTable tbody tr[data-row-key="wide:8"] td[data-col-index="1"]';

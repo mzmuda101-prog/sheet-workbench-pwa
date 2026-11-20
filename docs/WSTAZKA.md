@@ -20,7 +20,7 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 | 4 | Dolny pasek | Karty arkuszy (z kolorem karty z pliku, przewijane), Widoczne X/Y, Średnia / Liczba / Suma zaznaczenia, powiększenie. | v1.07.00 (PR #19) |
 | 5 | Mini pasek | Nad zaznaczeniem myszą (pod nim, gdy brak miejsca): B, wypełnienie, format liczb, Σ, Filtruj wg wartości, Notatka, Wyjaśnij. Klawiatura i dotyk bez paska. | v1.08.00 |
 | 6 | Opcje wstążki (6a pokazywanie i gęstość, 6b Klasyczna) | Klasyczna / Uproszczona, Zawsze / Chowaj przy przewijaniu / Tylko karty (Ctrl+F1), gęstość Mysz / Dotyk, gęstość wierszy z Automatyczną. | 6a: v1.09.00 · 6b: v1.10.00 |
-| 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. Trzy części: 7a góra, 7b dół, 7c panele na cały ekran. | 7a: v1.11.00 |
+| 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. Trzy części: 7a góra, 7b dół, 7c panele na cały ekran. | 7a: v1.11.00 · 7b: v1.12.00 |
 
 ## Do decyzji Mateusza (domyślnie — jak w makiecie)
 
@@ -212,4 +212,22 @@ Testy: `scripts/phone-top-playwright.js` (Chromium + WebKit). Testy zwijanej kar
 `hero-collapse-guard`) usunięte — tej karty na telefonie z plikiem już nie ma; ich zasady „strona się nie
 przewija” i „dolny pasek na ekranie” sprawdza nowy test. Do sprawdzenia na prawdziwym iPhonie: wycięcie
 ekranu, klawiatura przy edycji, ← z niezapisanymi zmianami.
+
+## Etap 7b — co weszło (dół ekranu na telefonie; v1.12.00)
+
+Decyzje Mateusza 2026-11-20: polecenia te same co we wstążce na komputerze (wariant A, bez osobnego
+zestawu), rząd zawsze w Edycji, pasek „Kopiuj / Wklej / Wypełnij” znika (menu kontekstowe może powtarzać).
+- **Rząd poleceń** nad dolnym paskiem (`#phBottom`): przycisk z nazwą karty („Główne ▾”) + `#rbCmds`
+  przeniesiony ze wstążki (te same przyciski i obsługa), 40 px, przewija się w bok. W Podglądzie go nie ma.
+- **Arkusz kart** (`#phSheet`) po stuknięciu w nazwę karty: klawiatura się chowa, karty jako pigułki,
+  polecenia w siatce 4 kolumn z podpisami (przyciski z samą ikoną dostają podpis z aria-label).
+- **Klawiatura**: rząd poleceń wchodzi do paska cyfr (key-bar.js) i jedzie z nim nad klawiaturą.
+- **Przeniesione na telefonie** (bez dubli): Spisywanie / Wpisywanie → menu Trybu; powiększenie → karta
+  Widok; Eksport → ⋯ (ekranu Plik na telefonie nie ma); Ponów → pasek u góry, gdy jest co ponawiać;
+  Wypełnij w dół / w prawo → karta Główne (także na komputerze).
+- **Rząd Szukaj**: bez „Aa” i ▾; „Narzędzia” → **Filtry** (ikona lejka, licznik działających filtrów).
+- Dymki na telefonie stoją pod paskiem u góry (wcześniej przykrywały Tryb i ⋯).
+
+Test: `scripts/phone-bottom-playwright.js` (Chromium + WebKit). Na prawdziwym iPhonie: rząd poleceń nad
+klawiaturą przy edycji komórki, arkusz kart, czy rząd nie jest za nisko przy kresce systemu.
 

@@ -154,12 +154,12 @@ body.rb-on .rb-fixed .undo-btn { inline-size: 28px; block-size: 28px; padding: 0
 .rb-panel { display: flex; align-items: center; gap: 2px; flex: none; }
 .rb-panel[hidden] { display: none; }
 /* pasek formatowania w karcie Narzędzia główne — bez własnej ramki, przyciski 28 px */
-body.rb-on .rb-panel .format-ribbon {
+body:is(.rb-on, .ph-on) .rb-panel .format-ribbon {
   display: flex; flex-wrap: nowrap; align-items: center; gap: 2px;
   padding: 0; margin: 0; border: 0; background: none; box-shadow: none;
 }
-body.rb-on .rb-panel :is(.fmt-btn, .tb-btn) { block-size: 28px; min-inline-size: 28px; }
-body.rb-on .rb-panel .tb-menu-btn { block-size: 28px; }
+body:is(.rb-on, .ph-on) .rb-panel :is(.fmt-btn, .tb-btn) { block-size: 28px; min-inline-size: 28px; }
+body:is(.rb-on, .ph-on) .rb-panel .tb-menu-btn { block-size: 28px; }
 
 /* ── przewijany rząd z podpowiedzią ── */
 .rb-strip { display: flex; align-items: stretch; min-inline-size: 0; position: relative; }
@@ -222,13 +222,13 @@ body.rb-on #moreMenuBtn { display: none; }
 .rb-btn.rb-ic { padding: 0; justify-content: center; inline-size: 28px; }
 .rb-sep { flex: none; inline-size: 1px; align-self: stretch; margin: 8px 4px; background: var(--rb-line); }
 /* przyciski przeniesione z menu „Widok ▾”/„Więcej ▾” i z ⋯ — wyglądają jak reszta rzędu */
-body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle) {
+body:is(.rb-on, .ph-on) .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle) {
   block-size: 28px; min-block-size: 0; padding: 0 8px; border: 0; border-radius: 6px;
   background: none; box-shadow: none; font-size: 12.5px; font-weight: 500; color: var(--ink);
 }
-body.rb-on .rb-panel :is(#resetSortBtn, #wideLongToggle).hidden { display: none; }
-body.rb-on .rb-panel #wideLongToggle[aria-pressed="true"] { background: var(--accent-light); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
-body.rb-on .rb-panel #aiMenuItem { display: inline-flex; gap: 6px; block-size: 28px; padding: 0 8px; border-radius: 6px; inline-size: auto; }
+body:is(.rb-on, .ph-on) .rb-panel :is(#resetSortBtn, #wideLongToggle).hidden { display: none; }
+body:is(.rb-on, .ph-on) .rb-panel #wideLongToggle[aria-pressed="true"] { background: var(--accent-light); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent-border); }
+body:is(.rb-on, .ph-on) .rb-panel #aiMenuItem { display: inline-flex; gap: 6px; block-size: 28px; padding: 0 8px; border-radius: 6px; inline-size: auto; }
 
 /* przycisk trybu i „Edytuj” (Podgląd) */
 .rb-mode, .rb-edit {
@@ -276,7 +276,7 @@ body.rb-reading .rb-act .hero-save { display: none; }
 :is(.rb-btn, .rb-mode, .rb-edit):active { transform: scale(0.97); }
 @media (hover: hover) and (pointer: fine) {
   .rb-btn:hover, .rb-mi:hover, .rb-menu .rb-slot > .btn:hover,
-  body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle, #aiMenuItem):hover { background: var(--rb-hover); }
+  body:is(.rb-on, .ph-on) .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle, #aiMenuItem):hover { background: var(--rb-hover); }
   .rb-edit:hover { background: var(--accent-h); }
 }
 :is(.rb-btn, .rb-mode, .rb-edit, .rb-mi):focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -294,7 +294,7 @@ body.rb-reading .rb-act .hero-save { display: none; }
 }
 #transcribeBtn { --rb-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2M9 12h6M9 16h6'/%3E%3C/svg%3E"); }
 #entryBtn { --rb-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='8' y='2' width='8' height='4' rx='1'/%3E%3Cpath d='M16 4h2a2 2 0 0 1 2 2v4M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h5'/%3E%3Cpath d='M19.5 13.5a1.4 1.4 0 0 1 2 2L16 21l-3 .5.5-3z'/%3E%3C/svg%3E"); }
-body.rb-on .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle) { font-weight: 400; }
+body:is(.rb-on, .ph-on) .rb-panel :is(#reportBtn, #resetSortBtn, #wideLongToggle) { font-weight: 400; }
 
 /* ── pasek formuły + chipy filtrów w jednym rzędzie (zadanie 3, makieta v2 .fbar) ── */
 .rb-fbar-row { display: flex; flex-wrap: wrap; align-items: flex-start; column-gap: 8px; row-gap: 4px; margin-bottom: 8px; }
@@ -630,7 +630,7 @@ body.ph-on .hero, body.ph-on #heroGrip { display: none !important; }
 .ph-qb:active, .ph-top .undo-btn:active, .ph-top .app-menu-btn:active { transform: scale(0.95); background: var(--accent-light); }
 .ph-qb:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 /* Cofnij zawsze na swoim miejscu (pasek nie skacze) — wyszarzony, gdy nie ma czego cofać */
-body.ph-on .ph-top .undo-btn.hidden { display: inline-grid !important; opacity: 0.35; pointer-events: none; }
+body.ph-on .ph-top #undoBtn.hidden { display: inline-grid !important; opacity: 0.35; pointer-events: none; }
 .ph-name { min-inline-size: 0; text-align: center; line-height: 1.2; }
 .ph-name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
 .ph-name span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
@@ -647,7 +647,9 @@ body.ph-on #quickSearch { font-size: 16px; }
 body.ph-on #quickSearchBtn { display: none; }
 /* rząd Szukaj: pole i przyciski obok 40 px, przyciski w polu 32 px */
 body.ph-on .table-toolbar { align-items: center; }
-body.ph-on .table-toolbar > #quickSearchWrap { block-size: 40px; min-block-size: 40px; }
+/* tylko zwinięte pole: po „suwakach” (qs-expanded) opcje szukania schodzą do drugiego rzędu — stała wysokość je ucinała */
+body.ph-on .table-toolbar > #quickSearchWrap:not(.qs-expanded) { block-size: 40px; min-block-size: 40px; }
+body.ph-on .table-toolbar > #quickSearchWrap.qs-expanded { min-block-size: 40px; }
 body.ph-on .table-toolbar > :is(#fmtSheetBtn, #panelToggle, #toolbarToggle) { block-size: 40px; min-block-size: 40px; inline-size: 40px; min-inline-size: 40px; padding: 0; margin-block: 0; }
 body.ph-on #quickSearchWrap :is(#nlqOpenBtn, #qsMoreBtn) { block-size: 32px; min-block-size: 32px; }
 /* pasek formuły tylko podczas edycji — wtedy w miejscu paska Szukaj */
@@ -672,3 +674,99 @@ body.ph-on .table-foot > .add-row-btn, body.ph-on .table-foot > .status-badge { 
   .ph-qb, .ph-top .undo-btn, .ph-top .app-menu-btn { transition: background-color 120ms ease; }
   .ph-qb:active, .ph-top .undo-btn:active, .ph-top .app-menu-btn:active { transform: none; }
 }
+
+/* ── telefon, etap 7b: rząd poleceń bieżącej karty i arkusz kart (ribbon.js; makieta „Telefon”) ──────────
+   Te same polecenia co we wstążce (#rbCmds). Rząd: 40 px, jedna oś, przewija się w bok. Arkusz: pigułki
+   kart + siatka 4 kolumn z podpisami, cele ≥ 56 px. W Podglądzie rzędu nie ma. */
+.ph-bottom[hidden], .ph-sheet[hidden] { display: none !important; }
+body.ph-on.ph-reading .ph-bottom { display: none !important; }
+.ph-bottom {
+  display: flex; align-items: center; gap: 4px; min-inline-size: 0;
+  padding: 4px max(6px, env(safe-area-inset-right, 0px)) 4px max(6px, env(safe-area-inset-left, 0px));
+  background: var(--surface); border-top: 1px solid var(--border);
+}
+.ph-tab-btn {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; block-size: 40px; padding: 0 10px;
+  border: 0; border-radius: 10px; background: var(--accent-light); color: var(--accent);
+  font: inherit; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  touch-action: manipulation; -webkit-user-select: none; user-select: none;
+  transition: transform 140ms var(--ease-out);
+}
+.ph-tab-btn:active { transform: scale(0.97); }
+.ph-tab-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ph-cmds-slot { flex: 1 1 auto; min-inline-size: 0; }
+/* rząd poleceń na telefonie: bez Cofnij/Ponów (są u góry) i bez opcji wstążki (tylko komputer) */
+body.ph-on .ph-cmds-slot > #rbCmds { block-size: 40px; padding: 0; border: 0; background: none; }
+body.ph-on #rbCmds :is(.rb-fixed, .rb-end) { display: none; }
+body.ph-on .ph-cmds-slot > #rbCmds .rb-panel :is(.rb-btn, .fmt-btn, .tb-btn, .tb-menu-btn, #reportBtn, #resetSortBtn, #wideLongToggle, #aiMenuItem) {
+  block-size: 40px; min-block-size: 40px; min-inline-size: 40px; touch-action: manipulation;
+}
+body.ph-on .ph-cmds-slot > #rbCmds .rb-panel .rb-btn.rb-ic { inline-size: 40px; }
+body.ph-on #rbCmds .rb-panel .fmt-select { block-size: 36px; font-size: 16px; }
+body.ph-on #rbCmds .rb-panel #zoomGroup { block-size: 40px; }
+/* Aa, ▾ i pasek „Kopiuj / Wklej / Wypełnij” — ich polecenia są teraz w kartach (bez dubli) */
+body.ph-on :is(#fmtSheetBtn, #toolbarToggle, #tableActions, #cellActions) { display: none !important; }
+/* Narzędzia → Filtry (licznik działających filtrów zostaje) */
+.ph-filter-ico { display: none; }
+body.ph-on #panelToggle > svg:not(.ph-filter-ico) { display: none; }
+body.ph-on #panelToggle > .ph-filter-ico { display: block; }
+/* Ponów u góry tylko, gdy jest co ponawiać */
+body.ph-on .ph-top #redoBtn { inline-size: 40px; block-size: 40px; padding: 0; border: 0; background: none; box-shadow: none; border-radius: 10px; }
+
+/* arkusz kart „w miejscu klawiatury” */
+.ph-sheet {
+  display: grid; grid-template-rows: auto minmax(0, 1fr); block-size: min(260px, 42dvh);
+  padding: 8px max(8px, env(safe-area-inset-right, 0px)) max(8px, calc(env(safe-area-inset-bottom, 0px) - 20px)) max(8px, env(safe-area-inset-left, 0px));
+  background: var(--surface); border-top: 1px solid var(--border);
+}
+.ph-sheet-head { display: flex; align-items: center; gap: 6px; min-inline-size: 0; }
+.ph-sheet-tabs { flex: 1 1 auto; min-inline-size: 0; overflow-x: auto; scrollbar-width: none; }
+.ph-sheet-tabs::-webkit-scrollbar { display: none; }
+.ph-sheet .rb-tabs { display: flex; gap: 4px; }
+.ph-sheet .rb-tab {
+  flex: none; block-size: 36px; padding: 0 12px; border: 1px solid var(--border); border-radius: 18px;
+  background: var(--panel, var(--surface)); color: var(--ink); font: inherit; font-size: 13px; white-space: nowrap;
+  touch-action: manipulation;
+}
+.ph-sheet .rb-tab[aria-selected="true"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.ph-sheet .rb-tab::after { display: none; }
+.ph-sheet-body { overflow-y: auto; overscroll-behavior: contain; padding-block-start: 8px; min-block-size: 0; }
+.ph-sheet #rbCmds { block-size: auto; padding: 0; border: 0; background: none; display: block; }
+.ph-sheet #rbCmds :is(.rb-fixed, .rb-end, .rb-nudge, .rb-sep) { display: none !important; }
+.ph-sheet #rbCmds .rb-strip, .ph-sheet #rbCmds .rb-sc { display: block; block-size: auto; overflow: visible; -webkit-mask-image: none; mask-image: none; }
+.ph-sheet #rbCmds .rb-panel { block-size: auto; }
+.ph-sheet #rbCmds .rb-panel:not([hidden]) { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.ph-sheet #rbCmds .rb-panel :is(.rb-btn, .rb-slot > .btn, #reportBtn, #resetSortBtn, #wideLongToggle, #aiMenuItem, .tb-menu-btn) {
+  display: grid; justify-items: center; align-content: center; gap: 4px; inline-size: auto; min-block-size: 60px; block-size: auto;
+  padding: 8px 2px; border-radius: 10px; font-size: 11.5px; line-height: 1.2; text-align: center; white-space: normal;
+}
+.ph-sheet #rbCmds .rb-panel .rb-btn svg { inline-size: 22px; block-size: 22px; color: var(--accent); }
+/* przyciski z samą ikoną: podpis z aria-label (polecenia w arkuszu zawsze z podpisem) */
+.ph-sheet #rbCmds .rb-panel .rb-btn.rb-ic::after { content: attr(aria-label); }
+.ph-sheet #rbCmds .rb-panel .rb-slot { display: contents; }
+/* blok formatu i powiększenie: cała szerokość, zawijają się */
+.ph-sheet #rbCmds .rb-panel :is(.format-ribbon, #zoomGroup) { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-start; row-gap: 4px; }
+.ph-sheet #rbCmds .rb-panel .format-ribbon :is(.fmt-btn, .tb-btn) { block-size: 40px; min-inline-size: 40px; }
+@media (prefers-reduced-motion: reduce) { .ph-tab-btn { transition: none; } .ph-tab-btn:active { transform: none; } }
+
+/* dymki na telefonie są u góry ekranu — z paskiem telefonu stają POD nim, nie na nim
+   (inaczej przykrywały Tryb i ⋯, a stuknięcie trafiało w dymek) */
+@media (max-width: 768px) and (pointer: coarse) {
+  body.ph-on .toast-container { top: calc(env(safe-area-inset-top, 0px) + 52px); }
+}
+
+/* odstęp od kreski iPhone'a (ok. 14 px, bez kreski 6 px) ma ten element, który stoi najniżej:
+   w Edycji rząd poleceń (dolny pasek z kartami już nie), w Podglądzie dolny pasek, przy otwartym arkuszu kart arkusz;
+   w pasku cyfr nad klawiaturą odstępu nie trzeba */
+body.ph-on:not(.ph-reading) .table-foot { padding-block-end: 0; }
+.ph-bottom { padding-block-end: max(4px, calc(env(safe-area-inset-bottom, 0px) - 20px)); }
+body.ph-sheet-open .ph-bottom, .key-bar .ph-bottom { padding-block-end: 4px; }
+
+/* rząd Szukaj na telefonie: pole | Filtry. Rozwinięte opcje (suwaki) rosną w dół w kolumnie pola,
+   a Filtry zostaje obok — dawniej spadał do osobnego rzędu (Mateusz 2026-11-20, pkt 1) */
+body.ph-on .table-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; column-gap: 8px; }
+body.ph-on .table-toolbar > #quickSearchWrap { grid-column: 1; grid-row: 1; }
+body.ph-on .table-toolbar > #panelToggle { grid-column: 2; grid-row: 1; }
+body.ph-on .table-toolbar > :not(#quickSearchWrap):not(#panelToggle) { grid-column: 1 / -1; }
+/* przełącznik operatorów pod palec */
+body.ph-on #quickSearchWrap .qs-operators-toggle { min-block-size: 40px; padding-inline: 10px; gap: 8px; font-size: 13px; }

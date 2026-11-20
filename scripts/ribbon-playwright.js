@@ -177,8 +177,9 @@ async function run() {
     // etap 7a: na telefonie z plikiem pasek u góry zamiast dużej karty „hero” (phone-top-playwright.js)
     check("6. 768 px: Zapisz w pasku telefonu", await page.evaluate(() => !!document.getElementById("heroSaveBtn").closest("#phTop")));
     check("6. 768 px: pasek telefonu widoczny", await shown(page, "#phTop"));
-    check("Z. 768 px: powiększenie wróciło do paska nad tabelą", await page.evaluate(() => !!document.getElementById("zoomGroup").closest("#toolbarMain")));
-    check("T2. 768 px: Spisywanie wróciło do menu Więcej", await page.evaluate(() => !!document.getElementById("transcribeBtn").closest("#moreMenu")));
+    // etap 7b: telefon z plikiem — powiększenie na karcie Widok w rzędzie poleceń, Spisywanie w menu Trybu
+    check("Z. 768 px: powiększenie na karcie Widok (rząd poleceń telefonu)", await page.evaluate(() => !!document.getElementById("zoomGroup").closest("#rbPanel-view") && !!document.getElementById("rbCmds").closest("#phBottom")));
+    check("T2. 768 px: Spisywanie w menu Trybu", await page.evaluate(() => !!document.getElementById("transcribeBtn").closest("#rbModeMenu")));
     await page.setViewportSize({ width: 1440, height: 900 });
     await sleep(300);
     check("6. z powrotem 1440 px: Szukaj we wstążce", await inRibbon(page, "#quickSearch"));
@@ -309,6 +310,9 @@ async function run() {
     check("F1. 1440→768: fokus zostaje w Szukaj", await page.evaluate(() => document.activeElement?.id === "quickSearch"));
     await page.fill("#quickSearch", "");
     // F2: otwarte „Widok ▾” nie zostaje przyklejone w rogu po przejściu na wstążkę
+    // (etap 7b: na telefonie „Widok ▾” jest na karcie Widok w rzędzie poleceń na dole)
+    await page.evaluate(() => swbRibbon.select("view"));
+    await sleep(100);
     await page.click("#viewMenuBtn");
     await sleep(150);
     await page.setViewportSize({ width: 1024, height: 900 });
@@ -396,7 +400,7 @@ async function run() {
     await page.setViewportSize({ width: 768, height: 900 });
     await page.waitForFunction(() => !document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
     await sleep(150);
-    check("E2. 768 px: motyw, język, skróty, eksport wracają na swoje miejsca", await page.evaluate(() => !!document.querySelector("#appMenu #themeSeg") && !!document.querySelector("#appMenu #langSwitch") && !!document.querySelector("#appMenu #shortcutsMenuItem") && !!document.querySelector("#moreMenu #exportCsvBtn")));
+    check("E2. 768 px: motyw, język, skróty, eksport w menu ⋯", await page.evaluate(() => !!document.querySelector("#appMenu #themeSeg") && !!document.querySelector("#appMenu #langSwitch") && !!document.querySelector("#appMenu #shortcutsMenuItem") && !!document.querySelector("#appMenu #exportCsvBtn"))); // 7b: eksport w ⋯ (ekranu Plik na telefonie nie ma)
     check("brak błędów strony (E2)", errors.length === 0, errors.join(" | "));
     await context.close();
   }
