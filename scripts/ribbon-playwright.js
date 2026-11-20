@@ -114,6 +114,10 @@ async function run() {
 
     // powiększenie na dolnym pasku (nie na karcie Widok); Szukaj rozwija się szeroko, póki w nim pracujesz
     check("Z. powiększenie na dolnym pasku, nie we wstążce", await page.evaluate(() => !!document.getElementById("zoomGroup").closest("#tableFoot")) && !(await inRibbon(page, "#zoomGroup")));
+    // dolny pasek: karty, „+ Nowy wiersz/kolumna”, sumy i powiększenie na jednej osi (zgłoszenie Mateusza 2026-11-20: przesunięte o 4 px)
+    const footAxis = await page.evaluate(() => [...document.getElementById("tableFoot").children].filter((el) => el.getBoundingClientRect().height > 0).map((el) => { const r = el.getBoundingClientRect(); return [el.id || el.className, Math.round(r.top + r.height / 2)]; }));
+    const axes = footAxis.map((x) => x[1]);
+    check("Z. dolny pasek: wszystko na jednej osi (±1 px)", axes.length >= 3 && Math.max(...axes) - Math.min(...axes) <= 1, footAxis);
     await page.click("#quickSearch");
     await sleep(300);
     const qsWide = await page.evaluate(() => Math.round(document.getElementById("quickSearchWrap").getBoundingClientRect().width));

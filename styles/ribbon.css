@@ -426,6 +426,12 @@ body.rb-on .table-foot > .zoom-group :is(.tb-btn, .zoom-now) { block-size: 24px;
    ściskają się wtedy karty arkuszy, które same się przewijają) i przewijają się w bok; wygaszone
    krawędzie daje attachOverflowFade (frame-compact.js). Zasada: nic nie ucina się po cichu. */
 body.rb-on .table-foot { flex-wrap: nowrap; }
+/* jedna oś i jedna wysokość z kartami i powiększeniem (28 px); margines 8 px z dawnego układu pod tabelą spychał je w dół */
+body.rb-on .table-foot > :is(.add-row-btn, .cell-stats-bar) { margin-block-start: 0; }
+/* na dotyku przyciski zostają 38 px (cel pod palec), środki i tak są na jednej osi */
+@media (pointer: fine) {
+  body.rb-on .table-foot > :is(.add-row-btn, .cell-stats-bar) { min-block-size: 0; block-size: 28px; padding-block: 0; }
+}
 body.rb-on .table-foot > .cell-stats-bar {
   flex: 1 1 0; min-inline-size: 140px;
   flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; white-space: nowrap;
