@@ -888,7 +888,7 @@ let aggregationWorkbenchState = {
   resultSearch: "",
   resultSearchOperators: false, // operatory (&&, ||, !, {}, >>, <<) w szukajce wyników
 };
-const APP_BUILD_VERSION = "v1.12.00";
+const APP_BUILD_VERSION = "v1.13.00";
 
 // Coalesced view refresh — jedna klatka zamiast kaskady render*() w handlerze.
 let _viewRefreshRaf = 0;
