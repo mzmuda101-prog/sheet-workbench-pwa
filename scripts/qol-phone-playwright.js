@@ -3,6 +3,8 @@
 //   1. telefon: sumy na dolnym pasku domyślnie schowane, karty arkuszy na cały rząd; Σ pokazuje / chowa
 //      sumy i wybór jest zapamiętany; na komputerze sumy jak dotąd (bez Σ),
 //   2. filtr „Zmienione wiersze”: tylko niezapisane / od otwarcia pliku; chip z ✕; licznik filtrów,
+//   3. gęstość „Wygodna” na dotyku: niski wiersz z pliku rośnie o 40% do progu z czcionki (≈ 24 px przy 11 pt),
+//      „Zwarta” i mysz zostają wierne plikowi.
 //
 // Uruchom z serwerem na APP_URL (domyślnie http://127.0.0.1:4175/). ENGINE=webkit — Safari.
 
@@ -51,6 +53,25 @@ async function run() {
     await sleep(300);
     check("1. Σ drugi raz chowa sumy", !(await shown(page, "#cellStatsBar")));
 
+    // 3. gęstość: wiersze z pliku 9 pt (12 px) — przy Wygodnej co najmniej 29 px
+    const dens = await page.evaluate(async () => {
+      for (let r = 0; r < 60; r++) currentSheetRowHeights[r] = { hpt: 9 };
+      const h = () => { const tr = document.querySelector('#dataTable tbody tr[data-row-key="wide:10"]'); return tr ? Math.round(tr.getBoundingClientRect().height) : 0; };
+      renderActiveTable();
+      await new Promise((r) => setTimeout(r, 300));
+      const comfy = { density: document.documentElement.dataset.density || "comfortable", h: h() };
+      document.documentElement.dataset.density = "compact";
+      renderActiveTable();
+      await new Promise((r) => setTimeout(r, 300));
+      const compact = h();
+      delete document.documentElement.dataset.density;
+      renderActiveTable();
+      return { comfy, compact, excel: typeof isExcelLayoutEnabled === "function" && isExcelLayoutEnabled() };
+    });
+    // reguła dotyku: próg z czcionki pliku (≈ 20–26 px), niższy wiersz +40% do progu — nie stałe 29 px
+    check("3. Wygodna na dotyku: niski wiersz z pliku rośnie do progu z czcionki (22–27 px)", dens.comfy.density === "comfortable" && dens.comfy.h >= 22 && dens.comfy.h <= 27, dens);
+    check("3. Zwarta: wiersz zostaje niski jak w pliku", dens.compact > 0 && dens.compact < dens.comfy.h, dens);
+
     check("brak błędów strony (telefon)", errors.length === 0, errors.join(" | "));
     await context.close();
   }
@@ -59,6 +80,16 @@ async function run() {
   {
     const { context, page, errors } = await open(browser, { width: 1280, height: 800 });
     check("1. komputer: bez przycisku Σ", !(await shown(page, "#statsToggle")));
+    // mysz: Wygodna nie rusza wierszy z pliku (celność palca to sprawa dotyku)
+    const mouseH = await page.evaluate(async () => {
+      for (let r = 0; r < 60; r++) currentSheetRowHeights[r] = { hpt: 9 };
+      delete document.documentElement.dataset.density;
+      renderActiveTable();
+      await new Promise((r) => setTimeout(r, 300));
+      const tr = document.querySelector('#dataTable tbody tr[data-row-key="wide:10"]');
+      return tr ? Math.round(tr.getBoundingClientRect().height) : 0;
+    });
+    check("3. mysz: Wygodna zostawia wiersz z pliku (18 px)", mouseH > 0 && mouseH <= 20, mouseH);
     // 2. zmiana dwóch komórek w różnych wierszach
     const rows = await page.evaluate(() => {
       updateSheetCell(10, 1, { value: "Zmiana A", type: "string" });

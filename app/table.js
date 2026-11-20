@@ -1702,16 +1702,38 @@ function toPixelWidth(meta) {
 // Wysokość wiersza z pliku (Wymiary z Excela): własna z <row ht>, a bez niej domyślna arkusza
 // (<sheetFormatPr defaultRowHeight>) — Excel tak rysuje wiersze bez „ht” („bazy” od wiersza 24:
 // 14 pt, a apka dawała ~31 px). Wiersz z tekstem w kilku liniach Excel by dopasował — tu też.
+// Gęstość „Wygodna” na dotyku: niskie wiersze z pliku rosną, żeby palec trafiał w komórkę (Mateusz 2026-11-20:
+// arkusze z bardzo małymi wierszami — wysokość z pliku wygrywała z gęstością). Mądrze, nie „wszystko po 29 px”:
+//   • próg zależy od czcionki pliku: linia tekstu (czcionka × 1,3) + 5 px nad i pod — 11 pt ≈ 24 px, 8 pt ≈ 20 px,
+//   • wiersz niższy niż próg rośnie o 40%, ale nie ponad próg (niższe wiersze z pliku dalej są niższe),
+//   • wyższe wiersze, „Standardowa” / „Zwarta”, mysz i ręcznie przeciągnięte wysokości — bez zmian.
+const SWB_TOUCH_ROW_GROW = 1.4;
+function swbTouchRowThreshold() {
+  if (document.documentElement.dataset.density) return 0; // brak atrybutu = Wygodna
+  const touch = document.body.classList.contains("ph-on") || !matchMedia("(pointer: fine)").matches;
+  if (!touch) return 0;
+  const zoom = (typeof zoomLevelEl !== "undefined" && parseFloat(zoomLevelEl.value)) || 1;
+  const el = typeof tableEl !== "undefined" && tableEl ? tableEl : document.documentElement;
+  const font = parseFloat(getComputedStyle(el).getPropertyValue("--cell-font-base")) || 12.5;
+  return Math.round((font * 1.3 + 10) * zoom);
+}
+/** Wysokość wiersza z pliku po regule dotyku (h w px, już w skali powiększenia). */
+function swbTouchRowH(h) {
+  const thr = swbTouchRowThreshold();
+  if (!thr || !(h > 0) || h >= thr) return h;
+  return Math.min(thr, Math.round(h * SWB_TOUCH_ROW_GROW));
+}
+
 function excelFileRowHeight(row) {
   const zoom = (typeof zoomLevelEl !== "undefined" && parseFloat(zoomLevelEl.value)) || 1; // rośnie z powiększeniem, jak szerokości
   const own = toPixelHeight(currentSheetRowHeights[row.rowIndex0]);
-  if (own) return Math.round(own * zoom);
+  if (own) return swbTouchRowH(Math.round(own * zoom));
   const pt = typeof currentSheetDefaultRowPt === "number" ? currentSheetDefaultRowPt : 0;
   if (!(pt > 0)) return 0;
   // Nowy silnik (przewijanie wirtualne) też dostaje tę wysokość (2026-11-02): traktuje ją jak szacunek
   // i mierzy narysowane wiersze (virt-rows fixedHeightOf bierze tylko WŁASNE wysokości z pliku).
   if (Array.isArray(row.display) && row.display.some((d) => typeof d === "string" && d.includes("\n"))) return 0;
-  return Math.max(18, Math.round(((pt * 96) / 72) * zoom));
+  return swbTouchRowH(Math.max(18, Math.round(((pt * 96) / 72) * zoom)));
 }
 
 function toPixelHeight(meta) {
