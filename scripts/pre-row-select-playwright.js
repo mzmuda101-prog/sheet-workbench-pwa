@@ -98,6 +98,7 @@ async function run() {
   await sleep(200);
   const d1 = await state(p);
   ok("3a. klik w pre-cell zaznacza ją", d1.pre === 1, d1);
+  ok("3a. przy myszy bez okrągłego „Odznacz” (Esc / klik obok; Mateusz 2026-11-20)", !d1.fab, d1);
   await p.keyboard.press("Escape");
   await sleep(200);
   const d2 = await state(p);

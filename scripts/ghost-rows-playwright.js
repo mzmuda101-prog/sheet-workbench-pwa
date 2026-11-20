@@ -161,6 +161,16 @@ async function run() {
     };
   });
   check("6. 2 duchy-kolumny z kolejnymi literami i „＋”, bez data-col-index", c6.cols === 2 && c6.letters.join() === c6.want.join() && c6.plus === "＋" && c6.dataIdx === 0, c6);
+  // 6b. jak w Excelu: za danymi zwykłe puste komórki — linia siatki w każdym wierszu danych przez obie
+  // kolumny-duchy, wiersze nad nagłówkiem bez szarego tła (zgłoszenie Mateusza 2026-11-20)
+  const c6b = await p.evaluate(() => {
+    const tr = tbodyEl.querySelector("tr[data-row-key]");
+    const a = getComputedStyle(tr, "::after");
+    const pre = document.querySelector("#dataTable thead tr.pre-row > td.ghost-col-cell");
+    return { content: a.content, border: a.borderBottomWidth, outset: a.borderImageOutset, preBg: pre ? getComputedStyle(pre).backgroundColor : "brak" };
+  });
+  check("6b. wiersz danych: linia siatki przez obie kolumny-duchy", c6b.content !== "none" && c6b.border === "1px" && /96px/.test(c6b.outset), c6b);
+  check("6b. wiersze nad nagłówkiem za danymi bez szarego tła", c6b.preBg === "rgba(0, 0, 0, 0)" || c6b.preBg === "brak", c6b);
   // wiersz WIDOCZNY w oknie tabeli (wcześniej przewinięto na dół — 7. wiersz DOM bywa poza widokiem)
   const pt = await p.evaluate(() => {
     const wb = tableWrapEl.getBoundingClientRect();

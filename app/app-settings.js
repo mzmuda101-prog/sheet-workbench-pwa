@@ -61,6 +61,10 @@ async function swbCopyVersion() {
 
 // Po aktualizacji: jeden dymek „Zaktualizowano do vX” z „Co nowego” (pierwsze uruchomienie — cisza).
 function swbAnnounceUpdate() {
+  // index.html idzie z sieci, więc nowy kod startuje jeszcze pod STARYM SW (obok „Aktualizuj”) —
+  // czekamy z dymkiem, aż stroną steruje SW tej wersji (po kliknięciu „Aktualizuj” i przeładowaniu)
+  const ctl = navigator.serviceWorker && navigator.serviceWorker.controller;
+  if (ctl && !String(ctl.scriptURL || "").includes(`v=${APP_BUILD_VERSION}`)) return;
   let prev = null;
   try { prev = localStorage.getItem(SWB_SEEN_VERSION_KEY); localStorage.setItem(SWB_SEEN_VERSION_KEY, APP_BUILD_VERSION); } catch { return; }
   if (!prev || prev === APP_BUILD_VERSION) return;
