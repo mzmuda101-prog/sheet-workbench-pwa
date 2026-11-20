@@ -1212,9 +1212,13 @@ function syncSelectionHeadersInDom(rect, rangeRows) {
 
 // Przycisk „Odznacz" (dotykowy zamiennik Esc) — widoczny, gdy jest aktywny
 // fokus lub zaznaczenie. Czyści wszystko jednym tapnięciem.
+// Tylko po dotyku/rysiku: przy myszy to robi Esc albo klik obok, a przycisk zasłaniał róg tabeli
+// (Mateusz, 2026-11-20). Ostatnie urządzenie wskazujące, nie „czy ekran jest dotykowy” — iPad z gładzikiem.
+let swbClearFabTouch = false;
+document.addEventListener("pointerdown", (e) => { swbClearFabTouch = e.pointerType === "touch" || e.pointerType === "pen"; }, true);
 function updateClearSelectionFab() {
   if (!clearSelectionFabEl) return;
-  const active = !!(focusedCellState || selectedCellState);
+  const active = swbClearFabTouch && !!(focusedCellState || selectedCellState);
   clearSelectionFabEl.classList.toggle("is-visible", active);
 }
 
