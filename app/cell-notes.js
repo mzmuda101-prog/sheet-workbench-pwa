@@ -375,9 +375,9 @@ function swbGoToNote(dir) {
 // tabletowe często nie mają rzędu F). e.key przy wciśniętym Ctrl/⌘ zostaje literą, a AltGr+N
 // na polskim układzie daje „ń” — więc polskie znaki nie są przechwytywane.
 document.addEventListener("keydown", (e) => {
-  const meta = e.ctrlKey || e.metaKey;
+  const meta = swbMod(e);
   const combo = meta && e.altKey && (String(e.key).toLowerCase() === "n" || (e.metaKey && e.code === "KeyN"));
-  const fkey = e.key === "F8" && !meta && !e.altKey;
+  const fkey = e.key === "F8" && !e.ctrlKey && !e.metaKey && !e.altKey; // F8 bez żadnego modyfikatora
   if (!combo && !fkey) return;
   if (!workbook) return;
   const dir = e.shiftKey ? -1 : 1;
@@ -479,7 +479,7 @@ const swbNoteModal = (() => {
 
   function onKey(e) {
     if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); return; }
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); save(); return; }
+    if (e.key === "Enter" && swbMod(e)) { e.preventDefault(); e.stopPropagation(); save(); return; }
     if (!el.contains(e.target)) {
       // fokus jeszcze poza oknem — nic nie może trafić do siatki pod spodem
       if (e.key !== "Tab") return;

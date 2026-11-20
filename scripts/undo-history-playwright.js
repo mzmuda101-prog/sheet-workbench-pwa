@@ -97,7 +97,7 @@ async function run() {
   const btnAfterEdit = await page.evaluate(() => !document.getElementById("undoBtn").classList.contains("hidden") && !document.getElementById("undoBtn").disabled);
   ok("6. przycisk ↶ pojawia się po zmianie", btnAfterEdit, btnAfterEdit);
 
-  await page.keyboard.press("Control+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await sleep(250);
   const undone = await cellState(target.rowIndex0, target.col);
   report.undone = undone;
@@ -106,16 +106,17 @@ async function run() {
   ok("1. siatka i wiersz pokazują starą wartość", undone.rowDisplay === before.rowDisplay && undone.td === before.td, { undone, before });
 
   // 2. ponów
-  await page.keyboard.press("Control+Shift+z");
+  await page.keyboard.press("ControlOrMeta+Shift+z");
   await sleep(250);
   const redone = await cellState(target.rowIndex0, target.col);
   ok("2. Ctrl+Shift+Z ponawia", redone.v === "ZZZ-test" && redone.pending && redone.td === "ZZZ-test", redone);
-  await page.keyboard.press("Control+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await sleep(200);
-  await page.keyboard.press("Control+y");
+  // Ctrl+Y = Ponów tylko poza Makiem (na Macu ⌘⇧Z; Control jest tam wolny — mac-keys-playwright)
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+Shift+z" : "Control+y");
   await sleep(200);
   const redoneY = await cellState(target.rowIndex0, target.col);
-  ok("2. Ctrl+Y też ponawia", redoneY.v === "ZZZ-test", redoneY);
+  ok("2. Ctrl+Y (poza Makiem) / ⌘⇧Z też ponawia", redoneY.v === "ZZZ-test", redoneY);
   // przycisk ↶ = to samo co skrót
   await page.click("#undoBtn");
   await sleep(250);
@@ -137,7 +138,7 @@ async function run() {
   const filled = await page.evaluate(({ idx, col }) => idx.map((i) => String(getDisplayValue(baseRows.find((r) => r.rowIndex0 === i), col) ?? "")), fill);
   ok("wypełnienie zadziałało (warunek testu)", filled.every((v) => v === fill.beforeVals[0]), { filled, fill });
   await page.evaluate(() => giveGridDomFocus && giveGridDomFocus());
-  await page.keyboard.press("Control+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await sleep(250);
   const unfilled = await page.evaluate(({ idx, col }) => idx.map((i) => String(getDisplayValue(baseRows.find((r) => r.rowIndex0 === i), col) ?? "")), fill);
   ok("3. „Wypełnij w dół” cofa się JEDNYM Ctrl+Z", JSON.stringify(unfilled) === JSON.stringify(fill.beforeVals), { unfilled, before: fill.beforeVals });
@@ -150,7 +151,7 @@ async function run() {
   // 5. Ctrl+Z w polu tekstowym nie rusza arkusza
   const beforeInput = await cellState(target.rowIndex0, target.col);
   await page.evaluate(() => { const i = document.getElementById("quickSearch"); document.getElementById("quickSearchWrap").classList.remove("hidden"); i.focus(); });
-  await page.keyboard.press("Control+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await sleep(200);
   const afterInput = await cellState(target.rowIndex0, target.col);
   ok("5. Ctrl+Z w polu tekstowym nie cofa arkusza", afterInput.v === beforeInput.v && afterInput.v === "nowe", afterInput);
@@ -165,7 +166,7 @@ async function run() {
   const otherBefore = await cellState(other.rowIndex0, other.col);
   await editCell(other.rowIndex0, other.col, "DO-COFNIECIA");
   await page.evaluate(() => giveGridDomFocus && giveGridDomFocus());
-  await page.keyboard.press("Control+z");
+  await page.keyboard.press("ControlOrMeta+z");
   await sleep(250);
   const saved = await page.evaluate(async ({ a, b }) => {
     const bytes = await buildOutputBytes("xlsx");

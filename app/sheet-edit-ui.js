@@ -621,11 +621,16 @@ var sheetEditUi = (() => {
     const trOverlay = document.getElementById("transcribeOverlay");
     if (trOverlay && !trOverlay.classList.contains("hidden")) return;
     if (document.querySelector(".modal:not(.hidden)")) return;
-    const meta = e.ctrlKey || e.metaKey;
+    const meta = swbMod(e);
+    const anyMod = e.ctrlKey || e.metaKey; // zwykły klawisz: bez Controla i ⌘
     if (e.key === "Escape" && painterFmt) { e.preventDefault(); stopPainter(); return; }
-    // Ctrl+D / Ctrl+R = wypełnij w dół / w prawo (kopia, jak w Excelu; autofill.js).
-    // Na Macu też ⌘D (Excel tak ma); ⌘R zostaje przeglądarce (odświeżanie).
-    if (!e.altKey && !e.shiftKey && (e.ctrlKey || (e.metaKey && e.code === "KeyD")) && (e.code === "KeyD" || e.code === "KeyR")) {
+    // Ctrl+D / Ctrl+R = wypełnij w dół / w prawo (kopia, jak w Excelu; autofill.js). Na Macu ⌘D / ⌘R
+    // jak w Excelu na Macu (Control wolny). ⌘R tylko przy aktywnej komórce w tabeli — poza nią
+    // przeglądarka dalej odświeża stronę (a przy niezapisanych zmianach pyta, bootstrap.js beforeunload).
+    // Na Macu tylko z fokusem w tabeli: po kliknięciu obok (fokus na <body>) ⌘R ma odświeżyć stronę,
+    // a ⌘D zostać przeglądarce — nie nadpisać po cichu komórki (przegląd kodu 2026-11-20)
+    const inGrid = !SWB_APPLE_KB || !!document.activeElement?.closest?.("#dataTable");
+    if (!e.altKey && !e.shiftKey && meta && inGrid && (e.code === "KeyD" || e.code === "KeyR")) {
       e.preventDefault();
       if (typeof swbFillCopy === "function") swbFillCopy(e.code === "KeyD" ? "down" : "right");
       return;
@@ -640,12 +645,12 @@ var sheetEditUi = (() => {
         return;
       }
     }
-    if (!meta && !e.altKey && (e.key === "Delete" || e.key === "Backspace")) {
+    if (!anyMod && !e.altKey && (e.key === "Delete" || e.key === "Backspace")) {
       e.preventDefault();
       cfmtClearContents();
       return;
     }
-    if (e.key === "F2" && !meta && !e.altKey) {
+    if (e.key === "F2" && !anyMod && !e.altKey) {
       const td = findCellElement(focusedCellState);
       if (td && typeof openCellEditor === "function") {
         e.preventDefault();

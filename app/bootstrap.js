@@ -644,7 +644,10 @@ document.addEventListener("keydown", (e) => {
   // Raport zakrywa tabelę (inert), ale fokus może spaść na <body> — wtedy litera,
   // strzałki czy Ctrl+V trafiały w niewidoczną komórkę pod nakładką.
   if (typeof rpIsOpen !== "undefined" && rpIsOpen) return;
-  const meta = e.ctrlKey || e.metaKey;
+  const meta = swbMod(e); // skróty apki: ⌘ na Macu (Control wolny), Ctrl gdzie indziej
+  // „zwykły klawisz” (pisanie, strzałki, Enter, /): bez żadnego Controla ani ⌘ — na Macu Control+litera
+  // nie wpisuje litery (to skróty systemu), więc nie może otwierać edytora komórki
+  const anyMod = e.ctrlKey || e.metaKey;
   const popupOpen = typeof isQuickSearchPopupOpen === "function"
     ? isQuickSearchPopupOpen()
     : !!(quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden"));
@@ -652,7 +655,7 @@ document.addEventListener("keydown", (e) => {
   // Popup szybkiego szukania ma priorytet: Enter = Szukaj (niezależnie od fokusu),
   // strzałki ↓/↑ = live wyniki, Esc obsługiwane niżej. Bez tego Enter na „luźnym"
   // fokusie otwierał edytor komórki zamiast szukać.
-  if (popupOpen && !meta && !e.altKey) {
+  if (popupOpen && !anyMod && !e.altKey) {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       // Tylko z pola szukania albo z samej listy trafień. Wcześniej ten warunek łapał
       // KAŻDY cel przy otwartej liście — więc ↓/↑ na <select> „Tryb"/„Akcja" nie
@@ -684,7 +687,7 @@ document.addEventListener("keydown", (e) => {
 
   // `/` — szybkie otwarcie popup szukania (gdy nie piszesz w polu/edytorze
   // i nie masz aktywnej komórki — wtedy `/` ma iść do edytora jak inny znak).
-  if (!popupOpen && !meta && !e.altKey && e.key === "/" && !shouldIgnoreTableArrowNavigation() && !focusedCellState) {
+  if (!popupOpen && !anyMod && !e.altKey && e.key === "/" && !shouldIgnoreTableArrowNavigation() && !focusedCellState) {
     if (currentHeaders.length && quickSearchPopupEl && quickSearchPopupInput) {
       e.preventDefault();
       openQuickSearchPopup();
@@ -700,7 +703,7 @@ document.addEventListener("keydown", (e) => {
     swbJumpToEdge(EDGE_DIR[e.key], e.shiftKey);
     return;
   }
-  if (!meta && !e.altKey && !shouldIgnoreTableArrowNavigation()) {
+  if (!anyMod && !e.altKey && !shouldIgnoreTableArrowNavigation()) {
     let handled = false;
     // UWAGA: `e.shiftKey` jest prawdziwe także dla samego klawisza Shift, więc bez tej
     // bramki gołe przytrzymanie Shifta zakładało zaznaczenie 1×1 i przełączało tryb
@@ -766,7 +769,7 @@ document.addEventListener("keydown", (e) => {
   // Jedyne wejście w tryb komórki bez myszy (Shift+klik wymaga wskaźnika), a przy
   // okazji zgodne z arkuszami, gdzie Shift+Space zaznacza wiersz. MUSI stać przed
   // gałęzią „znak drukowalny otwiera edytor" — spacja to też znak o długości 1.
-  if (!meta && !e.altKey && e.shiftKey && e.key === " "
+  if (!anyMod && !e.altKey && e.shiftKey && e.key === " "
     && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
     e.preventDefault();
     // Kierunek ustalamy PRZED przestawieniem — isCellSelectionMode() czyta już nową
@@ -787,7 +790,7 @@ document.addEventListener("keydown", (e) => {
   const plainKey = /^Key[A-Z]$/.test(e.code || "") && e.key.toLowerCase() === e.code.slice(3).toLowerCase();
   const altLetter = e.key.length === 1 && !e.metaKey && !(e.ctrlKey && e.altKey && plainKey)
     && (e.getModifierState?.("AltGraph") || (e.altKey && !e.ctrlKey) || (e.altKey && e.ctrlKey && /\p{L}/u.test(e.key)));
-  if (((!meta && !e.altKey) || altLetter) && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
+  if (((!anyMod && !e.altKey) || altLetter) && focusedCellState && !shouldIgnoreTableArrowNavigation()) {
     if (e.key === "Enter") {
       // Enter na zaznaczonej komórce = krok w dół, Shift+Enter w górę (jak w Excelu; edycja: F2, dwuklik
       // albo pisanie). Dawniej otwierał edytor — Enter + pisanie w ostatnim wierszu nadpisywało go
@@ -850,7 +853,7 @@ document.addEventListener("keydown", (e) => {
       return;
     }
   }
-  if (e.key === "F6" && !meta && !e.altKey) {
+  if (e.key === "F6" && !anyMod && !e.altKey) {
     if (cycleAppRegion(e.shiftKey ? -1 : 1)) {
       e.preventDefault();
       return;

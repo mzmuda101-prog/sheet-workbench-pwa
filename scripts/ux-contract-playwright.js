@@ -116,7 +116,7 @@ async function run() {
   await page.evaluate(() => document.querySelectorAll(".toast").forEach((x) => x.remove()));
 
   // 3. skróty
-  await page.keyboard.press(ENGINE_NAME === "webkit" ? "Meta+Slash" : "Control+Slash");
+  await page.keyboard.press("ControlOrMeta+Slash");
   await page.waitForSelector(".sc-dialog", { timeout: 3000 }).catch(() => {});
   const sc = await page.evaluate(() => {
     const d = document.querySelector(".sc-dialog");
@@ -146,7 +146,7 @@ async function run() {
   });
   check("3. Esc zamyka okno; panel Pomoc = ten sam rejestr; teksty PL i EN", reg.closed && reg.panelRows === reg.total && !reg.missing.length, reg);
   const before = await page.evaluate(() => document.documentElement.dataset.theme);
-  await page.keyboard.press(ENGINE_NAME === "webkit" ? "Meta+Alt+Slash" : "Control+Alt+Slash");
+  await page.keyboard.press("ControlOrMeta+Alt+Slash");
   const after = await page.evaluate(() => document.documentElement.dataset.theme);
   check("3. Ctrl/⌘+Alt+/ przełącza motyw", before !== after, { before, after });
   await page.evaluate(() => { localStorage.removeItem("excel-workbench-theme"); applyThemePref("system", false); });

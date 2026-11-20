@@ -90,7 +90,7 @@ async function run() {
   const dc = await p.evaluate(() => ({ expr: derivedColumns[0].expr, v: viewRows[0] && viewRows[0].display[currentHeaders.indexOf("Stan krótko")] }));
   check("2. kolumna wyliczana [Status] → [Stan zakresu] i liczy się dalej", dc.expr === "LEFT([Stan zakresu];3)" && typeof dc.v === "string" && dc.v.length === 3, dc);
 
-  await p.keyboard.press(ENGINE === "webkit" && process.platform === "darwin" ? "Meta+z" : "Control+z");
+  await p.keyboard.press("ControlOrMeta+z");
   await sleep(500);
   const s3 = await state(p);
   check("3. Cofnij przywraca nazwę razem z sortem i zapytaniem", s3.h === "Status" && s3.cell === "Status" && s3.sort === "Status" && s3.q.startsWith('Status:="W trakcie"'), s3);

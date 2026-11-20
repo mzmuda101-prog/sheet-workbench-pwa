@@ -465,7 +465,7 @@ const swbRibbon = (() => {
   // Ctrl/⌘+F1: Tylko karty ↔ Zawsze (jak w Excelu); Esc chowa wysunięte polecenia
   document.addEventListener("keydown", (e) => {
     if (!on) return;
-    if (e.key === "F1" && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+    if (e.key === "F1" && swbMod(e) && !e.altKey && !e.shiftKey) {
       e.preventDefault();
       setShow(prefs().show === "tabs" ? "pin" : "tabs");
     } else if (e.key === "Escape" && peek) setPeek(false);

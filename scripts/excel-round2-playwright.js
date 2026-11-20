@@ -242,17 +242,17 @@ async function run() {
 
   // Ctrl+D na pojedynczej komórce = kopia z komórki NAD nią (tekst zostaje tekstem)
   await pick(2, 5);
-  await page.keyboard.press("Control+d");
+  await page.keyboard.press("ControlOrMeta+d");
   await sleep(200);
   const f3 = await page.evaluate(() => workbook.Sheets.Fill.F3 && { t: workbook.Sheets.Fill.F3.t, v: workbook.Sheets.Fill.F3.v });
   ok("5. Ctrl+D: „007” skopiowane jako tekst „007” (nie liczba 7)", f3 && f3.t === "s" && f3.v === "007" && (await text(2, 5)) === "007", f3);
   await pick(2, 6);
-  await page.keyboard.press("Control+d");
+  await page.keyboard.press("ControlOrMeta+d");
   await sleep(200);
   const g3 = await page.evaluate(() => workbook.Sheets.Fill.G3?.f || null);
   ok("5. Ctrl+D: formuła z przesuniętym odwołaniem (=A3*2)", g3 === "A3*2", g3);
   await pick(1, 8);
-  await page.keyboard.press("Control+r");
+  await page.keyboard.press("ControlOrMeta+r");
   await sleep(200);
   ok("5. Ctrl+R: kopia z komórki po lewej", (await text(1, 8)) === "x", await text(1, 8));
 

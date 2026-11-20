@@ -1832,7 +1832,7 @@ const swbEntry = (() => {
       if (ui.panel) { togglePanel(ui.panel); overlay.querySelector("#enSettingsBtn")?.focus(); return; }
       close(); return;
     }
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    if (e.key === "Enter" && swbMod(e)) {
       e.preventDefault(); e.stopPropagation();
       if (ui.step === 2) toReview();
       else if (ui.step === 3) { const b = overlay.querySelector("#enCommitBtn"); if (b && !b.disabled) doCommit(); }

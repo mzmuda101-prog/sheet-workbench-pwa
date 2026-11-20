@@ -23,7 +23,7 @@ const rnd = () => ((s = (s * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 const pick = (a) => a[Math.floor(rnd() * a.length)];
 
 const TEXTS = ["abc", "Zażółć gęślą", "123", "-4,5", "=SUMA(A1:A3)", "2026-10-24", "<b>x</b>", "😀👍🏽", "  ", "\t", "x".repeat(300), "1e309", "#ADR!", "'quoted", "a\"b", "&amp;"];
-const KEYS = ["Escape", "Enter", "Tab", "Shift+Tab", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Backspace", "Delete", "Home", "End", "PageDown", "Control+z", "Control+y", "Meta+z", "Shift+ArrowRight", "Control+a", "F2"];
+const KEYS = ["Escape", "Enter", "Tab", "Shift+Tab", "ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Backspace", "Delete", "Home", "End", "PageDown", "ControlOrMeta+z", "ControlOrMeta+Shift+z", "Meta+z", "Shift+ArrowRight", "Control+a", "F2"];
 
 async function main() {
   const browser = await playwright[ENGINE].launch({ headless: true });
