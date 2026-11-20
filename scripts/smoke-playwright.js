@@ -47,7 +47,8 @@ async function run() {
     .locator("html")
     .evaluate((el) => el.classList.contains("sidebar-open"));
 
-  await page.locator("#panelHandle").tap({ force: true });
+  // etap 8 / 7c: uchwytu „Wysuń” na telefonie już nie ma — ta sama funkcja, którą wołał
+  await page.evaluate(() => toggleSidebar());
   await page.waitForTimeout(350);
 
   const openAfterClick = await page
@@ -79,7 +80,8 @@ async function run() {
     };
   });
 
-  await page.locator("#panelHandle").tap({ force: true });
+  // etap 8 / 7c: uchwytu „Wysuń” na telefonie już nie ma — ta sama funkcja, którą wołał
+  await page.evaluate(() => toggleSidebar());
   await page.waitForTimeout(350);
   const closedAfterSecondClick = await page
     .locator("html")
@@ -122,8 +124,8 @@ async function run() {
 
   const failures = [];
   if (closedAfterManualClose) failures.push("sidebar should close before the handle-open check");
-  if (!openAfterClick) failures.push("mobile handle should open the sidebar");
-  if (closedAfterSecondClick) failures.push("mobile handle should close the sidebar on second click");
+  if (!openAfterClick) failures.push("mobile sidebar toggle should open the sidebar");
+  if (closedAfterSecondClick) failures.push("mobile sidebar toggle should close the sidebar on second call");
   if (!serviceWorker.supported || !serviceWorker.active) failures.push("service worker should be active");
   if (errors.length) failures.push(`console/page errors: ${errors.join(" | ")}`);
 
