@@ -610,7 +610,7 @@ body.rb-classic .rb-cl .fmt-gcap[data-g="edit"] { grid-column: 14 / 17; }
 
 /* ── telefon z plikiem (etap 7a, makieta v2 „Telefon”; ribbon.js placePhone) ──────────────────────────
    Pasek u góry: ← · Cofnij · nazwa pliku i arkusz · Tryb · Zapisz (tylko przy zmianach) · ⋯.
-   Wymiary z makiety: góra 40 px, rząd Szukaj 40 px (przyciski w polu 32 px), dół 34 px — w każdym rzędzie
+   Wymiary: góra 40 px, rząd Szukaj 40 px (przyciski w polu 32 px), dół 40 px — w każdym rzędzie
    jedna oś i jedna wysokość (Mateusz: 44 px było za duże). Pasek pod wycięciem ekranu (safe area). */
 .ph-top[hidden] { display: none !important; }
 .ph-top {
@@ -658,12 +658,14 @@ body.ph-on .sheet-picker-fab { display: none !important; }
 body.ph-on .table-foot { flex-wrap: nowrap; }
 body.ph-on .table-foot > #sheetTabs { display: flex !important; flex: 0 1 auto; min-inline-size: 0; max-inline-size: 55%; padding: 0; background: none; border: 0; box-shadow: none; }
 body.ph-on .table-foot > #sheetTabs.hidden { display: none !important; }
-/* dolny pasek: jedna oś, 34 px (stary margines 8 px nad sumami spychał je w dół — jak na komputerze) */
-body.ph-on .table-foot { align-items: center; }
-body.ph-on .table-foot > :is(#sheetTabs, .cell-stats-bar) { block-size: 34px; margin-block: 0; padding-block: 0; align-items: center; }
-body.ph-on .table-foot > #sheetTabs .sheet-tab { block-size: 34px; }
+/* dolny pasek: jedna oś, 40 px (stary margines 8 px nad sumami spychał je w dół — jak na komputerze).
+   Mateusz na iPhonie: przy 34 px palec trafiał w kreskę systemu — wyżej i z lekkim odstępem od niej: nie cała
+   strefa kreski (34 px wyglądało jak dziura), tylko ok. 14 px (bez kreski 6 px). */
+body.ph-on .table-foot { align-items: center; padding-block-end: max(6px, calc(env(safe-area-inset-bottom, 0px) - 20px)); }
+body.ph-on .table-foot > :is(#sheetTabs, .cell-stats-bar) { block-size: 40px; margin-block: 0; padding-block: 0; align-items: center; }
+body.ph-on .table-foot > #sheetTabs .sheet-tab { block-size: 40px; }
 body.ph-on .table-foot > :is(#heroSheetBtn, #sheetTabs) { order: -2; }
-body.ph-on .table-foot > #heroSheetBtn { flex: none; margin: 0; block-size: 34px; min-inline-size: 40px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+body.ph-on .table-foot > #heroSheetBtn { flex: none; margin: 0; block-size: 40px; min-inline-size: 40px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 body.ph-on .table-foot > #heroSheetBtn[hidden] { display: none; }
 body.ph-on .table-foot > .add-row-btn, body.ph-on .table-foot > .status-badge { display: none; }
 @media (prefers-reduced-motion: reduce) {

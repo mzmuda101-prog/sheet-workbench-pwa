@@ -88,7 +88,7 @@ async function run() {
     const oneHeight = (list) => list.length > 1 && new Set(list.map((x) => x.h)).size === 1;
     check("2. góra: jedna oś, przyciski 40 px (makieta)", oneAxis(rows.top) && rows.top.every((x) => x.h === 40 || x.id === "rbModeBtn"), rows.top);
     check("2. rząd Szukaj: jedna oś i jedna wysokość", oneAxis(rows.search) && oneHeight(rows.search), rows.search);
-    check("2. dolny pasek: jedna oś i jedna wysokość", oneAxis(rows.foot) && oneHeight(rows.foot), rows.foot);
+    check("2. dolny pasek: jedna oś i jedna wysokość, 40 px (łatwo złapać palcem, iPhone Mateusza)", oneAxis(rows.foot) && oneHeight(rows.foot) && rows.foot[0].h === 40, rows.foot);
     const qsFont = await page.evaluate(() => parseFloat(getComputedStyle(document.getElementById("quickSearch")).fontSize));
     check("2. Szukaj ≥ 16 px (bez powiększania strony na iPhonie)", qsFont >= 16, qsFont);
 
