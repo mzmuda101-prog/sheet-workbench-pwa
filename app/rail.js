@@ -23,7 +23,8 @@ const swbRail = (() => {
   let current = null; // { key, panels, title }
   let releaseTimer = 0;
 
-  const ribbonOn = () => document.body.classList.contains("rb-on");
+  // etap 7c: telefon z plikiem (body.ph-on) — ten sam tryb jednego panelu, panel na cały ekran (CSS)
+  const ribbonOn = () => document.body.classList.contains("rb-on") || document.body.classList.contains("ph-on");
   const isOpen = () => root.classList.contains("sidebar-open");
   const docked = () => typeof appFrame !== "undefined" && appFrame.isDocked && appFrame.isDocked();
   const panelTitle = (id) => document.getElementById(id)?.querySelector("summary .panel-title")?.textContent.trim() || "";
@@ -143,5 +144,13 @@ const swbRail = (() => {
   if (isOpen()) restoreLast();
   labels();
 
-  return { show, close, labels, current: () => current };
+  // pasek telefonu włącza się / wyłącza (ribbon.js placePhone) — jak przy wstążce
+  document.addEventListener("swb:phone", () => { if (!ribbonOn()) current = null; apply(); });
+  // Filtry (rząd Szukaj na telefonie) — ten sam zestaw co przycisk Filtry szyny
+  function showKey(k) {
+    if (!RAIL[k]) return;
+    if (isOpen() && current?.key === k) { close(); return; }
+    show(RAIL[k].panels, { key: k, title: RAIL[k].title });
+  }
+  return { show, showKey, close, labels, current: () => current };
 })();

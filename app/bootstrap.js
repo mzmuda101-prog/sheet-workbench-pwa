@@ -471,7 +471,8 @@ document.addEventListener("click", (e) => {
   if (panelToggle && panelToggle.contains(e.target)) return;
   if (panelHandle && panelHandle.contains(e.target)) return;
   // szyna i wstążka (rail.js, ribbon.js) same otwierają panel — ich klik go nie zamyka
-  if (e.target.closest && e.target.closest("#sidebarRail, #ribbon")) return;
+  // telefon (etap 7b/7c): rząd poleceń, arkusz kart i ⋯ też otwierają panele
+  if (e.target.closest && e.target.closest("#sidebarRail, #ribbon, #phBottom, #phSheet, #appMenu")) return;
   if (columnPickerEl && !columnPickerEl.classList.contains("hidden") && columnPickerEl.contains(e.target)) return;
   if (quickSearchPopupEl && !quickSearchPopupEl.classList.contains("hidden") && quickSearchPopupEl.contains(e.target)) return;
   setSidebarOpen(false);

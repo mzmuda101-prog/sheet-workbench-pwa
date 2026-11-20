@@ -20,7 +20,7 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 | 4 | Dolny pasek | Karty arkuszy (z kolorem karty z pliku, przewijane), Widoczne X/Y, Średnia / Liczba / Suma zaznaczenia, powiększenie. | v1.07.00 (PR #19) |
 | 5 | Mini pasek | Nad zaznaczeniem myszą (pod nim, gdy brak miejsca): B, wypełnienie, format liczb, Σ, Filtruj wg wartości, Notatka, Wyjaśnij. Klawiatura i dotyk bez paska. | v1.08.00 |
 | 6 | Opcje wstążki (6a pokazywanie i gęstość, 6b Klasyczna) | Klasyczna / Uproszczona, Zawsze / Chowaj przy przewijaniu / Tylko karty (Ctrl+F1), gęstość Mysz / Dotyk, gęstość wierszy z Automatyczną. | 6a: v1.09.00 · 6b: v1.10.00 |
-| 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. Trzy części: 7a góra, 7b dół, 7c panele na cały ekran. | 7a: v1.11.00 · 7b: v1.12.00 |
+| 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. Trzy części: 7a góra, 7b dół, 7c panele na cały ekran. | 7a: v1.11.00 · 7b: v1.12.00 · 7c: v1.13.00 |
 
 ## Do decyzji Mateusza (domyślnie — jak w makiecie)
 
@@ -230,4 +230,15 @@ zestawu), rząd zawsze w Edycji, pasek „Kopiuj / Wklej / Wypełnij” znika (m
 
 Test: `scripts/phone-bottom-playwright.js` (Chromium + WebKit). Na prawdziwym iPhonie: rząd poleceń nad
 klawiaturą przy edycji komórki, arkusz kart, czy rząd nie jest za nisko przy kresce systemu.
+
+## Etap 7c — co weszło (panele na cały ekran na telefonie; v1.13.00)
+
+- Telefon z plikiem: panele otwierają się po jednym na cały ekran (ten sam tryb jednego panelu co szyna
+  na komputerze, `app/rail.js`), z ← u góry (przycisk „Schowaj panel”) i tytułem. Wjazd z prawej.
+- Znikają: uchwyt „Wysuń”, „Znajdź ustawienie…”, zakładki grup i pinezka (bez pliku zostają jak dotąd).
+- Filtry (rząd Szukaj) otwiera panel filtrów; licznik działających filtrów zostaje.
+- Szyna na kartach: Sortowanie i Sprawdzanie na Danych, Formuły na Formułach (na komputerze dalej szyna).
+- Linki z ekranu Plik: Wczytywanie (arkusz i nagłówek), Skróty wyszukiwania, Dziennik zdarzeń — w ⋯.
+
+Test: `scripts/phone-panels-playwright.js`. `drawer-tabs-playwright.js` sprawdza zakładki grup bez pliku.
 

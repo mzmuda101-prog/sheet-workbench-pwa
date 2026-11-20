@@ -168,7 +168,9 @@ async function run() {
   });
   check("6. kolumna tabeli Excela zablokowana z wyjaśnieniem", !t6.ok && t6.after === t6.before && /opracowanie_terenow/.test(t6.reason || ""), t6);
   await p.click('#dataTable thead tr.header-row th[data-col-index="0"]', { button: "right" });
-  await sleep(300);
+  // czekamy na menu, nie stałe 300 ms — w pełnym przebiegu (2 testy naraz) menu bywało jeszcze puste
+  await p.waitForSelector("#cellMenu .cmi-hdr-rename", { timeout: 5000 }).catch(() => {});
+  await sleep(100);
   const m6 = await p.evaluate(() => ({ dis: document.querySelector("#cellMenu .cmi-hdr-rename")?.getAttribute("aria-disabled"), note: document.querySelector("#cellMenu .cell-menu-note")?.textContent || "" }));
   check("6. menu: pozycja wyszarzona + powód pod nią", m6.dis === "true" && /tabeli Excela/.test(m6.note), m6);
   check("tabela: bez błędów strony", errs6.length === 0, errs6);

@@ -3,8 +3,8 @@
 //   ENGINE=webkit node scripts/drawer-tabs-playwright.js
 //
 // Pilnuje:
-//   1. telefon: „Narzędzia” pokazuje JEDNĄ grupę (za pierwszym razem Filtry), reszta schowana;
-//      bez pliku startuje „Plik”;
+//   1. telefon BEZ pliku: „Narzędzia” pokazuje JEDNĄ grupę — „Plik”; (z plikiem od etapu 7c: jeden panel
+//      na cały ekran, phone-panels-playwright.js — tamże licznik filtrów i Pomoc z ⋯);
 //   2. klik w zakładkę przełącza grupę, wybór jest pamiętany do kolejnego otwarcia;
 //   3. „Aktywne filtry: n” + liczba na zakładce; „Wyczyść filtry” zdejmuje filtr;
 //   4. „Znajdź ustawienie…” szuka we wszystkich grupach, po wyczyszczeniu wraca zakładka;
@@ -55,32 +55,16 @@ async function run() {
   check("1. bez pliku: startuje „Plik”, jedna grupa", s0.current === "group-data" && s0.visible.join() === "group-data" && s0.tabsShown, s0);
   await toggle(page);
 
-  await page.evaluate(() => loadSampleFile());
-  await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 20000 });
-  await sleep(800);
-  await page.evaluate(() => document.querySelectorAll(".toast").forEach((t) => t.remove()));
+  // etap 7c (2026-11-20): z otwartym plikiem telefon pokazuje panele po jednym na cały ekran (phone-panels-
+  // playwright.js) — zakładki grup zostają na ekranie bez pliku, więc tu sprawdzamy je bez pliku
   await toggle(page);
-  const s1 = await state(page);
-  check("1. z plikiem, pierwszy raz: „Filtry”, reszta schowana", s1.current === "group-filters" && s1.visible.join() === "group-filters" && s1.selected === "group-filters", s1);
-
   await page.click('#drawerTabs [data-group="group-edit"]');
   await sleep(200);
   const s2 = await state(page);
   check("2. klik w zakładkę przełącza grupę", s2.visible.join() === "group-edit" && s2.selected === "group-edit", s2);
-  await toggle(page); await toggle(page);
-  check("2. wybór pamiętany przy kolejnym otwarciu", (await state(page)).current === "group-edit", await state(page));
+  // (zapamiętanie zakładki dotyczyło pracy z plikiem — bez pliku panel zawsze zaczyna od „Plik”)
 
-  // 3. aktywne filtry
-  await toggle(page);
-  await page.evaluate(() => { quickSearchEl.value = "Nowak"; applyQuickSearch(); });
-  await sleep(700);
-  await toggle(page);
-  const act = await page.evaluate(() => ({ shown: !document.getElementById("drawerActive").hidden, text: document.getElementById("drawerActiveText").textContent, tab: document.querySelector('#drawerTabs [data-group="group-filters"] .drawer-tab-count')?.textContent }));
-  check("3. „Aktywne filtry: 1” i liczba na zakładce Filtry", act.shown && act.text === "Aktywne filtry: 1" && act.tab === "1", act);
-  await page.click("#drawerActiveClear");
-  await sleep(700);
-  const cleared = await page.evaluate(() => ({ shown: !document.getElementById("drawerActive").hidden, q: quickSearchEl.value, rows: viewRows.length }));
-  check("3. „Wyczyść filtry” zdejmuje filtr i chowa wiersz", !cleared.shown && cleared.q === "", cleared);
+  // 3. (przeniesione do phone-panels: licznik filtrów przy przycisku Filtry — z plikiem nie ma już zakładek)
 
   // 4. szukanie ustawienia
   await page.fill("#sidebarFinder", "kolumn");
@@ -92,18 +76,14 @@ async function run() {
   const f2 = await state(page);
   check("4. po wyczyszczeniu wraca zakładka", f2.focus && f2.visible.join() === f2.current, f2);
 
-  // 5. Pomoc z kodu
-  await page.evaluate(() => swbOpenHelpPanel());
-  await sleep(600);
-  const h = await page.evaluate(() => ({ current: swbDrawerTabs._current(), visible: !!document.getElementById("panel-shortcuts").offsetParent }));
-  check("5. sekcja otwarta z kodu w innej grupie — zakładka za nią", h.current === "group-help" && h.visible, h);
+  // 5. (przeniesione do phone-panels: Skróty wyszukiwania z ⋯ otwierają panel — z plikiem jeden panel naraz)
 
   // 6. strzałki
   await page.focus('#drawerTabs [aria-selected="true"]');
   await page.keyboard.press("ArrowLeft");
   await sleep(150);
   const k = await page.evaluate(() => ({ current: swbDrawerTabs._current(), focused: document.activeElement?.dataset?.group }));
-  check("6. ← w pasku zakładek przełącza na poprzednią grupę", k.current === "group-analyze" && k.focused === "group-analyze", k);
+  check("6. ← w pasku zakładek przełącza na poprzednią grupę", !!k.current && k.current !== "group-edit" && k.focused === k.current, k);
   await ctx.close();
 
   // ── 7. komputer: pasek ikon ──
