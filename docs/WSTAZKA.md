@@ -242,3 +242,18 @@ klawiaturą przy edycji komórki, arkusz kart, czy rząd nie jest za nisko przy 
 
 Test: `scripts/phone-panels-playwright.js`. `drawer-tabs-playwright.js` sprawdza zakładki grup bez pliku.
 
+## Etap 8 — co weszło (ekran startowy jak w Documents Workbench; v1.14.00)
+
+Dodany przez Mateusza 2026-11-20 jako końcowy (przed kartą Tabela). Decyzje: karty „Zobacz na przykładzie”
+zostają (mniejsze), bez „Przewodnika”, tytuł „Otwórz arkusz”.
+- **Bez pliku** (`body.swb-nofile`, ribbon.js): na komputerze logo · Plik · „Sheet Workbench” · ⋯ — bez kart,
+  poleceń, szukania, trybu, szyny i dolnego paska; na telefonie karta z nazwą i ⋯, bez klucza i „Wysuń”.
+- **Środek**: kafelek z ikoną, „Otwórz arkusz” (28 px), jedno zdanie o prywatności, „Otwórz plik…” (główny),
+  „Nowy skoroszyt”, „Przykładowy plik” (na telefonie główny na całą szerokość, dwa pod nim), ostatnie pliki,
+  „albo przeciągnij plik w dowolne miejsce okna” (bez tego na dotyku).
+- **Przeciąganie** pliku w dowolne miejsce okna (bootstrap.js; jak app-frame.js w Documents).
+- **Ustaw jako arkusz startowy** (prawy klik / przytrzymanie na karcie arkusza i w liście arkuszy): activeTab
+  + jedno tabSelected w pliku — Excel otwiera plik na tym arkuszu (sprawdzone w Excelu 2026-11-20).
+
+Testy: `scripts/start-screen-playwright.js`, `scripts/start-sheet-playwright.js`.
+

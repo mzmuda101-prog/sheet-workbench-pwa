@@ -3519,24 +3519,22 @@ details.panel[open] > summary {
   min-height: 280px;
 }
 
+/* Ekran startowy (etap 8, 2026-11-20) — jak w Documents Workbench: kafelek z ikoną, tytuł wyraźnie większy
+   niż tekst (28 px wobec 14 px), jedno zdanie o prywatności. Komunikaty „w pliku” (in-file) zostają spokojne. */
 .empty-icon {
-  line-height: 0;
-  color: var(--placeholder);
-  margin-bottom: 4px;
+  inline-size: 56px; block-size: 56px; border-radius: 16px; display: grid; place-items: center;
+  background: var(--accent-light); color: var(--accent); margin-bottom: 6px;
 }
-
-.empty-title {
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--ink-2);
-}
-
-.empty-sub {
-  font-size: 12.5px;
-  color: var(--muted);
-  max-width: 260px;
-  line-height: 1.6;
-}
+.empty-title { margin: 0; font-size: 28px; line-height: 1.15; letter-spacing: -0.01em; font-weight: 700; color: var(--ink); }
+.empty-sub { margin: 0; font-size: 14px; color: var(--muted); max-width: 44ch; line-height: 1.45; }
+.empty-state.in-file .empty-icon { background: none; color: var(--placeholder); }
+.empty-state.in-file .empty-title { font-size: 14.5px; font-weight: 600; color: var(--ink-2); }
+.empty-state.in-file .empty-sub { font-size: 12.5px; max-width: 260px; }
+.empty-drop-hint { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); }
+.empty-state.in-file .empty-drop-hint { display: none; }
+@media (pointer: coarse) { .empty-drop-hint { display: none; } } /* na dotyku nie ma przeciągania */
+/* całe okno przyjmuje upuszczony plik (bootstrap.js) — widać to obwódką ekranu startowego */
+body.drag-active .empty-state:not(.hidden) { outline: 2px dashed var(--accent); outline-offset: -12px; border-radius: 18px; }
 
 /* Odzyskiwanie niezapisanej pracy (drafts.js) — karta na ekranie startowym */
 .draft-recovery { display: flex; flex-direction: column; gap: 8px; width: min(440px, 100%); margin: 10px auto 2px; }
@@ -3562,14 +3560,22 @@ details.panel[open] > summary {
   gap: 8px;
   margin-top: 14px;
 }
+.empty-actions .btn { min-block-size: 44px; padding-inline: 18px; font-size: 14px; }
+.empty-actions .btn.ghost { color: var(--ink); background: var(--panel); }
+/* telefon (jak Documents): główny przycisk na całą szerokość, reszta pod nim w równych kafelkach */
+@media (max-width: 600px) {
+  .empty-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); inline-size: min(360px, 100%); }
+  .empty-actions > #emptyOpenBtn { grid-column: 1 / -1; min-block-size: 50px; }
+  .empty-actions .btn.ghost { flex-direction: column; gap: 4px; min-block-size: 64px; padding: 8px; font-size: 13px; white-space: normal; }
+}
 
 /* S10: przykłady pod przyciskami pustego ekranu */
 .empty-examples {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  width: min(620px, 100%);
-  margin: 18px auto 0;
+  width: min(560px, 100%);
+  margin: 22px auto 0;
 }
 .empty-examples-cap {
   grid-column: 1 / -1;
@@ -3595,7 +3601,7 @@ details.panel[open] > summary {
   -webkit-tap-highlight-color: transparent;
   transition: border-color var(--t), background var(--t);
 }
-.empty-example-title { font-size: 13px; font-weight: 650; color: var(--accent); }
+.empty-example-title { font-size: 12.5px; font-weight: 650; color: var(--accent); }
 .empty-example-sub { font-size: 11.5px; line-height: 1.35; color: var(--muted); }
 .empty-example:disabled { opacity: .6; cursor: progress; }
 .empty-example:focus-visible { outline: none; border-color: var(--border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }

@@ -291,6 +291,24 @@ const swbSheetOps = (() => {
     return to;
   }
 
+  // „Ustaw jako arkusz startowy” (Mateusz 2026-11-20): Excel otwiera plik na tym arkuszu — activeTab w workbook.xml
+  // i jedno tabSelected (wyrocznia Excela 2026-11-20: activeTab=2 + tabSelected na 3. arkuszu → otwarty „Trzeci”).
+  async function setStartSheet(zip, { name }) {
+    const info = await workbookInfo(zip);
+    const idx = info.sheets.findIndex((s) => s.name === name);
+    if (idx < 0) throw new Error("brak arkusza");
+    if (info.sheets[idx].state && info.sheets[idx].state !== "visible") throw new Error("sheetStartHidden");
+    write(zip, "xl/workbook.xml", await setActive(zip, info.wb, info.sheets, idx));
+    return name;
+  }
+  // Arkusz, na którym Excel otworzy plik (activeTab), albo pierwszy.
+  function startSheetName(wbXml) {
+    const view = /<(?:[\w-]+:)?workbookView\b[^>]*>/.exec(wbXml || "");
+    const n = view ? Number(attr(view[0], "activeTab") || 0) : 0;
+    const tags = sheetTags(wbXml || "");
+    return (tags[n] || tags[0] || {}).name || "";
+  }
+
   // Usunięcie arkusza wraz z częściami, do których prowadzi tylko on (tabele, notatki, rysunki…).
   // Zwraca nazwę arkusza, który staje się aktywny (sąsiad z prawej, jak w Excelu, albo z lewej).
   async function deleteSheet(zip, { name }) {
@@ -451,7 +469,7 @@ const swbSheetOps = (() => {
     });
   }
 
-  return { nameProblem, nextName, quoteName, rewriteFormula, rewriteXmlFormulas, addSheet, renameSheet, deleteSheet, newWorkbook, workbookInfo, addTable, tableColumnNames };
+  return { nameProblem, nextName, quoteName, rewriteFormula, rewriteXmlFormulas, addSheet, renameSheet, deleteSheet, setStartSheet, startSheetName, newWorkbook, workbookInfo, addTable, tableColumnNames };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = swbSheetOps;

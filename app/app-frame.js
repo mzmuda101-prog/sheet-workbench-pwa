@@ -247,6 +247,54 @@ const appFrame = (() => {
     window.addEventListener("resize", () => closeSheetMenu(false), { passive: true });
   }
 
+  // Menu karty arkusza (Mateusz 2026-11-20): prawy klik albo przytrzymanie palcem na karcie → polecenia dla
+  // TEGO arkusza (Ustaw jako arkusz startowy, Nowy, Zmień nazwę, Usuń) — ta sama lista co pod nazwą arkusza.
+  function openSheetTabMenu(tab, name) {
+    if (typeof swbSheetOpsUi === "undefined" || !name) return;
+    const items = swbSheetOpsUi.menuActions(() => closeSheetMenu(false), "app-menu-item", name).filter((el) => !el.classList.contains("app-menu-sep"));
+    const cap = document.createElement("div");
+    cap.className = "app-menu-cap";
+    cap.textContent = name;
+    sheetMenu.setAttribute("aria-label", t("sheetTabMenu", { name }));
+    sheetMenu.replaceChildren(cap, ...items);
+    const r = tab.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const width = Math.min(280, vw - 16);
+    sheetMenu.style.width = `${width}px`;
+    sheetMenu.style.left = `${Math.round(Math.max(8, Math.min(vw - width - 8, r.left)))}px`;
+    sheetMenu.style.maxHeight = "";
+    sheetMenu.style.top = `${Math.round(r.bottom + 6)}px`;
+    sheetMenu.hidden = false;
+    // karty stoją na dole — menu otwiera się w górę, gdy pod nimi brak miejsca
+    if (r.bottom + 6 + sheetMenu.offsetHeight > window.innerHeight - 8) sheetMenu.style.top = `${Math.round(Math.max(8, r.top - 6 - sheetMenu.offsetHeight))}px`;
+    items[0]?.focus({ preventScroll: true });
+  }
+  if (typeof sheetTabsEl !== "undefined" && sheetTabsEl) {
+    const tabOf = (e) => e.target.closest?.(".sheet-tab[data-sheet]");
+    sheetTabsEl.addEventListener("contextmenu", (e) => {
+      const tab = tabOf(e);
+      if (!tab) return;
+      e.preventDefault();
+      openSheetTabMenu(tab, tab.dataset.sheet);
+    });
+    // iOS nie wysyła contextmenu przy przytrzymaniu — liczymy sami (0,5 s, bez przesunięcia palca)
+    let hold = 0, holdXY = null, held = false;
+    sheetTabsEl.addEventListener("pointerdown", (e) => {
+      const tab = tabOf(e);
+      held = false;
+      if (!tab || e.pointerType === "mouse") return;
+      holdXY = [e.clientX, e.clientY];
+      clearTimeout(hold);
+      hold = setTimeout(() => { held = true; openSheetTabMenu(tab, tab.dataset.sheet); }, 500);
+    });
+    const cancelHold = () => { clearTimeout(hold); holdXY = null; };
+    sheetTabsEl.addEventListener("pointermove", (e) => { if (holdXY && Math.hypot(e.clientX - holdXY[0], e.clientY - holdXY[1]) > 8) cancelHold(); });
+    sheetTabsEl.addEventListener("pointerup", cancelHold);
+    sheetTabsEl.addEventListener("pointercancel", cancelHold);
+    // po przytrzymaniu puszczenie palca nie przełącza arkusza
+    sheetTabsEl.addEventListener("click", (e) => { if (held) { held = false; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+  }
+
   // ── Zapisz ─────────────────────────────────────────────────────────────────
   function pendingCount() {
     if (typeof pendingEdits === "undefined" || !pendingEdits) return 0;

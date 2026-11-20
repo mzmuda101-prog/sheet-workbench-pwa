@@ -22,6 +22,7 @@ const swbSheetOpsUi = (() => {
     plus: '<path d="M12 5v14M5 12h14"/>',
     pencil: '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>',
     trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+    flag: '<path d="M4 22V4a1 1 0 0 1 1-1h12l-2 4 2 4H5"/>',
   };
   function icon(name) {
     const s = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -195,8 +196,26 @@ const swbSheetOpsUi = (() => {
     return apply((zip) => swbSheetOps.deleteSheet(zip, { name }), () => t("sheetDeleted", { name }));
   }
 
-  // Pozycje na dole listy arkuszy (menu pod nazwą arkusza i lista od dołu na telefonie).
-  function menuActions(close, itemClass) {
+  // „Ustaw jako arkusz startowy” (Mateusz 2026-11-20): Excel otworzy plik na tym arkuszu (po zapisaniu).
+  // W apce zostajemy na bieżącym arkuszu.
+  async function setStartSheet(name = currentSheetName) {
+    if (!workbook || !name || !originalFileBytes) return false;
+    try {
+      const zip = await JSZip.loadAsync(await currentBytes());
+      if (swbSheetOps.startSheetName(await zip.file("xl/workbook.xml")?.async("string")) === name) {
+        toast(t("sheetStartAlready", { name }), "info");
+        return false;
+      }
+    } catch { /* sprawdzenie pomocnicze — operacja i tak sprawdzi plik */ }
+    const stay = currentSheetName;
+    return apply(async (zip) => { await swbSheetOps.setStartSheet(zip, { name }); return stay; }, () => t("sheetStartSet", { name }));
+  }
+
+  // Pozycje na dole listy arkuszy (menu pod nazwą arkusza i lista od dołu na telefonie) oraz menu karty
+  // arkusza (prawy klik / przytrzymanie) — wtedy `name` to arkusz z karty, nie bieżący.
+  function menuActions(close, itemClass, name = null) {
+    // bez `name` (lista arkuszy) — bieżący arkusz W CHWILI KLIKNIĘCIA; lista na telefonie buduje się raz przy wczytaniu
+    const target = () => name || currentSheetName;
     const make = (id, label, ico, run, danger) => {
       const b = document.createElement("button");
       b.type = "button";
@@ -215,9 +234,10 @@ const swbSheetOpsUi = (() => {
     sep.setAttribute("role", "separator");
     return [
       sep,
+      make("start", t("sheetStartItem"), "flag", () => setStartSheet(target())),
       make("add", t("sheetAdd"), "plus", addSheet),
-      make("rename", t("sheetRenameItem"), "pencil", () => renameSheet()),
-      make("delete", t("sheetDeleteItem"), "trash", () => deleteSheet(), true),
+      make("rename", t("sheetRenameItem"), "pencil", () => renameSheet(target())),
+      make("delete", t("sheetDeleteItem"), "trash", () => deleteSheet(target()), true),
     ];
   }
 
@@ -341,7 +361,7 @@ const swbSheetOpsUi = (() => {
     return { s: { r: idx[0], c: currentStartCol + rect.colMin }, e: { r: idx[idx.length - 1], c: currentStartCol + Math.min(rect.colMax, real - 1) } };
   }
 
-  return { newWorkbook, addSheet, renameSheet, deleteSheet, formatAsTable, fileStep, menuActions, init, isBusy: () => busy };
+  return { newWorkbook, addSheet, renameSheet, deleteSheet, setStartSheet, formatAsTable, fileStep, menuActions, init, isBusy: () => busy };
 })();
 
 document.addEventListener("DOMContentLoaded", () => swbSheetOpsUi.init());

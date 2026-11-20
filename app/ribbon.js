@@ -210,7 +210,20 @@ const swbRibbon = (() => {
     place(desk);
     if (!desk) placePhone(hasFile());
   }
-  if (heroEl) new MutationObserver(() => { if (!deskMq.matches) placePhone(hasFile()); }).observe(heroEl, { attributes: true, attributeFilter: ["class"] });
+  // bez pliku (etap 8): ekran startowy jak w Documents — wstążka i paski chowają polecenia (CSS: body.swb-nofile)
+  const syncNoFile = () => {
+    const was = document.body.classList.contains("swb-nofile");
+    const now = !hasFile();
+    if (was === now) return;
+    document.body.classList.toggle("swb-nofile", now);
+    // wstążka zmienia wysokość (rząd poleceń znika / wraca) — przypięty panel i tabela liczą się od nowa
+    requestAnimationFrame(() => {
+      if (typeof onViewportChange === "function") onViewportChange();
+      window.dispatchEvent(new Event("resize"));
+    });
+  };
+  syncNoFile();
+  if (heroEl) new MutationObserver(() => { syncNoFile(); if (!deskMq.matches) placePhone(hasFile()); }).observe(heroEl, { attributes: true, attributeFilter: ["class"] });
   const sheetNameEl = document.getElementById("heroSheetName");
   if (sheetNameEl) new MutationObserver(syncPhName).observe(sheetNameEl, { childList: true, characterData: true, subtree: true });
 
