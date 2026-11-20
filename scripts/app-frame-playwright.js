@@ -578,7 +578,8 @@ async function run() {
     await new Promise((r) => setTimeout(r, 100));
     return {
       docW: document.documentElement.scrollWidth, vw: innerWidth,
-      leftW: Math.round(document.querySelector(".hero-left").getBoundingClientRect().width),
+      // etap 7a: na telefonie z plikiem nazwa stoi w pasku u góry (#phName), duża karta jest schowana
+      leftW: Math.round((document.querySelector("body.ph-on #phName") || document.querySelector(".hero-left")).getBoundingClientRect().width),
       title: document.getElementById("heroTitle").textContent,
       overflowing: actions.scrollWidth > actions.clientWidth + 1,
       fadeR: actions.classList.contains("more-r"),
@@ -593,9 +594,12 @@ async function run() {
     await sleep(400);
     const on = await qsWideState(page);
     check("Q5. telefon: tapnięcie w szukanie → Aa/🔧/▾ się zsuwają, pole do krawędzi", on.wide && /panelToggle/.test(on.yielded) && /toolbarToggle/.test(on.yielded) && on.visibleYielded === 0 && on.gapRight <= 12, JSON.stringify(on));
-    await page.tap("#quickSearchBtn");
+    // etap 7a: lupa schowana na telefonie z plikiem (szuka klawisz „Szukaj”) — przycisk w polu to teraz ✦
+    await page.tap("#qsMoreBtn");
     await sleep(200);
-    check("Q6. telefon: lupa w polu nie zwija (iOS nie daje fokusu przyciskom)", (await qsWideState(page)).wide, "");
+    check("Q6. telefon: przycisk w polu nie zwija (iOS nie daje fokusu przyciskom)", (await qsWideState(page)).wide, "");
+    await page.tap("#qsMoreBtn");
+    await sleep(200);
     await page.tap("#dataTable tbody tr[data-row-key] td[data-col-index='1']");
     await sleep(450);
     const off = await qsWideState(page);

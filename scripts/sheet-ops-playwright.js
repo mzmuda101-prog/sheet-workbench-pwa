@@ -61,6 +61,10 @@ async function run() {
   const openSheetList = async () => {
     // telefon: nagłówek zwija się przy pracy w tabeli — jak użytkownik, najpierw rozwijamy go uchwytem
     if (await p.evaluate(() => document.body.classList.contains("hero-collapsed"))) { await tap("#heroGrip"); await sleep(500); }
+    // telefon z plikiem (etap 7a): przycisk listy arkuszy jest na dole — otwarty od dołu „Aa” go zasłania,
+    // więc jak użytkownik najpierw „Gotowe”
+    // (pasek formatu bez zaznaczenia ma aria-disabled — Playwright nie stuka w nic pod nim, palec tak)
+    if (await p.evaluate(() => { const d = document.querySelector(".fmt-sheet-host .fmt-sheet-done"); if (!d || !d.offsetParent) return false; d.click(); return true; })) await sleep(350);
     await tap("#heroSheetBtn");
     await p.waitForSelector(TOUCH ? "#sheetPickerOverlay.open .sheet-op-item" : "#sheetMenu:not([hidden]) .sheet-op-item", { timeout: 5000 });
     await sleep(350);

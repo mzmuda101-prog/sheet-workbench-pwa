@@ -452,9 +452,9 @@ body.rb-on .table-foot > #sheetTabs {
 }
 body.rb-on .table-foot > #sheetTabs.hidden { display: none; }
 /* kilka arkuszy: nazwa jest na karcie — przycisk listy to sama ikona (nazwa zostaje w aria-label) */
-body.rb-on .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn { inline-size: 28px; padding: 0; justify-content: center; }
-body.rb-on .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn > :is(.hero-sheet-name, .hero-sheet-caret) { display: none; }
-body.rb-on .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn::before {
+body:is(.rb-on, .ph-on) .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn { inline-size: 28px; padding: 0; justify-content: center; }
+body:is(.rb-on, .ph-on) .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn > :is(.hero-sheet-name, .hero-sheet-caret) { display: none; }
+body:is(.rb-on, .ph-on) .table-foot:has(> #sheetTabs:not(.hidden)) > #heroSheetBtn::before {
   content: ""; inline-size: 16px; block-size: 16px; background: currentColor;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01'/%3E%3C/svg%3E") center / contain no-repeat;
@@ -607,3 +607,66 @@ body.rb-classic .rb-cl #fmtClearBtn { grid-area: 2 / 14; }
 body.rb-classic .rb-cl :is(#fmtPainterBtn, #fmtClearBtn) { justify-content: flex-start; gap: 6px; }
 body.rb-classic .rb-cl :is(#fmtPainterBtn, #fmtClearBtn) .fmt-cl-t { display: inline; font-size: 12px; white-space: nowrap; }
 body.rb-classic .rb-cl .fmt-gcap[data-g="edit"] { grid-column: 14 / 17; }
+
+/* ── telefon z plikiem (etap 7a, makieta v2 „Telefon”; ribbon.js placePhone) ──────────────────────────
+   Pasek u góry: ← · Cofnij · nazwa pliku i arkusz · Tryb · Zapisz (tylko przy zmianach) · ⋯.
+   Wymiary z makiety: góra 40 px, rząd Szukaj 40 px (przyciski w polu 32 px), dół 34 px — w każdym rzędzie
+   jedna oś i jedna wysokość (Mateusz: 44 px było za duże). Pasek pod wycięciem ekranu (safe area). */
+.ph-top[hidden] { display: none !important; }
+.ph-top {
+  position: relative; z-index: 30;
+  display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 2px;
+  padding: calc(env(safe-area-inset-top, 0px) + 2px) max(6px, env(safe-area-inset-right, 0px)) 2px max(6px, env(safe-area-inset-left, 0px));
+  background: var(--surface); border-bottom: 1px solid var(--border);
+}
+body.ph-on .hero, body.ph-on #heroGrip { display: none !important; }
+.ph-slot { display: contents; }
+.ph-qb, .ph-top .undo-btn, .ph-top .app-menu-btn {
+  inline-size: 40px; block-size: 40px; min-inline-size: 40px; min-block-size: 40px; padding: 0;
+  display: inline-grid; place-items: center; border: 0; background: none; box-shadow: none; border-radius: 10px;
+  color: var(--ink); touch-action: manipulation; -webkit-user-select: none; user-select: none;
+  transition: transform 140ms var(--ease-out), background-color 120ms ease;
+}
+.ph-qb:active, .ph-top .undo-btn:active, .ph-top .app-menu-btn:active { transform: scale(0.95); background: var(--accent-light); }
+.ph-qb:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Cofnij zawsze na swoim miejscu (pasek nie skacze) — wyszarzony, gdy nie ma czego cofać */
+body.ph-on .ph-top .undo-btn.hidden { display: inline-grid !important; opacity: 0.35; pointer-events: none; }
+.ph-name { min-inline-size: 0; text-align: center; line-height: 1.2; }
+.ph-name b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.ph-name span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
+/* Tryb: sama ikona (nazwa trybu w aria-label i w menu) */
+.ph-top .rb-mode { block-size: 36px; min-inline-size: 44px; padding: 0 9px; gap: 2px; touch-action: manipulation; }
+.ph-top .rb-mode .rb-mode-txt { display: none; }
+.ph-top .hero-save { block-size: 34px; min-block-size: 34px; padding: 0 12px; margin-inline: 2px; box-shadow: none; touch-action: manipulation; }
+.ph-top .hero-save:not(.is-dirty) { display: none; }
+/* menu trybu pod przyciskiem: ribbon.js liczy pozycję od okna (wstążka schowana), więc fixed */
+.ph-top #rbModeMenu { position: fixed; z-index: 60; }
+/* Szukaj: 16 px tekstu — mniej i iPhone powiększa stronę przy stuknięciu w pole */
+body.ph-on #quickSearch { font-size: 16px; }
+/* lupa zbędna: szukanie uruchamia klawisz „Szukaj” na klawiaturze (enterkeyhint) — więcej miejsca na pole */
+body.ph-on #quickSearchBtn { display: none; }
+/* rząd Szukaj: pole i przyciski obok 40 px, przyciski w polu 32 px */
+body.ph-on .table-toolbar { align-items: center; }
+body.ph-on .table-toolbar > #quickSearchWrap { block-size: 40px; min-block-size: 40px; }
+body.ph-on .table-toolbar > :is(#fmtSheetBtn, #panelToggle, #toolbarToggle) { block-size: 40px; min-block-size: 40px; inline-size: 40px; min-inline-size: 40px; padding: 0; margin-block: 0; }
+body.ph-on #quickSearchWrap :is(#nlqOpenBtn, #qsMoreBtn) { block-size: 32px; min-block-size: 32px; }
+/* pasek formuły tylko podczas edycji — wtedy w miejscu paska Szukaj */
+body.ph-on:not(.ph-editing) #editBars { display: none !important; }
+body.ph-on.ph-editing .table-toolbar { display: none !important; }
+/* karty arkuszy pod tabelą (jak na komputerze), zamiast pływającego przycisku arkusza */
+body.ph-on .sheet-picker-fab { display: none !important; }
+body.ph-on .table-foot { flex-wrap: nowrap; }
+body.ph-on .table-foot > #sheetTabs { display: flex !important; flex: 0 1 auto; min-inline-size: 0; max-inline-size: 55%; padding: 0; background: none; border: 0; box-shadow: none; }
+body.ph-on .table-foot > #sheetTabs.hidden { display: none !important; }
+/* dolny pasek: jedna oś, 34 px (stary margines 8 px nad sumami spychał je w dół — jak na komputerze) */
+body.ph-on .table-foot { align-items: center; }
+body.ph-on .table-foot > :is(#sheetTabs, .cell-stats-bar) { block-size: 34px; margin-block: 0; padding-block: 0; align-items: center; }
+body.ph-on .table-foot > #sheetTabs .sheet-tab { block-size: 34px; }
+body.ph-on .table-foot > :is(#heroSheetBtn, #sheetTabs) { order: -2; }
+body.ph-on .table-foot > #heroSheetBtn { flex: none; margin: 0; block-size: 34px; min-inline-size: 40px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+body.ph-on .table-foot > #heroSheetBtn[hidden] { display: none; }
+body.ph-on .table-foot > .add-row-btn, body.ph-on .table-foot > .status-badge { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .ph-qb, .ph-top .undo-btn, .ph-top .app-menu-btn { transition: background-color 120ms ease; }
+  .ph-qb:active, .ph-top .undo-btn:active, .ph-top .app-menu-btn:active { transform: none; }
+}

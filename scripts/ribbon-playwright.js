@@ -6,7 +6,7 @@
 //   3. Szukaj, Zapisz, ⋯ i Cofnij to TE SAME elementy, przeniesione do wstążki,
 //   4. pasek formuły tuż pod wstążką (≤ 82 px od góry),
 //   5. strzałki przełączają karty i przenoszą fokus,
-//   6. 768 px: wszystko wraca na swoje miejsca; 1440 px: znowu we wstążce,
+//   6. 768 px: wszystko wraca na swoje miejsca (z plikiem: pasek telefonu, etap 7a); 1440 px: znowu we wstążce,
 //   7. 820 px: nic nie wystaje w bok, rząd kart ma strzałkę „+N”,
 //   8. telefon: bez wstążki, układ jak dotąd.
 //
@@ -174,8 +174,9 @@ async function run() {
     await sleep(100);
     check("6. 768 px: bez rb-on", !(await page.evaluate(() => document.body.classList.contains("rb-on"))));
     check("6. 768 px: Szukaj wróciło na miejsce", !(await inRibbon(page, "#quickSearch")) && (await page.evaluate(() => !!document.getElementById("quickSearch").closest("#quickSearchWrap")?.closest(".table-panel"))));
-    check("6. 768 px: Zapisz wróciło do nagłówka", await page.evaluate(() => !!document.getElementById("heroSaveBtn").closest(".hero")));
-    check("6. 768 px: nagłówek widoczny", await shown(page, ".hero"));
+    // etap 7a: na telefonie z plikiem pasek u góry zamiast dużej karty „hero” (phone-top-playwright.js)
+    check("6. 768 px: Zapisz w pasku telefonu", await page.evaluate(() => !!document.getElementById("heroSaveBtn").closest("#phTop")));
+    check("6. 768 px: pasek telefonu widoczny", await shown(page, "#phTop"));
     check("Z. 768 px: powiększenie wróciło do paska nad tabelą", await page.evaluate(() => !!document.getElementById("zoomGroup").closest("#toolbarMain")));
     check("T2. 768 px: Spisywanie wróciło do menu Więcej", await page.evaluate(() => !!document.getElementById("transcribeBtn").closest("#moreMenu")));
     await page.setViewportSize({ width: 1440, height: 900 });
@@ -292,7 +293,7 @@ async function run() {
     await page.setViewportSize({ width: 768, height: 900 });
     await page.waitForFunction(() => !document.body.classList.contains("rb-on"), null, { timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(100);
-    check("E4. 768 px: przycisk arkusza i karty wracają do nagłówka", await page.evaluate(() => !!document.getElementById("heroSheetBtn").closest(".hero") && !!document.getElementById("sheetTabs").closest(".hero")));
+    check("E4. 768 px: przycisk arkusza i karty na dolnym pasku (telefon, etap 7a)", await page.evaluate(() => !!document.getElementById("heroSheetBtn").closest("#tableFoot") && !!document.getElementById("sheetTabs").closest("#tableFoot")));
     await context.close();
   }
 

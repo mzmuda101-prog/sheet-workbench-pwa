@@ -20,7 +20,7 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 | 4 | Dolny pasek | Karty arkuszy (z kolorem karty z pliku, przewijane), Widoczne X/Y, Średnia / Liczba / Suma zaznaczenia, powiększenie. | v1.07.00 (PR #19) |
 | 5 | Mini pasek | Nad zaznaczeniem myszą (pod nim, gdy brak miejsca): B, wypełnienie, format liczb, Σ, Filtruj wg wartości, Notatka, Wyjaśnij. Klawiatura i dotyk bez paska. | v1.08.00 |
 | 6 | Opcje wstążki (6a pokazywanie i gęstość, 6b Klasyczna) | Klasyczna / Uproszczona, Zawsze / Chowaj przy przewijaniu / Tylko karty (Ctrl+F1), gęstość Mysz / Dotyk, gęstość wierszy z Automatyczną. | 6a: v1.09.00 · 6b: v1.10.00 |
-| 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. | — |
+| 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. Trzy części: 7a góra, 7b dół, 7c panele na cały ekran. | 7a: v1.11.00 |
 
 ## Do decyzji Mateusza (domyślnie — jak w makiecie)
 
@@ -192,3 +192,24 @@ okienka i zablokowany nagłówek, Gęstość wierszy i Przywróć szerokości ko
 Skupienie, Pełny ekran, Opisz formułę słowami, Wygładź podsumowanie, Procent i separator tysięcy (Liczba).
 Część z nich istnieje w innym miejscu (szyna: filtry i sortowanie; menu Widok; panele) — przy dokładaniu
 pilnować zasady bez dubli.
+
+## Etap 7a — co weszło (góra ekranu na telefonie; v1.11.00)
+
+Plan zaakceptowany przez Mateusza 2026-11-20 (podział 7a → 7b → 7c). Do 768 px, z otwartym plikiem:
+- **Pasek u góry** (`#phTop`, `app/ribbon.js` placePhone): ← · Cofnij · nazwa pliku i arkusz · Tryb (ikona,
+  to samo menu co na komputerze) · Zapisz · ⋯. Te same elementy (te same id) co we wstążce i w nagłówku.
+  Duża karta „hero” z uchwytem zwijania jest wtedy schowana (bez pliku zostaje jak dotąd).
+- **Zapisz** z licznikiem tylko przy niezapisanych zmianach. **Cofnij** stoi zawsze, wyszarzony bez historii.
+- **←** = to samo pytanie co przy „Aktualizuj” (Zapisz / Nie zapisuj / Anuluj), potem ekran startowy z
+  ostatnimi plikami (przeładowanie zamiast ręcznego czyszczenia stanu modułów).
+- **Szukaj**: 16 px tekstu (iPhone nie powiększa strony), bez lupy (szuka klawisz „Szukaj” na klawiaturze).
+  „Aa”, klucz i ▾ zostają w tym rzędzie do etapu 7b (rząd poleceń na dole) — żeby nic nie zniknęło w międzyczasie.
+- **Pasek formuły** tylko podczas edycji komórki, w miejscu rzędu Szukaj (klasa `ph-editing`).
+- **Karty arkuszy** pod tabelą jak na komputerze (przycisk listy jako ikona), bez pływającego przycisku arkusza.
+- Pasek pod wycięciem ekranu (safe area), cele 44 px, reakcja przy dotknięciu.
+
+Testy: `scripts/phone-top-playwright.js` (Chromium + WebKit). Testy zwijanej karty (`hero-pull-expand`,
+`hero-collapse-guard`) usunięte — tej karty na telefonie z plikiem już nie ma; ich zasady „strona się nie
+przewija” i „dolny pasek na ekranie” sprawdza nowy test. Do sprawdzenia na prawdziwym iPhonie: wycięcie
+ekranu, klawiatura przy edycji, ← z niezapisanymi zmianami.
+

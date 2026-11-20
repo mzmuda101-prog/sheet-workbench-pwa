@@ -43,6 +43,76 @@ const swbRibbon = (() => {
     [document.getElementById("zoomGroup"), document.getElementById("tableFoot")],
   ].filter(([el, into]) => el && into).map(([el, slot, at]) => ({ el, slot, at, mark: document.createComment("swb-rb") }));
   moves.push(...extra);
+
+  // ── telefon z plikiem (etap 7a, makieta v2 „Telefon”): pasek u góry zamiast dużej karty „hero” ──
+  // Te same elementy co we wstążce — Tryb (z menu), Cofnij, Zapisz, ⋯ — a karty arkuszy jak na komputerze
+  // pod tabelą. Pasek formuły tylko podczas edycji (w miejscu Szukaj; klasa ph-editing, CSS).
+  const phTop = document.getElementById("phTop");
+  const heroEl = document.querySelector(".hero");
+  const foot = document.getElementById("tableFoot");
+  const phMoves = !phTop ? [] : [
+    ...Array.from(phTop.querySelectorAll("[data-ph]")).map((slot) => [document.querySelector(slot.dataset.ph), slot]),
+    [document.getElementById("rbModeMenu"), phTop],
+    [document.getElementById("sheetTabs"), foot, "start"],
+    [document.getElementById("heroSheetBtn"), foot, "start"],
+  ].filter(([el, slot]) => el && slot).map(([el, slot, at]) => ({ el, slot, at, mark: document.createComment("swb-ph") }));
+  let phOn = false;
+  const hasFile = () => !!heroEl?.classList.contains("has-file");
+  function placePhone(want) {
+    if (!phTop || want === phOn) return;
+    phOn = want;
+    closeMenus();
+    for (const m of phMoves) {
+      if (want) { m.el.before(m.mark); if (m.at === "start") m.slot.prepend(m.el); else m.slot.append(m.el); }
+      else if (m.mark.parentNode) m.mark.replaceWith(m.el);
+    }
+    phTop.hidden = !want;
+    document.body.classList.toggle("ph-on", want);
+    if (!want) document.body.classList.remove("ph-editing");
+    syncPhName();
+    requestAnimationFrame(() => {
+      if (typeof onViewportChange === "function") onViewportChange();
+      window.dispatchEvent(new Event("resize"));
+    });
+  }
+  function syncPhName() {
+    if (!phOn) return;
+    const f = document.getElementById("phFile"), s = document.getElementById("phSheet");
+    if (f) f.textContent = document.getElementById("heroTitle")?.textContent.trim() || "";
+    if (s) s.textContent = typeof currentSheetName === "string" ? currentSheetName : "";
+  }
+  // ← „Wróć do plików”: to samo pytanie co przy „Aktualizuj” (Zapisz / Nie zapisuj / Anuluj), potem
+  // ekran startowy z ostatnimi plikami. Przeładowanie zamiast ręcznego czyszczenia stanu wszystkich modułów.
+  document.getElementById("phBackBtn")?.addEventListener("click", async () => {
+    if (typeof confirmReloadWithUnsaved === "function" && !(await confirmReloadWithUnsaved())) return;
+    window.location.reload();
+  });
+  // edycja komórki (pole w komórce albo pasek formuły) → pasek formuły w miejscu Szukaj
+  const EDIT_SEL = "input.cell-editor, #formulaInput, #nameBox";
+  const syncEditing = () => {
+    const a = document.activeElement;
+    const was = document.body.classList.contains("ph-editing");
+    const now = phOn && !!a?.matches?.(EDIT_SEL);
+    if (now === was) return;
+    document.body.classList.toggle("ph-editing", now);
+    if (typeof onViewportChange === "function") requestAnimationFrame(() => onViewportChange());
+  };
+  document.addEventListener("focusin", syncEditing);
+  document.addEventListener("focusout", () => setTimeout(syncEditing, 0));
+  // pole w komórce znika z DOM po Enter / Esc — wtedy przeglądarka nie zgłasza utraty fokusu
+  const later = () => { if (document.body.classList.contains("ph-editing")) setTimeout(syncEditing, 0); };
+  document.addEventListener("keydown", later, true);
+  document.addEventListener("pointerdown", later, true);
+  function syncDevice() {
+    const desk = deskMq.matches;
+    if (desk) placePhone(false); // najpierw oddaj kontrolki z paska telefonu, potem wstążka bierze swoje
+    place(desk);
+    if (!desk) placePhone(hasFile());
+  }
+  if (heroEl) new MutationObserver(() => { if (!deskMq.matches) placePhone(hasFile()); }).observe(heroEl, { attributes: true, attributeFilter: ["class"] });
+  const sheetNameEl = document.getElementById("heroSheetName");
+  if (sheetNameEl) new MutationObserver(syncPhName).observe(sheetNameEl, { childList: true, characterData: true, subtree: true });
+
   let on = false;
   function place(desk) {
     if (desk === on) return;
@@ -302,6 +372,7 @@ const swbRibbon = (() => {
       nameEl.textContent = [file, sheet, tr("rbReadOnly")].filter(Boolean).join(" · ");
     }
     strips.forEach((x) => x.sync());
+    syncPhName();
   }
   if (modeSwitch) new MutationObserver(syncMode).observe(modeSwitch, { subtree: true, attributes: true, attributeFilter: ["class", "aria-pressed"] });
   const titleEl = document.getElementById("heroTitle");
@@ -500,12 +571,12 @@ const swbRibbon = (() => {
     closeMenus();
     // menu paska (frame-compact.js) przypięte do przycisku, który właśnie zmienia miejsce
     if (typeof frameCompact !== "undefined" && frameCompact?.closeMenu) frameCompact.closeMenu(false);
-    place(deskMq.matches);
+    syncDevice();
     syncMode();
   };
   if (deskMq.addEventListener) deskMq.addEventListener("change", onMq); else deskMq.addListener(onMq);
   syncPrefs();
-  place(deskMq.matches);
+  syncDevice();
   labels();
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && MENUS.some(([, m]) => !m.hidden)) { e.preventDefault(); closeMenus(true); } });
 
