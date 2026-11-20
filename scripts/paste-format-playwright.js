@@ -116,7 +116,7 @@ async function run() {
   await focus(11, H.udzial);
   const tgt4b = await info(11, H.udzial);
   await page.click(`#dataTable tbody tr[data-row-key="wide:10"] td[data-col-index="${headers.indexOf(H.udzial)}"]`);
-  await page.keyboard.press(process.platform === "darwin" && ENGINE === "webkit" ? "Meta+Shift+V" : "Control+Shift+V");
+  await page.keyboard.press("ControlOrMeta+Shift+V");
   await sleep(300);
   const dst4b = await info(11, H.udzial);
   check("4. Ctrl/⌘+Shift+V wkleja same wartości", dst4b.v === src8.v && dst4b.bold === tgt4b.bold && dst4b.fill === tgt4b.fill && dst4b.numFmt === tgt4b.numFmt, { tgt4b, dst4b });

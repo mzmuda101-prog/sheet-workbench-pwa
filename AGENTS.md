@@ -40,6 +40,9 @@ Wspólne zasady wszystkich projektów (przeczytaj na starcie): `../ZASADY-AGENTO
   (przyciski mają `tabindex="0"`, więc w Safari stuknięcie daje fokus).
 - Podpowiedzi przez `data-hint` (cursor-hint), nie `title`.
 - Litery nie jako skróty klawiszowe (klawiatury tabletowe); F1–F12 tylko jako alias.
+- Na Macu/iPadzie skróty tylko z ⌘, Control jest wolny (Mateusz, 2026-11-20): w kodzie `swbMod(e)`
+  zamiast `e.ctrlKey || e.metaKey`; „zwykły klawisz” = bez Controla i ⌘. Napisy ze skrótami przez
+  `swbKeysText()` (na Macu „⌘B”). Testy naciskają `ControlOrMeta+…`; `scripts/mac-keys-playwright.js`.
 - To, co może się nie zmieścić, przewija się — nic nie ucina się po cichu.
 - Bez emoji w UI, kodzie i commitach.
 

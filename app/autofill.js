@@ -681,7 +681,8 @@ const swbFillHandle = (() => {
       sync();
       return;
     }
-    const invert = !!(e && (e.ctrlKey || e.altKey || e.metaKey));
+    // kopia zamiast serii: Alt/⌥ albo Ctrl/⌘; na Macu bez Controla (Control+klik = prawy przycisk, Control wolny)
+    const invert = !!(e && (e.altKey || e.metaKey || (e.ctrlKey && !SWB_APPLE_KB)));
     swbFillRange(model, d.rect, d.dir, d.end, { mode: "series", invert });
     // zaznaczony zostaje cały wypełniony zakres, jak w Excelu
     const m = swbSelView();

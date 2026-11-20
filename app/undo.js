@@ -118,6 +118,8 @@ function undoCloseStep() {
 
 // Przywraca stan zapisany w kroku; zwraca krok odwrotny (do drugiego stosu).
 function undoApplyStep(step) {
+  // operacja na całym pliku („Formatuj jako tabelę”): wczytanie zapisanego pliku (sheet-ops-ui.js)
+  if (step.file) return typeof swbSheetOpsUi !== "undefined" ? swbSheetOpsUi.fileStep(step) : null;
   // szerokość kolumny / wysokość wiersza (layout-edit.js)
   if (step.layout) return typeof swbLayoutEdit !== "undefined" ? swbLayoutEdit.applyStep(step) : null;
   // Krok zbiorczy (anonimizacja całego pliku): kilka arkuszy jako jedno Cofnij.
@@ -187,6 +189,8 @@ function undoDropStale() {
 }
 
 function undoRedo(direction) {
+  // trwa wczytywanie pliku (operacja albo Cofnij kroku „cały plik”) — Cofnij teraz nic by nie trafił
+  if (typeof swbSheetOpsUi !== "undefined" && swbSheetOpsUi.isBusy()) { toast(t("undoWaitFile"), "info"); return false; }
   undoCloseStep(); // domknij krok z bieżącego zadania, jeśli jest
   undoDropStale(); // inny plik → stara historia nie ma sensu
   const from = direction === "undo" ? undoStack : redoStack;
@@ -200,6 +204,8 @@ function undoRedo(direction) {
   const inverse = undoApplyStep(step);
   if (inverse) to.push(inverse);
   setDirtyState(true);
+  // krok „cały plik”: widok i dymek po wczytaniu robi sheet-ops-ui.js
+  if (step.file) { updateUndoButtons(); return true; }
   // Cofnięte/ponowione dodanie kolumny: kolumny wynikają z arkusza — układ od nowa (row-grow.js)
   if (typeof swbRowGrow !== "undefined") swbRowGrow.afterUndo(step);
 
@@ -269,9 +275,10 @@ if (redoBtnEl) redoBtnEl.addEventListener("click", redoLast);
 // Skróty: w polach tekstowych (edytor komórki, szukanie, panel) zostaje natywne
 // cofanie PISANIA — tu obsługujemy tylko cofanie zmian w arkuszu.
 document.addEventListener("keydown", (e) => {
-  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  if (!swbMod(e) || e.altKey) return;
   const isZ = e.code === "KeyZ" || String(e.key).toLowerCase() === "z";
-  const isY = (e.code === "KeyY" || String(e.key).toLowerCase() === "y") && !e.metaKey;
+  // Ctrl+Y = Ponów tylko poza Makiem (tam ⌘⇧Z; ⌘Y to w przeglądarce historia)
+  const isY = (e.code === "KeyY" || String(e.key).toLowerCase() === "y") && !SWB_APPLE_KB && !e.metaKey;
   if (!isZ && !isY) return;
   const a = document.activeElement;
   const tag = String(a?.tagName || "").toLowerCase();

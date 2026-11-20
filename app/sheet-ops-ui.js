@@ -61,44 +61,62 @@ const swbSheetOpsUi = (() => {
   }
 
   // ── operacje na arkuszach ────────────────────────────────────────────────────
+  // Plik z bieżącymi poprawkami (pendingEdits, dopisane wiersze, szerokości) — baza operacji na ZIP
+  // i „zdjęcie” stanu do Cofnij.
+  function currentBytes() {
+    const grow = typeof swbRowGrow !== "undefined" ? swbRowGrow.growInfo() : null;
+    return buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps(), { grow, layout: pendingLayout });
+  }
+  // Wczytanie pliku od nowa (po operacji albo przy Cofnij/Ponów kroku „cały plik”) z zachowaniem
+  // nazwy, uchwytu, trybu i stanu „niezapisane”; arkusz `sheet` na wierzchu.
+  async function reopen(bytes, sheet, { model = false } = {}) {
+    const name = currentFileName;
+    const handle = currentFileHandle;
+    const mode = typeof swbEditMode !== "undefined" ? swbEditMode : null;
+    const ok = await swbHandleFileCore(new File([bytes], name), handle, { reopen: true });
+    if (!ok) throw new Error("reopen");
+    if (mode && typeof sheetEditUi !== "undefined") sheetEditUi.setMode(mode);
+    if (typeof swbRowGrow !== "undefined") swbRowGrow.snapshot(); // dopisane wiersze są już w pliku
+    swbStructureDirty = true;
+    setDirtyState(true);
+    // formuły z odwołaniem do usuniętego arkusza mają w pliku „#REF!”, a w komórce starą wartość — przelicz
+    if (typeof swbFormulaRecalcCells === "function") {
+      const keys = [];
+      workbook.SheetNames.forEach((sn) => { const ws = workbook.Sheets[sn]; Object.keys(ws).forEach((ref) => { if (ref[0] !== "!" && ws[ref] && ws[ref].f && ws[ref].f.includes("#REF!")) keys.push(`${sn}\u0000${ref}`); }); });
+      swbFormulaRecalcCells(keys);
+    }
+    openSheet(sheet);
+    // dymek po wczytaniu arkusza — inaczej „Wczytano …” przychodzi później i go zastępuje. Czekamy też
+    // na model tabeli: bez niego kolejna operacja (np. „Tylko zaznaczenie” zaraz po Cofnij) widziała
+    // „nie tryb szeroki” i kończyła się po cichu (table-undo 3, Chromium).
+    const t0 = performance.now();
+    await new Promise((resolve) => {
+      // model tylko na żądanie (Cofnij/Ponów tabeli) — pusty arkusz („Nowy arkusz”) modelu nie ma
+      const ready = () => document.body.getAttribute("aria-busy") !== "true" && (!model || !!currentDisplayModel);
+      const tick = () => (ready() || performance.now() - t0 > 15000 ? resolve() : setTimeout(tick, 40));
+      setTimeout(tick, 80);
+    });
+  }
+
   // Poprawki do pliku → operacja na ZIP → ponowne wczytanie, arkusz `target` na wierzchu.
-  async function apply(op, okMessage) {
+  // Historia Cofnij zaczyna się od nowa (kroki komórek odnoszą się do starego pliku). Z `opts.undo`
+  // (nazwa) operacja sama staje się krokiem Cofnij „cały plik”: przed = `opts.before` albo baza.
+  async function apply(op, okMessage, opts = {}) {
     if (busy || !workbook || !originalFileBytes) return false;
     if (typeof swbEditGuard === "function" && !swbEditGuard()) return false;
     busy = true;
     try {
       if (typeof flushCellEditor === "function") flushCellEditor();
-      const grow = typeof swbRowGrow !== "undefined" ? swbRowGrow.growInfo() : null;
-      const base = await buildPatchedXlsx(originalFileBytes, pendingEdits, buildSheetFormulaMaps(), { grow, layout: pendingLayout });
+      const base = await currentBytes();
       const zip = await JSZip.loadAsync(base);
       const target = await op(zip);
       const bytes = await zip.generateAsync({ type: "uint8array", compression: "DEFLATE" });
-      const name = currentFileName;
-      const handle = currentFileHandle;
-      const mode = typeof swbEditMode !== "undefined" ? swbEditMode : null;
-      const ok = await swbHandleFileCore(new File([bytes], name), handle, { reopen: true });
-      if (!ok) throw new Error("reopen");
-      if (mode && typeof sheetEditUi !== "undefined") sheetEditUi.setMode(mode);
-      if (typeof swbRowGrow !== "undefined") swbRowGrow.snapshot(); // dopisane wiersze są już w pliku
+      await reopen(bytes, target);
       undoStack = [];
       redoStack = [];
+      if (opts.undo) undoStack.push({ file: true, workbook, sheet: target, changes: [], label: opts.undo, bytes: opts.before || base, other: bytes });
       if (typeof updateUndoButtons === "function") updateUndoButtons();
-      swbStructureDirty = true;
-      setDirtyState(true);
-      // formuły z odwołaniem do usuniętego arkusza mają w pliku „#REF!”, a w komórce starą wartość — przelicz
-      if (typeof swbFormulaRecalcCells === "function") {
-        const keys = [];
-        workbook.SheetNames.forEach((sn) => { const ws = workbook.Sheets[sn]; Object.keys(ws).forEach((ref) => { if (ref[0] !== "!" && ws[ref] && ws[ref].f && ws[ref].f.includes("#REF!")) keys.push(`${sn}\u0000${ref}`); }); });
-        swbFormulaRecalcCells(keys);
-      }
-      openSheet(target);
-      // dymek po wczytaniu arkusza — inaczej „Wczytano …” przychodzi później i go zastępuje
-      const t0 = performance.now();
-      await new Promise((resolve) => {
-        const tick = () => (document.body.getAttribute("aria-busy") !== "true" || performance.now() - t0 > 15000 ? resolve() : setTimeout(tick, 40));
-        setTimeout(tick, 80);
-      });
-      toast(okMessage(target), "success");
+      toast(okMessage(target), "success", opts.toast ? opts.toast(target) : null);
       return true;
     } catch (err) {
       const key = err && /^sheet[A-Z]/.test(err.message) ? err.message : "sheetOpFailed";
@@ -108,6 +126,40 @@ const swbSheetOpsUi = (() => {
     } finally {
       busy = false;
     }
+  }
+
+  // Cofnij / Ponów kroku „cały plik” (undo.js undoApplyStep): wczytuje zapisany plik, a historia
+  // (same kroki „cały plik” — kroki komórek zniknęły przy operacji) zostaje. Zwraca krok odwrotny od
+  // razu; wczytanie biegnie potem (undoRedo kończy się synchronicznie, kolejne Cofnij czeka na isBusy).
+  function fileStep(step) {
+    const inverse = { ...step, bytes: step.other, other: step.bytes };
+    busy = true;
+    inverse.done = Promise.resolve().then(async () => {
+      const u = undoStack;
+      const r = redoStack;
+      let ok = true;
+      try { await reopen(step.bytes, step.sheet, { model: true }); } catch (err) {
+        ok = false;
+        toast(t("sheetOpFailed"), "error");
+        log(`Cofnij/Ponów operacji na pliku nie powiodło się: ${(err && err.message) || err}`, "error");
+      } finally {
+        undoStack = u;
+        redoStack = r;
+        // nowy obiekt skoroszytu po wczytaniu; treść arkusza jest ta sama co przy nagraniu kroków
+        // (Ponów zmian komórek po tabeli zostaje — undoDropStale by je inaczej wyrzucił)
+        for (const s of [...u, ...r]) s.workbook = workbook;
+        busy = false;
+        if (typeof updateUndoButtons === "function") updateUndoButtons();
+      }
+      if (!ok) return false;
+      const undone = r.includes(inverse);
+      toast(t(undone ? "fileStepUndone" : "fileStepRedone", { name: step.label }), "info", {
+        action: t(undone ? "redoAction" : "undoAction"),
+        onAction: () => (undone ? redoLast() : undoLast()),
+      });
+      return true;
+    });
+    return inverse;
   }
 
   async function addSheet() {
@@ -180,7 +232,9 @@ const swbSheetOpsUi = (() => {
 
   // Formatuj jako tabelę: wiersz nagłówka + wszystkie wiersze danych; kolumny zaznaczone (gdy zaznaczono
   // kilka) albo wszystkie. Nazwy kolumn jak Excel trafiają do komórek nagłówka, potem tabela w pliku.
-  async function formatAsTable() {
+  // exact = zakres arkusza { s, e } (przycisk „Tylko zaznaczenie” w komunikacie): tabela dokładnie
+  // na nim, pierwszy wiersz to nagłówek — jak Ctrl+T w Excelu na zaznaczeniu.
+  async function formatAsTable(exact = null) {
     if (busy || !workbook || !currentSheetName) return false;
     if (typeof swbEditGuard === "function" && !swbEditGuard()) return false;
     if (!currentDisplayModel || currentDisplayModel.mode !== "wide") { toast(t("tableNotWide"), "info"); return false; }
@@ -193,13 +247,19 @@ const swbSheetOpsUi = (() => {
     const wsH = workbook.Sheets[currentSheetName];
     const colEmpty = (c) => { const h = wsH[XLSX.utils.encode_cell({ r: currentHeaderRow - 1, c: currentStartCol + c })]; return !(h && h.v != null && h.v !== "") && !baseRows.some((row) => row && Array.isArray(row.values) && row.values[c] != null && row.values[c] !== ""); };
     if (!(rect && rect.colCount > 1)) while (c1 > c0 && colEmpty(c1)) c1--;
-    const r0 = currentHeaderRow - 1;
+    let r0 = currentHeaderRow - 1;
     let r1 = r0 + 1; // tabela bez danych: nagłówek + jeden pusty wiersz (jak Excel)
     baseRows.forEach((row) => {
       if (!row || !Number.isFinite(row.rowIndex0) || row.rowIndex0 <= r1) return;
       if (Array.isArray(row.values) && row.values.slice(c0, c1 + 1).some((v) => v != null && v !== "")) r1 = row.rowIndex0;
     });
-    const range = { s: { r: r0, c: currentStartCol + c0 }, e: { r: r1, c: currentStartCol + c1 } };
+    let range = { s: { r: r0, c: currentStartCol + c0 }, e: { r: r1, c: currentStartCol + c1 } };
+    const auto = range;
+    if (exact) { range = exact; r0 = exact.s.r; }
+    const hc0 = range.s.c - currentStartCol; // kolumna nagłówka względem widoku (updateSheetCell)
+    // zaznaczenie inne niż zakres tabeli: w komunikacie „Tylko zaznaczenie” (wiersze ciągłe, ≥ 2)
+    const sel = !exact ? selectionRange(rect) : null;
+    const offer = sel && XLSX.utils.encode_range(sel) !== XLSX.utils.encode_range(auto) ? sel : null;
     const cross = (a) => a.s.r <= range.e.r && a.e.r >= range.s.r && a.s.c <= range.e.c && a.e.c >= range.s.c;
     const hit = [...new Set(Object.values(currentTables || {}))].find((tb) => {
       if (!tb || tb.sheetName !== currentSheetName) return false;
@@ -214,20 +274,74 @@ const swbSheetOpsUi = (() => {
       raw.push(cell && cell.v != null && cell.v !== "" ? String(cell.w != null ? cell.w : cell.v) : null);
     }
     const columns = swbSheetOps.tableColumnNames(raw, t("tableEmptyCol"));
+    // Cofnij wraca do stanu PRZED wpisaniem nazw kolumn do nagłówka (niżej), nie tylko sprzed tabeli;
+    // otwarty edytor komórki zatwierdzamy najpierw, żeby jego wpis był w tym stanie
+    if (typeof flushCellEditor === "function") flushCellEditor();
+    const before = await currentBytes();
     // Excel: nagłówek tabeli to zawsze tekst równy nazwie kolumny (formuła i liczba też stają się tekstem)
     columns.forEach((name, i) => {
       const cell = ws[XLSX.utils.encode_cell({ r: r0, c: range.s.c + i })];
-      if (!cell || cell.f || cell.t !== "s" || cell.v !== name) updateSheetCell(r0, c0 + i, { value: name, type: "string" });
+      if (!cell || cell.f || cell.t !== "s" || cell.v !== name) updateSheetCell(r0, hc0 + i, { value: name, type: "string" });
     });
     const taken = new Set(Object.keys(currentTables || {}).concat(((workbook.Workbook && workbook.Workbook.Names) || []).map((n) => String(n.Name || "").toLowerCase())));
     let k = 1;
     while (taken.has(`${t("tableBase")}${k}`.toLowerCase())) k++;
     const name = `${t("tableBase")}${k}`;
     const ref = XLSX.utils.encode_range(range);
-    return apply((zip) => swbSheetOps.addTable(zip, { sheet: currentSheetName, ref, name, columns }).then(() => currentSheetName), () => t("tableCreated", { name, ref }));
+    const col = (c) => XLSX.utils.encode_col(c);
+    const cols = range.s.c === range.e.c ? col(range.s.c) : `${col(range.s.c)}–${col(range.e.c)}`;
+    const msg = exact ? t("tableCreated", { name, ref }) : t("tableCreatedRange", { name, ref, row: r0 + 1, cols });
+    return apply((zip) => swbSheetOps.addTable(zip, { sheet: currentSheetName, ref, name, columns }).then(() => currentSheetName), () => msg, {
+      undo: name,
+      before,
+      toast: () => {
+        const step = undoStack[undoStack.length - 1]; // krok tej tabeli (apply go właśnie dodał)
+        // przyciski dymka działają tylko na TĘ tabelę — po innej zmianie nie cofają cudzego kroku
+        const undoThis = () => {
+          if (typeof undoCloseStep === "function") undoCloseStep();
+          if (undoStack[undoStack.length - 1] !== step || !undoLast()) { toast(t("undoStepGone"), "info"); return null; }
+          return redoStack[redoStack.length - 1];
+        };
+        return {
+          stack: !!offer,
+          action: t("undoAction"),
+          onAction: () => { undoThis(); },
+          ...(offer ? {
+            action2: t("tableOnlySel", { ref: XLSX.utils.encode_range(offer) }),
+            // cofnij tę tabelę, potem utwórz ją dokładnie na zaznaczeniu
+            onAction2: async () => {
+              try {
+                const inv = undoThis();
+                if (!inv || !(await inv.done)) return;
+                await formatAsTable(offer);
+              } catch (err) {
+                toast(t("sheetOpFailed"), "error");
+                log(`Tylko zaznaczenie: ${(err && err.message) || err}`, "error");
+              }
+            },
+          } : {}),
+        };
+      },
+    });
   }
 
-  return { newWorkbook, addSheet, renameSheet, deleteSheet, formatAsTable, menuActions, init, isBusy: () => busy };
+  // Zaznaczenie jako zakres arkusza — tylko gdy to ciągłe wiersze danych (bez wierszy nad nagłówkiem,
+  // w kolejności arkusza: po sortowaniu albo filtrze widoczne wiersze nie muszą leżeć obok siebie).
+  function selectionRange(rect) {
+    if (!rect || rect.rowCount < 2) return null;
+    const idx = [];
+    for (let i = rect.rowStart; i <= rect.rowEnd; i++) {
+      const row = rect.model.rows[i];
+      if (!row || row.isPreRow || !Number.isFinite(row.rowIndex0)) return null;
+      idx.push(row.rowIndex0);
+    }
+    if (idx.some((r, i) => i && r !== idx[i - 1] + 1)) return null;
+    const real = typeof swbRealHeaderCount === "function" ? swbRealHeaderCount() : currentHeaders.length;
+    if (rect.colMin > real - 1) return null;
+    return { s: { r: idx[0], c: currentStartCol + rect.colMin }, e: { r: idx[idx.length - 1], c: currentStartCol + Math.min(rect.colMax, real - 1) } };
+  }
+
+  return { newWorkbook, addSheet, renameSheet, deleteSheet, formatAsTable, fileStep, menuActions, init, isBusy: () => busy };
 })();
 
 document.addEventListener("DOMContentLoaded", () => swbSheetOpsUi.init());

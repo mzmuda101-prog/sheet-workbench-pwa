@@ -603,10 +603,10 @@ async function run() {
     check("O6. Esc chowa wysunięte polecenia", (await r2h()) === 0);
 
     // Ctrl+F1 przełącza Tylko karty ↔ Zawsze; wybór zostaje po przeładowaniu
-    await page.keyboard.press("Control+F1");
+    await page.keyboard.press("ControlOrMeta+F1");
     await sleep(300);
     check("O6. Ctrl+F1: z powrotem Zawsze", /rb-show-pin/.test(await body()) && (await r2h()) > 30);
-    await page.keyboard.press("Control+F1");
+    await page.keyboard.press("ControlOrMeta+F1");
     await sleep(300);
     await page.reload({ waitUntil: "load" });
     await page.evaluate(() => document.getElementById("heroSplash")?.remove());
@@ -614,7 +614,7 @@ async function run() {
     await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 30000 });
     await sleep(400);
     check("O6. Tylko karty zapamiętane po przeładowaniu", /rb-show-tabs/.test(await body()), await body());
-    await page.keyboard.press("Control+F1");
+    await page.keyboard.press("ControlOrMeta+F1");
     await sleep(300);
 
     // Chowaj przy przewijaniu: w dół rząd poleceń się chowa, w górę wraca

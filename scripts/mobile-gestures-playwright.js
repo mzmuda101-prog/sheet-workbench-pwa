@@ -16,7 +16,7 @@ const APP_URL = process.env.APP_URL || "http://127.0.0.1:4175/";
 const ENGINE = process.env.ENGINE || "chromium";
 const SLEEP_SCALE = Math.min(1, Math.max(0.1, Number(process.env.SLEEP_SCALE || 1)));
 const sleep = (ms) => new Promise((r) => setTimeout(r, Math.round(ms * SLEEP_SCALE)));
-const MOD = process.platform === "darwin" && ENGINE === "webkit" ? "Meta" : "Control";
+const MOD = process.platform === "darwin" ? "Meta" : "Control";
 
 async function open(browser, opts) {
   const ctx = await browser.newContext({ serviceWorkers: "block", ...opts });

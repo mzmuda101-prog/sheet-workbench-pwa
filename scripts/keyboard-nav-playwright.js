@@ -60,7 +60,7 @@ async function run() {
 
   // ── 2. Skok Ctrl+Alt+3 do tabeli + ruch strzałkami BEZ kliknięcia myszą ───────
   await page.evaluate(() => document.body.focus());
-  await page.keyboard.press("Control+Alt+Digit3");
+  await page.keyboard.press("ControlOrMeta+Alt+Digit3");
   await sleep(200);
   const afterJump = await page.evaluate(() => ({
     tag: document.activeElement?.tagName,
@@ -485,7 +485,7 @@ async function run() {
   const fromCell = await page.evaluate(() => ({
     tag: document.activeElement?.tagName, col: document.activeElement?.dataset?.colIndex,
   }));
-  await page.keyboard.press("Control+Shift+KeyF");
+  await page.keyboard.press("ControlOrMeta+Shift+KeyF");
   await sleep(400);
   const inPopup = await page.evaluate(() => document.activeElement?.id);
   await page.keyboard.press("Escape");

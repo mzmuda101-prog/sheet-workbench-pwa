@@ -970,7 +970,7 @@ const I18N = {
     cutNoRoom: "Wycięty blok nie mieści się w tym miejscu",
     fillOverwroteFormulas: "nadpisało formuły w {count} kom.",
     fillClearedCells: "wyczyściło {count} kom. (źródło było puste)",
-    fillDamageWarn: "Uwaga: wypełnianie {what} — Cofnij (⌘Z / Ctrl+Z) przywróci",
+    fillDamageWarn: "Uwaga: wypełnianie {what} — Cofnij (Ctrl/⌘+Z) przywróci",
     hdrRenameItem: "Zmień nazwę kolumny",
     hdrSortAsc: "Sortuj rosnąco",
     hdrSortDesc: "Sortuj malejąco",
@@ -990,7 +990,7 @@ const I18N = {
     hdrRenameFormula: "Nagłówek tej kolumny to formuła — zmień ją w Excelu",
     hdrRenameMerged: "Ten nagłówek jest częścią scalonej komórki — zmień nazwę w jej pierwszej kolumnie",
     hdrRenameDerived: "To kolumna wyliczana — jej nazwę zmienisz w „Kolumny wyliczane”",
-    fillHandleHint: "Przeciągnij, by wypełnić serią (Ctrl — kopia). Dwuklik: do końca danych obok",
+    fillHandleHint: "Przeciągnij, by wypełnić serią (Ctrl/Alt — kopia). Dwuklik: do końca danych obok",
     fillSkippedFormulas: "Pominięto {count} komórek — formuła po przesunięciu jest błędna (np. wyszła poza arkusz)",
     fillNeedsRange: "Zaznacz najpierw zakres (przytrzymaj Shift albo przeciągnij po komórkach)",
     cellActionsLabel: "Akcje",
@@ -1472,6 +1472,11 @@ const I18N = {
     tableBase: "Tabela",
     tableEmptyCol: "Kolumna",
     tableCreated: "Utworzono tabelę „{name}” ({ref})",
+    tableCreatedRange: "Utworzono tabelę „{name}” ({ref}): nagłówek z wiersza {row} i wszystkie wiersze danych w kolumnach {cols}",
+    tableOnlySel: "Tylko zaznaczenie ({ref})",
+    undoWaitFile: "Chwila — trwa wczytywanie pliku. Spróbuj Cofnij za moment.",
+    fileStepUndone: "Cofnięto: tabela „{name}”",
+    fileStepRedone: "Przywrócono: tabela „{name}”",
     tableOverlap: "Tu jest już tabela Excela „{name}”.",
     tableMerged: "W zakresie są scalone komórki — tabela Excela ich nie dopuszcza. Najpierw je rozdziel.",
     tableNotWide: "Tabelę można utworzyć w zwykłym widoku arkusza.",
@@ -2723,7 +2728,7 @@ const I18N = {
     cutNoRoom: "The cut block does not fit here",
     fillOverwroteFormulas: "overwrote formulas in {count} cells",
     fillClearedCells: "cleared {count} cells (the source was empty)",
-    fillDamageWarn: "Heads-up: the fill {what} — Undo (⌘Z / Ctrl+Z) brings them back",
+    fillDamageWarn: "Heads-up: the fill {what} — Undo (Ctrl/⌘+Z) brings them back",
     hdrRenameItem: "Rename column",
     hdrSortAsc: "Sort ascending",
     hdrSortDesc: "Sort descending",
@@ -2743,7 +2748,7 @@ const I18N = {
     hdrRenameFormula: "This column header is a formula — change it in Excel",
     hdrRenameMerged: "This header is part of a merged cell — rename it in its first column",
     hdrRenameDerived: "This is a calculated column — rename it in “Calculated columns”",
-    fillHandleHint: "Drag to fill a series (Ctrl — copy). Double-click: down to the end of the data next to it",
+    fillHandleHint: "Drag to fill a series (Ctrl/Alt — copy). Double-click: down to the end of the data next to it",
     fillSkippedFormulas: "Skipped {count} cells — the shifted formula is invalid (e.g. it went off the sheet)",
     fillNeedsRange: "Select a range first (hold Shift or drag across cells)",
     cellActionsLabel: "Actions",
@@ -3225,6 +3230,11 @@ const I18N = {
     tableBase: "Table",
     tableEmptyCol: "Column",
     tableCreated: "Created table “{name}” ({ref})",
+    tableCreatedRange: "Created table “{name}” ({ref}): header from row {row} and all data rows in columns {cols}",
+    tableOnlySel: "Selection only ({ref})",
+    undoWaitFile: "One moment — the file is loading. Try Undo again shortly.",
+    fileStepUndone: "Undone: table “{name}”",
+    fileStepRedone: "Redone: table “{name}”",
     tableOverlap: "There is already an Excel table “{name}” here.",
     tableMerged: "The range has merged cells — an Excel table can't contain them. Unmerge them first.",
     tableNotWide: "A table can be created in the normal sheet view.",
@@ -3864,7 +3874,7 @@ const STATIC_TRANSLATIONS = {
     quickSearch: "Szybkie szukanie",
     quickSearchSlash: "Szybkie szukanie (bez aktywnej komórki / poza polem)",
     undoShortcut: "Cofnij zmianę w arkuszu (edycja, wklejenie, wypełnianie, narzędzia edycji)",
-    redoShortcut: "Ponów (także Ctrl + Y)",
+    redoShortcut: "Ponów",
     fillDownShortcut: "Wypełnij w dół — kopia górnej komórki (sama komórka: kopia z komórki nad nią)",
     fillRightShortcut: "Wypełnij w prawo — kopia lewej komórki",
     fillHandleShortcut: "Kwadracik w rogu zaznaczenia: przeciągnij = seria (1, 2, 3…, daty, pon./wt., Kw1→Kw2), z Ctrl/Alt = kopia; dwuklik = do końca danych obok. Palcem róg rozciąga zaznaczenie, a wypełnianie jest w menu przytrzymania",
@@ -4241,7 +4251,7 @@ const STATIC_TRANSLATIONS = {
     quickSearch: "Quick search",
     quickSearchSlash: "Quick search (no active cell / outside a field)",
     undoShortcut: "Undo a change in the sheet (edit, paste, fill, edit tools)",
-    redoShortcut: "Redo (also Ctrl + Y)",
+    redoShortcut: "Redo",
     fillDownShortcut: "Fill down — copy the top cell (single cell: copy from the cell above)",
     fillRightShortcut: "Fill right — copy the left cell",
     fillHandleShortcut: "Square in the selection corner: drag = series (1, 2, 3…, dates, Mon/Tue, Q1→Q2), with Ctrl/Alt = copy; double-click = down to the end of the data next to it. With a finger the corner extends the selection; filling is in the press-and-hold menu",
@@ -4353,6 +4363,23 @@ const STATIC_TRANSLATIONS = {
     scrollTopAria: "Scroll table to top",
   },
 };
+
+// Skróty w napisach w formie tej klawiatury (core.js swbKeysText; na Macu „⌘B”, gdzie indziej „Ctrl+B”):
+// raz, w słownikach i w stałych podpowiedziach z HTML. Dane użytkownika tu nie trafiają.
+(() => {
+  if (typeof swbKeysText !== "function") return;
+  for (const dict of [I18N.pl, I18N.en, STATIC_TRANSLATIONS.pl, STATIC_TRANSLATIONS.en]) {
+    for (const k of Object.keys(dict || {})) if (typeof dict[k] === "string") dict[k] = swbKeysText(dict[k]);
+  }
+  document.querySelectorAll("[data-hint], [data-hint-pl], [data-hint-en], [data-rb-hint]").forEach((el) => {
+    for (const a of ["data-hint", "data-hint-pl", "data-hint-en", "data-rb-hint"]) {
+      const v = el.getAttribute(a);
+      if (v) el.setAttribute(a, swbKeysText(v));
+    }
+  });
+  document.querySelectorAll("kbd").forEach((k) => { if (!k.children.length) k.textContent = swbKeysText(k.textContent); });
+})();
+
 
 function setText(selector, value) {
   const el = document.querySelector(selector);

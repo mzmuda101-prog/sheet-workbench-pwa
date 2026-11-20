@@ -118,7 +118,7 @@ async function run() {
   await p.click(A2);
   await sleep(200);
   ok("5a. pole nazwy = A2, wstążka aktywna", await name() === "A2" && !(await p.evaluate(() => document.getElementById("formatRibbon").classList.contains("is-disabled"))), await name());
-  await p.keyboard.press("Control+b");
+  await p.keyboard.press("ControlOrMeta+b");
   await sleep(200);
   const bold = await p.evaluate(() => ({ fmt: cfmtPendingFmt(currentSheetName, "A2"), w: getComputedStyle(document.querySelector('#dataTable thead tr.pre-row[data-row-index="1"] td.pre-cell[data-col-index="0"]')).fontWeight }));
   ok("5b. Ctrl+B pogrubia komórkę nad nagłówkiem (zapis + widok)", bold.fmt && bold.fmt.b === true && Number(bold.w) >= 600, bold);
@@ -130,7 +130,7 @@ async function run() {
   await p.keyboard.press("Delete");
   await sleep(200);
   ok("5d. Delete czyści komórkę nad nagłówkiem", await cellV("A2") === null, await cellV("A2"));
-  await p.keyboard.press(process.platform === "darwin" && ENGINE === "webkit" ? "Meta+z" : "Control+z");
+  await p.keyboard.press("ControlOrMeta+z");
   await sleep(300);
   ok("5e. Cofnij przywraca", await cellV("A2") === "Tytuł", await cellV("A2"));
   // granica nagłówka: z ostatniego wiersza nad nim strzałka w dół → 1. wiersz danych i z powrotem
@@ -150,7 +150,7 @@ async function run() {
   await sleep(200);
   const rng = await p.evaluate(() => { const r = getSelectionRectangle(); return { n: r && r.rowCount * r.colCount, cls: document.querySelectorAll("#dataTable thead td.cell-in-range").length }; });
   ok("5g. Shift+strzałka robi zakres nad nagłówkiem (z obwódką)", rng.n === 2 && rng.cls === 2, rng);
-  await p.keyboard.press("Control+c");
+  await p.keyboard.press("ControlOrMeta+c");
   await sleep(200);
   const tsv = await p.evaluate(() => internalClipboard && internalClipboard.tsv);
   ok("5h. kopiowanie zakresu nad nagłówkiem", tsv === "Tytuł\t120", tsv);

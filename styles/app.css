@@ -5901,6 +5901,14 @@ html.low-power .loading-overlay.is-file {
 
 /* Akcja („Cofnij”, „Pokaż”…) i ✕ w dymku — kontrakt UX wspólny z Documents Workbench. */
 .toast-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* toast(…, { stack: true }): długi tekst w pierwszym rzędzie z ikoną i krzyżykiem, przyciski w drugim,
+   pod tekstem — inaczej długi komunikat z dwoma przyciskami ściskał się do kolumny szerokości litery
+   (Formatuj jako tabelę, 2026-11-20). Px jak w reszcie dymka (app.css nie ma skali odstępów). */
+.toast.toast-stack { flex-wrap: wrap; row-gap: 8px; }
+.toast.toast-stack .toast-body { flex: 1 1 calc(100% - 90px); }
+.toast.toast-stack .toast-close { order: 1; }
+.toast.toast-stack .toast-action { order: 2; }
+.toast.toast-stack .toast-action:not(.toast-action-2) { margin-inline-start: 32px; } /* ikona 22 px + odstęp 10 px */
 .toast.has-action, .toast:has(.toast-close) { padding-right: 8px; }
 .toast-action {
   flex: none;

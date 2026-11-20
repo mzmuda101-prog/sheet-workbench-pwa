@@ -5,8 +5,8 @@
 // SWB_SHORTCUTS. Dopisujesz nowy skrót → dopisz go tutaj (test shortcuts-palette pilnuje,
 // żeby każdy wpis miał tekst w obu językach i żeby Ctrl/⌘+/ otwierało okno).
 //
-// Klawisze: "mod" = ⌘ na Macu/iPadzie/iPhonie, Ctrl gdzie indziej; "ctrl" = zawsze Ctrl
-// (Ctrl+D/R — jak w Excelu, ⌘R przeładowałby stronę); "alt" = ⌥ na Macu, Alt gdzie indziej;
+// Klawisze: "mod" = ⌘ na Macu/iPadzie/iPhonie, Ctrl gdzie indziej; "ctrl" = Ctrl tylko poza Makiem
+// (kombinacje z nim na Macu nie są pokazywane — tam Control jest wolny); "alt" = ⌥ na Macu, Alt gdzie indziej;
 // "@klucz" = przetłumaczony napis (np. „Strzałki”). Kombinacje alternatywne: tablica tablic.
 // Litery nigdy bez modyfikatora (pisanie na klawiaturze tabletu), F1–F12 tylko jako alias.
 
@@ -55,8 +55,8 @@ const SWB_SHORTCUTS = [
   { cat: "edit", keys: [["mod", "shift", "Z"], ["ctrl", "Y"]], text: "redoShortcut" },
   { cat: "edit", keys: ["mod", "V"], text: "pasteShortcut" },
   { cat: "edit", keys: ["mod", "shift", "V"], text: "pasteValuesShortcut" },
-  { cat: "edit", keys: ["ctrl", "D"], text: "fillDownShortcut" },
-  { cat: "edit", keys: ["ctrl", "R"], text: "fillRightShortcut" },
+  { cat: "edit", keys: ["mod", "D"], text: "fillDownShortcut" },
+  { cat: "edit", keys: ["mod", "R"], text: "fillRightShortcut" },
   { cat: "edit", keys: ["⠿"], text: "fillHandleShortcut" },
   { cat: "edit", keys: ["shift", "F2"], text: "noteEditShortcut" },
   { cat: "edit", keys: ["mod", "alt", "N"], text: "noteNextShortcut" },
@@ -71,12 +71,7 @@ const SWB_SHORTCUTS = [
   { cat: "app", keys: ["Esc"], text: "closeModalPanel" },
 ];
 
-const SWB_IS_APPLE = (() => {
-  try {
-    const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
-    return /mac|iphone|ipad|ipod/i.test(p) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
-  } catch { return false; }
-})();
+const SWB_IS_APPLE = SWB_APPLE_KB; // core.js — na Macu skróty tylko z ⌘ (Control wolny)
 
 function swbKeyLabel(k) {
   if (k === "mod") return SWB_IS_APPLE ? "⌘" : "Ctrl";
@@ -88,15 +83,20 @@ function swbKeyLabel(k) {
 }
 
 // Kombinacja jako tekst (do wyszukiwania i dla czytnika): „⌘ + ⇧ + F”.
-function swbShortcutKeysText(sc) {
+// kombinacje z „ctrl” (np. Ctrl+Y) tylko poza Makiem
+function swbShortcutCombos(sc) {
   const combos = Array.isArray(sc.keys[0]) ? sc.keys : [sc.keys];
+  return SWB_IS_APPLE ? combos.filter((c) => !c.includes("ctrl")) : combos;
+}
+function swbShortcutKeysText(sc) {
+  const combos = swbShortcutCombos(sc);
   return combos.map((c) => c.map(swbKeyLabel).join(" + ")).join(" / ");
 }
 
 function swbShortcutRow(sc) {
   const row = document.createElement("div");
   row.className = "shortcut-row";
-  const combos = Array.isArray(sc.keys[0]) ? sc.keys : [sc.keys];
+  const combos = swbShortcutCombos(sc);
   combos.forEach((combo, ci) => {
     if (ci) row.append(Object.assign(document.createElement("span"), { textContent: "/" }));
     combo.forEach((k, ki) => {

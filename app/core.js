@@ -21,6 +21,31 @@
   }
 })();
 
+// ── Skróty klawiszowe na Macu / iPadzie: tylko ⌘ (prośba Mateusza 2026-11-20) ──
+// Control zostaje wolny dla systemu i innych skrótów (wcześniej Control i ⌘ działały wymiennie).
+// Gdzie indziej jak dotąd Ctrl (albo ⌘/Win). Skróty, które były „zawsze Ctrl” (Ctrl+D/R/5/F1),
+// na Macu są pod ⌘ — jak w Excelu na Macu (⌘D, ⌘R).
+const SWB_APPLE_KB = (() => {
+  try {
+    const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    return /mac|iphone|ipad|ipod/i.test(p) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+  } catch { return false; }
+})();
+// Modyfikator skrótów w zdarzeniu klawiatury: ⌘ na Macu (bez Controla), Ctrl gdzie indziej.
+function swbMod(e) { return SWB_APPLE_KB ? !!e.metaKey && !e.ctrlKey : !!(e.ctrlKey || e.metaKey); }
+// Napisy ze skrótami („Pogrubienie (Ctrl/⌘+B)”) w formie właściwej dla klawiatury: na Macu „⌘B”,
+// „⌥”, „⇧”; gdzie indziej „Ctrl+B”. Stosowane RAZ przy starcie do słowników tłumaczeń i stałych
+// podpowiedzi z HTML (language.js) — nigdy do danych użytkownika (nazwy plików, wartości komórek).
+function swbKeysText(s) {
+  if (typeof s !== "string" || !s) return s;
+  if (!SWB_APPLE_KB) return s.replace(/Ctrl\/⌘ ?\+ ?/g, (m) => m.replace("/⌘", ""));
+  return s
+    .replace(/Ctrl\/Alt/g, "⌥")
+    .replace(/(?:Ctrl\/⌘|Ctrl|Cmd) ?\+ ?/g, "⌘")
+    .replace(/Alt ?\+ ?/g, "⌥")
+    .replace(/Shift ?\+ ?/g, "⇧");
+}
+
 // Heurystyka „słabszego urządzenia" — używana do optymalizacji, które wolno
 // odpalać TYLKO tam, gdzie się opłacają (np. tańszy render zamrożonej kolumny
 // na dotykowych tabletach). Na mocnych urządzeniach nic się nie zmienia.
@@ -1089,7 +1114,7 @@ function toast(msg, type = "info", opts = null) {
   }
 
   const toastEl = document.createElement("div");
-  toastEl.className = `toast ${type}`;
+  toastEl.className = `toast ${type}${opts && opts.stack ? " toast-stack" : ""}`;
   toastEl.setAttribute("role", type === "error" || type === "warning" ? "alert" : "status");
   toastEl.setAttribute("aria-atomic", "true");
 

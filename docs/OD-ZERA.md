@@ -100,9 +100,16 @@ Każde polecenie ma jedno miejsce; telefon (do 480 px) — te same miejsca.
   Odmowa z komunikatem: zakres nachodzi na inną tabelę albo na scalone komórki.
 - Plik: `swbSheetOps.addTable` (część tabeli, relacja, `<tableParts>`, typ zawartości); nazwy kolumn muszą być
   równe komórkom nagłówka — aplikacja wpisuje je przed utworzeniem (inaczej Excel „naprawia” plik).
-- Jak operacje na arkuszach: plik wczytuje się od nowa, Cofnij zaczyna się od nowa (w Excelu Ctrl+T da się cofnąć —
-  **na później**). Też na później: wybór stylu z galerii, wiersz sumy, „Moja tabela nie ma nagłówków”,
-  konwersja tabeli z powrotem na zakres.
+- Jak operacje na arkuszach: plik wczytuje się od nowa. **Cofnij / Ponów (2026-11-20):** utworzenie tabeli to
+  krok Cofnij „cały plik” — Ctrl+Z, przycisk Cofnij i „Cofnij” w komunikacie wracają do pliku sprzed tabeli (także
+  sprzed wpisania nazw kolumn do nagłówka), Ctrl+Y ją przywraca. Ograniczenie: zmiany komórek sprzed utworzenia
+  tabeli nie dają się cofnąć po niej (historia zaczyna się od nowa, jak przy innych operacjach na pliku).
+- Komunikat (decyzja Mateusza 2026-11-20: zakres zostaje): „Utworzono tabelę „Tabela2” (H5:I25): nagłówek z wiersza 5
+  i wszystkie wiersze danych w kolumnach H–I”. Gdy zaznaczenie (ciągłe wiersze danych, co najmniej dwa) jest inne
+  niż ten zakres, drugi przycisk „Tylko zaznaczenie (H8:I13)” cofa tabelę i tworzy ją dokładnie na zaznaczeniu,
+  z pierwszym wierszem jako nagłówkiem — jak Ctrl+T w Excelu. Test: `scripts/table-undo-playwright.js`.
+- Na później: wybór stylu z galerii, wiersz sumy, „Moja tabela nie ma nagłówków”, konwersja tabeli z powrotem
+  na zakres.
 - Przy okazji: po usunięciu arkusza formuły z `#REF!` przeliczają się od razu (wcześniej pokazywały starą wartość).
 
 ## Jak to sprawdzać
