@@ -87,13 +87,13 @@ async function run() {
     const after = await page.evaluate(() => ({ sel: document.querySelector('#ribbon [role="tab"][aria-selected="true"]')?.dataset.rtab, focus: document.activeElement?.dataset?.rtab }));
     check("5. strzałka w prawo → Wstaw (wybór i fokus)", after.sel === "ins" && after.focus === "ins", JSON.stringify(after));
     const panelOk = await page.evaluate(() => {
-      const ps = Array.from(document.querySelectorAll("#ribbon .rb-panel[data-rtab]"));
+      const ps = Array.from(document.querySelectorAll("#ribbon .rb-panel[data-rtab]:not(.rb-cl)")); // Uproszczona (Klasyczna osobno, K6)
       return ps.length === 7 && ps.filter((p) => !p.hidden).map((p) => p.dataset.rtab).join() === "ins";
     });
     check("5. widać tylko panel karty Wstaw", panelOk);
 
     // ── zadanie 2: polecenia kart i menu trybu ──
-    const named = await page.evaluate(() => Array.from(document.querySelectorAll("#ribbon .rb-panel[data-rtab]")).map((p) => {
+    const named = await page.evaluate(() => Array.from(document.querySelectorAll("#ribbon .rb-panel[data-rtab]:not(.rb-cl)")).map((p) => {
       const btns = Array.from(p.querySelectorAll("button, select"));
       const noName = btns.filter((b) => !(b.getAttribute("aria-label") || b.textContent.trim()));
       return { tab: p.dataset.rtab, n: btns.length, noName: noName.map((b) => b.id || b.className) };
@@ -102,7 +102,8 @@ async function run() {
     // bez dubli (decyzja Mateusza): żadne dwa przyciski wstążki nie otwierają tego samego panelu
     const dupPanels = await page.evaluate(() => {
       const seen = {}; const dup = [];
-      document.querySelectorAll("#ribbon [data-rb-panel]").forEach((b) => { const k = b.dataset.rbPanel; if (seen[k]) dup.push(k); seen[k] = 1; });
+      document.querySelectorAll("#ribbon [data-rb-panel]").forEach((b) => { if (b.closest(".rb-cl")) return; // Klasyczna = te same polecenia w innym układzie
+        const k = b.dataset.rbPanel; if (seen[k]) dup.push(k); seen[k] = 1; });
       return dup;
     });
     check("T2. bez dubli: jeden przycisk na panel", dupPanels.length === 0, dupPanels.join());
@@ -442,7 +443,7 @@ async function run() {
     const homes = await page.evaluate(() => {
       const railPanels = { filters: ["panel-text-filters", "panel-date-filter", "panel-smart-filters"], sort: ["panel-sort-workbench"], formulas: ["panel-formula-workbench"], check: ["panel-validation"] };
       const onRail = new Set(Object.values(railPanels).flat());
-      const btns = Array.from(document.querySelectorAll("#ribbon [data-rb-panel]")).map((b) => b.dataset.rbPanel);
+      const btns = Array.from(document.querySelectorAll("#ribbon [data-rb-panel]")).filter((b) => !b.closest(".rb-cl")).map((b) => b.dataset.rbPanel);
       const all = Array.from(document.querySelectorAll(".sidebar details.panel")).map((d) => d.id);
       const count = (id) => (onRail.has(id) ? 1 : 0) + btns.filter((x) => x === id).length;
       return { none: all.filter((id) => count(id) === 0), many: all.filter((id) => count(id) > 1) };
@@ -483,6 +484,83 @@ async function run() {
     const h = await page.evaluate(() => ({ open: document.documentElement.classList.contains("sidebar-open"), h: Math.round(document.getElementById("panel-sort-workbench").getBoundingClientRect().height) }));
     check("E3. 900×900 (szuflada): Sortowanie otwiera panel z treścią", h.open && h.h > 80, JSON.stringify(h));
     check("brak błędów strony (E3 szuflada)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+
+  // ── etap 6b: wstążka Klasyczna ──────────────────────────────────────────────
+  {
+    const { context, page, errors } = await open(browser, { width: 1440, height: 900 });
+    const r2h = () => page.evaluate(() => Math.round(document.querySelector(".rb-r2").getBoundingClientRect().height));
+    const caps = () => page.evaluate(() => Array.from(document.querySelectorAll("#ribbon .rb-panel:not([hidden]) :is(.rb-gcap, .fmt-gcap)")).filter((c) => c.getClientRects().length).map((c) => c.textContent.trim()));
+    const lay = await page.evaluate(() => Array.from(document.querySelectorAll("#rbOptsMenu [data-rb-layout]")).map((b) => `${b.dataset.rbLayout}:${b.getAttribute("aria-checked")}`));
+    check("K6. menu opcji: Uproszczona / Klasyczna, zaznaczona Uproszczona", JSON.stringify(lay) === JSON.stringify(["simple:true", "classic:false"]), lay.join());
+    await page.click("#rbOptsBtn");
+    await page.click('#rbOptsMenu [data-rb-layout="classic"]');
+    await sleep(400);
+    const h = await r2h();
+    check("K6. Klasyczna: rząd poleceń 80–100 px", /rb-classic/.test(await page.evaluate(() => document.body.className)) && h >= 80 && h <= 100, h);
+    const home = await caps();
+    check("K6. Narzędzia główne: grupy Schowek, Czcionka, Wyrównanie, Liczba, Edycja", ["Schowek", "Czcionka", "Wyrównanie", "Liczba", "Edycja"].every((c) => home.includes(c)), home.join(" | "));
+    check("K6. blok formatu w panelu Klasycznej (ta sama kontrolka)", await page.evaluate(() => !!document.querySelector("#formatRibbon").closest(".rb-panel.rb-cl:not([hidden])")));
+    const big = await page.evaluate(() => { const b = document.querySelector('.rb-cl:not([hidden]) .rb-big[data-rb-act="paste"]'); return b ? { h: Math.round(b.getBoundingClientRect().height), t: b.textContent.trim() } : null; });
+    check("K6. Wklej: duży przycisk z podpisem", big && big.h >= 50 && big.t === "Wklej", JSON.stringify(big));
+    // B w Klasycznej działa jak dotąd (ta sama obsługa w sheet-edit-ui.js)
+    await page.click('#dataTable tbody tr[data-row-key]:nth-child(7) td[data-col-index="3"]');
+    await page.click('#formatRibbon [data-fmt="b"]');
+    await sleep(300);
+    const bold = await page.evaluate(() => ({ w: getComputedStyle(document.querySelector('#dataTable tbody tr[data-row-key]:nth-child(7) td[data-col-index="3"]')).fontWeight, p: document.querySelector('#formatRibbon [data-fmt="b"]').getAttribute("aria-pressed") }));
+    check("K6. Klasyczna: B pogrubia komórkę i jest wciśnięte", bold.w === "700" && bold.p === "true", JSON.stringify(bold));
+    await page.click("#rbTab-an");
+    await sleep(200);
+    const an = await caps();
+    check("K6. Analiza: grupy Arkusz, Zestawienia, Wynik", ["Arkusz", "Zestawienia", "Wynik"].every((c) => an.includes(c)), an.join(" | "));
+    await page.click('.rb-cl:not([hidden]) .rb-big[data-rb-panel="panel-workbench-analysis"]');
+    await sleep(500);
+    check("K6. duży przycisk otwiera ten sam panel", await page.evaluate(() => typeof isSidebarOpen === "function" && isSidebarOpen()));
+    await page.keyboard.press("Escape");
+    // wybór zostaje po przeładowaniu
+    await page.reload({ waitUntil: "load" });
+    await page.evaluate(() => document.getElementById("heroSplash")?.remove());
+    await page.evaluate(() => document.getElementById("loadSampleBtn")?.click());
+    await page.waitForFunction(() => document.querySelector("#dataTable tbody tr[data-row-key]"), null, { timeout: 30000 });
+    await sleep(400);
+    check("K6. Klasyczna zapamiętana", await page.evaluate(() => document.body.classList.contains("rb-classic") && !!document.querySelector("#formatRibbon").closest(".rb-cl")));
+    // telefon i z powrotem: blok formatu wraca na swoje miejsce, potem znowu do Klasycznej
+    await page.setViewportSize({ width: 768, height: 900 });
+    await sleep(400);
+    check("K6. 768 px: blok formatu poza wstążką", await page.evaluate(() => !document.querySelector("#formatRibbon").closest("#ribbon")));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await sleep(400);
+    check("K6. 1440 px: znowu w Klasycznej", await page.evaluate(() => !!document.querySelector("#formatRibbon").closest(".rb-cl")));
+    // język zmieniony przy wąskim oknie (blok formatu poza wstążką) — po poszerzeniu podpisy grup po angielsku
+    await page.setViewportSize({ width: 768, height: 900 });
+    await sleep(300);
+    await page.evaluate(() => applyLanguage("en"));
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await sleep(400);
+    const en = await caps();
+    check("K6. EN po zmianie przy wąskim oknie: Font, Alignment, Number, Editing", ["Font", "Alignment", "Number", "Editing"].every((c) => en.includes(c)), en.join(" | "));
+    await page.evaluate(() => applyLanguage("pl"));
+    await sleep(200);
+    // Plik → Opcje: powrót do Uproszczonej
+    await page.click("#rbFileBtn");
+    await page.click('[data-bs-sec="opts"]');
+    await sleep(300);
+    await page.click('#rbLayoutSeg [data-rb-layout="simple"]');
+    await page.keyboard.press("Escape");
+    await sleep(400);
+    check("K6. Uproszczona: rząd 36 px, blok formatu w panelu Uproszczonej", (await r2h()) === 36 && await page.evaluate(() => !document.body.classList.contains("rb-classic") && !!document.querySelector("#formatRibbon").closest(".rb-panel:not(.rb-cl)")));
+    check("brak błędów strony (K6)", errors.length === 0, errors.join(" | "));
+    await context.close();
+  }
+  {
+    // 1024 px: Klasyczna przewija się w bok, strona nie wystaje
+    const { context, page, errors } = await open(browser, { width: 1024, height: 768 });
+    await page.evaluate(() => swbRibbon.setLayout("classic"));
+    await sleep(400);
+    const ov = await page.evaluate(() => ({ page: document.documentElement.scrollWidth - window.innerWidth, more: document.querySelector('[data-strip="cmds"]').classList.contains("has-r") }));
+    check("K6. 1024 px: bez poziomego wystawania strony, rząd przewijany (+N)", ov.page <= 0 && ov.more, JSON.stringify(ov));
+    check("brak błędów strony (K6 1024)", errors.length === 0, errors.join(" | "));
     await context.close();
   }
 
@@ -605,8 +683,8 @@ async function run() {
     await page.focus("#rbOptsBtn");
     await page.keyboard.press("Enter");
     await sleep(150);
-    await page.keyboard.press("ArrowDown");
-    await page.keyboard.press("ArrowDown");
+    // menu: fokus na zaznaczonym „Zawsze” → Chowaj przy przewijaniu → Tylko karty
+    for (let i = 0; i < 2; i++) await page.keyboard.press("ArrowDown");
     await page.keyboard.press("Enter");
     await sleep(250);
     const f = await page.evaluate(() => ({ tabs: document.body.classList.contains("rb-show-tabs"), focus: document.activeElement?.classList.contains("rb-tab") }));

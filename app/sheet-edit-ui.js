@@ -204,7 +204,9 @@ var sheetEditUi = (() => {
     if (typeof frameCompact !== "undefined") frameCompact.sync();
     if (!show) return;
     const wide = currentDisplayModel && currentDisplayModel.mode === "wide";
-    barsEl.classList.toggle("is-long-view", !wide);
+    // bez modelu (plik wczytuje się od nowa) to nie jest Wide-to-Long — bez przygaszania paska
+    const longView = !!currentDisplayModel && !wide;
+    barsEl.classList.toggle("is-long-view", longView);
     const a = wide && typeof cfmtActiveCell === "function" ? cfmtActiveCell() : null;
     const s = (a && a.style) || {};
     setPressed('[data-fmt="b"]', !!s.bold);
@@ -262,7 +264,9 @@ var sheetEditUi = (() => {
       }
       fxInput.disabled = !a;
       fxInput.readOnly = !!(a && !a.real);
-      fxInput.placeholder = !wide ? t("fmtLongViewNote") : (a && !a.real ? t("fmtDerivedNote") : "");
+      // bez modelu (plik wczytuje się od nowa, np. po „Formatuj jako tabelę”) to nie jest Wide-to-Long —
+      // wcześniej na ~160 ms migał tu napis o Wide-to-Long (nagranie Mateusza 2026-11-19)
+      fxInput.placeholder = longView ? t("fmtLongViewNote") : (a && !a.real ? t("fmtDerivedNote") : "");
     }
   }
 

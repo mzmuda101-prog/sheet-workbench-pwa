@@ -19,7 +19,7 @@ funkcje — bez kopii logiki. Jedna funkcja = jedno miejsce na wstążce.
 | 3 | Szyna i panele + karta Tabela | Szyna 40 px: Filtry, Sortowanie, Notatki, Formuły, Sprawdzanie, Asystent z licznikami; panel wysuwany nad tabelę albo przypięty. Zastępuje długi panel z sekcjami i „Znajdź ustawienie…”. Kontekstowa karta Tabela (kursor w tabeli Excela), mignie dwa razy, nie przełącza się sama. | v1.06.00 (PR #17); karta Tabela przeniesiona na koniec |
 | 4 | Dolny pasek | Karty arkuszy (z kolorem karty z pliku, przewijane), Widoczne X/Y, Średnia / Liczba / Suma zaznaczenia, powiększenie. | v1.07.00 (PR #19) |
 | 5 | Mini pasek | Nad zaznaczeniem myszą (pod nim, gdy brak miejsca): B, wypełnienie, format liczb, Σ, Filtruj wg wartości, Notatka, Wyjaśnij. Klawiatura i dotyk bez paska. | v1.08.00 |
-| 6 | Opcje wstążki (6a pokazywanie i gęstość, 6b Klasyczna) | Klasyczna / Uproszczona, Zawsze / Chowaj przy przewijaniu / Tylko karty (Ctrl+F1), gęstość Mysz / Dotyk, gęstość wierszy z Automatyczną. | 6a: v1.09.00 · 6b: — |
+| 6 | Opcje wstążki (6a pokazywanie i gęstość, 6b Klasyczna) | Klasyczna / Uproszczona, Zawsze / Chowaj przy przewijaniu / Tylko karty (Ctrl+F1), gęstość Mysz / Dotyk, gęstość wierszy z Automatyczną. | 6a: v1.09.00 · 6b: v1.10.00 |
 | 7 | Telefon | Pasek u góry (wstecz, cofnij, nazwa + arkusz, tryb, ⋯), Szukaj z ✦ i filtrami, pasek formuły tylko przy edycji, rząd poleceń nad paskiem cyfr, arkusz kart w miejscu klawiatury. | — |
 
 ## Do decyzji Mateusza (domyślnie — jak w makiecie)
@@ -163,3 +163,32 @@ komórki (`applyCellFilter`). Do decyzji później: pasek także przy kliknięci
   w środek tabeli okno wierszy liczyło się ze starą poprawką (drift), zapas nad widokiem znikał i
   pierwszy krok w górę podskakiwał (virt-guard 11). Dotyczyło też ręcznie wybranej Standardowej.
 - Bez „Klasycznej” w menu — wejdzie z etapem 6b.
+
+## Etap 6b — co weszło (wstążka Klasyczna; v1.10.00)
+
+- Wybór: menu opcji przy rzędzie poleceń (Układ: Uproszczona / Klasyczna) i Plik → Opcje (Układ wstążki).
+  Domyślnie Uproszczona; wybór zapamiętany na urządzeniu (`swb-rb-prefs-v1`).
+- `app/ribbon-classic.js` buduje panele Klasycznej (rząd 92 px): duże przyciski (ikona nad podpisem),
+  kolumny małych z podpisami, nazwy grup pod spodem. Przyciski to klony Uproszczonej (te same
+  `data-rb-act` / `data-rb-panel`), kontrolki z id (Raport, Widok ▾, Asystent AI…) przenoszą się do gniazd.
+- Blok formatu (`#formatRibbon`) zostaje w całości — jego obsługa w `sheet-edit-ui.js` słucha na całym
+  bloku — a w grupy Czcionka / Wyrównanie / Liczba / Edycja układa go siatka CSS (podpisy grup i pod
+  dużymi Σ i „Formatuj jako tabelę” widać tylko w Klasycznej).
+- Grupy (tylko polecenia, które aplikacja ma — decyzja Mateusza 2026-11-19): Narzędzia główne: Schowek ·
+  Czcionka · Wyrównanie · Liczba · Edycja · Narzędzia; Wstaw: Dane · Komórka; Dane: Sortowanie · Narzędzia
+  danych · Ochrona; Formuły: Inspekcja; Analiza: Arkusz · Zestawienia · Wynik; Widok: Widok; Asystent.
+  Grupa bez widocznych poleceń (np. Sortowanie bez sortowania) znika.
+- Różnice od makiety: Malarz formatów w grupie Edycja (nie w Schowku — blok formatu jest jedną kontrolką);
+  gęstość Dotyk dotyczy tylko Uproszczonej.
+- Przy okazji (nagranie Mateusza 2026-11-19): przy ponownym wczytaniu pliku (np. „Formatuj jako tabelę”)
+  pasek formuły nie miga już napisem o Wide-to-Long.
+
+### Polecenia z makiety, których Sheet nie ma — do decyzji później
+
+Wstaw / Usuń wiersz i kolumnę (Narzędzia główne → Komórki; Wstaw → Wiersze i kolumny), Lista rozwijana,
+Arkusz (Shift+F11), Tryby auto, Filtr dat, Puste / niepuste, Presety sortowania, Sprawdzanie wartości,
+Podobne nazwy (Dane), Wstaw funkcję (Shift+F3), Szablony formuł, Przelicz (F9), Czas trwania, Zablokuj
+okienka i zablokowany nagłówek, Gęstość wierszy i Przywróć szerokości kolumn (Widok → Siatka), Pasek cyfr,
+Skupienie, Pełny ekran, Opisz formułę słowami, Wygładź podsumowanie, Procent i separator tysięcy (Liczba).
+Część z nich istnieje w innym miejscu (szyna: filtry i sortowanie; menu Widok; panele) — przy dokładaniu
+pilnować zasady bez dubli.

@@ -55,6 +55,10 @@ const swbRibbon = (() => {
       else if (m.mark.parentNode) { m.mark.replaceWith(m.el); }
     }
     if (!desk) fbarRow.remove();
+    classicNow = false; // na telefonie kontrolki wróciły do siebie (znaczniki), Klasyczna zaczyna od nowa
+    applyLayout(); // na telefonie zdejmuje też body.rb-classic
+    // kontrolki, które dopiero weszły do wstążki (blok formatu z podpisami grup), dostają napisy w bieżącym języku
+    if (desk) labels();
     root.hidden = !desk;
     document.body.classList.toggle("rb-on", desk);
     // dopiero po zmianie klasy: wcześniej pole w chowanym pasku nie ma jeszcze rozmiaru
@@ -66,6 +70,26 @@ const swbRibbon = (() => {
       window.dispatchEvent(new Event("resize"));
     });
     document.dispatchEvent(new CustomEvent("swb:ribbon", { detail: { on: desk } }));
+  }
+
+  // ── układ Klasyczna / Uproszczona (etap 6b; ribbon-classic.js buduje panele Klasycznej) ──
+  // Kontrolki z id stoją w Klasycznej w gniazdach [data-rbc] — przy przełączeniu przenoszą się
+  // między gniazdami obu układów; na telefonie wracają na swoje miejsce (znaczniki z place()).
+  const clSlots = (typeof swbRibbonClassic !== "undefined" && swbRibbonClassic?.slots) || [];
+  let classicNow = false;
+  function applyLayout() {
+    const want = on && prefs().layout === "classic" && clSlots.length > 0;
+    document.body.classList.toggle("rb-classic", want);
+    if (want !== classicNow) {
+      classicNow = want;
+      for (const s of clSlots) {
+        const el = document.querySelector(s.dataset.rbc);
+        if (!el) continue;
+        if (want) s.append(el);
+        else if (el.parentNode === s) root.querySelector(`.rb-panel:not(.rb-cl) [data-rb="${CSS.escape(s.dataset.rbc)}"]`)?.append(el);
+      }
+    }
+    select(current);
   }
 
   // ── karty ─────────────────────────────────────────────────────────────────
@@ -81,7 +105,9 @@ const swbRibbon = (() => {
       x.setAttribute("aria-selected", String(sel));
       x.tabIndex = sel ? 0 : -1;
     });
-    panels.forEach((p) => { p.hidden = p.dataset.rtab !== id; });
+    panels.forEach((p) => { p.hidden = p.dataset.rtab !== id || p.classList.contains("rb-cl") !== classicNow; });
+    // karta wskazuje panel bieżącego układu (czytnik ekranu: „przejdź do sterowanego elementu”)
+    tabs.forEach((x) => x.setAttribute("aria-controls", `${classicNow ? "rbPanelCl" : "rbPanel"}-${x.dataset.rtab}`));
     const cmds = strips.find((s) => s.key === "cmds");
     if (cmds) { cmds.sc.scrollLeft = 0; cmds.sync(); }
     tabStrip?.reveal(tab);
@@ -112,7 +138,7 @@ const swbRibbon = (() => {
     const items = () => Array.from(sc.querySelectorAll(key === "tabs"
       ? ".rb-tab:not([hidden])"
       : ".rb-panel:not([hidden]) > *:not(.rb-slot), .rb-panel:not([hidden]) > .rb-slot > * > *, .rb-panel:not([hidden]) > .rb-slot > *:not(.format-ribbon)"))
-      .filter((c) => c.offsetParent && !c.matches(".fmt-sep, .rb-sep"));
+      .filter((c) => c.offsetParent && !c.matches(".fmt-sep, .rb-sep, .fmt-gcap"));
     function sync(first) {
       if (!on) return;
       const max = sc.scrollWidth - sc.clientWidth;
@@ -212,7 +238,8 @@ const swbRibbon = (() => {
     menu.style.top = `${Math.round(r.bottom - R.top + 6)}px`;
     if (side === "right") { menu.style.right = `${Math.max(8, Math.round(R.right - r.right))}px`; menu.style.left = ""; menu.style.transformOrigin = "top right"; }
     else { menu.style.left = `${Math.max(8, Math.round(r.left - R.left))}px`; menu.style.right = ""; menu.style.transformOrigin = "top left"; }
-    (menu.querySelector('[aria-checked="true"]') || menuItems(menu)[0])?.focus();
+    // menu opcji: fokus na bieżącym sposobie pokazywania (najczęstszy wybór), nie na układzie
+    (menu.querySelector('[data-rb-show][aria-checked="true"]') || menu.querySelector('[aria-checked="true"]') || menuItems(menu)[0])?.focus();
   }
   for (const [btn, menu, side] of MENUS) {
     btn.addEventListener("click", () => (menu.hidden ? openMenu(btn, menu, side) : closeMenus()));
@@ -303,6 +330,7 @@ const swbRibbon = (() => {
     root.querySelector('[role="tablist"]')?.setAttribute("aria-label", tr("rbTabsAria"));
     root.querySelectorAll(".rb-nudge-l").forEach((b) => b.setAttribute("aria-label", tr("rbScrollLeft")));
     root.querySelectorAll(".rb-nudge-r").forEach((b) => b.setAttribute("aria-label", tr("rbScrollRight")));
+    if (typeof swbRibbonClassic !== "undefined") swbRibbonClassic?.labels();
     strips.forEach((s) => s.sync());
   }
 
@@ -355,13 +383,14 @@ const swbRibbon = (() => {
   const fineMq = matchMedia("(any-pointer: fine)");
   const portraitMq = matchMedia("(orientation: portrait)");
   const saved = (() => {
-    try { const p = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}"); return { show: SHOWS.includes(p.show) ? p.show : null, dens: ["mouse", "touch"].includes(p.dens) ? p.dens : null }; }
-    catch (_) { return { show: null, dens: null }; }
+    try { const p = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}"); return { show: SHOWS.includes(p.show) ? p.show : null, dens: ["mouse", "touch"].includes(p.dens) ? p.dens : null, layout: p.layout === "classic" ? "classic" : null }; }
+    catch (_) { return { show: null, dens: null, layout: null }; }
   })();
   const touchOnly = () => !fineMq.matches;
   const prefs = () => ({
     show: saved.show || (touchOnly() && portraitMq.matches ? "auto" : "pin"),
     dens: saved.dens || (touchOnly() ? "touch" : "mouse"),
+    layout: saved.layout || "simple",
   });
   const SHOW_ICONS = {};
   optsMenu?.querySelectorAll("[data-rb-show]").forEach((b) => { SHOW_ICONS[b.dataset.rbShow] = b.querySelector("svg")?.innerHTML || ""; });
@@ -389,9 +418,10 @@ const swbRibbon = (() => {
     const mark = (sel, key, val) => document.querySelectorAll(sel).forEach((x) => x.setAttribute("aria-checked", String(x.dataset[key] === val)));
     mark("#rbOptsMenu [data-rb-show], #rbShowSeg [data-rb-show]", "rbShow", p.show);
     mark("#rbDensSeg [data-rb-dens]", "rbDens", p.dens);
+    mark("#rbOptsMenu [data-rb-layout], #rbLayoutSeg [data-rb-layout]", "rbLayout", p.layout);
     // wysokość tabeli liczy się od jej górnej krawędzi — po zmianie rzędu poleceń przelicz
     // wysokość rzędu poleceń zależy od pokazywania i gęstości — tabela liczy się od jej górnej krawędzi
-    if (`${p.show}|${p.dens}` !== lastLayout) { lastLayout = `${p.show}|${p.dens}`; relayout(); }
+    if (`${p.show}|${p.dens}|${p.layout}` !== lastLayout) { lastLayout = `${p.show}|${p.dens}|${p.layout}`; relayout(); }
     requestAnimationFrame(() => strips.forEach((st) => st.sync()));
     document.dispatchEvent(new CustomEvent("swb:rbprefs", { detail: p }));
   }
@@ -408,6 +438,7 @@ const swbRibbon = (() => {
   }
   const setShow = (v) => { peek = false; save("show", v); };
   const setDens = (v) => save("dens", v);
+  const setLayout = (v) => { saved.layout = v === "classic" ? "classic" : null; save("layout", saved.layout); applyLayout(); };
   function setPeek(v) {
     if (peek === v) return;
     peek = v;
@@ -420,6 +451,8 @@ const swbRibbon = (() => {
     tuck(false);
     select(id);
   }
+  optsMenu?.addEventListener("click", (e) => { const b = e.target.closest("[data-rb-layout]"); if (b) setLayout(b.dataset.rbLayout); });
+  document.getElementById("rbLayoutSeg")?.addEventListener("click", (e) => { const b = e.target.closest("[data-rb-layout]"); if (b) setLayout(b.dataset.rbLayout); });
   optsMenu?.addEventListener("click", (e) => {
     const b = e.target.closest("[data-rb-show]");
     if (!b) return;
@@ -476,5 +509,5 @@ const swbRibbon = (() => {
   labels();
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && MENUS.some(([, m]) => !m.hidden)) { e.preventDefault(); closeMenus(true); } });
 
-  return { isOn: () => on, select, current: () => current, openPanel, labels, closeMenus, prefs: () => ({ ...prefs(), peek }), setShow, setDens };
+  return { isOn: () => on, select, current: () => current, openPanel, labels, closeMenus, prefs: () => ({ ...prefs(), peek }), setShow, setDens, setLayout };
 })();
