@@ -145,6 +145,7 @@ function afCollectChips() {
   const smartN = typeof smartActiveCount === "function" ? smartActiveCount() : 0;
   if (smartN) chips.push({ id: "smart", parts: [{ text: t("activeFiltersSmart", { n: smartN }), tag: "label" }], clear: afClearSmart });
   if (validationState && validationState.showOnly) chips.push({ id: "validation", parts: [{ text: t("activeFiltersValidation"), tag: "label" }], clear: afClearValidation });
+  if (typeof swbChangedOnly !== "undefined" && swbChangedOnly) chips.push({ id: "changed", parts: [{ text: t("activeFiltersChanged"), tag: "label" }], clear: () => swbSetChangedOnly("") });
   if (typeof swbNotesOnly !== "undefined" && swbNotesOnly) chips.push({ id: "notes", parts: [{ text: t("activeFiltersNotes"), tag: "label" }], clear: () => swbSetNotesOnly(false) });
   return chips;
 }
@@ -785,6 +786,7 @@ function captureViewState() {
     }
     if (validationState && validationState.showOnly) f.validation = true;
     if (typeof swbNotesOnly !== "undefined" && swbNotesOnly) f.notes = true;
+    if (typeof swbChangedOnly !== "undefined" && swbChangedOnly) f.changed = swbChangedOnly;
     if (Object.keys(f).length) filter = f;
   }
   normalizeSortState();

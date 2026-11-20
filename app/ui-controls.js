@@ -455,6 +455,7 @@ function updateFilterBadge() {
   if (columnSelections.date.size) count += 1;
   if (validationState.showOnly) count += 1;
   if (typeof swbNotesOnly !== "undefined" && swbNotesOnly) count += 1;
+  if (typeof swbChangedOnly !== "undefined" && swbChangedOnly) count += 1;
   if (typeof smartActiveCount === "function") count += smartActiveCount();
 
   filterBadgeEl.textContent = String(count);
@@ -1124,6 +1125,7 @@ async function handleFile(file, fileHandle = null, opts = {}) {
     pendingEdits = {}; // świeży plik → brak naniesionych edycji
     pendingLayout = {}; // (po operacji na arkuszu układ jest już w pliku — też od zera)
     if (typeof swbNotesOnly !== "undefined") swbNotesOnly = false; // filtr notatek nie przechodzi na inny plik
+    if (!opts.reopen && typeof swbChangedReset === "function") swbChangedReset(); // nowy plik: „zmienione od otwarcia” od zera
     try {
       workbook = XLSX.read(data, { cellDates: true, cellStyles: true });
     } catch {

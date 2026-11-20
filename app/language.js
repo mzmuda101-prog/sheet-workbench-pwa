@@ -1766,6 +1766,8 @@ const I18N = {
     phTabHome: "Główne",
     phSheetAria: "Karty i polecenia",
     phFilters: "Filtry",
+    phStatsShow: "Pokaż sumy",
+    phStatsHide: "Schowaj sumy",
     phBack: "Wróć do plików",
     rbBsSearchHelp: "Skróty wyszukiwania",
   },
@@ -3528,6 +3530,8 @@ const I18N = {
     phTabHome: "Home",
     phSheetAria: "Tabs and commands",
     phFilters: "Filters",
+    phStatsShow: "Show totals",
+    phStatsHide: "Hide totals",
     phBack: "Back to files",
     rbBsSearchHelp: "Search shortcuts",
   },
@@ -3733,6 +3737,13 @@ const STATIC_TRANSLATIONS = {
     noteSaved: "Zapisano notatkę w {ref}",
     noteRemoved: "Usunięto notatkę z {ref}",
     notesOnlyLabel: "Tylko wiersze z notatkami ({n})",
+    changedOnlyLabel: "Zmienione wiersze",
+    changedOnlyOff: "wszystkie wiersze",
+    changedOnlyUnsaved: "tylko niezapisane zmiany",
+    changedOnlyAll: "tylko zmienione od otwarcia pliku",
+    activeFiltersChanged: "zmienione wiersze",
+    changedShowAction: "Pokaż zmienione",
+    changedAfterEntry: "Wpisane zmiany są w arkuszu.",
     notesSearchLabel: "Szukaj też w treści notatek",
     activeFiltersNotes: "Tylko z notatkami",
     noteNavPos: "{i} z {n}",
@@ -4110,6 +4121,13 @@ const STATIC_TRANSLATIONS = {
     noteSaved: "Note saved in {ref}",
     noteRemoved: "Note removed from {ref}",
     notesOnlyLabel: "Only rows with notes ({n})",
+    changedOnlyLabel: "Changed rows",
+    changedOnlyOff: "all rows",
+    changedOnlyUnsaved: "only unsaved changes",
+    changedOnlyAll: "only changed since the file was opened",
+    activeFiltersChanged: "changed rows",
+    changedShowAction: "Show changes",
+    changedAfterEntry: "Your entries are in the sheet.",
     notesSearchLabel: "Also search note text",
     activeFiltersNotes: "Only with notes",
     noteNavPos: "{i} of {n}",
@@ -5180,6 +5198,7 @@ function applyLanguage(lang) {
   if (typeof syncRowsAboveHeaderToggle === "function") syncRowsAboveHeaderToggle();
   if (typeof swbKeyBar !== "undefined" && swbKeyBar.syncToggle) swbKeyBar.syncToggle();
   if (typeof swbNotesSyncFilterUi === "function") swbNotesSyncFilterUi();
+  if (typeof swbChangedSyncUi === "function") swbChangedSyncUi();
   if (typeof swbAnonSyncLanguage === "function") swbAnonSyncLanguage();
   if (typeof swbRecent !== "undefined") swbRecent.render();
   if (typeof swbDrawerTabs !== "undefined") swbDrawerTabs.labels();

@@ -479,6 +479,15 @@
                     <input id="onlyNonEmpty" type="checkbox" />
                     Tylko wiersze z danymi
                   </label>
+                  <!-- changed-rows.js: wiersze zmienione w tej sesji (niezapisane / od otwarcia pliku) -->
+                  <label class="field">
+                    <span id="changedOnlyLabel">Zmienione wiersze</span>
+                    <select id="changedOnly">
+                      <option value="">wszystkie wiersze</option>
+                      <option value="unsaved">tylko niezapisane zmiany</option>
+                      <option value="all">tylko zmienione od otwarcia pliku</option>
+                    </select>
+                  </label>
                   <div class="notes-filter-group hidden" id="notesFilterGroup">
                     <label class="field checkbox" data-hint data-hint-pl="Zostawia wiersze, w których jakaś komórka ma notatkę (czerwony trójkącik). W polu szukania to samo daje @notatka." data-hint-en="Keeps rows where some cell has a note (red corner). In the search field, @note does the same." data-hint-delay="1.1" data-hint-touch="on">
                       <input id="notesOnly" type="checkbox" />
@@ -1632,7 +1641,7 @@
                 <span class="ca-toggle-label">Akcje</span><span class="ca-chevron" aria-hidden="true">⌄</span>
               </button>
             </div>
-            <div class="table-foot" id="tableFoot"><div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div></div>
+            <div class="table-foot" id="tableFoot"><div class="cell-stats-bar hidden" id="cellStatsBar" aria-live="polite"></div><button class="stats-toggle" id="statsToggle" type="button" aria-pressed="false" aria-controls="cellStatsBar" aria-label="Pokaż sumy">Σ</button></div>
             <!-- Telefon w Edycji (wstążka, etap 7b; ribbon.js): rząd poleceń bieżącej karty — te same polecenia
                  co we wstążce (#rbCmds przenosi się tutaj). Przycisk z nazwą karty otwiera arkusz kart w miejscu
                  klawiatury. Przy otwartej klawiaturze rząd jedzie razem z paskiem cyfr (key-bar.js). -->
@@ -2150,6 +2159,7 @@
     <script defer src="app/undo.js?v=v1.13.00"></script>
     <script defer src="app/layout-edit.js?v=v1.13.00"></script>
     <script defer src="app/cell-notes.js?v=v1.13.00"></script>
+    <script defer src="app/changed-rows.js?v=v1.13.00"></script>
     <script defer src="app/anonymize-core.js?v=v1.13.00"></script>
     <script defer src="app/anonymize-tools.js?v=v1.13.00"></script>
     <script defer src="app/anonymize-zip.js?v=v1.13.00"></script>

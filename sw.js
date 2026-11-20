@@ -68,6 +68,7 @@ const SHELL_ASSETS = [
   `./app/drawer-tabs.js?v=${ASSET_V}`,
   `./app/key-bar.js?v=${ASSET_V}`,
   `./app/cell-notes.js?v=${ASSET_V}`,
+  `./app/changed-rows.js?v=${ASSET_V}`,
   `./app/anonymize-core.js?v=${ASSET_V}`,
   `./app/anonymize-tools.js?v=${ASSET_V}`,
   `./app/anonymize-zip.js?v=${ASSET_V}`,
