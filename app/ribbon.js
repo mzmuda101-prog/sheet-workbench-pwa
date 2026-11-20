@@ -62,6 +62,12 @@ const swbRibbon = (() => {
     [document.getElementById("zoomGroup"), document.getElementById("rbPanel-view")],
     [document.getElementById("exportCsvBtn"), document.getElementById("appMenu")],
     [document.getElementById("rbCmds"), document.getElementById("phCmdsSlot")],
+    // etap 7c: szyna paneli (komputer) na telefonie stoi na kartach — Sortowanie i Sprawdzanie na Danych,
+    // Formuły na Formułach (Filtry ma przycisk w rzędzie Szukaj); linki z ekranu Plik do ⋯
+    [document.querySelector('.rb-rail-btn[data-rb-rail="sort"]'), document.getElementById("rbPanel-data")],
+    [document.querySelector('.rb-rail-btn[data-rb-rail="check"]'), document.getElementById("rbPanel-data")],
+    [document.querySelector('.rb-rail-btn[data-rb-rail="formulas"]'), document.getElementById("rbPanel-fx")],
+    ...["panel-file-sheet", "panel-shortcuts", "panel-log"].map((p) => [root.querySelector(`.rb-bs-link[data-rb-panel="${p}"]`), document.getElementById("appMenu")]),
   ].filter(([el, slot]) => el && slot).map(([el, slot, at]) => ({ el, slot, at, mark: document.createComment("swb-ph") }));
   let phOn = false;
   const hasFile = () => !!heroEl?.classList.contains("has-file");
@@ -83,6 +89,7 @@ const swbRibbon = (() => {
     syncPhName();
     syncPhTab();
     syncKeyRide();
+    document.dispatchEvent(new CustomEvent("swb:phone", { detail: { on: want } }));
     requestAnimationFrame(() => {
       if (typeof onViewportChange === "function") onViewportChange();
       window.dispatchEvent(new Event("resize"));
@@ -519,11 +526,27 @@ const swbRibbon = (() => {
   });
 
   // ── panel boczny: otwórz sekcję (do etapu 3 — potem szyna z wysuwanym panelem) ──
+  // telefon (etap 7c): Filtry w rzędzie Szukaj otwiera panel filtrów (jak przycisk szyny), nie cały panel boczny
+  document.getElementById("panelToggle")?.addEventListener("click", (e) => {
+    if (!phOn || typeof swbRail === "undefined" || !swbRail?.showKey) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    swbRail.showKey("filters");
+  }, true);
+  // linki do paneli poza wstążką i rzędem poleceń (na telefonie: Wczytywanie / Skróty / Dziennik w ⋯)
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest?.("[data-rb-panel]");
+    if (!b || root.contains(b) || rbCmds?.contains(b)) return;
+    const menu = b.closest("#appMenu");
+    if (menu) { menu.hidden = true; document.getElementById("appMenuBtn")?.setAttribute("aria-expanded", "false"); }
+    openPanel(b.dataset.rbPanel);
+  });
+
   function openPanel(detailsId) {
     const d = document.getElementById(detailsId);
     if (!d) return;
     // etap 3: jeden panel naraz, z tytułem (rail.js); bez rail.js — jak dotąd
-    if (typeof swbRail !== "undefined" && swbRail && on) { swbRail.show([detailsId]); return; }
+    if (typeof swbRail !== "undefined" && swbRail && (on || phOn)) { swbRail.show([detailsId]); return; }
     if (typeof setSidebarOpen === "function") setSidebarOpen(true);
     d.open = true;
     requestAnimationFrame(() => d.scrollIntoView({ block: "nearest" }));

@@ -770,3 +770,37 @@ body.ph-on .table-toolbar > #panelToggle { grid-column: 2; grid-row: 1; }
 body.ph-on .table-toolbar > :not(#quickSearchWrap):not(#panelToggle) { grid-column: 1 / -1; }
 /* przełącznik operatorów pod palec */
 body.ph-on #quickSearchWrap .qs-operators-toggle { min-block-size: 40px; padding-inline: 10px; gap: 8px; font-size: 13px; }
+
+/* ── telefon, etap 7c: panele na cały ekran (makieta „Telefon”, .fly; rail.js — jeden panel naraz) ──────
+   ← u góry po lewej (ten sam przycisk co „Schowaj panel”), obok tytuł panelu. Wjazd z prawej, jak ekran
+   w aplikacji na iPhonie. Bez uchwytu „Wysuń”, „Znajdź ustawienie…”, zakładek grup i pinezki. */
+body.ph-on :is(#panelHandle, .sidebar-finder, .drawer-tabs, #sidebarPinBtn) { display: none !important; }
+body.ph-on .sidebar {
+  inset: 0; inline-size: 100vw; block-size: 100dvh; max-block-size: none; margin: 0; z-index: 70;
+  border: 0; border-radius: 0; box-shadow: none; background: var(--bg);
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  transform: translateX(100%); opacity: 1;
+  transition: transform 280ms var(--ease-out);
+}
+:root.sidebar-open body.ph-on .sidebar { transform: translateX(0); }
+body.ph-on .sidebar-top { min-block-size: 48px; padding: 4px 6px; gap: 4px; border-bottom: 1px solid var(--border); background: var(--surface); }
+body.ph-on .sidebar-top #sidebarCloseBtn { display: inline-grid !important; place-items: center; order: -1; inline-size: 40px; block-size: 40px; min-inline-size: 40px; border-radius: 10px; touch-action: manipulation; }
+body.ph-on .sidebar-top .rb-pane-title { font-size: 17px; }
+/* przyciski szyny na kartach (Sortowanie, Sprawdzanie, Formuły): w rzędzie ikona 40 px, w arkuszu kart z podpisem */
+body.ph-on .rb-panel .rb-rail-btn {
+  display: inline-grid; place-items: center; inline-size: 40px; block-size: 40px; padding: 0;
+  border: 0; border-radius: 6px; background: none; color: var(--ink-2); touch-action: manipulation;
+}
+.ph-sheet #rbCmds .rb-panel .rb-rail-btn { display: grid; justify-items: center; align-content: center; gap: 4px; inline-size: auto; block-size: auto; min-block-size: 60px; padding: 8px 2px; font-size: 11.5px; line-height: 1.2; text-align: center; }
+.ph-sheet #rbCmds .rb-panel .rb-rail-btn::after { content: attr(aria-label); color: var(--ink); }
+.ph-sheet #rbCmds .rb-panel .rb-rail-btn svg { inline-size: 22px; block-size: 22px; color: var(--accent); }
+/* linki z ekranu Plik w ⋯ — jak pozycje menu */
+body.ph-on #appMenu > .rb-bs-link {
+  display: flex; align-items: center; gap: 10px; inline-size: 100%; min-block-size: 44px; padding: 8px 12px;
+  border: 0; border-radius: 10px; background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: start;
+}
+body.ph-on #appMenu > .rb-bs-link svg { flex: none; color: var(--ink-2); }
+@media (prefers-reduced-motion: reduce) {
+  body.ph-on .sidebar { transition: opacity 160ms ease; transform: none; opacity: 0; }
+  :root.sidebar-open body.ph-on .sidebar { opacity: 1; }
+}
