@@ -479,6 +479,26 @@ document.addEventListener("click", (e) => {
 });
 
 
+// Upuszczenie pliku w dowolnym miejscu okna (etap 8, jak Documents Workbench app-frame.js). Strefa w panelu
+// i pola, które same obsługują upuszczenie, robią to wcześniej (defaultPrevented).
+{
+  let dragDepth = 0;
+  const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+  window.addEventListener("dragenter", (e) => { if (!hasFiles(e)) return; dragDepth++; document.body.classList.add("drag-active"); });
+  window.addEventListener("dragleave", () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) document.body.classList.remove("drag-active"); });
+  window.addEventListener("dragover", (e) => { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener("drop", async (e) => {
+    dragDepth = 0;
+    document.body.classList.remove("drag-active");
+    if (e.defaultPrevented || !hasFiles(e)) return;
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (!file) return;
+    if (typeof confirmReloadWithUnsaved === "function" && typeof hasUnsavedChanges !== "undefined" && hasUnsavedChanges && !(await confirmReloadWithUnsaved())) return;
+    handleFile(file).then((ok) => { if (ok) openDefaultSheet(); });
+  });
+}
+
 dropZone.addEventListener("dragover", (e) => {
   e.preventDefault();
   dropZone.classList.add("dragover");

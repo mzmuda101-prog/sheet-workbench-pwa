@@ -40,6 +40,8 @@
         <div class="rb-r1">
           <span class="rb-logo" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg></span>
           <button class="rb-file" id="rbFileBtn" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="rbBackstage">Plik</button>
+          <!-- bez pliku (etap 8): zamiast kart sama nazwa aplikacji, jak w Documents Workbench -->
+          <span class="rb-appname" id="rbAppName">Sheet Workbench</span>
           <div class="rb-strip" data-strip="tabs">
             <button class="rb-nudge rb-nudge-l" type="button" tabindex="-1" aria-label="Przewiń w lewo"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span class="rb-cnt"></span></button>
             <div class="rb-sc"><div class="rb-tabs" role="tablist" aria-label="Karty wstążki">
@@ -1565,30 +1567,30 @@
 
             <div class="empty-state" id="emptyState">
               <div class="empty-icon" aria-hidden="true">
-                <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                  <path d="M8 12h8" />
-                  <path d="M8 16h8" />
-                  <path d="M12 12v7" />
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" />
+                  <path d="M3 9h18M3 15h18M9 3v18" />
                 </svg>
               </div>
-              <div class="empty-title" id="emptyTitle">Wczytaj plik Excel, aby zacząć</div>
-              <div class="empty-sub" id="emptySub">wybierz plik poniżej albo przeciągnij go do strefy w panelu bocznym</div>
+              <!-- Etap 8 (2026-11-20): układ jak ekran startowy Documents Workbench (docs/makiety/start-v1.html tam):
+                   kafelek z ikoną, duży tytuł, jedno zdanie, główny przycisk + równe, ostatnie pliki, przeciągnij. -->
+              <h2 class="empty-title" id="emptyTitle">Otwórz arkusz</h2>
+              <p class="empty-sub" id="emptySub">Excel (.xlsx). Plik zostaje na tym urządzeniu — nic nie jest wysyłane na serwer.</p>
               <div class="draft-recovery" id="draftRecovery" hidden aria-live="polite"></div>
               <div class="empty-actions">
                 <button class="btn" id="emptyOpenBtn" type="button" data-hint data-hint-pl="Otwórz plik XLSX z dysku — wszystko przetwarzane lokalnie" data-hint-en="Open an XLSX file from disk — everything is processed locally" data-hint-delay="1.1" data-hint-touch="on">
-                  Wybierz plik z dysku
+                  Otwórz plik…
                 </button>
-                <button class="btn ghost" id="emptyNewBtn" type="button" data-hint data-hint-pl="Pusty arkusz do wpisywania od zera" data-hint-en="A blank sheet to start from scratch" data-hint-delay="1.1" data-hint-touch="on">
+                <button class="btn ghost" id="emptyNewBtn" type="button" data-hint data-hint-pl="Pusty arkusz do wpisywania od zera" data-hint-en="A blank sheet to start from scratch" data-hint-delay="1.1" data-hint-touch="on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6M9 15h6"/></svg>
                   Nowy skoroszyt
                 </button>
-                <button class="btn ghost" id="loadSampleBtn" type="button" data-hint data-hint-pl="Wczyta lokalnie wygenerowany przykładowy arkusz — bez wysyłania czegokolwiek" data-hint-en="Loads a locally generated sample sheet — nothing is uploaded" data-hint-delay="1.1" data-hint-touch="on">
-                  Wypróbuj na przykładowym pliku
+                <button class="btn ghost" id="loadSampleBtn" type="button" data-hint data-hint-pl="Wczyta lokalnie wygenerowany przykładowy arkusz — bez wysyłania czegokolwiek" data-hint-en="Loads a locally generated sample sheet — nothing is uploaded" data-hint-delay="1.1" data-hint-touch="on"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+                  Przykładowy plik
                 </button>
               </div>
               <!-- Ostatnio otwierane (recent-files.js) — lokalne kopie, tylko na tym urządzeniu -->
               <div class="recent-files" id="recentFiles" role="group" aria-labelledby="recentCap" hidden></div>
+              <p class="empty-drop-hint" id="emptyDropHint">albo przeciągnij plik w dowolne miejsce okna</p>
               <!-- S10: co da się zrobić po otwarciu — klik pokazuje rezultat na przykładzie -->
               <div class="empty-examples" id="emptyExamples" role="group" aria-labelledby="emptyExamplesCap">
                 <div class="empty-examples-cap" id="emptyExamplesCap">Zobacz na przykładzie</div>

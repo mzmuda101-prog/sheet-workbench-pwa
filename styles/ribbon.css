@@ -816,3 +816,15 @@ body.ph-on .table-foot > .stats-toggle {
 body.ph-on .table-foot > .stats-toggle[aria-pressed="true"] { background: var(--accent-light); border-color: var(--accent-border); color: var(--accent); }
 body.ph-on:not(.ph-stats-on) .table-foot > .cell-stats-bar { display: none !important; }
 body.ph-on:not(.ph-stats-on) .table-foot > #sheetTabs { max-inline-size: none; flex: 1 1 auto; }
+
+/* ── bez pliku: ekran startowy jak w Documents Workbench (etap 8; ribbon.js body.swb-nofile) ─────────────
+   Komputer: logo · Plik · nazwa aplikacji · ⋯ — bez kart, poleceń, szukania, trybu, szyny i dolnego paska.
+   Telefon: karta z logo, nazwą i ⋯ — bez klucza, „Wysuń” i uchwytu nagłówka. */
+.rb-appname { display: none; }
+body.rb-on.swb-nofile .rb-appname { display: block; flex: 1 1 auto; min-inline-size: 0; padding-inline: 10px; font-weight: 700; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.rb-on.swb-nofile :is(.rb-r1 > .rb-strip[data-strip="tabs"], #rbCmds, .rb-search, #rbModeBtn, #rbEditBtn, #sidebarRail) { display: none !important; }
+body.rb-on.swb-nofile .rb-act > .rb-slot:has(> #panelToggle) { display: none; }
+body.swb-nofile .table-foot { display: none !important; }
+body.swb-nofile:not(.rb-on) :is(.table-toolbar, #panelHandle, #heroGrip) { display: none !important; }
+/* bez pliku szyny nie ma — tabela/ekran startowy bez odstępu zarezerwowanego na nią */
+body.rb-on.swb-nofile .main { margin-left: 0 !important; }
