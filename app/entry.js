@@ -492,7 +492,7 @@ const swbEntry = (() => {
         <div class="tr-head-tools">
           <button class="btn btn-sm ghost" id="enLogBtn" type="button" aria-expanded="false" aria-controls="enLog">${esc(t("entryLog", { n: ui.sessionLog.length }))}</button>
           <button class="btn btn-sm ghost" id="enSettingsBtn" type="button" aria-expanded="false" aria-controls="enSettings">${esc(t("entrySettings"))}</button>
-          <button class="btn btn-sm ghost" id="enFontBtn" type="button" aria-label="${esc(t("entryFont"))}">A</button>
+          <button class="btn btn-sm ghost" id="enFontBtn" type="button" aria-label="${esc(t("entryFont"))}" data-hint="${esc(t("entryFontHint"))}">Aa</button>
           <button class="modal-close" id="enCloseBtn" type="button" aria-label="${esc(t("entryClose"))}">${ICON_X}</button>
         </div>
       </div>
@@ -645,19 +645,18 @@ const swbEntry = (() => {
   function renderTarget(stage, bar) {
     stage.innerHTML = `
       <div class="tr-card en-card">
-        <div class="en-target-line"><label class="en-label" for="enTargetInput">${esc(t("entryTargetLabel"))}</label>
-          <button class="btn btn-xs ghost" id="enHelpBtn" type="button" aria-expanded="${!!ui.helpOpen}" aria-controls="enHelp">${esc(t("entryHelpBtn"))}</button></div>
-        <dl class="en-help" id="enHelp" ${ui.helpOpen ? "" : "hidden"}>
-          <dt>${esc(t("entryHelpOne"))}</dt><dd>${esc(t("entryHelpOneEx"))}</dd>
-          <dt>${esc(t("entryHelpList"))}</dt><dd>${esc(t("entryHelpListEx"))}</dd>
-          <dt>${esc(t("entryHelpQuery"))}</dt><dd>${esc(t("entryHelpQueryEx"))}</dd>
-          <dt>${esc(t("entryHelpNew"))}</dt><dd>${esc(t("entryHelpNewEx"))}</dd>
-        </dl>
+        <div class="en-target-line"><label class="en-label" for="enTargetInput">${esc(t("entryTargetLabel"))}</label></div>
         <input class="en-input en-target-input" id="enTargetInput" type="text" autocomplete="off" spellcheck="false"
           enterkeyhint="go" role="combobox" aria-expanded="false" aria-controls="enCandidates" aria-autocomplete="list"
           placeholder="${esc(t("entryTargetPlaceholder"))}" value="${esc(ui.query)}">
         <div class="en-hint" id="enKeyHint">${esc(t("entryTargetHint", { col: headers()[ui.keyCol] || "" }))}</div>
         <div class="en-candidates" id="enCandidates" role="listbox" aria-label="${esc(t("entryTargetLabel"))}"></div>
+        <dl class="en-help" id="enHelp" ${String(ui.query || "").trim() ? "hidden" : ""}>
+          <dt>${esc(t("entryHelpOne"))}</dt><dd>${esc(t("entryHelpOneEx"))}</dd>
+          <dt>${esc(t("entryHelpList"))}</dt><dd>${esc(t("entryHelpListEx"))}</dd>
+          <dt>${esc(t("entryHelpQuery"))}</dt><dd>${esc(t("entryHelpQueryEx"))}</dd>
+          <dt>${esc(t("entryHelpNew"))}</dt><dd>${esc(t("entryHelpNewEx"))}</dd>
+        </dl>
       </div>`;
     bar.innerHTML = `<span class="en-keys">${esc(t("entryKeysHint"))}</span>`;
     if (ui.queueDraft && !ui.queue) {
@@ -709,13 +708,9 @@ const swbEntry = (() => {
         overlay.querySelector("#enTargetInput")?.focus();
       });
     }
-    stage.querySelector("#enHelpBtn").addEventListener("click", (e) => {
-      ui.helpOpen = !ui.helpOpen;
-      e.currentTarget.setAttribute("aria-expanded", String(ui.helpOpen));
-      stage.querySelector("#enHelp").hidden = !ui.helpOpen;
-    });
     const input = stage.querySelector("#enTargetInput");
-    input.addEventListener("input", () => { ui.query = input.value; search(); });
+    // ściągawka = pusty stan pola: znika, gdy pojawiają się wyniki
+    input.addEventListener("input", () => { ui.query = input.value; stage.querySelector("#enHelp").hidden = !!input.value.trim(); search(); });
     input.addEventListener("keydown", onTargetKey);
     search();
     input.focus();
@@ -889,7 +884,7 @@ const swbEntry = (() => {
         <div class="en-field-head">
           <label class="tr-field-label" for="enF${col}">${esc(headers()[col])}</label>
           <span class="en-field-tools">${noteHtml}
-          ${formula ? `<span class="en-tag">${esc(t("entryFormulaField"))}</span>` : `<button class="en-pin" type="button" aria-pressed="${pinned}" aria-label="${esc(pinned ? t("entryUnpin") : t("entryPin"))}" title="${esc(pinned ? t("entryUnpin") : t("entryPin"))}">${ICON_PIN}</button>`}</span>
+          ${formula ? `<span class="en-tag">${esc(t("entryFormulaField"))}</span>` : `<button class="btn btn-xs ghost en-pin" type="button" aria-pressed="${pinned}" data-hint="${esc(pinned ? t("entryUnpin") : t("entryPin"))}">${ICON_PIN}<span>${esc(t(pinned ? "entryPinOn" : "entryPinOff"))}</span></button>`}</span>
         </div>
         <input class="en-input" id="enF${col}" type="text" autocomplete="off" spellcheck="false" enterkeyhint="next"
           ${formula ? "readonly tabindex=\"-1\"" : ""} value="${esc(val)}" placeholder="${esc(!formula && now ? now : "")}"${!formula && now ? ' data-en-now=""' : ""}
@@ -906,7 +901,7 @@ const swbEntry = (() => {
          <button class="btn btn-xs ghost" id="enQSkip" type="button">${esc(t("entryQSkip"))}</button></span>`
       : `<button class="btn btn-xs ghost" id="enChangeTarget" type="button">${esc(t("entryChangeTarget"))}</button>`;
     const smartBack = fixing ? "" : !ui.target.newRow && ui.smart && ui.smart.off && smartSrc()
-      ? `<button class="btn btn-xs ghost en-smart-toggle" id="enSmartOn" type="button">${esc(t("entrySmartBack"))}</button>` : "";
+      ? `<button class="btn btn-xs ghost en-smart-toggle" id="enSmartOn" type="button">${esc(t("entrySmartBack", { close: smartName("close"), issue: smartName("issue") }))}</button>` : "";
     stage.innerHTML = `<div class="tr-card en-card">
       ${walking ? queueProgressHtml() : ""}
       <div class="en-target-line"><span class="en-target-name">${esc(head)}</span>${targetTools}</div>
@@ -964,8 +959,8 @@ const swbEntry = (() => {
         if (ui.pinned.has(col)) ui.pinned.delete(col); else ui.pinned.add(col);
         const on = ui.pinned.has(col);
         b.setAttribute("aria-pressed", String(on));
-        b.setAttribute("aria-label", on ? t("entryUnpin") : t("entryPin"));
-        b.title = on ? t("entryUnpin") : t("entryPin");
+        b.dataset.hint = on ? t("entryUnpin") : t("entryPin");
+        b.querySelector("span").textContent = t(on ? "entryPinOn" : "entryPinOff");
         persistNow();
       });
       hint(col);
