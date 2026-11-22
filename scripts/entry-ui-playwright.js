@@ -571,13 +571,14 @@ async function run() {
 
   // 21. zgłoszenie „032||023||019||052||545”: numery z || = kolejka; wyniki zapytania → „wszystkie do kolejki”; odmiana liczebników
   await openEntry(); await sleep(250);
-  // ściągawka przy polu celu (prośba: „napisz gdzieś, jak to działa”) — przycisk, bo na dotyku nie ma najechania
-  ok("21. ściągawka domyślnie zwinięta", !(await page.isVisible("#enHelp")), null);
-  await page.click("#enHelpBtn"); await sleep(100);
+  // ściągawka przy polu celu (etap B 2026-11-22): stale widoczna, gdy pole puste — bez przycisku „Jak to działa?”
+  await page.fill("#enTargetInput", ""); await page.dispatchEvent("#enTargetInput", "input"); await sleep(100);
   const help = await page.textContent("#enHelp").catch(() => "");
-  ok("21. „Jak to działa?” pokazuje przykłady: jeden wiersz, lista, ||, zapytanie", await page.isVisible("#enHelp") && /031, 032, 045-048/.test(help) && /\|\|/.test(help) && /Status:=/.test(help), help);
-  ok("21. przycisk ma aria-expanded", (await page.getAttribute("#enHelpBtn", "aria-expanded")) === "true", null);
-  await page.click("#enHelpBtn"); await sleep(100);
+  ok("21. przy pustym polu widać przykłady: jedna karta, kilka kart, ||, zapytanie", await page.isVisible("#enHelp") && /031, 032, 045-048/.test(help) && /\|\|/.test(help) && /Status:=/.test(help), help);
+  ok("21. bez przycisku „Jak to działa?”", !(await page.$("#enHelpBtn")), null);
+  await page.fill("#enTargetInput", "Jan"); await sleep(100);
+  ok("21. przy wpisywaniu ściągawka znika (miejsce dla wyników)", !(await page.isVisible("#enHelp")), null);
+  await page.fill("#enTargetInput", ""); await sleep(100);
   ok("21. ściągawka mówi o liście po przecinku, a || wskazuje Ustawienia", /031, 032, 045-048/.test(help) && /Ustawieni/.test(help), help);
   await toggleSettings(); await page.selectOption("#enKeyCol", "3"); await toggleSettings();
   // domyślnie (decyzja Mateusza 2026-11-16) numery z || to zwykłe szukanie „lub”

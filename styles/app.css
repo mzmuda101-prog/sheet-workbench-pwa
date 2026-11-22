@@ -9877,13 +9877,9 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-field-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 28px; }
 .en-field .tr-field-label { margin-bottom: 0; }
 .en-tag { font-size: 12px; color: var(--muted-strong); }
-.en-pin {
-  display: inline-flex; align-items: center; justify-content: center;
-  inline-size: 32px; block-size: 32px; padding: 0;
-  color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: var(--r-sm);
-  cursor: pointer;
-}
-.en-pin[aria-pressed="true"] { color: var(--on-accent); background: var(--accent); }
+.en-pin { display: inline-flex; align-items: center; gap: 4px; min-block-size: 32px; color: var(--muted-strong); }
+.btn.en-pin[aria-pressed="true"], .btn.en-pin[aria-pressed="true"]:hover { color: var(--on-accent); background: var(--accent); border-color: var(--accent); }
+.en-target-line .btn { white-space: nowrap; flex: 0 0 auto; }
 .en-pin:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
 .en-preview { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; min-height: 0; }
 .en-preview:empty { display: none; }
