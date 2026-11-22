@@ -9935,6 +9935,8 @@ body.en-active .cell-suggest { z-index: 210; } /* podpowiedzi nad nakładką (20
 .en-q-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .en-q-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-height: 48px; padding: 8px 14px; background: var(--surface); border: 1px solid var(--border-subtle); border-radius: var(--r-lg); }
 .en-q-text { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+.en-q-pick { display: flex; align-items: center; gap: 10px; min-height: 44px; min-width: 0; cursor: pointer; }
+.en-q-pick input { inline-size: 22px; block-size: 22px; flex: 0 0 auto; margin: 0; }
 .en-q-st { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; margin-inline-start: auto; min-width: 0; }
 .en-q-st.is-ok { color: var(--success); }
 .en-q-st.is-warn { color: var(--warning); }
