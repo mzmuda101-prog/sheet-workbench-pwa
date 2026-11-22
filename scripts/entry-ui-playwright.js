@@ -493,6 +493,38 @@ async function run() {
   ok("20. koniec kolejki — podsumowanie wpisano 1 · pominięto 1", t20b.some((m) => /1/.test(m) && /pomini/i.test(m)), t20b);
   ok("20. po kolejce — pole celu", (await st()).step === 1 && !(await st()).queue, await st());
 
+  // 20h. HURTEM CZĘŚCI KART w trakcie „po kolei” (uwaga Mateusza 2026-11-22): idę po kolei, widzę, że dwie karty
+  // mają tę samą datę → wracam, zaznaczam tylko je, wpisuję datę raz, wracam do kart po kolei.
+  const bJan = await cv("B2");
+  await typeTarget("Jan Kowalski, Anna Nowak, Piotr Zając"); await page.press("#enTargetInput", "Enter"); await sleep(250);
+  ok("20h. na starcie zaznaczone wszystkie 3 karty", (await page.$$eval("#entryOverlay [data-en-q-pick]:checked", (e) => e.length)) === 3, null);
+  await page.click("#enQWalk"); await sleep(250);
+  await page.fill(field(3), "8");
+  await page.keyboard.press("ControlOrMeta+Enter"); await sleep(200);
+  for (const cb of await page.$$("#entryOverlay [data-en-overwrite]")) await cb.check();
+  await page.click("#enCommitBtn"); await sleep(500);
+  ok("20h. w karcie Anny jest przycisk „Wpisz coś kilku kartom naraz”", /kilku kartom/.test(await page.textContent("#enQBack").catch(() => "")), await page.textContent("#enQBack").catch(() => ""));
+  await page.click("#enQBack"); await sleep(250);
+  const h1 = await page.evaluate(() => ({ step: window.__entry.state().step, picks: document.querySelectorAll("#entryOverlay [data-en-q-pick]").length,
+    checked: document.querySelectorAll("#entryOverlay [data-en-q-pick]:checked").length, all: document.querySelector("#enQAll")?.disabled, date: document.querySelector('#entryOverlay [data-en-qf="1"]')?.value }));
+  ok("20h. powrót z kart: do zaznaczenia tylko 2 niewpisane, żadna nie zaznaczona, pola wspólne puste", h1.step === "queue" && h1.picks === 2 && h1.checked === 0 && h1.all && !h1.date, h1);
+  await page.check('#entryOverlay [data-en-q-pick="1"]'); await page.check('#entryOverlay [data-en-q-pick="2"]');
+  await page.fill('#entryOverlay [data-en-qf="1"]', "15.11.2026"); await sleep(100);
+  ok("20h. „naraz” dla 2 zaznaczonych", /2/.test(await page.textContent("#enQAll")) && !(await page.$eval("#enQAll", (b) => b.disabled)), await page.textContent("#enQAll"));
+  await page.click("#enQAll"); await sleep(250);
+  if (await page.isVisible("#enQOverwrite")) { await page.check("#enQOverwrite"); await sleep(100); }
+  await page.click("#enCommitBtn"); await sleep(500);
+  const [b4, b6, b2] = [String(await cv("B4")), String(await cv("B6")), String(await cv("B2"))];
+  ok("20h. data wpisana tylko Annie i Piotrowi, Jan bez zmian", b4 === b6 && b4 !== String(bJan) && b2 === String(bJan), { b4, b6, b2, bJan });
+  await page.click("#enQAfterWalk"); await sleep(300);
+  const h2 = await st();
+  ok("20h. dalej po kolei: Anna (wiersz 4), Jan już wpisany nie wraca", h2.step === 2 && h2.target && h2.target.rowIndex0 === 3 && h2.queue.items[0].state === "done", h2);
+  await page.click("#enQSkip"); await sleep(300);
+  ok("20h. potem Piotr (wiersz 6) — niezaznaczone nie przepadły", (await st()).target?.rowIndex0 === 5, await st());
+  await page.click("#enQBack"); await sleep(200); await page.click("#enQCancel"); await sleep(200);
+  await page.evaluate(() => { window.__entry.undoCard(); window.__entry.undoCard(); }); await sleep(200);
+  await clearToasts();
+
   // brak w arkuszu → nowy wiersz w trybie po kolei
   await typeTarget("Zenon Nowy, Jan Kowalski"); await page.press("#enTargetInput", "Enter"); await sleep(250);
   await page.selectOption('#entryOverlay [data-en-q-missing="0"]', "new"); await sleep(100);

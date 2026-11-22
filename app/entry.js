@@ -902,7 +902,7 @@ const swbEntry = (() => {
     const fixing = !!(ui.queue && ui.queue.mode === "fix");
     const targetTools = fixing ? `<button class="btn btn-xs ghost" id="enQFixBack" type="button">${esc(t("entryQBack"))}</button>`
       : walking
-      ? `<span class="en-field-tools"><button class="btn btn-xs ghost" id="enQBack" type="button">${esc(t("entryQBack"))}</button>
+      ? `<span class="en-field-tools"><button class="btn btn-xs ghost" id="enQBack" type="button">${esc(t("entryQBackBulk"))}</button>
          <button class="btn btn-xs ghost" id="enQSkip" type="button">${esc(t("entryQSkip"))}</button></span>`
       : `<button class="btn btn-xs ghost" id="enChangeTarget" type="button">${esc(t("entryChangeTarget"))}</button>`;
     const smartBack = fixing ? "" : !ui.target.newRow && ui.smart && ui.smart.off && smartSrc()
@@ -985,7 +985,7 @@ const swbEntry = (() => {
     const walking = !!(ui.queue && ui.queue.mode === "walk");
     const head = t("entryTargetExisting", { n: excelRow(row.rowIndex0), key: keyText(row) });
     const targetTools = walking
-      ? `<span class="en-field-tools"><button class="btn btn-xs ghost" id="enQBack" type="button">${esc(t("entryQBack"))}</button>
+      ? `<span class="en-field-tools"><button class="btn btn-xs ghost" id="enQBack" type="button">${esc(t("entryQBackBulk"))}</button>
          <button class="btn btn-xs ghost" id="enQSkip" type="button">${esc(t("entryQSkip"))}</button></span>`
       : `<button class="btn btn-xs ghost" id="enChangeTarget" type="button">${esc(t("entryChangeTarget"))}</button>`;
     const dataPos = src.roles.map((r, p) => (r === "data" ? p : -1)).filter((p) => p >= 0);
@@ -1353,6 +1353,9 @@ const swbEntry = (() => {
     persistNow();
   }
 
+  // zaznaczenie „naraz”: brak pola = zaznaczona (stare szkice kolejki)
+  const pickable = (it) => Number.isInteger(it.choice) && it.state !== "done";
+  const picked = (it) => pickable(it) && it.pick !== false;
   const activeItems = () => (ui.queue ? ui.queue.items.map((it, i) => ({ it, i })).filter(({ it }) => it.choice !== "skip" && it.choice !== null) : []);
   const commonFilled = () => !!ui.queue && Object.values(ui.queue.common || {}).some((v) => String(v ?? "").trim());
 
@@ -1389,6 +1392,7 @@ const swbEntry = (() => {
     const items = [], meta = {};
     let unresolved = false, needNote = false;
     q.items.forEach((it) => {
+      if (!picked(it)) return;
       const d = queueDecision(it);
       if (!d) return;
       if (d.needs && it.resolve === null) { unresolved = true; return; }
@@ -1436,8 +1440,12 @@ const swbEntry = (() => {
     if (!q || !ul) return;
     const smart = qSmartOn();
     ul.innerHTML = q.items.map((it, i) => {
+      const head = pickable(it)
+        ? `<label class="en-q-pick"><input type="checkbox" data-en-q-pick="${i}" ${it.pick !== false ? "checked" : ""}><span class="en-q-text">${esc(it.text)}</span></label>`
+        : `<span class="en-q-text">${esc(it.text)}</span>${it.state === "done" ? `<span class="en-q-st is-ok">${esc(t("entryQDoneItem"))}</span>` : ""}`;
+      if (it.state === "done") return `<li class="en-q-item is-done" data-en-q="${i}">${head}</li>`;
       let ctl = smart ? queueSmartStatus(it, i) : null;
-      if (ctl) return `<li class="en-q-item" data-en-q="${i}"><span class="en-q-text">${esc(it.text)}</span>${ctl}</li>`;
+      if (ctl) return `<li class="en-q-item" data-en-q="${i}">${head}${ctl}</li>`;
       if (it.status === "ok") ctl = `<span class="en-q-st is-ok">${esc(t("entryQOk", { n: excelRow(it.rowIndex0) }))}</span>`;
       else if (it.status === "ambiguous") ctl = `<label class="en-q-st is-warn"><span class="visually-hidden">${esc(it.text)}: </span>${esc(t("entryQAmbiguous"))}
         <select class="en-select" data-en-q-choose="${i}"><option value="">${esc(t("entryQChoose"))}</option>
@@ -1447,13 +1455,18 @@ const swbEntry = (() => {
         <select class="en-select" data-en-q-missing="${i}"><option value="skip" ${it.choice !== "new" ? "selected" : ""}>${esc(t("entryQSkipOpt"))}</option>
         <option value="new" ${it.choice === "new" ? "selected" : ""}>${esc(t("entryQNewOpt"))}</option></select></label>`;
       else ctl = `<span class="en-q-st is-miss">${esc(t("entryQSameRow"))}</span>`;
-      return `<li class="en-q-item" data-en-q="${i}"><span class="en-q-text">${esc(it.text)}</span>${ctl}</li>`;
+      return `<li class="en-q-item" data-en-q="${i}">${head}${ctl}</li>`;
     }).join("");
+    ul.querySelectorAll("[data-en-q-pick]").forEach((cb) => cb.addEventListener("change", () => {
+      q.items[Number(cb.dataset.enQPick)].pick = cb.checked;
+      updateQueueButtons(); persistSoon();
+    }));
     ul.querySelectorAll("[data-en-q-choose]").forEach((sel) => sel.addEventListener("change", () => {
       const it = q.items[Number(sel.dataset.enQChoose)];
       it.choice = sel.value === "" ? null : sel.value === "skip" ? "skip" : Number(sel.value);
       it.resolve = undefined;
-      if (qSmartOn()) drawQueueList();
+      drawQueueList();
+      ul.querySelector(`[data-en-q-choose="${sel.dataset.enQChoose}"]`)?.focus();
       updateQueueButtons(); persistSoon();
     }));
     ul.querySelectorAll("[data-en-q-missing]").forEach((sel) => sel.addEventListener("change", () => {
@@ -1568,7 +1581,11 @@ const swbEntry = (() => {
       input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); focusField(inputs, e.shiftKey ? i - 1 : i + 1); } });
     });
     bar.querySelector("#enQCancel").addEventListener("click", () => finishQueue());
-    bar.querySelector("#enQWalk").addEventListener("click", () => { q.mode = "walk"; nextQueueItem(0); });
+    bar.querySelector("#enQWalk").addEventListener("click", () => {
+      // wspólne wpisane teraz dochodzą do tych, które podsuwamy w kartach (walkCommon), a nie je zastępują
+      q.walkCommon = { ...(q.walkCommon || {}), ...Object.fromEntries(Object.entries(q.common || {}).filter(([, v]) => String(v ?? "").trim())) };
+      q.mode = "walk"; nextQueueItem(0);
+    });
     bar.querySelector("#enQAll").addEventListener("click", () => { q.ow = false; ui.step = "queueReview"; render(); });
     updateQueueButtons();
   }
@@ -1582,13 +1599,15 @@ const swbEntry = (() => {
     const si = smart ? queueSmartItems() : null;
     const unresolved = q.items.some((it) => it.choice === null) || !!(si && si.unresolved);
     const k = activeItems().filter(({ it }) => it.state !== "done").length;
-    const m = si ? si.items.length : q.items.filter((it) => Number.isInteger(it.choice) && it.state !== "done").length;
+    const m = si ? si.items.length : q.items.filter(picked).length;
+    const noPick = m === 0 && q.items.some(pickable) && !q.items.some(picked);
     walk.textContent = t("entryQWalk", { n: k });
     all.textContent = t("entryQAll", { n: m });
     walk.disabled = unresolved || k === 0;
     all.disabled = unresolved || m === 0 || (!smart && !commonFilled()) || !!(si && si.needNote);
     const hint = overlay.querySelector("#enQHint");
-    const why = unresolved ? t(q.items.some((it) => it.choice === null) ? "entryQNeedChoice" : "entrySmartQNeedChoice") : si && si.needNote ? t("entrySmartQNeedNote") : (!smart && m > 0 && !commonFilled() ? t("entryQNeedCommon") : "");
+    const why = unresolved ? t(q.items.some((it) => it.choice === null) ? "entryQNeedChoice" : "entrySmartQNeedChoice") : si && si.needNote ? t("entrySmartQNeedNote")
+      : noPick ? t("entryQNeedPick") : (!smart && m > 0 && !commonFilled() ? t("entryQNeedCommon") : "");
     if (hint) { hint.textContent = why; hint.hidden = !why; }
   }
 
@@ -1605,7 +1624,12 @@ const swbEntry = (() => {
   }
 
   function wireQueueWalk(stage) {
-    stage.querySelector("#enQBack")?.addEventListener("click", () => { ui.queue.mode = null; ui.target = null; ui.step = "queue"; render(); persistNow(); });
+    stage.querySelector("#enQBack")?.addEventListener("click", () => {
+      const q = ui.queue;
+      q.items.forEach((it) => { it.pick = false; });
+      q.common = {};
+      q.mode = null; ui.target = null; ui.step = "queue"; render(); persistNow();
+    });
     stage.querySelector("#enQSkip")?.addEventListener("click", () => {
       const it = ui.queue.items[ui.queue.pos];
       if (it && it.state !== "done") it.state = "skipped";
@@ -1631,7 +1655,7 @@ const swbEntry = (() => {
     q.pos = i;
     q.mode = "walk";
     ui.target = it.choice === "new" ? { newRow: true } : { rowIndex0: it.choice };
-    ui.fields = { ...q.common };
+    ui.fields = { ...(q.walkCommon || q.common) };
     if (it.choice === "new") ui.fields[ui.keyCol] = it.text;
     ui.notes = {}; ui.overwrite = new Set(); ui.overwriteNotes = new Set();
     const sm = q.smart || {};
@@ -1651,7 +1675,7 @@ const swbEntry = (() => {
     persist({ draft: false });
   }
 
-  function queueTargets() { return ui.queue.items.filter((it) => Number.isInteger(it.choice) && it.state !== "done").map((it) => it.choice); }
+  function queueTargets() { return ui.queue.items.filter(picked).map((it) => it.choice); }
 
   // wejście planMany/commitMany kolejki: przy akcji smart pola per wiersz, inaczej wspólne
   function queueInput() {
@@ -1742,7 +1766,9 @@ const swbEntry = (() => {
       // Kolejka zostaje: do wyboru „Zakończ” (jak dawniej) albo „po kolei” przez TE SAME wiersze, żeby dopisać
       // to, co różne — bez wpisywania listy od nowa. Wspólne już są w arkuszu, więc nie podsuwamy ich drugi raz.
       const series = new Set(qi.input.items ? qi.input.items.map((x) => x.rowIndex0) : qi.input.targets);
-      q.items.forEach((it) => { if (it.state === "pending" && it.choice !== "new" && !(Number.isInteger(it.choice) && series.has(it.choice))) it.state = "skipped"; });
+      // zaznaczone, a niewpisane (np. smart „pomiń”) — pominięte; niezaznaczone czekają na „po kolei”
+      q.items.forEach((it) => { if (it.state === "pending" && picked(it) && !series.has(it.choice)) it.state = "skipped"; });
+      q.items.forEach((it) => { if (it.state === "pending") it.pick = true; });
       q.action = "fields"; q.common = {}; q.mode = null; q.pos = -1; q.series = series.size;
       ui.target = null; ui.query = "";
       ui.step = "queueAfter";
